@@ -17,6 +17,9 @@ keywords = ["world-models", "neuro-symbolic", "oracle", "faithfulness", "cyber-d
 dependencies = []
 
 [project.optional-dependencies]
+# The learned world model (M4+) adds PyTorch; kept out of the base install so the
+# env/oracle/delta/loop/metrics core stays installable and testable without it.
+model = ["torch>=2.2", "numpy>=1.24"]
 dev = ["pytest>=8", "ruff>=0.6", "mypy>=1.11", "build>=1.2"]
 
 [project.urls]
@@ -47,6 +50,15 @@ files = ["src", "tests"]
 module = "tests.*"
 disallow_untyped_defs = false
 disallow_incomplete_defs = false
+
+# PyTorch's public API is incompletely typed; under strict mypy that produces
+# unavoidable Any-propagation noise in the model/train modules. Relax the
+# torch-specific strict checks there only; the rest of the codebase stays strict.
+[[tool.mypy.overrides]]
+module = ["verisim.model.*", "verisim.train.*"]
+disallow_untyped_decorators = false
+disallow_untyped_calls = false
+warn_return_any = false
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

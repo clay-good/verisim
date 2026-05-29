@@ -31,22 +31,24 @@ SPEC-2 §13 — is implemented and tested:
 | **M2** | Drivers, trajectory JSONL, versioned manifests/splits | ✅ |
 | **M3** | Divergence `d(s,ŝ)`, faithful horizon `H_ε`, run-record schema | ✅ |
 | **M5** | Propose–verify–correct loop: `fixed` policy + `hard_reset` operator + baselines (b2/b3) | ✅ |
-| M4 | Neural world model + supervised training (needs PyTorch/GPU) | ⬜ |
+| **M4** | Neural world model `M_θ`: tokenizer, from-scratch transformer, constrained decoder, supervised training | ✅ |
 | M6 | E1 — the `H_ε(ρ)` curve (the v0 result) | ⬜ |
 | M7 | Smart policies (`drift`/`uncertainty`) + operators (`residual`/`projection`) | ⬜ |
 
 M0–M3 plus the M5 loop are the deterministic core; they have **no runtime
 dependencies** and need no GPU. The propose–verify–correct loop is built
-model-agnostically and exercised with the spec's baseline models, so the learned
-model (M4) — which adds PyTorch and is intentionally kept out of the base install
-— drops straight into the existing loop.
+model-agnostically, so the learned model `M_θ` (M4) — a from-scratch decoder-only
+transformer that predicts structured deltas under grammar-constrained decoding —
+drops straight into the loop via `NeuralWorldModel`. PyTorch is an optional
+`[model]` extra (see [docs/model-representation.md](./docs/model-representation.md)
+for the tokenization/representation decisions).
 
 ## Quickstart
 
 ```bash
 python3.11 -m venv .venv && source .venv/bin/activate
-pip install -e ".[dev]"
-pytest            # property tests, semantics goldens, metric tests
+pip install -e ".[dev,model]"   # ".[dev]" alone skips the torch-based M4 tests
+pytest            # property tests, semantics goldens, metric/loop/model tests
 ruff check .      # lint
 mypy              # strict type-check
 ```
@@ -70,8 +72,9 @@ for cmd in ["mkdir /a", "write /a/f alpha", "mv /a /b", "cat /b/f"]:
 See [SPEC-2.md §10](./SPEC-2.md). The implemented packages live under
 [src/verisim/](src/verisim/): `env/`, `oracle/`, `delta/`, `data/`, `metrics/`,
 `loop/` (the propose–verify–correct runner, policies, operators, baseline
-models), and `experiments/` (the baseline sweep). `model/` and `train/` are
-placeholders for the learned model (M4).
+models), `experiments/` (the baseline sweep), `model/` (the learned model `M_θ`:
+vocab, tokenizer, grammar, transformer, constrained decoder), and `train/`
+(Stage-1 supervised training).
 
 ## License & posture
 
