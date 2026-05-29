@@ -30,13 +30,16 @@ SPEC-2 §13 — is implemented and tested:
 | **M1** | `Delta` types, `apply(state, delta)`, delta↔serialization | ✅ |
 | **M2** | Drivers, trajectory JSONL, versioned manifests/splits | ✅ |
 | **M3** | Divergence `d(s,ŝ)`, faithful horizon `H_ε`, run-record schema | ✅ |
+| **M5** | Propose–verify–correct loop: `fixed` policy + `hard_reset` operator + baselines (b2/b3) | ✅ |
 | M4 | Neural world model + supervised training (needs PyTorch/GPU) | ⬜ |
-| M5 | Propose–verify–correct loop (policies + operators) | ⬜ |
 | M6 | E1 — the `H_ε(ρ)` curve (the v0 result) | ⬜ |
+| M7 | Smart policies (`drift`/`uncertainty`) + operators (`residual`/`projection`) | ⬜ |
 
-M0–M3 is the deterministic core; it has **no runtime dependencies** and needs no
-GPU. The neural model (M4+) adds PyTorch and is intentionally kept out of the base
-install.
+M0–M3 plus the M5 loop are the deterministic core; they have **no runtime
+dependencies** and need no GPU. The propose–verify–correct loop is built
+model-agnostically and exercised with the spec's baseline models, so the learned
+model (M4) — which adds PyTorch and is intentionally kept out of the base install
+— drops straight into the existing loop.
 
 ## Quickstart
 
@@ -65,8 +68,10 @@ for cmd in ["mkdir /a", "write /a/f alpha", "mv /a /b", "cat /b/f"]:
 ## Layout
 
 See [SPEC-2.md §10](./SPEC-2.md). The implemented packages live under
-[src/verisim/](src/verisim/): `env/`, `oracle/`, `delta/`, `data/`, `metrics/`.
-`model/`, `train/`, `loop/`, and `experiments/` are placeholders for M4+.
+[src/verisim/](src/verisim/): `env/`, `oracle/`, `delta/`, `data/`, `metrics/`,
+`loop/` (the propose–verify–correct runner, policies, operators, baseline
+models), and `experiments/` (the baseline sweep). `model/` and `train/` are
+placeholders for the learned model (M4).
 
 ## License & posture
 
