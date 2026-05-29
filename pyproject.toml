@@ -1,0 +1,50 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "verisim"
+version = "0.0.1"
+description = "Oracle-grounded, neuro-symbolic world models of computer environments (v0 deterministic core)."
+readme = "README.md"
+requires-python = ">=3.11"
+license = { file = "LICENSE" }
+authors = [{ name = "Clay Good" }]
+keywords = ["world-models", "neuro-symbolic", "oracle", "faithfulness", "cyber-defense"]
+# v0 deterministic core (M0-M3) has no runtime dependencies. The neural model
+# (M4+) adds PyTorch; it is intentionally kept out of the base install so the
+# env/oracle/metrics foundation stays installable and testable without a GPU.
+dependencies = []
+
+[project.optional-dependencies]
+dev = ["pytest>=8", "ruff>=0.6", "mypy>=1.11", "build>=1.2"]
+
+[project.urls]
+Homepage = "https://github.com/clay-good/verisim"
+Specification = "https://github.com/clay-good/verisim/blob/main/SPEC.md"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/verisim"]
+
+[tool.ruff]
+line-length = 100
+src = ["src", "tests"]
+target-version = "py311"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "B", "UP", "SIM", "RUF"]
+
+[tool.mypy]
+python_version = "3.11"
+strict = true
+files = ["src", "tests"]
+# Tests build small ad-hoc states; allow untyped test functions without noise,
+# but still type-check their bodies (so real type errors surface).
+[[tool.mypy.overrides]]
+module = "tests.*"
+disallow_untyped_defs = false
+disallow_incomplete_defs = false
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-q"
