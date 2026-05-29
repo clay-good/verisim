@@ -10,7 +10,9 @@ propose-verify-correct loop (M5) is what populates these; M3 defines the schema.
 from __future__ import annotations
 
 import json
+from collections.abc import Sequence
 from dataclasses import asdict, dataclass, field
+from pathlib import Path
 from typing import Any
 
 from .horizon import faithful_horizon
@@ -51,3 +53,17 @@ class RunRecord:
             divergences=list(d["divergences"]),
             consultation_schedule=list(d.get("consultation_schedule", [])),
         )
+
+
+def write_records(records: Sequence[RunRecord], path: str | Path) -> Path:
+    """Write run-records as JSONL (one per line) and return the path."""
+    out = Path(path)
+    out.parent.mkdir(parents=True, exist_ok=True)
+    out.write_text("\n".join(record.to_json() for record in records) + "\n")
+    return out
+
+
+def read_records(path: str | Path) -> list[RunRecord]:
+    """Read a JSONL run-record file written by :func:`write_records`."""
+    text = Path(path).read_text().strip()
+    return [RunRecord.from_json(line) for line in text.splitlines() if line]

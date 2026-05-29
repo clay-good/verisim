@@ -42,11 +42,15 @@ def apply(state: State, delta: Delta) -> State:
         elif isinstance(edit, Delete):
             fs.pop(edit.path, None)
         elif isinstance(edit, Modify):
-            old = fs[edit.path]
-            mode = old.mode if isinstance(old, File) else 0o644
-            fs[edit.path] = File(content=edit.content, mode=mode)
+            # Best-effort/total: a (possibly wrong) predicted delta may target a
+            # missing path or a directory; then the edit is a no-op and the
+            # divergence metric records the error (SPEC-2 §5.2). Oracle deltas only
+            # ever Modify an existing file, so this is identical for them.
+            old = fs.get(edit.path)
+            if isinstance(old, File):
+                fs[edit.path] = File(content=edit.content, mode=old.mode)
         elif isinstance(edit, Move):
-            moved = _subtree(fs, edit.src)
+            moved = _subtree(fs, edit.src)  # empty if src is absent -> no-op
             relocated: dict[str, Node] = {}
             for path in moved:
                 new_path = edit.dst + path[len(edit.src) :]
@@ -55,12 +59,11 @@ def apply(state: State, delta: Delta) -> State:
                 del fs[path]
             fs.update(relocated)
         elif isinstance(edit, Chmod):
-            node = fs[edit.path]
-            fs[edit.path] = (
-                File(content=node.content, mode=edit.mode)
-                if isinstance(node, File)
-                else Dir(mode=edit.mode)
-            )
+            node = fs.get(edit.path)
+            if isinstance(node, File):
+                fs[edit.path] = File(content=node.content, mode=edit.mode)
+            elif isinstance(node, Dir):
+                fs[edit.path] = Dir(mode=edit.mode)
         elif isinstance(edit, SetCwd):
             cwd = edit.path
         elif isinstance(edit, SetEnv):

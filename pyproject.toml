@@ -20,6 +20,7 @@ dependencies = []
 # The learned world model (M4+) adds PyTorch; kept out of the base install so the
 # env/oracle/delta/loop/metrics core stays installable and testable without it.
 model = ["torch>=2.2", "numpy>=1.24"]
+viz = ["matplotlib>=3.7"]  # E1 figure plotting (SPEC-2 §7.3); not needed at runtime
 dev = ["pytest>=8", "ruff>=0.6", "mypy>=1.11", "build>=1.2"]
 
 [project.urls]
