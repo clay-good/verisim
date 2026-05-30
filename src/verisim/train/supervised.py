@@ -3,7 +3,7 @@
 Teacher-forced cross-entropy over the serialized delta tokens, on oracle-generated
 examples. v0 uses full-batch gradient descent over a small example set -- enough to
 fit a tiny env to near-zero loss (the M4 verify) and deterministic given a seed.
-Stage 2 (RLVR against the oracle reward) is deferred to a later milestone.
+Stage 2 (RLVR against the oracle reward) lives in :mod:`verisim.train.rlvr`.
 """
 
 from __future__ import annotations

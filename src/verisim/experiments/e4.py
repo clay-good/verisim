@@ -15,9 +15,10 @@ Two metrics per cell, both at ρ=0 (unaided):
   - **clean faithful horizon** ``H_ε`` -- how far the unaided autoregressive rollout
     stays faithful. The headline-relevant measure.
 
-The remaining §9 ablation axes (representation: delta vs. full-state; objective:
-supervised vs. +RLVR) need model/training machinery v0 does not have (a full-state
-head; Stage-2 RLVR) and are left for later.
+The objective axis (supervised vs. +RLVR) is run separately in ``objective.py``,
+which branches a Stage-2 RLVR copy off the Stage-1 model and measures the same clean
+metrics; the representation axis (delta vs. full-state) still needs a full-state head
+and is left for later.
 """
 
 from __future__ import annotations

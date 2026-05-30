@@ -1,0 +1,29 @@
+{
+  "name": "e4-objective",
+  "rlvr_steps": 60,
+  "rlvr_samples_per_env": 4,
+  "rlvr_lr": 0.001,
+  "rlvr_seeds": [0, 1, 2, 3],
+  "rlvr_n_steps": 16,
+  "rlvr_max_edits": 12,
+  "rlvr_max_run": 16,
+  "rlvr_seed": 0,
+  "base": {
+    "name": "e4-objective",
+    "train_driver": "weighted",
+    "train_seeds": [0, 1, 2, 3],
+    "train_steps_per_traj": 40,
+    "n_layer": 2,
+    "n_head": 2,
+    "n_embd": 64,
+    "block_size": 512,
+    "train_iters": 400,
+    "lr": 0.003,
+    "model_seed": 0,
+    "difficulties": { "low": "weighted", "high": "adversarial" },
+    "eval_seeds": [100, 101, 102, 103, 104],
+    "eval_steps": 24,
+    "rhos": [0.0],
+    "epsilons": [0.0]
+  }
+}

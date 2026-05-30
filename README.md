@@ -44,8 +44,8 @@ drops straight into the loop via `NeuralWorldModel`. PyTorch is an optional
 `[model]` extra (see [docs/model-representation.md](./docs/model-representation.md)
 for the tokenization/representation decisions). **Stage-2 RLVR** — REINFORCE against
 the oracle's faithful-horizon reward (`verisim.train.train_rlvr`, SPEC-2 §5.3) — is
-implemented and tested; the supervised-vs-RLVR objective ablation is the open
-empirical follow-on.
+implemented and tested, and the supervised-vs-RLVR objective ablation (E4) has been
+run — an honest null at this scale (see below).
 
 ### The headline result (E1)
 
@@ -103,7 +103,12 @@ python figures/plot_comparison.py --records runs/e3/records.jsonl --key operator
   lift clean per-step accuracy off its ~0.1–0.2 floor
   ([`figures/e4_ablation.png`](figures/e4_ablation.png)). So the H1 floor is not a raw
   capacity problem at this scale; the open lever is training budget / difficulty
-  co-tuning ([SPEC-2 §17.5](./SPEC-2.md)), not parameters.
+  co-tuning ([SPEC-2 §17.5](./SPEC-2.md)), not parameters. The **objective axis**
+  (supervised vs. +RLVR, [`figures/objective.png`](figures/objective.png)) is likewise
+  an honest null here: training against the oracle's faithful-horizon reward leaves
+  clean accuracy within overlapping CIs of supervised, because the reward is sparse
+  exactly at the H1 floor — RLVR has signal to amplify only once the model sustains a
+  horizon to extend.
 
 The full write-up — every figure, the honest H1/H2/H3 negatives, the calibration and
 ablation diagnostics, threats to validity, and exact reproduction — is in

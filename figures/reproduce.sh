@@ -34,4 +34,10 @@ python -m verisim.experiments.e4 --config configs/e4.json --out runs/e4/records.
 python figures/plot_e4.py --records runs/e4/records.jsonl \
     --out figures/e4_ablation.png --csv figures/e4_ablation.csv
 
-echo "== done: figures/{e1_curve,e2_policies,e3_operators,calibration,e4_ablation}.{png,csv} =="
+echo "== E4 objective axis: supervised vs. +RLVR (trains + RLVR-tunes; slower) =="
+python -m verisim.experiments.objective --config configs/objective.json \
+    --out runs/objective/records.jsonl
+python figures/plot_objective.py --records runs/objective/records.jsonl \
+    --out figures/objective.png --csv figures/objective.csv
+
+echo "== done: figures/{e1_curve,e2_policies,e3_operators,calibration,e4_ablation,objective}.{png,csv} =="

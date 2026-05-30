@@ -2,7 +2,8 @@
 
 > The v0 result, stated honestly. This is the short write-up SPEC-2 §13 (M8) calls
 > for: the experiments that produce figures — E1 (the curve), E2/E3 (policy and
-> operator comparisons), the §7.2 calibration diagnostic, and the E4 ablation — what
+> operator comparisons), the §7.2 calibration diagnostic, and the E4 ablation
+> (size/difficulty and the supervised-vs-+RLVR objective axis) — what
 > they show, and what they do not. Every number here is read from a committed
 > run-record CSV and is regenerable from a config + seeds (SPEC-2 §12). Figures live
 > in [`../figures/`](../figures/).
@@ -154,13 +155,35 @@ elsewhere — training iterations / dataset size and difficulty co-tuning (SPEC-
 §17.5), not raw model size. (A reproducible curiosity: the adversarial "high" driver
 is sometimes *easier* to predict per-step than "low" — its destructive commands often
 fail predictably and leave state unchanged, which the model reproduces exactly more
-often than it does structure-building writes.) Of the two remaining §9 axes, the
-**objective** axis (supervised vs. +RLVR) now has its machinery — Stage-2 RLVR
-([`src/verisim/train/rlvr.py`](../src/verisim/train/rlvr.py)), which REINFORCE-trains
-against the oracle's faithful-horizon reward and is tested to learn from scratch and to
-not collapse a faithful model — so running it as a tuned ablation is the next empirical
-step; the **representation** axis (delta vs. full-state) still needs a full-state head
-and is left for later.
+often than it does structure-building writes.)
+
+### Objective axis: supervised vs. +RLVR (§9, §17.4)
+
+The third E4 axis asks whether **training against the oracle** — Stage-2 RLVR, which
+REINFORCE-trains the model on the oracle's faithful-horizon reward
+([`src/verisim/train/rlvr.py`](../src/verisim/train/rlvr.py)) — buys clean
+faithfulness over supervised pretraining alone. One Stage-1 supervised model is
+branched into a Stage-2 RLVR copy and both arms are scored on the same clean (ρ=0)
+metrics, 5 seeds/cell ([`objective.png`](../figures/objective.png),
+[`objective.csv`](../figures/objective.csv)).
+
+| objective | clean acc (low) | clean acc (high) | clean horizon (high) |
+|-----------|-----------------|------------------|----------------------|
+| supervised | 0.07 | 0.15 | 0.2 |
+| +RLVR | 0.07 | 0.13 | 0.2 |
+
+RLVR is an **honest null at this scale**: clean per-step accuracy is identical on the
+`low` driver (0.07) and a hair lower on `high` (0.13 vs. 0.15, CIs `[0.08,0.18]` vs.
+`[0.09,0.22]` — fully overlapping), and clean horizon is unchanged. The cause is
+structural, not a bug: the faithful-horizon reward is **sparse exactly when the model
+is at the H1 floor** — episodes terminate at the first unfaithful step, so a model that
+usually fails step 0 sees almost no reward signal to amplify. RLVR has leverage only
+once the model already sustains a non-trivial horizon, which is the difficulty
+co-tuning (§17.5) this scale has not yet reached. The machinery is correct and tested
+([`tests/test_rlvr.py`](../tests/test_rlvr.py): it learns from scratch on a tiny env
+and does not collapse a faithful model); what it needs is a task with horizon to
+extend. The last §9 axis — **representation** (delta vs. full-state) — still needs a
+full-state head and is left for later.
 
 ## Threats to validity
 
@@ -197,6 +220,9 @@ python -m verisim.experiments.calibration --config configs/calibration.json \
 python figures/plot_calibration.py --pairs runs/calibration/pairs.jsonl
 python -m verisim.experiments.e4 --config configs/e4.json --out runs/e4/records.jsonl
 python figures/plot_e4.py --records runs/e4/records.jsonl
+python -m verisim.experiments.objective --config configs/objective.json \
+    --out runs/objective/records.jsonl
+python figures/plot_objective.py --records runs/objective/records.jsonl
 ```
 
 The run-records are git-ignored (regenerable); the figures and their CSVs are
