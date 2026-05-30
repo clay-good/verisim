@@ -154,9 +154,13 @@ elsewhere — training iterations / dataset size and difficulty co-tuning (SPEC-
 §17.5), not raw model size. (A reproducible curiosity: the adversarial "high" driver
 is sometimes *easier* to predict per-step than "low" — its destructive commands often
 fail predictably and leave state unchanged, which the model reproduces exactly more
-often than it does structure-building writes.) Two §9 axes — representation
-(delta vs. full-state) and objective (supervised vs. +RLVR) — need machinery v0 does
-not have and are left for later.
+often than it does structure-building writes.) Of the two remaining §9 axes, the
+**objective** axis (supervised vs. +RLVR) now has its machinery — Stage-2 RLVR
+([`src/verisim/train/rlvr.py`](../src/verisim/train/rlvr.py)), which REINFORCE-trains
+against the oracle's faithful-horizon reward and is tested to learn from scratch and to
+not collapse a faithful model — so running it as a tuned ablation is the next empirical
+step; the **representation** axis (delta vs. full-state) still needs a full-state head
+and is left for later.
 
 ## Threats to validity
 

@@ -42,7 +42,10 @@ model-agnostically, so the learned model `M_θ` (M4) — a from-scratch decoder-
 transformer that predicts structured deltas under grammar-constrained decoding —
 drops straight into the loop via `NeuralWorldModel`. PyTorch is an optional
 `[model]` extra (see [docs/model-representation.md](./docs/model-representation.md)
-for the tokenization/representation decisions).
+for the tokenization/representation decisions). **Stage-2 RLVR** — REINFORCE against
+the oracle's faithful-horizon reward (`verisim.train.train_rlvr`, SPEC-2 §5.3) — is
+implemented and tested; the supervised-vs-RLVR objective ablation is the open
+empirical follow-on.
 
 ### The headline result (E1)
 
