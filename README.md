@@ -34,7 +34,7 @@ SPEC-2 §13 — is implemented and tested:
 | **M4** | Neural world model `M_θ`: tokenizer, from-scratch transformer, constrained decoder, supervised training | ✅ |
 | **M6** | E1 — the `H_ε(ρ)` curve: sweep harness + bootstrap-CI aggregation + figure (curve plotted; tuning ongoing) | ◐ |
 | **M7** | Smart policies (`drift`/`uncertainty`) + operators (`residual`/`projection`); E2/E3 equal-budget comparisons with CIs | ✅ |
-| M8 | Write-up: technical report + packaging (Inspect eval, Prime Intellect environment) | ⬜ |
+| **M8** | Write-up ([`docs/report.md`](./docs/report.md)) + packaging: faithfulness benchmark (Inspect eval) + oracle-as-reward RL environment (verifiers-spec) | ◐ |
 
 M0–M3 plus the M5 loop are the deterministic core; they have **no runtime
 dependencies** and need no GPU. The propose–verify–correct loop is built
@@ -84,16 +84,45 @@ python figures/plot_comparison.py --records runs/e3/records.jsonl --key operator
 
 **Honest findings** (small committed config, not a tuned run):
 
-- **E2 (H2):** at equal budget `fixed` (`H_ε≈1.1`) *beats* both triggered policies
-  (`H_ε≈0.2`). The model's decode-entropy uncertainty signal ([SPEC-2 §7.2](./SPEC-2.md))
-  is not yet calibrated enough at this scale to beat naive even-spacing — a
-  reportable negative that points at uncertainty calibration as the next lever.
-- **E3 (H3):** all three operators give an **identical** `H_ε≈1.9` with identical
+- **E2 (H2):** at equal budget `fixed` (`H_ε≈1.4`) *beats* both triggered policies
+  (`uncertainty≈0.6`, `drift≈0.1`). The model's decode-entropy uncertainty signal
+  ([SPEC-2 §7.2](./SPEC-2.md)) is not yet calibrated enough at this scale to beat
+  naive even-spacing — a reportable negative that points at uncertainty calibration
+  as the next lever.
+- **E3 (H3):** all three operators give an **identical** `H_ε≈1.3` with identical
   CIs. This is the expected v0 *identity*: with a full-state one-step oracle truth,
   every operator snaps the coupled state to the same `s'`. `residual` and
   `projection` differ only in the diagnostic they expose (the online-learning signal
   magnitude / per-correction repair cost), which is where H3 will bite once partial
   verification or Stage-2 online learning lands.
+
+The full write-up — all three figures, the honest H1/H2/H3 negatives, threats to
+validity, and exact reproduction — is in [docs/report.md](./docs/report.md). Every
+figure regenerates from its config + seeds with `bash figures/reproduce.sh`.
+
+## Packaging for reuse
+
+The env + metric are packaged where researchers already look (SPEC-2 §15):
+
+- **Faithfulness benchmark** ([`verisim.eval`](src/verisim/eval/)) — dependency-free;
+  `score_model` / `score_suite` grade *any* model implementing the loop `Model`
+  protocol against the oracle's ground truth, and `step_labels` + `grade_prediction`
+  expose single-step labels for question-answer frameworks. An `inspect_ai` task
+  adapter ships behind the optional `[eval]` extra.
+- **Oracle-as-reward RL environment** ([`verisim.rl`](src/verisim/rl/)) — a
+  `verifiers`-spec `WorldModelEnv` (with the `load_environment` entrypoint) whose
+  reward is the oracle's faithfulness verdict, so the episode return *is* the faithful
+  horizon. The public form of "train a world model against a verifiable oracle reward."
+
+```python
+from verisim.eval import score_model, FaithfulnessSample
+from verisim.loop import OracleBackedModel
+from verisim.oracle import ReferenceOracle
+
+oracle = ReferenceOracle()
+score = score_model(OracleBackedModel(oracle), FaithfulnessSample("adversarial", 200, 24), oracle=oracle)
+assert score.normalized_horizon == 1.0   # a perfect model is fully faithful, unaided
+```
 
 ## Quickstart
 
@@ -125,9 +154,10 @@ See [SPEC-2.md §10](./SPEC-2.md). The implemented packages live under
 [src/verisim/](src/verisim/): `env/`, `oracle/`, `delta/`, `data/`, `metrics/`,
 `loop/` (the propose–verify–correct runner, policies, operators, baseline
 models), `experiments/` (the baseline sweep and E1/E2/E3), `model/` (the learned model `M_θ`:
-vocab, tokenizer, grammar, transformer, constrained decoder), and `train/`
-(Stage-1 supervised training). The experiment configs live in [configs/](configs/) and the
-plotting scripts + figures in [figures/](figures/).
+vocab, tokenizer, grammar, transformer, constrained decoder), `train/`
+(Stage-1 supervised training), and the M8 packaging `eval/` (faithfulness benchmark
++ Inspect adapter) and `rl/` (oracle-as-reward environment). The experiment configs
+live in [configs/](configs/) and the plotting scripts + figures in [figures/](figures/).
 
 ## License & posture
 

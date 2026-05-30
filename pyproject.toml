@@ -21,6 +21,9 @@ dependencies = []
 # env/oracle/delta/loop/metrics core stays installable and testable without it.
 model = ["torch>=2.2", "numpy>=1.24"]
 viz = ["matplotlib>=3.7"]  # E1 figure plotting (SPEC-2 §7.3); not needed at runtime
+# M8 packaging (SPEC-2 §15). The faithfulness benchmark core and the RL
+# environment are dependency-free; only the Inspect *adapter* needs inspect_ai.
+eval = ["inspect_ai>=0.3"]
 dev = ["pytest>=8", "ruff>=0.6", "mypy>=1.11", "build>=1.2"]
 
 [project.urls]
@@ -60,6 +63,21 @@ module = ["verisim.model.*", "verisim.train.*"]
 disallow_untyped_decorators = false
 disallow_untyped_calls = false
 warn_return_any = false
+
+# The Inspect adapter (SPEC-2 §15) imports the optional ``inspect_ai`` lazily; its
+# types are absent unless the ``[eval]`` extra is installed, so relax strict
+# typing for that one module. The benchmark *core* stays strict.
+[[tool.mypy.overrides]]
+module = ["verisim.eval.inspect_task"]
+disallow_untyped_decorators = false
+disallow_untyped_calls = false
+warn_return_any = false
+warn_unused_ignores = false
+
+# ``inspect_ai`` (the optional ``[eval]`` extra) ships no stubs and is absent in CI.
+[[tool.mypy.overrides]]
+module = ["inspect_ai.*"]
+ignore_missing_imports = true
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

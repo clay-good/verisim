@@ -102,6 +102,17 @@ def eval_actions(
 
 
 def train_model(config: E1Config, vocab: Vocab, oracle: Oracle, env: EnvConfig) -> GPT:
+    # Bit-reproducibility across *processes* (SPEC-2 §12), not just within one:
+    # multi-threaded CPU reductions are non-associative, so two runs of the same
+    # config drift in the low bits -- invisible to E1's argmax deltas but enough to
+    # move E2's continuous uncertainty signals across a quantile threshold. Single
+    # threading + seeding weight-init *before* model construction makes the whole
+    # pipeline deterministic regardless of machine thread count.
+    import torch
+
+    torch.manual_seed(config.model_seed)
+    torch.set_num_threads(1)
+
     examples = build_dataset(
         oracle,
         vocab,

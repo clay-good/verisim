@@ -168,7 +168,7 @@ Verisim is *not* claiming to invent world models, neuro-symbolic methods, or cyb
 - **Neuro-symbolic verifier-gated reasoning (VIRF, EIDOKU, SymCode).** Same instinct (deterministic gate over stochastic generation) at the level of a single reasoning step / answer. Verisim lifts it from one answer to an entire *temporal world rollout*, where errors compound — a strictly harder regime.
 - **Autonomous cyber defense simulators (CybORG, CyGIL, PrimAITE; emulation-simulation unification).** The application field. Verisim contributes a learned-but-faithful world model as a candidate fix for their sim-to-emulation gap (§4.1).
 - **RLVR / RL with verifiable rewards; Constitutional AI / RLAIF.** Constitutional AI uses an LLM to critique an LLM (probabilistic checking probabilistic). Verisim replaces the critic with a deterministic oracle wherever the domain admits one, and uses it as a *verifiable reward* to train the world model (§6.3). This is the author's standing research thesis instantiated.
-- **The author's own prior work** (Proxilion, Invariant, Mantissa, agent-replay, Vaulytica): each is a deterministic verifier over a stochastic process in a security context. Verisim is the generalization — the verifier is no longer guarding a single action; it is grounding a whole simulated world. See the repo's `docs/lineage.md` (to be written) for the explicit mapping.
+- **The author's own prior work** (Proxilion, Invariant, Mantissa, agent-replay, Vaulytica): each is a deterministic verifier over a stochastic process in a security context. Verisim is the generalization — the verifier is no longer guarding a single action; it is grounding a whole simulated world. See the repo's [`docs/lineage.md`](./docs/lineage.md) for the explicit mapping.
 
 ---
 
@@ -265,5 +265,5 @@ Any one of (1)–(3) is a meaningful, citable contribution achievable by a non-P
 
 - **Read next:** [SPEC-2.md](./SPEC-2.md) — the concrete v0 environment, oracle, model, metrics, baselines, repo layout, and milestones.
 - **Author:** Clay Good. **License:** MIT (see [LICENSE](./LICENSE)). **No telemetry, no commercial path** — this is a research repo.
-- **Citations / state of the art** referenced above (Genie 3, V-JEPA 2, Cosmos, neuro-symbolic world models, CybORG/CyGIL/PrimAITE, VIRF/EIDOKU/SymCode, RLVR) are current as of May 2026; a maintained bibliography lives in `docs/related-work.md` (to be written) with links and one-line takes.
+- **Citations / state of the art** referenced above (Genie 3, V-JEPA 2, Cosmos, neuro-symbolic world models, CybORG/CyGIL/PrimAITE, VIRF/EIDOKU/SymCode, RLVR) are current as of May 2026; a maintained bibliography lives in [`docs/related-work.md`](./docs/related-work.md) with one-line takes.
 - This document will evolve. When a hypothesis in §9 is tested, its result and the experiment that produced it are linked here and the hypothesis is marked confirmed/refuted/open. The spec is the living record of what we believed and what we learned.
