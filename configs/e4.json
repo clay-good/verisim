@@ -1,0 +1,24 @@
+{
+  "name": "e4-ablation",
+  "sizes": [
+    { "label": "tiny", "n_layer": 1, "n_embd": 32 },
+    { "label": "small", "n_layer": 2, "n_embd": 64 },
+    { "label": "medium", "n_layer": 4, "n_embd": 128 }
+  ],
+  "base": {
+    "name": "e4-ablation",
+    "train_driver": "weighted",
+    "train_seeds": [0, 1, 2, 3],
+    "train_steps_per_traj": 40,
+    "n_head": 2,
+    "block_size": 512,
+    "train_iters": 500,
+    "lr": 0.003,
+    "model_seed": 0,
+    "difficulties": { "low": "weighted", "high": "adversarial" },
+    "eval_seeds": [100, 101, 102, 103, 104],
+    "eval_steps": 24,
+    "rhos": [0.0],
+    "epsilons": [0.0]
+  }
+}

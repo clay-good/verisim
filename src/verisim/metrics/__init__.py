@@ -5,8 +5,10 @@ from __future__ import annotations
 from .aggregate import (
     ComparisonPoint,
     CurvePoint,
+    GroupStat,
     aggregate_comparison,
     aggregate_curve,
+    aggregate_values,
     bootstrap_ci,
 )
 from .calibration import (
@@ -24,10 +26,12 @@ __all__ = [
     "CalibrationReport",
     "ComparisonPoint",
     "CurvePoint",
+    "GroupStat",
     "ReliabilityBin",
     "RunRecord",
     "aggregate_comparison",
     "aggregate_curve",
+    "aggregate_values",
     "bootstrap_ci",
     "calibration_report",
     "divergence",

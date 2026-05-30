@@ -109,3 +109,37 @@ def test_plot_calibration_writes_figure_and_csv(tmp_path):
     text = csv.read_text()
     assert "lo,hi,mean_signal,mean_divergence,n" in text
     assert "pearson,spearman" in text
+
+
+def _e4_records() -> list[RunRecord]:
+    records: list[RunRecord] = []
+    for size, acc in (("tiny", 0.1), ("small", 0.3), ("medium", 0.6)):
+        for difficulty in ("low", "high"):
+            for seed in (1, 2, 3):
+                records.append(
+                    RunRecord(
+                        config={"size": size, "difficulty": difficulty, "step_accuracy": acc},
+                        seed=seed,
+                        epsilon=0.0,
+                        divergences=[0.0],
+                    )
+                )
+    return records
+
+
+def test_plot_e4_writes_figure_and_csv(tmp_path):
+    recs = tmp_path / "recs.jsonl"
+    write_records(_e4_records(), recs)
+    out = tmp_path / "e4.png"
+    csv = tmp_path / "e4.csv"
+    result = subprocess.run(
+        [
+            sys.executable, "figures/plot_e4.py",
+            "--records", str(recs), "--out", str(out), "--csv", str(csv), "--resamples", "50",
+        ],
+        capture_output=True,
+        text=True,
+    )
+    assert result.returncode == 0, result.stderr
+    assert out.exists() and out.stat().st_size > 0
+    assert "size,difficulty,mean_accuracy" in csv.read_text()

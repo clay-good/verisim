@@ -96,10 +96,16 @@ python figures/plot_comparison.py --records runs/e3/records.jsonl --key operator
   `projection` differ only in the diagnostic they expose (the online-learning signal
   magnitude / per-correction repair cost), which is where H3 will bite once partial
   verification or Stage-2 online learning lands.
+- **E4 (ablation):** scaling the model 4× (tiny `1×32` → medium `4×128`) does **not**
+  lift clean per-step accuracy off its ~0.1–0.2 floor
+  ([`figures/e4_ablation.png`](figures/e4_ablation.png)). So the H1 floor is not a raw
+  capacity problem at this scale; the open lever is training budget / difficulty
+  co-tuning ([SPEC-2 §17.5](./SPEC-2.md)), not parameters.
 
-The full write-up — all three figures, the honest H1/H2/H3 negatives, threats to
-validity, and exact reproduction — is in [docs/report.md](./docs/report.md). Every
-figure regenerates from its config + seeds with `bash figures/reproduce.sh`.
+The full write-up — every figure, the honest H1/H2/H3 negatives, the calibration and
+ablation diagnostics, threats to validity, and exact reproduction — is in
+[docs/report.md](./docs/report.md). Every figure regenerates from its config + seeds
+with `bash figures/reproduce.sh`.
 
 ## Packaging for reuse
 

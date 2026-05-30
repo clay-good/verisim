@@ -23,4 +23,15 @@ python -m verisim.experiments.e3 --config configs/e3.json --out runs/e3/records.
 python figures/plot_comparison.py --records runs/e3/records.jsonl --key operator \
     --out figures/e3_operators.png --csv figures/e3_operators.csv
 
-echo "== done: figures/{e1_curve,e2_policies,e3_operators}.{png,csv} =="
+echo "== calibration diagnostic (§7.2) =="
+python -m verisim.experiments.calibration --config configs/calibration.json \
+    --out runs/calibration/pairs.jsonl
+python figures/plot_calibration.py --pairs runs/calibration/pairs.jsonl \
+    --out figures/calibration.png --csv figures/calibration.csv
+
+echo "== E4: size/difficulty ablation (trains several models; slower) =="
+python -m verisim.experiments.e4 --config configs/e4.json --out runs/e4/records.jsonl
+python figures/plot_e4.py --records runs/e4/records.jsonl \
+    --out figures/e4_ablation.png --csv figures/e4_ablation.csv
+
+echo "== done: figures/{e1_curve,e2_policies,e3_operators,calibration,e4_ablation}.{png,csv} =="

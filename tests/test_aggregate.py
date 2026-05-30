@@ -5,7 +5,13 @@ from __future__ import annotations
 import math
 from statistics import fmean
 
-from verisim.metrics import RunRecord, aggregate_comparison, aggregate_curve, bootstrap_ci
+from verisim.metrics import (
+    RunRecord,
+    aggregate_comparison,
+    aggregate_curve,
+    aggregate_values,
+    bootstrap_ci,
+)
 
 
 def _record(difficulty: str, rho: float, seed: int, divergences: list[float]) -> RunRecord:
@@ -82,3 +88,23 @@ def test_aggregate_comparison_groups_by_label_with_calls():
     assert by_label["drift"].mean_calls == 1.0
     # Sorted by (label, epsilon).
     assert points == sorted(points, key=lambda p: (p.label, p.epsilon))
+
+
+def _acc_record(size: str, seed: int, accuracy: float) -> RunRecord:
+    return RunRecord(
+        config={"size": size, "step_accuracy": accuracy}, seed=seed, epsilon=0.0, divergences=[]
+    )
+
+
+def test_aggregate_values_groups_and_bootstraps_a_config_field():
+    records = [
+        _acc_record("tiny", 1, 0.2),
+        _acc_record("tiny", 2, 0.4),
+        _acc_record("big", 1, 0.9),
+    ]
+    stats = aggregate_values(records, group_keys=["size"], value="step_accuracy", n_resamples=200)
+    by_key = {s.key: s for s in stats}
+    assert math.isclose(by_key[("tiny",)].mean, 0.3)
+    assert by_key[("tiny",)].n == 2
+    assert by_key[("big",)].mean == 0.9
+    assert stats == sorted(stats, key=lambda s: s.key)

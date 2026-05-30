@@ -1,17 +1,18 @@
 # Verisim v0 — technical report
 
 > The v0 result, stated honestly. This is the short write-up SPEC-2 §13 (M8) calls
-> for: the three experiments that produce figures (E1/E2/E3), what they show, and
-> what they do not. Every number here is read from a committed run-record CSV and
-> is regenerable from a config + seeds (SPEC-2 §12). Figures live in
-> [`../figures/`](../figures/).
+> for: the experiments that produce figures — E1 (the curve), E2/E3 (policy and
+> operator comparisons), the §7.2 calibration diagnostic, and the E4 ablation — what
+> they show, and what they do not. Every number here is read from a committed
+> run-record CSV and is regenerable from a config + seeds (SPEC-2 §12). Figures live
+> in [`../figures/`](../figures/).
 
 ## Bottom line
 
 v0's job was to build the apparatus that can measure **how much oracle consultation
-buys how much faithful horizon** (`H_ε(ρ)`), and to run the first three experiments
-on it. The apparatus is built, tested, and reproducible. The headline scientific
-finding is a **clean set of negatives** at the small, fast committed scale:
+buys how much faithful horizon** (`H_ε(ρ)`), and to run the experiments on it. The
+apparatus is built, tested, and reproducible. The headline scientific finding is a
+**clean set of negatives** at the small, fast committed scale:
 
 - **H1 (a favorable knee exists):** *not observed.* The `H_ε(ρ)` curve is flat and
   near the floor across the interior and only reaches the ceiling at `ρ = 1`.
@@ -20,14 +21,19 @@ finding is a **clean set of negatives** at the small, fast committed scale:
 - **H3 (correction operator matters):** *identity, as predicted.* `hard_reset`,
   `residual`, and `projection` are statistically indistinguishable on faithful
   horizon — expected from a full-state oracle truth.
+- **Why (diagnostics):** the uncertainty signal that should drive H2 is **barely
+  correlated** with actual error (Pearson ≈ 0.11), and **scaling the model 4× does
+  not lift** clean per-step accuracy off its ~0.1–0.2 floor — so the levers are
+  calibration and training budget/difficulty, not policy cleverness or raw size.
 
 None of these refute the *program* (SPEC.md §9 explicitly treats a refuted
-hypothesis as a result, not a failure). They locate the work: the curve is
-uninformative because the committed model is too small and the difficulty dial is
-not yet tuned (SPEC-2 §17.5), and the smart policies lose because their uncertainty
-signal is not yet calibrated (SPEC-2 §17.2). The contribution of v0 is the
-**measurement**, the **honest curves**, and a benchmark + RL environment others can
-build on (SPEC-2 §15).
+hypothesis as a result, not a failure). They locate the work, and the two
+diagnostics (calibration §7.2, the E4 ablation §9) make the next levers concrete:
+the smart policies lose because their uncertainty signal is uncalibrated (SPEC-2
+§17.2), and the clean floor does not move with model size, so the open work is
+training budget / difficulty co-tuning (SPEC-2 §17.5), not parameters. The
+contribution of v0 is the **measurement**, the **honest curves**, and a benchmark +
+RL environment others can build on (SPEC-2 §15).
 
 ## Method (one paragraph)
 
@@ -126,12 +132,40 @@ verification** or **online learning**, both deferred. By H3's own refutation
 condition (hard reset indistinguishable or better), **H3 is not supported at v0**,
 and the experiment makes precise *why* and *what would change it*.
 
+## E4 — ablation: is the H1 floor a capacity problem? (§9, §17.5)
+
+E1 left open *why* the model drifts immediately at ρ=0: too small, or task
+mis-tuned (SPEC-2 §17.5)? E4 sweeps the two buildable §9 ablation axes — **model
+size** (tiny `1×32` → small `2×64` → medium `4×128`) and **difficulty/driver** —
+and measures clean (ρ=0) per-step teacher-forced accuracy, 5 seeds/cell
+([`e4_ablation.png`](../figures/e4_ablation.png), [`e4_ablation.csv`](../figures/e4_ablation.csv)).
+
+| size | low (weighted) | high (adversarial) |
+|------|----------------|--------------------|
+| tiny `1×32` | 0.09 | 0.22 |
+| small `2×64` | 0.09 | 0.15 |
+| medium `4×128` | 0.14 | 0.17 |
+
+Clean per-step accuracy stays in the **0.09–0.22** band across a 4× depth / 4× width
+increase, with heavily overlapping CIs — and clean horizon stays near zero
+everywhere. **Scaling the model within this range does not fix the floor.** So the H1
+negative is *not* simply "too few parameters" at this training budget; the lever is
+elsewhere — training iterations / dataset size and difficulty co-tuning (SPEC-2
+§17.5), not raw model size. (A reproducible curiosity: the adversarial "high" driver
+is sometimes *easier* to predict per-step than "low" — its destructive commands often
+fail predictably and leave state unchanged, which the model reproduces exactly more
+often than it does structure-building writes.) Two §9 axes — representation
+(delta vs. full-state) and objective (supervised vs. +RLVR) — need machinery v0 does
+not have and are left for later.
+
 ## Threats to validity
 
-- **Scale.** The committed model is ~tiny (1–2 layers, 64-dim) and trains for a few
-  hundred iterations on a CPU-sized dataset. Every negative above is consistent with
-  "too small to be interesting," not "the mechanism is wrong." The deterministic core
-  (M0–M3) and loop invariants (M5) are separately tested, so the apparatus is sound.
+- **Scale.** The committed model is ~tiny and trains for a few hundred iterations on
+  a CPU-sized dataset. The negatives are consistent with "too small/undertrained to
+  be interesting," not "the mechanism is wrong" — and E4 sharpens this: more *size*
+  alone does not help, so the suspect is training budget / data / difficulty, not
+  parameter count. The deterministic core (M0–M3) and loop invariants (M5) are
+  separately tested, so the apparatus is sound.
 - **Reference oracle, not a real OS.** v0's oracle is a model of POSIX, not POSIX
   (SPEC.md §2.1). H4 (mechanism survives a real sandbox) is Phase 1.
 - **Difficulty by driver only.** The §2.4 depth/breadth dial is not yet a knob; v0
@@ -157,6 +191,8 @@ python figures/plot_comparison.py --records runs/e3/records.jsonl --key operator
 python -m verisim.experiments.calibration --config configs/calibration.json \
     --out runs/calibration/pairs.jsonl
 python figures/plot_calibration.py --pairs runs/calibration/pairs.jsonl
+python -m verisim.experiments.e4 --config configs/e4.json --out runs/e4/records.jsonl
+python figures/plot_e4.py --records runs/e4/records.jsonl
 ```
 
 The run-records are git-ignored (regenerable); the figures and their CSVs are

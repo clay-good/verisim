@@ -38,6 +38,43 @@ def bootstrap_ci(
 
 
 @dataclass(frozen=True)
+class GroupStat:
+    """Bootstrapped mean of one numeric ``config`` field over a record group."""
+
+    key: tuple[str, ...]
+    mean: float
+    ci_low: float
+    ci_high: float
+    n: int
+
+
+def aggregate_values(
+    records: list[RunRecord],
+    *,
+    group_keys: list[str],
+    value: str,
+    n_resamples: int = 1000,
+    seed: int = 0,
+) -> list[GroupStat]:
+    """Group records by ``config[group_keys]`` and bootstrap the mean of ``config[value]``.
+
+    A generic companion to :func:`aggregate_curve` for ablations (E4): the grouped
+    quantity is an arbitrary numeric ``config`` field (e.g. ``"step_accuracy"``),
+    not the faithful horizon. Points are returned sorted by their key tuple.
+    """
+    groups: dict[tuple[str, ...], list[float]] = {}
+    for record in records:
+        key = tuple(str(record.config[k]) for k in group_keys)
+        groups.setdefault(key, []).append(float(record.config[value]))
+
+    stats: list[GroupStat] = []
+    for key, values in sorted(groups.items()):
+        lo, hi = bootstrap_ci(values, n_resamples=n_resamples, seed=seed)
+        stats.append(GroupStat(key=key, mean=fmean(values), ci_low=lo, ci_high=hi, n=len(values)))
+    return stats
+
+
+@dataclass(frozen=True)
 class CurvePoint:
     difficulty: str
     epsilon: float
