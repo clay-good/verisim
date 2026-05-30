@@ -19,7 +19,7 @@ from verisim.env.config import EnvConfig
 from verisim.env.state import State
 from verisim.oracle.base import Oracle
 
-from ..model.tokenizer import encode_prompt, encode_target
+from ..model.tokenizer import encode_prompt, encode_state_target, encode_target
 from ..model.vocab import Vocab
 
 IGNORE_INDEX = -100
@@ -51,6 +51,36 @@ def examples_from_rollout(
     return examples
 
 
+def state_examples_from_rollout(
+    oracle: Oracle,
+    vocab: Vocab,
+    config: EnvConfig,
+    driver: str,
+    seed: int,
+    n_steps: int,
+) -> list[Example]:
+    """Like :func:`examples_from_rollout` but with the *full next state* as target.
+
+    The full-state representation (SPEC-2 §9 ablation): the prompt is the same
+    ``<bos> state action <gen>``, but the target is :func:`encode_state_target`
+    (the whole next state + ``<eos>``) instead of the encoded delta.
+    """
+    driver_obj = Driver(name=driver, config=config, rng=random.Random(seed))
+    state = State.empty()
+    examples: list[Example] = []
+    for _ in range(n_steps):
+        action = driver_obj.sample(state)
+        result = oracle.step(state, action)
+        examples.append(
+            (
+                encode_prompt(state, action, vocab),
+                encode_state_target(result.state, result.stdout, vocab),
+            )
+        )
+        state = result.state
+    return examples
+
+
 def build_dataset(
     oracle: Oracle,
     vocab: Vocab,
@@ -59,10 +89,17 @@ def build_dataset(
     driver: str = "weighted",
     seeds: tuple[int, ...] = (0,),
     n_steps: int = 40,
+    target: str = "delta",
 ) -> list[Example]:
+    """Build supervised examples; ``target`` selects the prediction representation.
+
+    ``"delta"`` (default) targets the structured edit sequence (the primary M_θ);
+    ``"state"`` targets the full next state (the §9 representation-ablation arm).
+    """
+    builder = examples_from_rollout if target == "delta" else state_examples_from_rollout
     examples: list[Example] = []
     for seed in seeds:
-        examples += examples_from_rollout(oracle, vocab, config, driver, seed, n_steps)
+        examples += builder(oracle, vocab, config, driver, seed, n_steps)
     return examples
 
 

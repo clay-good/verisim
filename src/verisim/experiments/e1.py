@@ -101,7 +101,9 @@ def eval_actions(
     return actions
 
 
-def train_model(config: E1Config, vocab: Vocab, oracle: Oracle, env: EnvConfig) -> GPT:
+def train_model(
+    config: E1Config, vocab: Vocab, oracle: Oracle, env: EnvConfig, *, target: str = "delta"
+) -> GPT:
     # Bit-reproducibility across *processes* (SPEC-2 §12), not just within one:
     # multi-threaded CPU reductions are non-associative, so two runs of the same
     # config drift in the low bits -- invisible to E1's argmax deltas but enough to
@@ -120,6 +122,7 @@ def train_model(config: E1Config, vocab: Vocab, oracle: Oracle, env: EnvConfig) 
         driver=config.train_driver,
         seeds=config.train_seeds,
         n_steps=config.train_steps_per_traj,
+        target=target,
     )
     model = GPT(
         GPTConfig(

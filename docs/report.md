@@ -3,7 +3,8 @@
 > The v0 result, stated honestly. This is the short write-up SPEC-2 §13 (M8) calls
 > for: the experiments that produce figures — E1 (the curve), E2/E3 (policy and
 > operator comparisons), the §7.2 calibration diagnostic, and the E4 ablation
-> (size/difficulty and the supervised-vs-+RLVR objective axis) — what
+> (size/difficulty, the supervised-vs-+RLVR objective axis, and the delta-vs-full-state
+> representation axis) — what
 > they show, and what they do not. Every number here is read from a committed
 > run-record CSV and is regenerable from a config + seeds (SPEC-2 §12). Figures live
 > in [`../figures/`](../figures/).
@@ -182,8 +183,35 @@ once the model already sustains a non-trivial horizon, which is the difficulty
 co-tuning (§17.5) this scale has not yet reached. The machinery is correct and tested
 ([`tests/test_rlvr.py`](../tests/test_rlvr.py): it learns from scratch on a tiny env
 and does not collapse a faithful model); what it needs is a task with horizon to
-extend. The last §9 axis — **representation** (delta vs. full-state) — still needs a
-full-state head and is left for later.
+extend.
+
+### Representation axis: delta vs. full-state (§9, §10)
+
+The last §9 axis asks whether the **prediction target** matters: predict the localized
+**delta** (the primary `M_θ`) or regenerate the **full next state**? SPEC.md §6.1 argues
+delta should win — it bounds the hallucination surface and localizes verification. To
+measure it, a full-state head was built (the `StateGrammar` +
+[`constrained_decode_state`](../src/verisim/model/decode.py) +
+[`FullStateWorldModel`](../src/verisim/model/full_state.py), which constrained-decode the
+*whole* next state the way the delta decoder constrains edits) and trained on identical
+data to the delta model; both are scored on the same clean (ρ=0) metrics, 5 seeds/cell
+([`representation.png`](../figures/representation.png),
+[`representation.csv`](../figures/representation.csv)).
+
+| representation | clean acc (low) | clean acc (high) | clean horizon (high) |
+|----------------|-----------------|------------------|----------------------|
+| delta | 0.07 | 0.15 | 0.2 |
+| full_state | 0.00 | 0.03 | 0.0 |
+
+This is the **first E4 axis with a clear directional result**: delta dominates full-state
+at every cell (clean per-step accuracy 0.07/0.15 vs. 0.00/0.03 on low/high; clean horizon
+0/0.2 vs. 0/0), confirming SPEC.md §6.1. The reason is structural and on-thesis — to score
+a step, the full-state model must regenerate *every* fact of the next world correctly
+(grammar-validity is free, but faithfulness of the whole tree is not), whereas the delta
+model need only emit the handful of edits the action makes; the larger target surface is a
+strictly lower faithfulness floor. The committed scale is tiny, so the absolute numbers are
+floor-level for both arms, but the *ordering* — delta > full-state — is exactly the
+prediction the project's representation choice rests on, now measured rather than asserted.
 
 ## Threats to validity
 
@@ -223,6 +251,9 @@ python figures/plot_e4.py --records runs/e4/records.jsonl
 python -m verisim.experiments.objective --config configs/objective.json \
     --out runs/objective/records.jsonl
 python figures/plot_objective.py --records runs/objective/records.jsonl
+python -m verisim.experiments.representation --config configs/representation.json \
+    --out runs/representation/records.jsonl
+python figures/plot_representation.py --records runs/representation/records.jsonl
 ```
 
 The run-records are git-ignored (regenerable); the figures and their CSVs are

@@ -13,9 +13,10 @@ from __future__ import annotations
 import torch
 
 from verisim.delta.edits import Delta
+from verisim.env.state import State
 
-from .grammar import DeltaGrammar
-from .tokenizer import parse_target
+from .grammar import DeltaGrammar, StateGrammar
+from .tokenizer import parse_state_target, parse_target
 from .transformer import GPT
 from .vocab import Vocab
 
@@ -145,3 +146,73 @@ def constrained_decode_with_uncertainty(
         max_run=max_run,
         max_new_tokens=max_new_tokens,
     )
+
+
+@torch.no_grad()
+def constrained_decode_state(
+    model: GPT,
+    prompt_ids: list[int],
+    vocab: Vocab,
+    grammar: StateGrammar | None = None,
+    *,
+    max_fs_entries: int = 256,
+    max_env_entries: int = 64,
+    max_run: int = 256,
+    max_new_tokens: int = 8192,
+) -> State:
+    """Greedily decode a full *state* (the full-state representation, SPEC-2 §9).
+
+    Masks the model's logits to the :class:`StateGrammar`'s allowed next tokens, so
+    the decoded sequence always parses into a valid :class:`State` regardless of the
+    model's weights -- the full-state analogue of :func:`constrained_decode`.
+    Termination is guaranteed: the filesystem-entry and env-binding loops are capped
+    (forcing ``<cwd>`` / ``<last>``) and each repeating leaf run is capped (forcing
+    its closing token); all forced tokens are grammar-valid where forced.
+    """
+    grammar = grammar or StateGrammar(vocab)
+    model.eval()
+    device = next(model.parameters()).device
+    block_size = model.config.block_size
+    cwd_id = vocab.id("<cwd>")
+    last_id = vocab.id("<last>")
+
+    seq = list(prompt_ids)
+    generated: list[int] = []
+    stack = grammar.start()
+    fs_entries = 0
+    env_entries = 0
+    prev_top: str | None = None
+    run = 0
+
+    while not grammar.is_accept(stack):
+        if len(generated) >= max_new_tokens:
+            raise RuntimeError("constrained_decode_state exceeded max_new_tokens")
+        top = stack[0]
+        run = run + 1 if top == prev_top else 0
+
+        window = seq[-block_size:]
+        logits = model(torch.tensor([window], dtype=torch.long, device=device))[0, -1]
+
+        allowed = grammar.allowed(stack)
+        if top == "FS" and fs_entries >= max_fs_entries:
+            allowed = frozenset({cwd_id})
+        elif top == "EE" and env_entries >= max_env_entries:
+            allowed = frozenset({last_id})
+        elif top in _CLOSE_TOKEN and run >= max_run:
+            allowed = frozenset({vocab.id(_CLOSE_TOKEN[top])})
+
+        mask = torch.full((len(vocab),), float("-inf"), device=device)
+        mask[list(allowed)] = 0.0
+        token = int(torch.argmax(logits + mask).item())
+
+        if top == "FS" and token == vocab.id("<p>"):
+            fs_entries += 1
+        elif top == "EE" and token in vocab.envkey_ids:
+            env_entries += 1
+        stack = grammar.advance(stack, token)
+        seq.append(token)
+        generated.append(token)
+        prev_top = top
+
+    state, _ = parse_state_target(generated, vocab)
+    return state

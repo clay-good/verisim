@@ -40,4 +40,10 @@ python -m verisim.experiments.objective --config configs/objective.json \
 python figures/plot_objective.py --records runs/objective/records.jsonl \
     --out figures/objective.png --csv figures/objective.csv
 
-echo "== done: figures/{e1_curve,e2_policies,e3_operators,calibration,e4_ablation,objective}.{png,csv} =="
+echo "== E4 representation axis: delta vs. full-state (trains two models; slower) =="
+python -m verisim.experiments.representation --config configs/representation.json \
+    --out runs/representation/records.jsonl
+python figures/plot_representation.py --records runs/representation/records.jsonl \
+    --out figures/representation.png --csv figures/representation.csv
+
+echo "== done: figures/{e1_curve,e2_policies,e3_operators,calibration,e4_ablation,objective,representation}.{png,csv} =="

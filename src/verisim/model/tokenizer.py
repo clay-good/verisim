@@ -33,7 +33,7 @@ from verisim.delta.edits import (
     SetResult,
 )
 from verisim.env.action import Action
-from verisim.env.state import Dir, File, Node, State, content_hash
+from verisim.env.state import Dir, File, Last, Node, State, content_hash
 
 from .vocab import Vocab
 
@@ -188,6 +188,20 @@ def encode_prompt(state: State, action: Action, vocab: Vocab) -> list[int]:
     return [vocab.bos, *encode_state(state, vocab), *encode_action(action, vocab), vocab.gen]
 
 
+def encode_state_target(state: State, stdout: str, vocab: Vocab) -> list[int]:
+    """Encode a full *next state* as the model target (the full-state representation).
+
+    The alternative prediction target to :func:`encode_target` (SPEC-2 §9 / §10
+    ablation: delta vs. full-state). It is :func:`encode_state` extended with the
+    ``last`` stdout tokens (so the target carries the same observation facts the
+    delta's ``SetResult`` does -- a fair comparison; the divergence metric scores
+    ``last.stdout_hash``) and terminated by ``<eos>``. The model thus regenerates
+    the whole world rather than the edits, and constrained decoding (the
+    :class:`~verisim.model.grammar.StateGrammar`) keeps the output a valid state.
+    """
+    return [*encode_state(state, vocab), *_stdout_ids(stdout, vocab), vocab.eos]
+
+
 # --- parser (inverse of encode_target) --------------------------------------
 
 
@@ -319,12 +333,50 @@ def parse_target(ids: list[int], vocab: Vocab) -> tuple[Delta, str]:
     return delta, stdout
 
 
+def parse_state_target(ids: list[int], vocab: Vocab) -> tuple[State, str]:
+    """Parse a full-state target sequence into ``(state, stdout)``; raise if malformed.
+
+    The exact inverse of :func:`encode_state_target` (and of :func:`encode_state`
+    for the shared prefix): filesystem entries until ``<cwd>``, the cwd path, env
+    bindings until ``<last>``, the last exit code, and the stdout tokens. The
+    reconstructed ``last.stdout_hash`` is ``content_hash(stdout)``, matching the
+    oracle's representation.
+    """
+    cur = _Cursor(ids, vocab)
+    cur.expect("<state>")
+    fs: dict[str, Node] = {}
+    cwd_marker = vocab.id("<cwd>")
+    while cur.peek() != cwd_marker:
+        path = _parse_path(cur)
+        fs[path] = _parse_node(cur)
+    cur.take()  # <cwd>
+    cwd = _parse_path(cur)
+    cur.expect("<env>")
+    env: dict[str, str] = {}
+    last_marker = vocab.id("<last>")
+    while cur.peek() != last_marker:
+        key_tok = cur.take()
+        val_tok = cur.take()
+        if key_tok not in vocab.id_to_envkey or val_tok not in vocab.id_to_content:
+            raise TokenizeError("malformed env binding")
+        env[vocab.id_to_envkey[key_tok]] = vocab.id_to_content[val_tok]
+    cur.take()  # <last>
+    exit_tok = cur.take()
+    if exit_tok not in vocab.id_to_exit:
+        raise TokenizeError("malformed last exit code")
+    stdout = _parse_stdout(cur)
+    last = Last(exit_code=vocab.id_to_exit[exit_tok], stdout_hash=content_hash(stdout))
+    return State(fs=fs, cwd=cwd, env=env, last=last), stdout
+
+
 __all__ = [
     "TokenizeError",
     "encode_action",
     "encode_prompt",
     "encode_state",
+    "encode_state_target",
     "encode_target",
     "greedy_decompose",
+    "parse_state_target",
     "parse_target",
 ]

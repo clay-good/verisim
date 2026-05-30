@@ -12,12 +12,15 @@ pytest.importorskip("torch")
 
 from verisim.data.drivers import DRIVERS, Driver
 from verisim.env import DEFAULT_CONFIG, State, parse_action
-from verisim.model.grammar import DeltaGrammar
+from verisim.metrics.divergence import divergence
+from verisim.model.grammar import DeltaGrammar, StateGrammar
 from verisim.model.tokenizer import (
     TokenizeError,
     encode_prompt,
+    encode_state_target,
     encode_target,
     greedy_decompose,
+    parse_state_target,
     parse_target,
 )
 from verisim.model.vocab import Vocab
@@ -51,6 +54,31 @@ def test_target_roundtrip_and_grammar_acceptance(driver_name: str):
 
         delta2, stdout2 = parse_target(target, VOCAB)
         assert delta2 == result.delta
+        assert stdout2 == result.stdout
+
+        stack = grammar.start()
+        for token in target:
+            assert token in grammar.allowed(stack)
+            stack = grammar.advance(stack, token)
+        assert grammar.is_accept(stack)
+
+        state = result.state
+
+
+@pytest.mark.parametrize("driver_name", DRIVERS)
+def test_state_target_roundtrip_and_grammar_acceptance(driver_name: str):
+    """parse_state_target(encode_state_target(s, stdout)) reconstructs s exactly, and
+    every encoded full-state target is accepted by the StateGrammar automaton."""
+    oracle = ReferenceOracle()
+    grammar = StateGrammar(VOCAB)
+    driver = Driver(name=driver_name, config=DEFAULT_CONFIG, rng=random.Random(29))
+    state = State.empty()
+    for _ in range(120):
+        result = oracle.step(state, driver.sample(state))
+        target = encode_state_target(result.state, result.stdout, VOCAB)
+
+        parsed, stdout2 = parse_state_target(target, VOCAB)
+        assert divergence(parsed, result.state) == 0.0
         assert stdout2 == result.stdout
 
         stack = grammar.start()

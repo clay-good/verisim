@@ -1,0 +1,5 @@
+representation,difficulty,mean_accuracy,acc_ci_low,acc_ci_high,mean_horizon,horizon_ci_low,horizon_ci_high,n
+delta,high,0.15,0.09166666666666666,0.21666666666666665,0.2,0.0,0.6,5
+delta,low,0.06666666666666667,0.025,0.11666666666666665,0.0,0.0,0.0,5
+full_state,high,0.03333333333333333,0.008333333333333333,0.05833333333333333,0.0,0.0,0.0,5
+full_state,low,0.0,0.0,0.0,0.0,0.0,0.0,5
