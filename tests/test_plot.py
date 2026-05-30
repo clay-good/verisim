@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 import subprocess
 import sys
 
@@ -81,3 +82,30 @@ def test_plot_comparison_writes_figure_and_csv(tmp_path):
     assert out.exists() and out.stat().st_size > 0
     assert csv.exists()
     assert "label,epsilon,mean_h" in csv.read_text()
+
+
+def test_plot_calibration_writes_figure_and_csv(tmp_path):
+    pairs = tmp_path / "pairs.jsonl"
+    # A monotone signal->divergence relationship so the reliability curve is non-trivial.
+    pairs.write_text(
+        "\n".join(
+            json.dumps({"signal": s / 10.0, "divergence": s / 20.0}) for s in range(11)
+        )
+        + "\n"
+    )
+    out = tmp_path / "cal.png"
+    csv = tmp_path / "cal.csv"
+    result = subprocess.run(
+        [
+            sys.executable, "figures/plot_calibration.py",
+            "--pairs", str(pairs), "--out", str(out), "--csv", str(csv), "--bins", "5",
+        ],
+        capture_output=True,
+        text=True,
+    )
+    assert result.returncode == 0, result.stderr
+    assert out.exists() and out.stat().st_size > 0
+    assert csv.exists()
+    text = csv.read_text()
+    assert "lo,hi,mean_signal,mean_divergence,n" in text
+    assert "pearson,spearman" in text

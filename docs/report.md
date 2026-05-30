@@ -82,6 +82,28 @@ model this small that entropy does not track actual divergence. **H2 is refuted 
 this scale**, and the next lever is explicit: calibrate the uncertainty signal
 (SPEC-2 §17.2) before re-running.
 
+### Why the smart policies lose: the calibration diagnostic (§7.2)
+
+The H2 reversal has a measurable cause. The §7.2 uncertainty-calibration diagnostic
+collects per-step `(signal, divergence)` pairs — the model's decode-entropy
+confidence against its *actual* error that step, teacher-forced so it is uncompounded
+— and asks whether confidence predicts error
+([`calibration.png`](../figures/calibration.png), [`calibration.csv`](../figures/calibration.csv),
+240 pairs):
+
+| Pearson | Spearman | mean divergence |
+|---------|----------|-----------------|
+| 0.11 | 0.18 | 0.16 |
+
+Both correlations are near zero, and the reliability curve is essentially **flat**:
+the model's *most confident* steps (lowest-entropy bin) carry divergence ≈ 0.14, no
+better than its least confident (≈ 0.20). So the entropy signal carries almost no
+information about where the model errs — which is exactly why a policy that spends the
+budget on high-entropy steps cannot beat one that spreads it evenly. This turns "H2 is
+refuted" into a concrete, falsifiable next step: a triggered policy can only help once
+the signal it keys off is calibrated (SPEC-2 §17.2), so the diagnostic — not a new
+policy — is the lever to move next.
+
 ## E3 — correction operator (H3)
 
 Fix `fixed`/`ρ = 0.2`; compare `hard_reset` vs. `residual` vs. `projection`, 10
@@ -132,6 +154,9 @@ python figures/plot_comparison.py --records runs/e2/records.jsonl --key policy \
 python -m verisim.experiments.e3 --config configs/e3.json --out runs/e3/records.jsonl
 python figures/plot_comparison.py --records runs/e3/records.jsonl --key operator \
     --out figures/e3_operators.png --csv figures/e3_operators.csv
+python -m verisim.experiments.calibration --config configs/calibration.json \
+    --out runs/calibration/pairs.jsonl
+python figures/plot_calibration.py --pairs runs/calibration/pairs.jsonl
 ```
 
 The run-records are git-ignored (regenerable); the figures and their CSVs are

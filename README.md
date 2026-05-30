@@ -87,8 +87,9 @@ python figures/plot_comparison.py --records runs/e3/records.jsonl --key operator
 - **E2 (H2):** at equal budget `fixed` (`H_ε≈1.4`) *beats* both triggered policies
   (`uncertainty≈0.6`, `drift≈0.1`). The model's decode-entropy uncertainty signal
   ([SPEC-2 §7.2](./SPEC-2.md)) is not yet calibrated enough at this scale to beat
-  naive even-spacing — a reportable negative that points at uncertainty calibration
-  as the next lever.
+  naive even-spacing. The **calibration diagnostic** ([`figures/calibration.png`](figures/calibration.png),
+  Pearson ≈ 0.11) measures exactly this: confidence barely predicts error, so the
+  signal — not a new policy — is the lever to move next.
 - **E3 (H3):** all three operators give an **identical** `H_ε≈1.3` with identical
   CIs. This is the expected v0 *identity*: with a full-state one-step oracle truth,
   every operator snaps the coupled state to the same `s'`. `residual` and
