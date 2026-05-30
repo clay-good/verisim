@@ -1,6 +1,8 @@
 # Verisim — v0 Engineering & Experiment Specification (SPEC-2.md)
 
 > The buildable companion to [SPEC.md](./SPEC.md). SPEC.md is the science (why, what we claim, how we'd know we're wrong). **This document is the build**: the exact v0 environment, oracle, model, metrics, baselines, repo layout, tech stack, reproducibility regime, and milestone plan. It is written so that someone (the author, a collaborator, or a coding agent) can start implementing immediately and so that every experiment that produces a figure in the paper is fully specified here first.
+>
+> **After v0:** [SPEC-3.md](./SPEC-3.md) is the depth expansion (the real system oracle, network/multi-host state, partial observability, the self-healing online-adaptation loop, the information-theoretic bits-to-correct metric, and the SOTA lessons), and [SPEC-4.md](./SPEC-4.md) is the Autonomous Research Engine that drives the whole program with the human out of the loop. The v0 autoresearch ratchet specified at §17.5 is the seed of SPEC-4.
 
 **License:** MIT. **Scope of this doc:** Phase 0 (v0) only — see SPEC.md §12 for later phases. **Prime directive:** *the only job of v0 is to plot `H_ε(ρ)` once, cleanly, and test H1–H3.* Everything below serves that and refuses scope creep.
 

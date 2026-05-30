@@ -2,7 +2,7 @@
 
 > **Verisim** *(n., from* verisimilitude *— "the quality of resembling reality")*: a research program and open-source codebase for building **oracle-grounded, neuro-symbolic world models of computer environments**, where a deterministic oracle keeps a learned simulator faithful over long horizons.
 
-**License:** MIT. **Status:** v0, pre-experiment. **Audience:** the author (a security/systems engineer pivoting into ML research), future collaborators, and reviewers. **Companion document:** [SPEC-2.md](./SPEC-2.md) — the concrete v0 engineering and experiment specification. This document is the *science*; SPEC-2 is the *build*.
+**License:** MIT. **Status:** v0, pre-experiment. **Audience:** the author (a security/systems engineer pivoting into ML research), future collaborators, and reviewers. **Companion documents:** [SPEC-2.md](./SPEC-2.md) — the concrete v0 engineering and experiment specification (the *build*); [SPEC-3.md](./SPEC-3.md) — the depth expansion (system oracle, networks, partial observability, self-healing, the information-theoretic metric); [SPEC-4.md](./SPEC-4.md) — the Autonomous Research Engine that builds it all with the human out of the loop. This document is the *science*; SPEC-2 is the *v0 build*; SPEC-3 is *what it becomes*; SPEC-4 is *how it builds itself*.
 
 This file is intended to be read top to bottom by someone who has never seen the project, and to remain the canonical statement of *why the project exists, what it claims, and how we would know if we were wrong*. It is deliberately exhaustive. Sections 1–4 are the argument; 5–7 are the formalism; 8 is positioning; 9–10 are how we test it; 11–16 are scope, risk, and roadmap.
 
@@ -263,7 +263,7 @@ Any one of (1)–(3) is a meaningful, citable contribution achievable by a non-P
 
 ## 16. Provenance and reading order
 
-- **Read next:** [SPEC-2.md](./SPEC-2.md) — the concrete v0 environment, oracle, model, metrics, baselines, repo layout, and milestones.
+- **Read next:** [SPEC-2.md](./SPEC-2.md) — the concrete v0 environment, oracle, model, metrics, baselines, repo layout, and milestones. Then [SPEC-3.md](./SPEC-3.md) (the depth: real system oracle, networks, partial observability, self-healing, bits-to-correct) and [SPEC-4.md](./SPEC-4.md) (the autonomous research engine).
 - **Author:** Clay Good. **License:** MIT (see [LICENSE](./LICENSE)). **No telemetry, no commercial path** — this is a research repo.
 - **Citations / state of the art** referenced above (Genie 3, V-JEPA 2, Cosmos, neuro-symbolic world models, CybORG/CyGIL/PrimAITE, VIRF/EIDOKU/SymCode, RLVR) are current as of May 2026; a maintained bibliography lives in [`docs/related-work.md`](./docs/related-work.md) with one-line takes.
 - This document will evolve. When a hypothesis in §9 is tested, its result and the experiment that produced it are linked here and the hypothesis is marked confirmed/refuted/open. The spec is the living record of what we believed and what we learned.

@@ -66,3 +66,50 @@
 - **Prime Intellect Environments Hub / `verifiers`** — community RL environments with a
   verifiable-reward spec. *Take:* Verisim's oracle-as-reward env conforms to the
   `load_environment` entrypoint ([`verisim.rl`](../src/verisim/rl/)).
+
+## SPEC-3 / SPEC-4 era — depth and the autonomous engine (May 2026)
+
+> The references that ground [SPEC-3.md](../SPEC-3.md) (depth) and [SPEC-4.md](../SPEC-4.md)
+> (the autonomous research engine). Name + venue + year, per this file's no-fabricated-links
+> policy; arXiv IDs are given only where independently verified.
+
+- **Speculative decoding** — Leviathan et al. (Google, 2023); Chen et al. (DeepMind, 2023);
+  **Medusa**; **EAGLE / EAGLE-2** (2024, arXiv:2406.16858). *Take:* the draft+verify pattern
+  is structurally identical to Verisim's neural-proposer + oracle-verifier loop (SPEC-3 §8);
+  EAGLE-2's confidence↔acceptance calibration (≈0.05→0.04, ≈0.95→0.98) is the theory behind a
+  confidence-gated consultation policy (RQ2/H9), and the ~0.5-acceptance net-negative floor
+  bounds the useful ρ regime (SPEC-3 HW-3).
+- **Test-time training / adaptation** — TTT layers; **TTT for ARC** (Akyürek et al., MIT, 2024);
+  **LoRA-TTT** (2025); PETAL, AR-TTA, ReservoirTTA (TTA continual-learning line, 2025). *Take:*
+  the recipe for the §6 self-healing loop — small-lr, replay, low-rank/selective updates, EMA +
+  trust-region revert; per-step gradient updates without these forget catastrophically (SPEC-3 HW-2).
+- **Autonomous research agents** — Karpathy **autoresearch** (2026, single-GPU nanochat, `val_bpb`
+  gate, keep-if-better, fixed shard+budget anti-gaming); Sakana **AI Scientist v1/v2** (2025,
+  arXiv:2504.08066) and its documented eval-hacking (smaller/synthetic datasets); Google AI
+  co-scientist; DiscoPOP / population-based training / Bayesian opt. *Take:* the blueprint and the
+  cautionary tale for SPEC-4 — the deterministic oracle is the anti-hacking asset, but only on a
+  frozen, proposer-independent eval (SPEC-4 §5, §9).
+- **RL with verifiable rewards (extended)** — **DeepSeek-R1** (2025; rule-based verifiable rewards,
+  *refused* neural reward models for hacking risk); **GRPO** (Shao et al., 2024, critic-free).
+  *Take:* the oracle is the purest verifiable reward; prefer GRPO (no learned critic to hack) and
+  keep the reward strictly oracle-derived (SPEC-4 §10). Gap: RLVR is charted for reasoners, not
+  next-state predictors — dense per-field reward likely needed.
+- **Information-theoretic evaluation** — bits-per-byte; **MDL** (Rissanen, 1978); **prequential /
+  description length of deep learning models** (Blier & Ollivier, NeurIPS 2018). *Take:* the basis
+  for the §7 bits-to-correct metric — scale-free, tokenizer-independent, 0 iff faithful, computed
+  prequentially over a rollout.
+- **Small-model data-centrism** — **phi-1 … phi-4** ("Textbooks Are All You Need", Microsoft,
+  2023–2024). *Take:* the H1/H6 lever — clean accuracy ~0.1 is a data/curriculum problem, not a
+  parameter-count one (consistent with the committed E4 finding); fix with oracle-generated,
+  curriculum-ordered, coverage-balanced synthetic transitions and distillation (SPEC-3 §5).
+- **Partial observability / belief-state world models** — **RSSM** (PlaNet/Dreamer, ICLR 2020);
+  TransDreamer; Mamba-based variants. *Take:* the §4 hybrid — keep the explicit checkable state for
+  the observed part, add an RSSM latent for the unobserved part; oracle consults are belief resets.
+- **Deterministic system-oracle infrastructure** — **rr** (record/replay); **Hermit** (Facebook,
+  hermetic determinism over time/threads/RNG); **gVisor** (user-space syscall sandbox); CRIU;
+  mininet / containerlab. *Take:* the §2 system oracle is built on these; concurrency/thread
+  interleaving is the one hard wall they tame only at cost (SPEC-3 HW-1).
+- **Autonomous cyber defense (updated)** — **CAGE-4** (2024); **CybORG++** (2024); **CyGIL**;
+  **FARLAND** (unified emulation–simulation). *Take:* the sim-to-emulation transfer the field
+  *asserts* (e.g. CyGIL "full transferability") is **unquantified** — Verisim's opening is to lead
+  with a measured `H_ε(ρ)` against a real emulator oracle (SPEC-3 §3.3).
