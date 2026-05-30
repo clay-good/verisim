@@ -26,23 +26,23 @@ _CLOSE_TOKEN = {"PATH_SEG": "</p>", "CONTENT_TOK": "</c>", "STDOUT_TOK": "</o>"}
 
 
 @torch.no_grad()
-def constrained_decode(
+def _decode_core(
     model: GPT,
     prompt_ids: list[int],
     vocab: Vocab,
-    grammar: DeltaGrammar | None = None,
+    grammar: DeltaGrammar | None,
     *,
-    max_edits: int = 64,
-    max_run: int = 256,
-    max_new_tokens: int = 4096,
-) -> tuple[Delta, str]:
-    """Greedily decode the delta for ``prompt_ids``; return ``(delta, stdout)``.
+    max_edits: int,
+    max_run: int,
+    max_new_tokens: int,
+) -> tuple[Delta, str, float]:
+    """Greedy constrained decode; return ``(delta, stdout, mean_entropy)``.
 
-    Termination is guaranteed: the top-level edit count is capped at ``max_edits``
-    (forcing ``<eos>``) and each repeating leaf run is capped at ``max_run``
-    (forcing its closing token). Both forced tokens are always grammar-valid in
-    their state, so the result is still a valid delta. ``max_new_tokens`` is a hard
-    backstop that should never trigger.
+    ``mean_entropy`` is the mean over decoded steps of the Shannon entropy (nats) of
+    the masked next-token distribution -- the model's per-prediction uncertainty
+    (SPEC-2 §7.2). It is ``0`` when every step's choice is forced (a single allowed
+    token, e.g. a fully overfit model on a grammar with one continuation) and grows
+    as the model spreads probability across the grammar-valid alternatives.
     """
     grammar = grammar or DeltaGrammar(vocab)
     model.eval()
@@ -55,6 +55,7 @@ def constrained_decode(
     edits = 0
     prev_top: str | None = None
     run = 0
+    entropy_sum = 0.0
 
     while not grammar.is_accept(stack):
         if len(generated) >= max_new_tokens:
@@ -73,7 +74,11 @@ def constrained_decode(
 
         mask = torch.full((len(vocab),), float("-inf"), device=device)
         mask[list(allowed)] = 0.0
-        token = int(torch.argmax(logits + mask).item())
+        masked = logits + mask
+        token = int(torch.argmax(masked).item())
+
+        probs = torch.softmax(masked, dim=-1)
+        entropy_sum += float(-(probs * torch.log(probs.clamp_min(1e-12))).sum().item())
 
         if top == "DELTA" and token in vocab.op_ids:
             edits += 1
@@ -82,4 +87,61 @@ def constrained_decode(
         generated.append(token)
         prev_top = top
 
-    return parse_target(generated, vocab)
+    delta, stdout = parse_target(generated, vocab)
+    return delta, stdout, entropy_sum / max(1, len(generated))
+
+
+def constrained_decode(
+    model: GPT,
+    prompt_ids: list[int],
+    vocab: Vocab,
+    grammar: DeltaGrammar | None = None,
+    *,
+    max_edits: int = 64,
+    max_run: int = 256,
+    max_new_tokens: int = 4096,
+) -> tuple[Delta, str]:
+    """Greedily decode the delta for ``prompt_ids``; return ``(delta, stdout)``.
+
+    Termination is guaranteed: the top-level edit count is capped at ``max_edits``
+    (forcing ``<eos>``) and each repeating leaf run is capped at ``max_run``
+    (forcing its closing token). Both forced tokens are always grammar-valid in
+    their state, so the result is still a valid delta. ``max_new_tokens`` is a hard
+    backstop that should never trigger.
+    """
+    delta, stdout, _ = _decode_core(
+        model,
+        prompt_ids,
+        vocab,
+        grammar,
+        max_edits=max_edits,
+        max_run=max_run,
+        max_new_tokens=max_new_tokens,
+    )
+    return delta, stdout
+
+
+def constrained_decode_with_uncertainty(
+    model: GPT,
+    prompt_ids: list[int],
+    vocab: Vocab,
+    grammar: DeltaGrammar | None = None,
+    *,
+    max_edits: int = 64,
+    max_run: int = 256,
+    max_new_tokens: int = 4096,
+) -> tuple[Delta, str, float]:
+    """Like :func:`constrained_decode` but also returns the mean decode entropy.
+
+    The entropy is the per-step uncertainty signal that the ``uncertainty``/``drift``
+    consultation policies threshold (SPEC-2 §6.1, §7.2).
+    """
+    return _decode_core(
+        model,
+        prompt_ids,
+        vocab,
+        grammar,
+        max_edits=max_edits,
+        max_run=max_run,
+        max_new_tokens=max_new_tokens,
+    )

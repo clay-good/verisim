@@ -33,6 +33,20 @@ class Model(Protocol):
     def predict_delta(self, state: State, action: Action) -> Delta: ...
 
 
+@runtime_checkable
+class UncertaintyModel(Protocol):
+    """A :class:`Model` that also reports its per-prediction uncertainty (§7.2).
+
+    The signal drives the ``uncertainty``/``drift``-triggered consultation policies
+    (SPEC-2 §6.1). Models without one (the baselines below) simply do not implement
+    this protocol, and the runner treats their signal as ``0``.
+    """
+
+    def predict_delta_with_uncertainty(
+        self, state: State, action: Action
+    ) -> tuple[Delta, float]: ...
+
+
 class NullModel:
     """b3 trivial predictor: predicts no change (the empty delta)."""
 

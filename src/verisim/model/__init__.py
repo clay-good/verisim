@@ -7,7 +7,7 @@ without torch if needed.
 
 from __future__ import annotations
 
-from .decode import constrained_decode
+from .decode import constrained_decode, constrained_decode_with_uncertainty
 from .grammar import DeltaGrammar
 from .tokenizer import encode_prompt, encode_target, parse_target
 from .transformer import GPT, GPTConfig
@@ -21,6 +21,7 @@ __all__ = [
     "NeuralWorldModel",
     "Vocab",
     "constrained_decode",
+    "constrained_decode_with_uncertainty",
     "encode_prompt",
     "encode_target",
     "parse_target",

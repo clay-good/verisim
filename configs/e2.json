@@ -1,0 +1,23 @@
+{
+  "name": "e2-small",
+  "rho": 0.2,
+  "policies": ["fixed", "uncertainty", "drift"],
+  "base": {
+    "name": "e2-small",
+    "train_driver": "weighted",
+    "train_seeds": [0, 1, 2, 3],
+    "train_steps_per_traj": 40,
+    "n_layer": 2,
+    "n_head": 2,
+    "n_embd": 64,
+    "block_size": 512,
+    "train_iters": 500,
+    "lr": 0.003,
+    "model_seed": 0,
+    "difficulties": { "low": "weighted", "high": "adversarial" },
+    "eval_seeds": [100, 101, 102, 103, 104],
+    "eval_steps": 24,
+    "rhos": [0.2],
+    "epsilons": [0.0, 0.05, 0.1]
+  }
+}

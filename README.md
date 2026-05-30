@@ -33,7 +33,8 @@ SPEC-2 §13 — is implemented and tested:
 | **M5** | Propose–verify–correct loop: `fixed` policy + `hard_reset` operator + baselines (b2/b3) | ✅ |
 | **M4** | Neural world model `M_θ`: tokenizer, from-scratch transformer, constrained decoder, supervised training | ✅ |
 | **M6** | E1 — the `H_ε(ρ)` curve: sweep harness + bootstrap-CI aggregation + figure (curve plotted; tuning ongoing) | ◐ |
-| M7 | Smart policies (`drift`/`uncertainty`) + operators (`residual`/`projection`) | ⬜ |
+| **M7** | Smart policies (`drift`/`uncertainty`) + operators (`residual`/`projection`); E2/E3 equal-budget comparisons with CIs | ✅ |
+| M8 | Write-up: technical report + packaging (Inspect eval, Prime Intellect environment) | ⬜ |
 
 M0–M3 plus the M5 loop are the deterministic core; they have **no runtime
 dependencies** and need no GPU. The propose–verify–correct loop is built
@@ -62,6 +63,37 @@ does **not** yet show H1's favorable knee. That is a reportable result, not a
 failure (SPEC.md §9); making the interior informative is a model-capacity /
 difficulty tuning problem ([SPEC-2 §17.5](./SPEC-2.md)) and is the continuing M6
 work.
+
+### Policy and operator comparisons (E2 / E3)
+
+E2 fixes the budget at a knee `ρ` and compares the §6.1 consultation policies
+(`fixed` vs. `uncertainty_triggered` vs. `drift_triggered`); E3 fixes the policy
+and compares the §6.2 correction operators (`hard_reset` vs. `residual` vs.
+`projection`). Both are *equal-budget* by construction — the runner spends exactly
+`floor(ρ·T)` oracle calls per arm — so the comparison isolates **where** the budget
+is spent (E2) and **how** corrections are applied (E3).
+
+```bash
+python -m verisim.experiments.e2 --config configs/e2.json --out runs/e2/records.jsonl
+python figures/plot_comparison.py --records runs/e2/records.jsonl --key policy \
+    --out figures/e2_policies.png --csv figures/e2_policies.csv
+python -m verisim.experiments.e3 --config configs/e3.json --out runs/e3/records.jsonl
+python figures/plot_comparison.py --records runs/e3/records.jsonl --key operator \
+    --out figures/e3_operators.png --csv figures/e3_operators.csv
+```
+
+**Honest findings** (small committed config, not a tuned run):
+
+- **E2 (H2):** at equal budget `fixed` (`H_ε≈1.1`) *beats* both triggered policies
+  (`H_ε≈0.2`). The model's decode-entropy uncertainty signal ([SPEC-2 §7.2](./SPEC-2.md))
+  is not yet calibrated enough at this scale to beat naive even-spacing — a
+  reportable negative that points at uncertainty calibration as the next lever.
+- **E3 (H3):** all three operators give an **identical** `H_ε≈1.9` with identical
+  CIs. This is the expected v0 *identity*: with a full-state one-step oracle truth,
+  every operator snaps the coupled state to the same `s'`. `residual` and
+  `projection` differ only in the diagnostic they expose (the online-learning signal
+  magnitude / per-correction repair cost), which is where H3 will bite once partial
+  verification or Stage-2 online learning lands.
 
 ## Quickstart
 
@@ -92,10 +124,10 @@ for cmd in ["mkdir /a", "write /a/f alpha", "mv /a /b", "cat /b/f"]:
 See [SPEC-2.md §10](./SPEC-2.md). The implemented packages live under
 [src/verisim/](src/verisim/): `env/`, `oracle/`, `delta/`, `data/`, `metrics/`,
 `loop/` (the propose–verify–correct runner, policies, operators, baseline
-models), `experiments/` (the baseline sweep and E1), `model/` (the learned model `M_θ`:
+models), `experiments/` (the baseline sweep and E1/E2/E3), `model/` (the learned model `M_θ`:
 vocab, tokenizer, grammar, transformer, constrained decoder), and `train/`
-(Stage-1 supervised training). The E1 config lives in [configs/](configs/) and the
-plotting script + figure in [figures/](figures/).
+(Stage-1 supervised training). The experiment configs live in [configs/](configs/) and the
+plotting scripts + figures in [figures/](figures/).
 
 ## License & posture
 

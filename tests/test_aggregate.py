@@ -5,7 +5,7 @@ from __future__ import annotations
 import math
 from statistics import fmean
 
-from verisim.metrics import RunRecord, aggregate_curve, bootstrap_ci
+from verisim.metrics import RunRecord, aggregate_comparison, aggregate_curve, bootstrap_ci
 
 
 def _record(difficulty: str, rho: float, seed: int, divergences: list[float]) -> RunRecord:
@@ -53,3 +53,32 @@ def test_aggregate_curve_groups_and_summarizes():
     assert by_key[("high", 0.0)].mean_h == 0.0
     # Points are sorted by (difficulty, epsilon, rho).
     assert points == sorted(points, key=lambda p: (p.difficulty, p.epsilon, p.rho))
+
+
+def _comparison_record(label: str, seed: int, divergences: list[float], schedule: list[bool]):
+    return RunRecord(
+        config={"policy": label},
+        seed=seed,
+        epsilon=0.0,
+        divergences=divergences,
+        consultation_schedule=schedule,
+    )
+
+
+def test_aggregate_comparison_groups_by_label_with_calls():
+    records = [
+        _comparison_record("fixed", 1, [0.0, 0.5], [True, False]),  # H=1, calls=1
+        _comparison_record("fixed", 2, [0.0, 0.0, 0.5], [True, True, False]),  # H=2, calls=2
+        _comparison_record("drift", 1, [0.5], [True]),  # H=0, calls=1
+        _comparison_record("drift", 2, [0.5], [True]),  # H=0, calls=1
+    ]
+    points = aggregate_comparison(records, key="policy", n_resamples=200)
+    by_label = {p.label: p for p in points}
+
+    assert by_label["fixed"].mean_h == 1.5
+    assert by_label["fixed"].mean_calls == 1.5
+    assert by_label["fixed"].n == 2
+    assert by_label["drift"].mean_h == 0.0
+    assert by_label["drift"].mean_calls == 1.0
+    # Sorted by (label, epsilon).
+    assert points == sorted(points, key=lambda p: (p.label, p.epsilon))

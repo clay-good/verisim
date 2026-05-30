@@ -59,6 +59,68 @@ class CurvePoint:
         }
 
 
+@dataclass(frozen=True)
+class ComparisonPoint:
+    """A single arm of an equal-budget comparison (E2 policies / E3 operators).
+
+    ``label`` is the compared variant (policy or operator name); ``mean_calls`` is
+    the mean oracle consultations spent -- the budget the arms are compared *at*
+    (SPEC-2 §9, "at equal ρ").
+    """
+
+    label: str
+    epsilon: float
+    mean_h: float
+    ci_low: float
+    ci_high: float
+    mean_calls: float
+    n: int
+
+    def to_dict(self) -> dict[str, object]:
+        return {
+            "label": self.label,
+            "epsilon": self.epsilon,
+            "mean_h": self.mean_h,
+            "ci_low": self.ci_low,
+            "ci_high": self.ci_high,
+            "mean_calls": self.mean_calls,
+            "n": self.n,
+        }
+
+
+def aggregate_comparison(
+    records: list[RunRecord], *, key: str, n_resamples: int = 1000, seed: int = 0
+) -> list[ComparisonPoint]:
+    """Group records by ``(config[key], ε)`` and summarize ``H_ε`` with a CI.
+
+    Used for the equal-budget comparisons (E2 over consultation policies, E3 over
+    correction operators): ``key`` is the config field naming the compared variant
+    (``"policy"`` or ``"operator"``). Points are sorted by ``(label, ε)``.
+    """
+    horizons: dict[tuple[str, float], list[float]] = {}
+    calls: dict[tuple[str, float], list[float]] = {}
+    for record in records:
+        group = (str(record.config[key]), record.epsilon)
+        horizons.setdefault(group, []).append(float(record.faithful_horizon))
+        calls.setdefault(group, []).append(float(record.oracle_calls))
+
+    points: list[ComparisonPoint] = []
+    for (label, epsilon), values in sorted(horizons.items()):
+        lo, hi = bootstrap_ci(values, n_resamples=n_resamples, seed=seed)
+        points.append(
+            ComparisonPoint(
+                label=label,
+                epsilon=epsilon,
+                mean_h=fmean(values),
+                ci_low=lo,
+                ci_high=hi,
+                mean_calls=fmean(calls[(label, epsilon)]),
+                n=len(values),
+            )
+        )
+    return points
+
+
 def aggregate_curve(
     records: list[RunRecord], *, n_resamples: int = 1000, seed: int = 0
 ) -> list[CurvePoint]:

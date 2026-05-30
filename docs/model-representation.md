@@ -67,3 +67,27 @@ This keeps the spec's distinction crisp (SPEC-2 §5.2): **grammar-validity is th
 decoder's job; semantic faithfulness is the oracle's.** A syntactically valid delta
 can still be *wrong* — catching that is the propose-verify-correct loop's purpose,
 not the decoder's.
+
+## Uncertainty signal (SPEC-2 §17.2, decided at M7)
+
+The smart consultation policies (`uncertainty_triggered`, `drift_triggered`,
+SPEC-2 §6.1) need a cheap per-prediction confidence. The chosen signal is the
+**mean Shannon entropy of the constrained decode**: at each decode step the masked
+next-token logits are softmaxed over the grammar-valid tokens and their entropy
+(nats) is averaged across the generated tokens
+([`decode.py`](../src/verisim/model/decode.py),
+`constrained_decode_with_uncertainty`). It is `0` when every step's continuation is
+forced and grows as the model spreads probability across the valid alternatives.
+
+Chosen over ensemble disagreement (needs N models — too expensive on one local GPU)
+and a learned drift head (extra training surface) because it is free: it falls out
+of the decode the loop already runs. `NeuralWorldModel.predict_delta_with_uncertainty`
+returns `(delta, entropy)`, making `M_θ` a `verisim.loop.UncertaintyModel`; the
+runner threads the signal into the policy (instantaneous for `uncertainty`,
+summed-since-last-consult for `drift`).
+
+**Caveat (open):** grammar-validity ≠ calibration. The entropy measures the model's
+confidence over *token choices*, not a calibrated estimate of *semantic* divergence,
+and E2 (M7) shows it does not yet beat even-spacing at the small committed scale.
+Calibrating it against actual per-step divergence (the §7.2 reliability diagnostic)
+is the remaining M7-era work.

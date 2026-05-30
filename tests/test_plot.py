@@ -45,3 +45,39 @@ def test_plot_e1_writes_figure_and_csv(tmp_path):
     assert out.exists() and out.stat().st_size > 0
     assert csv.exists()
     assert "difficulty,epsilon,rho" in csv.read_text()
+
+
+def _comparison_records() -> list[RunRecord]:
+    records: list[RunRecord] = []
+    for label in ("fixed", "uncertainty", "drift"):
+        for seed in (1, 2, 3):
+            records.append(
+                RunRecord(
+                    config={"policy": label, "rho": 0.5},
+                    seed=seed,
+                    epsilon=0.0,
+                    divergences=[0.0, 0.0, 0.5],
+                    consultation_schedule=[True, False, False],
+                )
+            )
+    return records
+
+
+def test_plot_comparison_writes_figure_and_csv(tmp_path):
+    recs = tmp_path / "recs.jsonl"
+    write_records(_comparison_records(), recs)
+    out = tmp_path / "cmp.png"
+    csv = tmp_path / "cmp.csv"
+    result = subprocess.run(
+        [
+            sys.executable, "figures/plot_comparison.py",
+            "--records", str(recs), "--key", "policy",
+            "--out", str(out), "--csv", str(csv), "--resamples", "50",
+        ],
+        capture_output=True,
+        text=True,
+    )
+    assert result.returncode == 0, result.stderr
+    assert out.exists() and out.stat().st_size > 0
+    assert csv.exists()
+    assert "label,epsilon,mean_h" in csv.read_text()

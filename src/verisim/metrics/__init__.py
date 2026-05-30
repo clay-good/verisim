@@ -2,14 +2,22 @@
 
 from __future__ import annotations
 
-from .aggregate import CurvePoint, aggregate_curve, bootstrap_ci
+from .aggregate import (
+    ComparisonPoint,
+    CurvePoint,
+    aggregate_comparison,
+    aggregate_curve,
+    bootstrap_ci,
+)
 from .divergence import divergence, state_facts
 from .horizon import faithful_horizon
 from .record import RunRecord, read_records, write_records
 
 __all__ = [
+    "ComparisonPoint",
     "CurvePoint",
     "RunRecord",
+    "aggregate_comparison",
     "aggregate_curve",
     "bootstrap_ci",
     "divergence",

@@ -88,7 +88,7 @@ class E1Config:
         return E1Config.from_dict(json.loads(Path(path).read_text()))
 
 
-def _eval_actions(
+def eval_actions(
     oracle: Oracle, config: EnvConfig, driver: str, seed: int, n_steps: int
 ) -> list[Action]:
     driver_obj = Driver(name=driver, config=config, rng=random.Random(seed))
@@ -137,7 +137,7 @@ def run_e1(config: E1Config | None = None, *, oracle: Oracle | None = None) -> l
     records: list[RunRecord] = []
     for difficulty, driver in config.difficulties.items():
         for seed in config.eval_seeds:
-            actions = _eval_actions(oracle, env, driver, seed, config.eval_steps)
+            actions = eval_actions(oracle, env, driver, seed, config.eval_steps)
             for rho in config.rhos:
                 # epsilon does not affect loop dynamics (only H_ε), so run the
                 # rollout once per (difficulty, seed, rho) and spin out per-ε records.

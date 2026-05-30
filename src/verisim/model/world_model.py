@@ -11,7 +11,7 @@ from verisim.delta.edits import Delta
 from verisim.env.action import Action
 from verisim.env.state import State
 
-from .decode import constrained_decode
+from .decode import constrained_decode, constrained_decode_with_uncertainty
 from .grammar import DeltaGrammar
 from .tokenizer import encode_prompt
 from .transformer import GPT
@@ -28,3 +28,17 @@ class NeuralWorldModel:
         prompt = encode_prompt(state, action, self.vocab)
         delta, _ = constrained_decode(self.model, prompt, self.vocab, self.grammar)
         return delta
+
+    def predict_delta_with_uncertainty(
+        self, state: State, action: Action
+    ) -> tuple[Delta, float]:
+        """Predict the delta and the mean decode entropy (SPEC-2 §6.1, §7.2).
+
+        Makes ``M_θ`` a :class:`verisim.loop.UncertaintyModel`, so the loop's
+        ``uncertainty``/``drift``-triggered policies can threshold its confidence.
+        """
+        prompt = encode_prompt(state, action, self.vocab)
+        delta, _, entropy = constrained_decode_with_uncertainty(
+            self.model, prompt, self.vocab, self.grammar
+        )
+        return delta, entropy

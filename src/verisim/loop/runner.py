@@ -34,9 +34,9 @@ from verisim.metrics.divergence import divergence
 from verisim.metrics.record import RunRecord
 from verisim.oracle.base import Oracle
 
-from .model import Model
+from .model import Model, UncertaintyModel
 from .operator import CorrectionOperator, HardReset
-from .policy import ConsultationPolicy
+from .policy import ConsultationPolicy, StepContext
 
 
 def ground_truth_rollout(oracle: Oracle, s0: State, actions: Sequence[Action]) -> list[State]:
@@ -56,6 +56,13 @@ def budget_for_rho(rho: float, n_steps: int) -> int:
     return math.floor(rho * n_steps)
 
 
+def _predict(model: Model, state: State, action: Action) -> tuple[Any, float]:
+    """Predict the delta and the model's uncertainty (``0`` if it exposes none)."""
+    if isinstance(model, UncertaintyModel):
+        return model.predict_delta_with_uncertainty(state, action)
+    return model.predict_delta(state, action), 0.0
+
+
 def run_rollout(
     model: Model,
     oracle: Oracle,
@@ -71,24 +78,40 @@ def run_rollout(
 ) -> RunRecord:
     """Run one propose-verify-correct rollout and return its :class:`RunRecord`.
 
-    ``budget`` caps total consultations (``None`` = unlimited); the cap is honored
-    even when the policy proposes more, so the consultation count never exceeds it.
+    ``budget`` caps total consultations (``None`` = unlimited). Two budget controls
+    are layered on the policy's proposals so every policy spends *exactly* ``budget``
+    (true equal-``ρ`` comparison, SPEC-2 §16): the consultation count never exceeds
+    the cap, and a spend-down backstop forces a consult once the remaining budget
+    would otherwise be stranded (remaining budget ≥ remaining steps). For the
+    ``fixed`` policy, which already spreads its calls across the rollout, the
+    backstop never fires; it only matters for the triggered policies that may
+    under-spend, ensuring they are compared at the same call count.
     """
     correct = (operator or HardReset()).correct
     truth_states = ground_truth_rollout(oracle, s0, actions)
+    n_steps = len(actions)
 
     state = s0
     divergences: list[float] = []
     schedule: list[bool] = []
     calls = 0
+    cumulative_signal = 0.0
 
     for t, action in enumerate(actions):
-        predicted = apply(state, model.predict_delta(state, action))  # PROPOSE
-        consult = policy.should_consult(t) and (budget is None or calls < budget)
+        delta, signal = _predict(model, state, action)  # PROPOSE (+ uncertainty)
+        predicted = apply(state, delta)
+        cumulative_signal += signal
+
+        has_budget = budget is None or calls < budget
+        must_spend = budget is not None and (budget - calls) >= (n_steps - t)
+        ctx = StepContext(step=t, signal=signal, cumulative_signal=cumulative_signal)
+        consult = has_budget and (must_spend or policy.should_consult(ctx))
+
         if consult:
             truth = oracle.step(state, action).state  # VERIFY (from current state)
             calls += 1
             state = correct(predicted, truth)  # CORRECT
+            cumulative_signal = 0.0
         else:
             state = predicted
         schedule.append(consult)
