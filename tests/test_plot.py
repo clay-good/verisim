@@ -143,3 +143,39 @@ def test_plot_e4_writes_figure_and_csv(tmp_path):
     assert result.returncode == 0, result.stderr
     assert out.exists() and out.stat().st_size > 0
     assert "size,difficulty,mean_accuracy" in csv.read_text()
+
+
+def _auto_records() -> list[RunRecord]:
+    # A small ratchet: score rises, then a rejected trial; best_score is monotone.
+    rows = [(0, 0.1, 0.1, True), (1, 0.2, 0.2, True), (2, 0.15, 0.2, False)]
+    return [
+        RunRecord(
+            config={
+                "experiment": "auto-search", "trial": t, "score": s, "best_score": b, "kept": k,
+                "n_layer": 1, "n_embd": 32, "train_iters": 200, "train_steps_per_traj": 20,
+                "lr": 0.001,
+            },
+            seed=0,
+            epsilon=0.0,
+            divergences=[],
+        )
+        for t, s, b, k in rows
+    ]
+
+
+def test_plot_auto_writes_figure_and_csv(tmp_path):
+    recs = tmp_path / "log.jsonl"
+    write_records(_auto_records(), recs)
+    out = tmp_path / "auto.png"
+    csv = tmp_path / "auto.csv"
+    result = subprocess.run(
+        [
+            sys.executable, "figures/plot_auto.py",
+            "--records", str(recs), "--out", str(out), "--csv", str(csv),
+        ],
+        capture_output=True,
+        text=True,
+    )
+    assert result.returncode == 0, result.stderr
+    assert out.exists() and out.stat().st_size > 0
+    assert "trial,score,best_score,kept" in csv.read_text()

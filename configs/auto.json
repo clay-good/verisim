@@ -1,0 +1,30 @@
+{
+  "name": "auto-search",
+  "n_trials": 12,
+  "search_seed": 0,
+  "space": {
+    "n_layer": [1, 2, 4],
+    "n_embd": [32, 64, 128],
+    "train_iters": [200, 400, 800],
+    "train_steps_per_traj": [20, 40, 60],
+    "lr": [0.001, 0.003, 0.01]
+  },
+  "base": {
+    "name": "auto-search",
+    "train_driver": "weighted",
+    "train_seeds": [0, 1, 2],
+    "train_steps_per_traj": 20,
+    "n_layer": 1,
+    "n_head": 2,
+    "n_embd": 32,
+    "block_size": 512,
+    "train_iters": 200,
+    "lr": 0.001,
+    "model_seed": 0,
+    "difficulties": { "low": "weighted", "high": "adversarial" },
+    "eval_seeds": [100, 101, 102],
+    "eval_steps": 16,
+    "rhos": [0.0],
+    "epsilons": [0.0]
+  }
+}

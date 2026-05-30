@@ -213,6 +213,33 @@ strictly lower faithfulness floor. The committed scale is tiny, so the absolute 
 floor-level for both arms, but the *ordering* — delta > full-state — is exactly the
 prediction the project's representation choice rests on, now measured rather than asserted.
 
+## Automating the search: an oracle-gated ratchet (§17.5)
+
+The §17.5 co-tuning — find a config where the clean floor lifts — is a search problem,
+so v0 automates it as a *keep-if-better* ratchet
+([`src/verisim/auto/search.py`](../src/verisim/auto/search.py),
+[`auto_search.png`](../figures/auto_search.png),
+[`auto_search.csv`](../figures/auto_search.csv)), modeled on Karpathy's
+[`autoresearch`](https://github.com/karpathy/autoresearch): propose a one-knob mutation,
+train under a fixed budget, score one number, keep it only if it beats the running best.
+The difference is the gate. `autoresearch` scores on val_bpb — a held-out-loss *proxy*;
+verisim scores on **mean clean (ρ=0) per-step accuracy against the oracle's true next
+state** — ground truth, the deterministic "lint" the whole project is built on. That is
+verisim's single comparable scalar (its "val_bpb"), and it is a strictly stronger
+"did we improve?" signal than any oracle-free domain can construct (SPEC.md §4). `H_ε`
+is deliberately *not* the gate: at this scale it is ~0 everywhere (the H1 negative), too
+flat to climb, so accuracy is the smooth signal — the same reasoning behind `autoresearch`
+choosing val_bpb.
+
+A first 12-trial run (`configs/auto.json`) autonomously **more than doubled the clean
+floor, 0.042 → 0.094**, by finding `train_iters↑` then `lr↑`, then held through ten
+rejected trials. The absolute level is still floor-level (consistent with the H1 negative
+at v0 scale), but the *mechanism* provably lifts the oracle-grounded metric without a human
+in the loop — the self-improving "update-from-reality" loop the program is ultimately
+about, here at the outer (config-search) layer that wraps the RLVR inner loop. The
+proposer is seeded coordinate hill-climbing; an LLM-agent proposer drops in behind the
+same oracle gate.
+
 ## Threats to validity
 
 - **Scale.** The committed model is ~tiny and trains for a few hundred iterations on

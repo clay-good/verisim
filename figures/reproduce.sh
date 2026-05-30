@@ -46,4 +46,9 @@ python -m verisim.experiments.representation --config configs/representation.jso
 python figures/plot_representation.py --records runs/representation/records.jsonl \
     --out figures/representation.png --csv figures/representation.csv
 
-echo "== done: figures/{e1_curve,e2_policies,e3_operators,calibration,e4_ablation,objective,representation}.{png,csv} =="
+echo "== autoresearch ratchet: oracle-gated keep-if-better config search (§17.5; trains per trial) =="
+python -m verisim.auto.search --config configs/auto.json --out runs/auto/log.jsonl
+python figures/plot_auto.py --records runs/auto/log.jsonl \
+    --out figures/auto_search.png --csv figures/auto_search.csv
+
+echo "== done: figures/{e1_curve,e2_policies,e3_operators,calibration,e4_ablation,objective,representation,auto_search}.{png,csv} =="
