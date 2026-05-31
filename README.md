@@ -101,9 +101,13 @@ The claims above are audited empirically in [docs/verification.md](docs/verifica
 the core invariants (`apply == oracle`, serialization round-trips, the NW4 tokenizer,
 metric bounds, exit codes, in- and cross-process determinism) are proven over **48,000
 oracle transitions with zero failures** by the dependency-free, torch-free
-[`scripts/verify_invariants.py`](scripts/verify_invariants.py); every quantitative number
-in the report is machine-checked against the committed figure CSVs; and each committed CSV
-is regenerated from its config + seeds and diffed (`maxΔ = 0`). The audit found and fixed two
+[`scripts/verify_invariants.py`](scripts/verify_invariants.py) — and additionally over the
+**entire action space** (448,260 state×action pairs), **by construction**, and with
+**negative controls** confirming each check detects deliberate corruptions. Every
+quantitative number in the report *and* this README is machine-checked against the committed
+figure CSVs; all 12 CSVs regenerate from config + seeds with `maxΔ = 0`; and the packaging is
+verified end-to-end (the RL-env return equals the faithful horizon, the benchmark separates a
+perfect from a trivial model, coverage spans all 13 commands). The audit found and fixed two
 stale-documentation drifts (an E2 table and the K1 coverage diagnostic), with no invariant,
 reproducibility, or packaging claim refuted.
 

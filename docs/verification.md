@@ -14,10 +14,10 @@
 
 | Tier | What was proven | Result |
 |---|---|---|
-| 1 | Core invariants (`apply == oracle`, round-trips, NW4 tokenizer, metric well-formedness, exit codes, determinism) — sampled, **exhaustive over the full action space**, and **by construction** | **13 families × 48,000 transitions + 448,260 exhaustive pairs — 0 failures** |
-| 2 | Every quantitative number in [`report.md`](report.md) vs. the committed figure CSVs | 59/65 matched; **1 stale section found & fixed** (E2); 1 benign rounding |
-| 3 | Each committed figure CSV regenerated from its config + seeds | reproduced **exactly** (maxΔ = 0) — see table |
-| 4 | "No runtime deps", "no network calls", cross-process determinism, README examples, test suite | all confirmed (deterministic core imports with torch/numpy blocked; 224 tests pass) |
+| 1 | Core invariants (`apply == oracle`, round-trips, NW4 tokenizer, metric well-formedness, exit codes, determinism) — sampled, **exhaustive over the full action space**, **by construction**, and with **negative controls** (the checks have teeth) | **13 families × 48,000 transitions + 448,260 exhaustive pairs — 0 failures; 9/9 corruptions detected** |
+| 2 | Every quantitative number in [`report.md`](report.md) **and the README** vs. the committed figure CSVs | report 59/65 matched (**1 stale section fixed**, 1 benign rounding); README **6/6** |
+| 3 | Each committed figure CSV regenerated from its config + seeds | all 12 reproduced **exactly** (maxΔ = 0) — see table |
+| 4 | "No runtime deps", "no network calls", cross-process determinism, README examples, **packaging (RL reward == faithful horizon, benchmark, coverage)**, test suite | all confirmed (deterministic core imports with torch/numpy blocked; 224 tests pass) |
 
 The apparatus is sound: the load-bearing invariants hold at far larger scale than the
 test suite checks, the committed figures regenerate bit-for-bit, and the one
@@ -85,6 +85,23 @@ CI fails on any semantic drift.
 These promote the invariants from "holds on sampled trajectories" to "holds on the full
 action space, holds by construction, and holds independent of model weights."
 
+### 1.6 Negative controls — the checks have teeth
+
+A check that cannot fail proves nothing. Each row below feeds a **deliberately corrupted**
+input and confirms the check *detects* it, so the PASS results above are non-vacuous.
+
+| Check | Corruption fed | Detected? |
+|---|---|---|
+| `apply == oracle` | drop a real edit from the delta | **yes** |
+| `apply == oracle` | inject a spurious edit into the delta | **yes** |
+| `divergence` | two genuinely different states ⇒ `d > 0` (and symmetric) | **yes** |
+| `reachability_faithfulness` | a firewall change that breaks reachability ⇒ `rf < 1` | **yes** |
+| NW4 tokenizer round-trip | flip one host token ⇒ parsed delta differs | **yes** |
+| `bits_to_correct` | empty vs. real delta ⇒ `> 0`; partial < empty | **yes** |
+| determinism | different seeds ⇒ different trajectory | **yes** |
+
+**9/9 corruptions correctly detected.**
+
 ---
 
 ## 2. Report numbers vs. committed CSVs
@@ -104,6 +121,11 @@ precision). **59 matched; 6 did not**, in two clusters:
 - **objective `rlvr/high` (1 cell): benign rounding.** CSV value is `0.125`; the report
   writes `0.13` (round-half-up). Not an error — the prose CIs (`[0.08,0.18]`) match the
   CSV, and the half-up convention is used consistently elsewhere.
+
+The **README's** quantitative claims were checked the same way: `0.86` (= K2 `exact`),
+`~0.09` (= E4 low-driver floor), `~10/48` (= K4 ε=0.05 floor 10.3 / ceiling 48), and the
+`48,000` invariant transitions (= 12,000 + 36,000) — **6/6 verified** against the CSVs and
+the invariant arithmetic.
 
 ---
 
@@ -145,6 +167,10 @@ figures exactly.
 | "**No telemetry, no network calls at runtime**" | grep `src/` for `socket`/`urllib`/`requests`/`http`/`urlopen`/… | **none found** |
 | README **quickstart** example | Ran verbatim | `apply == oracle` held for all 4 commands |
 | README **packaging** example | Ran verbatim | `score_model(...).normalized_horizon == 1.0` |
+| RL env **reward == faithful horizon** | Run an episode (`terminate_on_divergence`); compare return to `faithful_horizon(divergences)` | perfect model → **24/24** (full); null model → **0**, and return **== `H_ε`** |
+| Benchmark **separates** perfect from trivial | `score_model` on `OracleBackedModel` vs `NullModel` (50 rollouts) | perfect `1.0`, null `0.0` |
+| Coverage spans **all 13 commands** (K1 claim) | `missing_commands` over the broad driver mix | **13/13, none missing** |
+| `load_environment` entrypoint | Construct via the hub entrypoint | returns a working `WorldModelEnv` |
 | Test suite | `pytest` | **224 passed, 1 skipped** (skip = optional `inspect_ai` adapter) |
 | Lint / types / build | `ruff check .`; `mypy --strict`; `python -m build` | all green |
 
