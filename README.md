@@ -37,8 +37,9 @@ build order in [SPEC §12](docs/specs/SPEC.md#12-research-roadmap):
 > [SPEC-5 (the network world)](docs/specs/SPEC-5.md)**, where drift is gradual and observation is
 > partial — and its **deterministic core (NW0–NW3) now ships**: a typed-graph reachability world,
 > a free Tier-A reference oracle, graph deltas, drivers, and graph/reachability metrics, all
-> dependency-free and tested (no GPU). Canonical build order:
-> [SPEC §12](docs/specs/SPEC.md#12-research-roadmap).
+> dependency-free and tested (no GPU). **NW4's supervised model ships too:** a from-scratch,
+> grammar-constrained network `M_θ` that drops into the loop exactly as v0's did. Canonical
+> build order: [SPEC §12](docs/specs/SPEC.md#12-research-roadmap).
 
 **v0 — shell/filesystem world (`src/verisim/`, SPEC-2 §13): complete.**
 
@@ -49,7 +50,7 @@ build order in [SPEC §12](docs/specs/SPEC.md#12-research-roadmap):
 | **M6–M8** | E1–E4 experiments, smart policies/operators, report, faithfulness benchmark + RL env | ✅ |
 | **SPEC-2.1** | K0 (learner works) → K1/K2 (floor ~0 → **0.86**) → K3/K4 (knee refuted on single-FS; licenses SPEC-5) | ✅ |
 
-**Network world (`src/verisim/net*`, SPEC-5 §13): deterministic core built.**
+**Network world (`src/verisim/net*`, SPEC-5 §13): deterministic core + supervised `M_θ`.**
 
 | Milestone | What | Status |
 |-----------|------|--------|
@@ -57,12 +58,14 @@ build order in [SPEC §12](docs/specs/SPEC.md#12-research-roadmap):
 | **NW1** | Graph `Delta` types, `apply`, serialization; the `apply == oracle` invariant | ✅ |
 | **NW2** | Drivers (uniform/weighted/adversarial topology+traffic) + trajectory generation | ✅ |
 | **NW3** | Graph divergence, **reachability-faithfulness**, bits-to-correct (`H_ε` + run-records reused from v0) | ✅ |
-| **NW4–NW8** | Message-passing/RSSM `M_θ` → the network `H_ε(ρ)` curve (the prime directive, H8) → packaging | ☐ next |
+| **NW4** | Network `M_θ` ([`netmodel/`](src/verisim/netmodel/)): closed vocab, tokenizer, LL(1) graph-delta grammar, constrained decode, supervised training. The **flat** arm (the H11 flat-Markov baseline, reusing v0's transformer + trainer) ships and is tested | ◐ flat arm |
+| **NW5–NW8** | Partial-observation loop + **message-passing/RSSM** arm → the network `H_ε(ρ)` curve (the prime directive, H8) → packaging | ☐ next |
 
 The deterministic cores (filesystem and network) have **no runtime dependencies** and need
 no GPU. The propose–verify–correct loop is model-agnostic, so the learned model `M_θ` — a
 from-scratch decoder-only transformer predicting structured deltas under grammar-constrained
-decoding — drops in via `NeuralWorldModel`. PyTorch is an optional `[model]` extra (see
+decoding — drops in via `NeuralWorldModel` (filesystem) or `NeuralNetworkWorldModel`
+(network). PyTorch is an optional `[model]` extra (see
 [docs/model-representation.md](docs/model-representation.md)).
 
 ### The v0 result, honestly (E1 → SPEC-2.1)
@@ -154,7 +157,8 @@ See [SPEC-2 §10](docs/specs/SPEC-2.md) (filesystem) and [SPEC-5 §16](docs/spec
 - **Network world (SPEC-5):** `net/` (typed-graph `NetworkState`, action grammar,
   serialization), `netoracle/` (Tier-A reference oracle), `netdelta/` (graph deltas + `apply`),
   `netdata/` (drivers + generation), `netmetrics/` (graph divergence, reachability-faithfulness,
-  bits-to-correct).
+  bits-to-correct), and `netmodel/` (the NW4 network `M_θ`: vocab, tokenizer, LL(1)
+  graph-delta grammar, constrained decode, supervised dataset — reusing v0's transformer + trainer).
 
 Experiment configs live in [configs/](configs/); plotting scripts + figures in
 [figures/](figures/); the run-records they read are git-ignored and regenerable from config + seeds.

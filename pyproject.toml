@@ -59,7 +59,7 @@ disallow_incomplete_defs = false
 # unavoidable Any-propagation noise in the model/train modules. Relax the
 # torch-specific strict checks there only; the rest of the codebase stays strict.
 [[tool.mypy.overrides]]
-module = ["verisim.model.*", "verisim.train.*"]
+module = ["verisim.model.*", "verisim.train.*", "verisim.netmodel.*"]
 disallow_untyped_decorators = false
 disallow_untyped_calls = false
 warn_return_any = false

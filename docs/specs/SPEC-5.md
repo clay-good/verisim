@@ -10,7 +10,10 @@ computer-network world: the next smallest world with the *hard* property.**
 > Tier-A reference oracle ([`netoracle/`](../../src/verisim/netoracle/)), graph deltas
 > ([`netdelta/`](../../src/verisim/netdelta/)), drivers ([`netdata/`](../../src/verisim/netdata/)),
 > and metrics ([`netmetrics/`](../../src/verisim/netmetrics/)) — see [`docs/network-semantics.md`](../network-semantics.md)
-> and §13. **Next: NW4** (the message-passing/RSSM model) → NW6 (the network `H_ε(ρ)` curve, H8).
+> and §13. **NW4's supervised model now ships too:** a from-scratch, grammar-constrained
+> network `M_θ` ([`netmodel/`](../../src/verisim/netmodel/)) that drops into the loop exactly as
+> v0's did. **Next: the NW5 partial-observation loop** (where the RSSM belief and the
+> message-passing graph arm become non-degenerate, §6.2) → NW6 (the network `H_ε(ρ)` curve, H8).
 
 This is to the network what [SPEC-2](./SPEC-2.md) is to the filesystem. SPEC-2 made
 the single-host shell/filesystem world buildable and proved the *method* —
@@ -384,6 +387,17 @@ is the autoresearch gate (§14) and a per-step diagnostic.
 
 ## 6. The model `M_θ`
 
+> **Build status (NW4).** The **flat** arm of `M_θ` ships now
+> ([`netmodel/`](../../src/verisim/netmodel/)): a from-scratch decoder-only transducer over
+> the serialized `(state, action) → Δ` sequence, with a closed token vocabulary, an LL(1)
+> graph-delta grammar, grammar-constrained greedy decode, and supervised training — reusing
+> v0's transformer (`GPT`) and trainer (`train_supervised`) unchanged, because the
+> example/padding shapes are identical. It is the H11 *flat-Markov baseline* and the NW5-loop
+> drop-in (`predict_delta`). The **message-passing encoder (§6.1)** and **RSSM belief (§6.2)**
+> land with the NW5 partial-observation loop: under NW4's full observability the belief
+> degenerates to exactly this Markov predictor (§6.2), so building it before NW5 would be
+> unused machinery; the graph-vs-flat comparison it enables is EN4 (§12).
+
 ### 6.1 Architecture
 
 A **message-passing predictor over the network graph**, action- and clock-conditioned,
@@ -655,8 +669,8 @@ no GPU** before any learned model. It does not collide with `M0–M8`, `S1–S6`
 | **NW1** | Graph `Delta` types, `apply(state, delta)`, delta↔serialization ([`netdelta/`](../../src/verisim/netdelta/)); the `apply == oracle` invariant | invariant tests | ✅ |
 | **NW2** | Drivers (uniform/weighted/adversarial topology+traffic), trajectory generation ([`netdata/`](../../src/verisim/netdata/)) | data tests | ✅ |
 | **NW3** | Graph divergence `d`, reachability-faithfulness, bits-to-correct ([`netmetrics/`](../../src/verisim/netmetrics/)); `H_ε` + run-record schema reused from v0 | metric tests | ✅ |
-| **NW4** | `M_θ`: message-passing + RSSM model, constrained delta decode, supervised training (SLM-sized) | model tests (torch extra) | ◐ next |
-| **NW5** | Propose-verify-correct loop with **partial-observation oracle**, probe-policy interface, correction/belief operators, baselines | loop invariants |
+| **NW4** | `M_θ`: constrained graph-delta decode + supervised training (SLM-sized) ([`netmodel/`](../../src/verisim/netmodel/)). The **flat** arm — a from-scratch transducer over serialized `(state, action) → Δ` reusing v0's transformer + trainer — ships and is tested; it is the H11 flat-Markov baseline and the NW5-loop drop-in | model tests (torch extra) | ◐ flat arm shipped |
+| **NW5** | Propose-verify-correct loop with **partial-observation oracle**, probe-policy interface, correction/belief operators, baselines; the **message-passing + RSSM `M_θ`** lands here, where partial observability makes the belief non-degenerate (§6.2) and the graph arm becomes the H11 contender | loop invariants |
 | **NW6** | **EN1 network `H_ε(ρ)` curve** + bootstrap-CI aggregation + figure | **the prime directive** |
 | **NW7** | Smart probe policies + belief operators + drift mitigations; EN2/EN3/EN4 (equal-budget, CIs) | comparison figures |
 | **NW8** | RLVR + online-TTT (EN5), counterfactual training (EN6), **LLM-callable simulator protocol** (§7), Inspect benchmark + `verifiers`-spec network RL env, technical report | packaging + report |
@@ -726,7 +740,8 @@ src/verisim/
   net/            # typed-graph State, Action grammar, canonical serialization, config
   netoracle/      # Tier-A reference DES; Tier-B namespace adapter (optional extra)
   netdelta/       # graph Delta types, apply(), serialization  (the NW1 invariant)
-  netmodel/       # M_θ: message-passing + RSSM, constrained delta decode, tokenizer
+  netmodel/       # M_θ: vocab/tokenizer/grammar + constrained delta decode + supervised dataset
+                  #   (flat arm shipped, reusing v0's GPT/trainer); message-passing/RSSM with NW5
   netloop/        # partial-observation propose-verify-correct runner, π_c, π_o, operators
   netmetrics/     # graph divergence, reachability-faithfulness, H_ε, bits-to-correct
   netdata/        # topology + traffic drivers, trajectory JSONL, manifests/splits
