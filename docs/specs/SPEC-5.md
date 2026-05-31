@@ -431,9 +431,16 @@ is the autoresearch gate (§14) and a per-step diagnostic.
 > a typed `NetGraph` (host nodes with up/service/firewall/action-role features, link edges, flow
 > edges, action+clock+exit graph features, `symlog` on the unbounded clock), over the **same closed
 > world** the flat arm serializes so the H11 comparison is fair. Tested with no torch/GPU
-> (`tests/test_netgraph.py`, 14 cases). **Next:** the torch GNN message-passing encoder + GRU-RSSM
-> belief (§6.2) + conditioned grammar-constrained decoder implementing the `NetModel` protocol, then
-> the §6.3 drift-mitigation training levers.
+> (`tests/test_netgraph.py`, 14 cases). **Shipped:** the torch GNN+RSSM model
+> ([`netmodel/graph_model.py`](../../src/verisim/netmodel/graph_model.py)) — a message-passing encoder
+> (link + flow edges, action/clock conditioned, `mp_rounds` ≈ diameter) + a GRU-based RSSM whose
+> stochastic-state variance is the §6.2 calibrated uncertainty signal (the upgrade over the flat arm's
+> decode-entropy) + a graph-conditioned causal decoder reusing the *same* `NetDeltaGrammar` and
+> `parse_target`, so every prediction is a valid delta by construction. It implements the
+> `NetModel`/`NetUncertaintyModel` loop protocols (drops into the NW5 loop unchanged), is deterministic,
+> and gradients flow through the full graph→RSSM→decoder stack (`tests/test_graph_model.py`, 5 cases).
+> **Next:** the §6.3 drift-mitigation training levers (noise injection first) and the EN4 graph-vs-flat
+> comparison.
 
 ### 6.1 Architecture
 
