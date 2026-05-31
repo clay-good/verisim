@@ -3,17 +3,25 @@
 **Engineering & experiment specification for the multi-host, partially-observable
 computer-network world: the next smallest world with the *hard* property.**
 
-> **▶ ACTIVE — deterministic core shipped (2026-05).** SPEC-2.1 refuted the knee on the
-> single-filesystem world (discrete errors), which **licenses this network world** — where drift
-> is gradual and observation is partial (SPEC §12). The **deterministic core NW0–NW3 is built and
-> tested** (no GPU): the typed-graph reachability world ([`net/`](../../src/verisim/net/)), the
-> Tier-A reference oracle ([`netoracle/`](../../src/verisim/netoracle/)), graph deltas
+> **▶ ACTIVE — NW0–NW6 shipped (2026-05); the prime-directive curve is plotted.** SPEC-2.1
+> refuted the knee on the single-filesystem world (discrete errors), which **licenses this
+> network world** — where drift is gradual and observation is partial (SPEC §12). The
+> **deterministic core NW0–NW3 is built and tested** (no GPU): the typed-graph reachability world
+> ([`net/`](../../src/verisim/net/)), the Tier-A reference oracle
+> ([`netoracle/`](../../src/verisim/netoracle/)), graph deltas
 > ([`netdelta/`](../../src/verisim/netdelta/)), drivers ([`netdata/`](../../src/verisim/netdata/)),
 > and metrics ([`netmetrics/`](../../src/verisim/netmetrics/)) — see [`docs/network-semantics.md`](../network-semantics.md)
-> and §13. **NW4's supervised model now ships too:** a from-scratch, grammar-constrained
-> network `M_θ` ([`netmodel/`](../../src/verisim/netmodel/)) that drops into the loop exactly as
-> v0's did. **Next: the NW5 partial-observation loop** (where the RSSM belief and the
-> message-passing graph arm become non-degenerate, §6.2) → NW6 (the network `H_ε(ρ)` curve, H8).
+> and §13. **NW4's supervised model ships:** a from-scratch, grammar-constrained network `M_θ`
+> ([`netmodel/`](../../src/verisim/netmodel/)) that drops into the loop exactly as v0's did.
+> **NW5 now ships the partial-observation loop** ([`netloop/`](../../src/verisim/netloop/)): the
+> two-mode (full / probe) partial-observation oracle (§5.3), probe policies `π_o` (§8.2),
+> correction/belief operators (§8.3), baselines, and the model-agnostic runner.
+> **NW6 plots the headline EN1 `H_ε(ρ)` curve** ([`experiments/en1.py`](../../src/verisim/experiments/en1.py),
+> [`figures/en1_curve.png`](../../figures/en1_curve.png)): on the flat-Markov `M_θ` the
+> network interior is **near-flat (the H8 honest negative)** — the network analogue of v0's
+> H1 floor (§10.1, [report](../report.md)). **Next: NW7** — the message-passing + RSSM graph
+> arm and the drift mitigations (noise injection, self-forcing; the GNS/m4 levers v0 lacked)
+> that must lift `M_θ` off that floor, with the EN2/EN3/EN4 comparisons.
 
 This is to the network what [SPEC-2](./SPEC-2.md) is to the filesystem. SPEC-2 made
 the single-host shell/filesystem world buildable and proved the *method* —
@@ -393,10 +401,11 @@ is the autoresearch gate (§14) and a per-step diagnostic.
 > graph-delta grammar, grammar-constrained greedy decode, and supervised training — reusing
 > v0's transformer (`GPT`) and trainer (`train_supervised`) unchanged, because the
 > example/padding shapes are identical. It is the H11 *flat-Markov baseline* and the NW5-loop
-> drop-in (`predict_delta`). The **message-passing encoder (§6.1)** and **RSSM belief (§6.2)**
-> land with the NW5 partial-observation loop: under NW4's full observability the belief
-> degenerates to exactly this Markov predictor (§6.2), so building it before NW5 would be
-> unused machinery; the graph-vs-flat comparison it enables is EN4 (§12).
+> drop-in (`predict_delta`) — it runs in the shipped NW5 loop and plots the NW6 EN1 curve. The
+> **message-passing encoder (§6.1)** and **RSSM belief (§6.2)** land at **NW7**, where the
+> probe-driven partial observability makes the belief non-degenerate (§6.2): under full
+> observability it degenerates to exactly this Markov predictor, so building it earlier would
+> be unused machinery; the graph-vs-flat comparison it enables is EN4 (§12).
 
 ### 6.1 Architecture
 
@@ -670,8 +679,8 @@ no GPU** before any learned model. It does not collide with `M0–M8`, `S1–S6`
 | **NW2** | Drivers (uniform/weighted/adversarial topology+traffic), trajectory generation ([`netdata/`](../../src/verisim/netdata/)) | data tests | ✅ |
 | **NW3** | Graph divergence `d`, reachability-faithfulness, bits-to-correct ([`netmetrics/`](../../src/verisim/netmetrics/)); `H_ε` + run-record schema reused from v0 | metric tests | ✅ |
 | **NW4** | `M_θ`: constrained graph-delta decode + supervised training (SLM-sized) ([`netmodel/`](../../src/verisim/netmodel/)). The **flat** arm — a from-scratch transducer over serialized `(state, action) → Δ` reusing v0's transformer + trainer — ships and is tested; it is the H11 flat-Markov baseline and the NW5-loop drop-in | model tests (torch extra) | ◐ flat arm shipped |
-| **NW5** | Propose-verify-correct loop with **partial-observation oracle**, probe-policy interface, correction/belief operators, baselines; the **message-passing + RSSM `M_θ`** lands here, where partial observability makes the belief non-degenerate (§6.2) and the graph arm becomes the H11 contender | loop invariants |
-| **NW6** | **EN1 network `H_ε(ρ)` curve** + bootstrap-CI aggregation + figure | **the prime directive** |
+| **NW5** | Propose-verify-correct loop with **partial-observation oracle** (full / probe modes), probe-policy interface `π_o`, correction/belief operators, baselines, model-agnostic runner ([`netloop/`](../../src/verisim/netloop/)). The **message-passing + RSSM `M_θ`** is deferred to NW7, where partial observability makes the belief non-degenerate (§6.2) and the graph arm becomes the H11 contender — exactly as v0 shipped the M5 loop with baselines before the neural model bit | loop invariants | ✅ (graph arm → NW7) |
+| **NW6** | **EN1 network `H_ε(ρ)` curve** + bootstrap-CI aggregation + figure ([`experiments/en1.py`](../../src/verisim/experiments/en1.py), [`figures/en1_curve.png`](../../figures/en1_curve.png)) | **the prime directive** | ✅ (H8 honest negative on the flat arm) |
 | **NW7** | Smart probe policies + belief operators + drift mitigations; EN2/EN3/EN4 (equal-budget, CIs) | comparison figures |
 | **NW8** | RLVR + online-TTT (EN5), counterfactual training (EN6), **LLM-callable simulator protocol** (§7), Inspect benchmark + `verifiers`-spec network RL env, technical report | packaging + report |
 

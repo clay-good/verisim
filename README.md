@@ -27,7 +27,7 @@ build order in [SPEC §12](docs/specs/SPEC.md#12-research-roadmap):
 
 ## Status
 
-> **Where things stand (2026-05): v0 is done; the network world's deterministic core is built.**
+> **Where things stand (2026-05): v0 is done; the network world is plotting its first curve.**
 > The filesystem v0 (M0–M8) and the focused **[SPEC-2.1](docs/specs/SPEC-2.1.md)** effort are
 > complete: K0 proved the learner works; K1/K2 lifted clean per-step faithfulness from ~0 to
 > **0.86** (dissolving the diagnosed copy bottleneck); K3/K4 then found that **no consultation
@@ -35,11 +35,15 @@ build order in [SPEC §12](docs/specs/SPEC.md#12-research-roadmap):
 > spike the set-difference past ε in one step, so first-exceedance `H_ε` is reset-resistant (the
 > honest negative, [report §K3+K4](docs/report.md)). Per SPEC-2.1 §10 that **licenses
 > [SPEC-5 (the network world)](docs/specs/SPEC-5.md)**, where drift is gradual and observation is
-> partial — and its **deterministic core (NW0–NW3) now ships**: a typed-graph reachability world,
-> a free Tier-A reference oracle, graph deltas, drivers, and graph/reachability metrics, all
-> dependency-free and tested (no GPU). **NW4's supervised model ships too:** a from-scratch,
-> grammar-constrained network `M_θ` that drops into the loop exactly as v0's did. Canonical
-> build order: [SPEC §12](docs/specs/SPEC.md#12-research-roadmap).
+> partial. The network **deterministic core (NW0–NW3)** ships (typed-graph reachability world,
+> free Tier-A oracle, graph deltas, drivers, graph/reachability metrics — all dependency-free,
+> no GPU), and so does **NW4's** grammar-constrained supervised network `M_θ`. **NW5 now ships
+> the partial-observation propose-verify-correct loop** (full / probe consultation modes, probe
+> policies, belief operators, baselines, [`netloop/`](src/verisim/netloop/)), and **NW6 plots the
+> prime-directive EN1 `H_ε(ρ)` curve**: on the flat-Markov `M_θ` the interior is **near-flat —
+> the H8 honest negative**, the network analogue of v0's H1 floor, which licenses the NW7
+> graph-arm + drift-mitigation work ([report §NW5+NW6](docs/report.md)). Canonical build order:
+> [SPEC §12](docs/specs/SPEC.md#12-research-roadmap).
 
 **v0 — shell/filesystem world (`src/verisim/`, SPEC-2 §13): complete.**
 
@@ -50,7 +54,7 @@ build order in [SPEC §12](docs/specs/SPEC.md#12-research-roadmap):
 | **M6–M8** | E1–E4 experiments, smart policies/operators, report, faithfulness benchmark + RL env | ✅ |
 | **SPEC-2.1** | K0 (learner works) → K1/K2 (floor ~0 → **0.86**) → K3/K4 (knee refuted on single-FS; licenses SPEC-5) | ✅ |
 
-**Network world (`src/verisim/net*`, SPEC-5 §13): deterministic core + supervised `M_θ`.**
+**Network world (`src/verisim/net*`, SPEC-5 §13): partial-observation loop + first `H_ε(ρ)` curve.**
 
 | Milestone | What | Status |
 |-----------|------|--------|
@@ -59,7 +63,9 @@ build order in [SPEC §12](docs/specs/SPEC.md#12-research-roadmap):
 | **NW2** | Drivers (uniform/weighted/adversarial topology+traffic) + trajectory generation | ✅ |
 | **NW3** | Graph divergence, **reachability-faithfulness**, bits-to-correct (`H_ε` + run-records reused from v0) | ✅ |
 | **NW4** | Network `M_θ` ([`netmodel/`](src/verisim/netmodel/)): closed vocab, tokenizer, LL(1) graph-delta grammar, constrained decode, supervised training. The **flat** arm (the H11 flat-Markov baseline, reusing v0's transformer + trainer) ships and is tested | ◐ flat arm |
-| **NW5–NW8** | Partial-observation loop + **message-passing/RSSM** arm → the network `H_ε(ρ)` curve (the prime directive, H8) → packaging | ☐ next |
+| **NW5** | Partial-observation propose-verify-correct loop ([`netloop/`](src/verisim/netloop/)): two-mode (full / **probe**) oracle, probe policies `π_o`, correction/belief operators, baselines, model-agnostic runner — loop invariants tested | ✅ |
+| **NW6** | **EN1 network `H_ε(ρ)` curve** ([`en1_curve.png`](figures/en1_curve.png)) — the prime directive (H8). Honest negative on the flat arm: near-flat interior | ✅ |
+| **NW7–NW8** | **Message-passing + RSSM** graph arm and drift mitigations (EN2/EN3/EN4) → RLVR/online-TTT + counterfactual + packaging | ☐ next |
 
 The deterministic cores (filesystem and network) have **no runtime dependencies** and need
 no GPU. The propose–verify–correct loop is model-agnostic, so the learned model `M_θ` — a
@@ -95,6 +101,22 @@ The full write-up — every figure (E1–E4, calibration, K0/K2/K4), the honest 
 mechanism, threats to validity, and exact reproduction — is in [docs/report.md](docs/report.md).
 Every figure regenerates from its config + seeds with `bash figures/reproduce.sh`.
 
+### The network world's first curve (NW6 / EN1)
+
+The same loop now runs on the partially-observable network world. EN1 — SPEC-5's prime
+directive — sweeps the consultation budget on the flat-Markov network `M_θ`:
+
+![EN1 H_ε(ρ) on the network world](figures/en1_curve.png)
+
+The interior is **near-flat, then a cliff at ρ=1** — the opposite of a favorable knee. This is
+the **H8 honest negative for the flat arm**, the network analogue of v0's H1 floor: the model
+memorizes its training trajectories (teacher-forced accuracy 1.0) but generalizes poorly
+off-distribution (~0.2 exact-delta match free-running), so it drifts past ε in ~1 step without
+consultation. That near-floor result is exactly what makes the **NW7** levers load-bearing — the
+message-passing + RSSM graph arm (H11) and the drift mitigations v0 never had (noise-injected
+rollout training, self-forcing; the GNS/m4 levers). The EN1 machinery now exists to measure,
+reproducibly, whether any of them lifts `M_θ` off the floor ([report §NW5+NW6](docs/report.md)).
+
 ### Verification
 
 The claims above are audited empirically in [docs/verification.md](docs/verification.md):
@@ -105,7 +127,9 @@ oracle transitions with zero failures** by the dependency-free, torch-free
 **entire action space** (448,260 state×action pairs), **by construction**, and with
 **negative controls** confirming each check detects deliberate corruptions. Every
 quantitative number in the report *and* this README is machine-checked against the committed
-figure CSVs; all 12 CSVs regenerate from config + seeds with `maxΔ = 0`; and the packaging is
+figure CSVs; all 13 CSVs (including the NW6 network `H_ε(ρ)` curve) regenerate from config +
+seeds with `maxΔ = 0`; the NW5 partial-observation loop invariants are tested (ρ=1 full-consult
+is exact; a one-host probe corrects strictly less than a full consult); and the packaging is
 verified end-to-end (the RL-env return equals the faithful horizon, the benchmark separates a
 perfect from a trivial model, coverage spans all 13 commands). The audit found and fixed two
 stale-documentation drifts (an E2 table and the K1 coverage diagnostic), with no invariant,
@@ -173,8 +197,10 @@ See [SPEC-2 §10](docs/specs/SPEC-2.md) (filesystem) and [SPEC-5 §16](docs/spec
 - **Network world (SPEC-5):** `net/` (typed-graph `NetworkState`, action grammar,
   serialization), `netoracle/` (Tier-A reference oracle), `netdelta/` (graph deltas + `apply`),
   `netdata/` (drivers + generation), `netmetrics/` (graph divergence, reachability-faithfulness,
-  bits-to-correct), and `netmodel/` (the NW4 network `M_θ`: vocab, tokenizer, LL(1)
-  graph-delta grammar, constrained decode, supervised dataset — reusing v0's transformer + trainer).
+  bits-to-correct), `netmodel/` (the NW4 network `M_θ`: vocab, tokenizer, LL(1) graph-delta
+  grammar, constrained decode, supervised dataset — reusing v0's transformer + trainer), and
+  `netloop/` (the NW5 partial-observation propose-verify-correct runner, two-mode oracle, probe
+  policies, correction/belief operators, baselines). The EN1 curve is `experiments/en1.py`.
 
 Experiment configs live in [configs/](configs/); plotting scripts + figures in
 [figures/](figures/); the run-records they read are git-ignored and regenerable from config + seeds.

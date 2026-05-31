@@ -51,4 +51,9 @@ python -m verisim.auto.search --config configs/auto.json --out runs/auto/log.jso
 python figures/plot_auto.py --records runs/auto/log.jsonl \
     --out figures/auto_search.png --csv figures/auto_search.csv
 
-echo "== done: figures/{e1_curve,e2_policies,e3_operators,calibration,e4_ablation,objective,representation,auto_search}.{png,csv} =="
+echo "== EN1: network H_eps(rho) curve (SPEC-5 NW6; the prime directive) =="
+python -m verisim.experiments.en1 --config configs/en1.json --out runs/en1/records.jsonl
+python figures/plot_en1.py --records runs/en1/records.jsonl \
+    --out figures/en1_curve.png --csv figures/en1_curve.csv
+
+echo "== done: figures/{e1_curve,e2_policies,e3_operators,calibration,e4_ablation,objective,representation,auto_search,en1_curve}.{png,csv} =="

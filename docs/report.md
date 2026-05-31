@@ -371,6 +371,46 @@ which the fully-observable, discrete-state filesystem has. SPEC-2.1 did its job:
 works, the floor is gone, and the evidence now says the knee lives one world up. The paused
 SPEC-5 is no longer a hopeful bet — it is an evidence-backed next step.
 
+## NW5+NW6 — the network world's loop, and its first `H_ε(ρ)` curve (SPEC-5)
+
+The deterministic network core (NW0–NW3) and the flat supervised `M_θ` (NW4) were already
+shipped. NW5 adds the **partial-observation propose-verify-correct loop**
+([`netloop/`](../src/verisim/netloop/)): a model-agnostic runner, the two baselines
+(null / oracle-backed), the two-mode **partial-observation oracle** (a cheap *probe* that
+reveals one host's subgraph vs. an expensive *full* consult, SPEC-5 §5.3), probe policies
+`π_o` (§8.2), and correction/belief operators including the **belief filter** that snaps only
+the observed subgraph (§8.3). The loop invariants mirror v0's and are separately tested
+(`tests/test_net_loop.py`): ρ=1 full-consult reproduces the oracle exactly; a perfect model
+never drifts at ρ=0; the budget is never exceeded; and — the property partial observability
+buys that v0 could not — a one-host **probe corrects strictly less than a full consult**, so
+probe-mode horizon is provably ≤ full-mode horizon at equal ρ (no v0 identity collapse).
+
+NW6 plots the prime-directive curve — **EN1**
+([`en1_curve.png`](../figures/en1_curve.png); `verisim.experiments.en1`, `configs/en1.json`).
+On the flat-Markov `M_θ` the interior is **near-flat, then a cliff at ρ=1** — the *opposite*
+of a favorable knee (ε=0.05):
+
+| ρ | 0 | 0.05 | 0.1 | 0.2 | 0.3 | 0.5 | 1.0 |
+|---|---|------|-----|-----|-----|-----|-----|
+| `H_ε` (high, ε=0.05) | 1.0 | 1.6 | 1.6 | 1.6 | 2.4 | 3.0 | 24.0 |
+| `H_ε` (low, ε=0.05)  | 0.8 | 1.4 | 1.4 | 1.4 | 1.4 | 3.4 | 24.0 |
+
+**This is the H8 honest negative for the flat arm**, and it is the network analogue of v0's H1
+floor — not a surprise but a measurement. The mechanism is the model, not (yet) the world: the
+flat `M_θ` memorizes its training trajectories (teacher-forced accuracy 1.0) but generalizes
+poorly off-distribution — held-out teacher-forced accuracy ~0.71 *per token*, and only **~0.2
+exact-delta match** free-running, so a single wrong token breaks the whole delta and the rollout
+drifts past ε in ~1 step without consultation. At ρ=0.2 the model recovers only ~7% of the
+ceiling horizon — far below H8's "≥80% of ceiling at ≤20% consultation."
+
+**What it licenses.** A flat near-floor interior on the flat-Markov baseline is exactly the
+result that makes the **NW7** levers load-bearing rather than optional: the message-passing +
+RSSM graph arm (§6.1–6.2, H11), and the drift mitigations v0 never had — **noise-injected
+rollout training** and **self-forcing/scheduled sampling** (the GNS/m4 levers, §6.3). The EN1
+machinery now exists to measure, cleanly and reproducibly, whether any of them lifts `M_θ` off
+this floor. As in v0, the negative is reported first-class and the apparatus (loop invariants,
+determinism, the CI-tested core) is proven independently of the model's faithfulness.
+
 ## Threats to validity
 
 - **Scale.** The committed model is ~tiny and trains for a few hundred iterations on
@@ -412,6 +452,10 @@ python figures/plot_objective.py --records runs/objective/records.jsonl
 python -m verisim.experiments.representation --config configs/representation.json \
     --out runs/representation/records.jsonl
 python figures/plot_representation.py --records runs/representation/records.jsonl
+# SPEC-5 network world (NW6, the prime-directive curve):
+python -m verisim.experiments.en1 --config configs/en1.json --out runs/en1/records.jsonl
+python figures/plot_en1.py --records runs/en1/records.jsonl \
+    --out figures/en1_curve.png --csv figures/en1_curve.csv
 ```
 
 The run-records are git-ignored (regenerable); the figures and their CSVs are
