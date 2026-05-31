@@ -203,6 +203,8 @@ The research record is unambiguous: autonomous research agents **hack their eval
 
 > **The core safety claim:** because faithfulness is scored against a deterministic oracle on frozen, proposer-independent states, **the only way to score well is to actually be faithful.** The agent cannot persuade, cannot pick a friendlier judge, cannot redefine truth. That is precisely why computer/network environments (with a real oracle) are the right place to run an autonomous research engine — and why the same engine could *not* be safely run in a domain whose "oracle" is a learned, gameable proxy.
 
+That the gate is **proposer-independent** is not only a safety property; it is the engineering face of the project's most general claim. The gate scores *the prediction against the oracle*, never *the model against a model* — so the engine can search across radically different proposers (config-tuned transformer, evolved architecture, a JEPA-style latent arm, an LLM-as-proposer) on one comparable scale, and any improvement it banks is an improvement in *faithfulness*, not in fitting a particular architecture's quirks. The autonomous engine is thus the most direct demonstration of **deterministic verification as a model-agnostic primitive** (SPEC.md §6 commitment 4, H22): one unfakeable judge, many swappable proposers.
+
 ---
 
 ## 10. The inner loop: RLVR, and why GRPO

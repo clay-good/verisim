@@ -125,7 +125,13 @@ NeuralOS answers "can a neural net *render* an OS?" Verisim answers "can a neura
 *be a faithful, checkable model of what the OS state actually becomes*, and how cheaply
 can an oracle keep it so?" The contrast is the cleanest possible statement of the whole
 program, now at the OS layer the field's flagship 2025 result chose to model the wrong
-way.
+way. And the contrast is *about the loop, not the network*: NeuralOS's diffusion renderer
+could be swapped for any other generator and it would still drift, because it has no oracle;
+Verisim's host proposer can be swapped (factored model, flat serializer, a JEPA-style latent
+arm, an LLM) and the composed-host curve and composition law (H13) stay the object of study,
+because the oracle — not the proposer — is what holds the result. That proposer-invariance is
+the host-layer instance of the project's model-agnostic primitive (SPEC.md §6 commitment 4,
+H22).
 
 ### 1.4 Why it is worth building for the community, not just for us
 

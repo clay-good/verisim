@@ -15,8 +15,16 @@
   visual coherence for minutes then drifts. *Take:* same failure mode (long-horizon
   drift), opposite domain (no oracle). Verisim attacks their open problem where it is
   measurable.
-- **V-JEPA 2** (Meta, 2025) — predictive world model in latent space for embodied
-  planning. *Take:* prediction branch of the 2025 split; no inference-time oracle.
+- **V-JEPA 2 / JEPA** (Meta; LeCun, 2025) — an *energy-based* predictive world model:
+  predict the future's *representation* (not raw pixels), discarding whatever is
+  unpredictable; plan by minimizing a learned goal energy via MPC. *Take:* the cleanest
+  oracle-free foil. Its energy is a *learned* surrogate, so a rollout can drift in latent
+  space uncaught — Verisim's divergence is the same energy *computed against ground truth*,
+  i.e. an energy-based world model whose energy is the oracle. Dual role: also a **component
+  source** — its latent-belief + collapse-prevention (VICReg/EMA) are borrowed for the
+  partial-observation arm (SPEC-5 §6.2), confined to the *unobserved* part so the checkable
+  part stays exact (SPEC.md §8; DD-3, SPEC-3 §4.2). And the question JEPA answers blind —
+  *what is safe to discard?* — Verisim answers by intervention against the oracle (SPEC.md §4).
 - **NVIDIA Cosmos** (NVIDIA, 2025) — world foundation models for physical-AI
   synthesis. *Take:* visual-synthesis branch; competes on fidelity Verisim does not.
 - **World Labs** (2025) — large-scale spatial/world models. *Take:* same no-oracle

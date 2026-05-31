@@ -394,6 +394,13 @@ This is the same ambition, made survivable: the world-simulation AI is real, it 
 community as a measuring instrument and a safe agent substrate, and it complements LLMs by being
 the one thing they cannot be — *verifiable*. The dream is intact; the path is one knee at a time.
 
+And the complement is *symmetric in the model*: because the loop treats the proposer as a
+pluggable part (the `Model` protocol, SPEC-2 §14), the verifiable specialist is not tied to one
+architecture — a transformer, a JEPA-style latent predictor, an RSSM, or an LLM itself can sit in
+the proposer slot, and the oracle grounds whichever one does. That is the broader contribution this
+knee is a down payment on: **deterministic verification as a model-agnostic primitive** (SPEC.md §6
+commitment 4, H22), demonstrated here on the smallest world before it is claimed on any larger one.
+
 ---
 
 ## 12. Definition of done

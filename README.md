@@ -11,6 +11,14 @@ a deterministic oracle can be placed in the loop to bound a neural world model's
 drift. Verisim builds that loop and measures the central tradeoff nobody else can
 measure: **how much oracle consultation buys how much faithful horizon.**
 
+The world model is a **pluggable proposer** — a from-scratch transformer, a JEPA-style
+latent predictor, an RSSM, or a frozen LLM all drop into the same loop (the model-agnostic
+`Model` protocol). So the deeper bet is about a *method*, not a model: **deterministic
+verification as a model-agnostic primitive for probabilistic ML** — the layer underneath the
+world-model race, not another entrant in it. That the favorable-consultation behavior belongs
+to the oracle-loop and not to any model class is itself a falsifiable hypothesis
+([SPEC §9, H22](docs/specs/SPEC.md#9-hypotheses-falsifiable)).
+
 All specs live under [`docs/specs/`](docs/specs/), with the canonical, evidence-gated
 build order in [SPEC §12](docs/specs/SPEC.md#12-research-roadmap):
 

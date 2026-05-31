@@ -195,7 +195,18 @@ Skeptical notes are included where the literature is hype.
   (pixels — here, raw packets). Reconstruction wastes capacity on irrelevant detail.
   → **Design choice:** the model predicts structured *deltas* and latent belief, never
   raw packet bytes. (This also matches v0's E4 finding that the delta representation
-  dominates full-state.)
+  dominates full-state.) *Two refinements the oracle makes possible (SPEC.md §8).* (a)
+  **Hybrid, not wholesale.** JEPA's superpower — discard the unpredictable — is in tension
+  with this world's superpower — bit-for-bit checkability. So latent prediction is confined
+  to the *unobserved* subgraph (the belief, §6.2); the *observed* graph stays an exact,
+  checkable delta. Never latent-ify what you can check. (b) **The oracle decides what to
+  discard.** JEPA chooses what to throw away implicitly and unverified; here the reference
+  oracle can *measure* which graph features are load-bearing (perturb a predicted field,
+  re-run the oracle, see if reachability diverges), so the belief models only the predictable
+  structure on evidence, not on a guess. Borrow JEPA's collapse-prevention (VICReg
+  variance/covariance, EMA target encoder) for the §6.2 latent so the graph belief does not
+  degenerate — the hard-won engineering of latent world models, reused rather than
+  rediscovered.
 - **Diffusion forcing / scheduled sampling.** Mixing teacher-forced and free-run
   prediction during training reduces autoregressive exposure bias.
   → **Design choice:** scheduled-sampling / free-run mixing is a drift-mitigation lever
@@ -656,6 +667,19 @@ mirrors a v0 experiment's role and names the hypothesis it tests (§10).
 - **EN6 — counterfactual & two-oracle grounding** (**H5**, **H12**): train with
   branched-replay counterfactuals; add the Batfish-style control-plane oracle (§5.1);
   measure faithfulness and downstream change-safety on held-out incidents.
+- **EN7 — model-invariance of the curve** (**H22**, SPEC.md §9): re-plot the EN1
+  `H_ε(ρ)` curve with *materially different proposers* dropped into the same loop, at
+  matched per-step competence — the flat-Markov transformer (shipped), the graph+RSSM arm
+  (NW7), and a frozen **LLM-as-proposer** behind the `Model` protocol (the NW8 simulator
+  protocol, §7, supplies the adapter). *Is the qualitative `H_ε(ρ)` shape the same in kind
+  across proposer classes — i.e. is the consultation behavior a property of the oracle-loop,
+  not the model?* This is the experiment that turns §6's "model-agnostic by construction"
+  plumbing into evidence. It composes with EN4 (whose graph-vs-flat arm is already the first
+  data point) rather than duplicating it: EN4 asks *which* proposer is most faithful, EN7
+  asks whether the *loop's behavior* is invariant to that choice. *Honest negative:* the
+  curve's shape depends strongly on the proposer (a knee for one class, none for another at
+  matched acceptance) → the benefit is model-specific, and H22 is refuted (a narrower but
+  still-reportable result).
 
 **External harness (optional, for community legibility).** Where it is cheap to do so,
 EN1/EN3/EN5 are additionally reported against a **CAGE-4 / CybORG**-class scenario
@@ -689,7 +713,7 @@ no GPU** before any learned model. It does not collide with `M0–M8`, `S1–S6`
 | **NW5** | Propose-verify-correct loop with **partial-observation oracle** (full / probe modes), probe-policy interface `π_o`, correction/belief operators, baselines, model-agnostic runner ([`netloop/`](../../src/verisim/netloop/)). The **message-passing + RSSM `M_θ`** is deferred to NW7, where partial observability makes the belief non-degenerate (§6.2) and the graph arm becomes the H11 contender — exactly as v0 shipped the M5 loop with baselines before the neural model bit | loop invariants | ✅ (graph arm → NW7) |
 | **NW6** | **EN1 network `H_ε(ρ)` curve** + bootstrap-CI aggregation + figure ([`experiments/en1.py`](../../src/verisim/experiments/en1.py), [`figures/en1_curve.png`](../../figures/en1_curve.png)) | **the prime directive** | ✅ (H8 honest negative on the flat arm) |
 | **NW7** | Smart probe policies + belief operators + drift mitigations; EN2/EN3/EN4 (equal-budget, CIs). **EN2** (consultation policy `π_c`, H9) and **EN3** (correction/belief operators, §8.3) ship on the flat arm ([`en2.py`](../../src/verisim/experiments/en2.py), [`en3.py`](../../src/verisim/experiments/en3.py)): EN3 breaks v0's operator identity collapse and shows the probe earns ~2.3× more faithful horizon per oracle-bit. The graph/RSSM arm (H11), the smart info-gain `π_o` (H10), the drift mitigations, and EN4 remain | comparison figures | ◐ EN2/EN3 (flat arm) |
-| **NW8** | RLVR + online-TTT (EN5), counterfactual training (EN6), **LLM-callable simulator protocol** (§7), Inspect benchmark + `verifiers`-spec network RL env, technical report | packaging + report |
+| **NW8** | RLVR + online-TTT (EN5), counterfactual training (EN6), **model-invariance sweep (EN7/H22)** — the LLM-as-proposer arm rides the new simulator protocol, **LLM-callable simulator protocol** (§7), Inspect benchmark + `verifiers`-spec network RL env, technical report | packaging + report |
 
 NW0–NW3 + the NW5 loop are the deterministic core. `M_θ` (NW4) drops into the loop via
 the same model-agnostic interface v0 uses (`NeuralWorldModel`).

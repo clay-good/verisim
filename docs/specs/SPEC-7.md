@@ -151,6 +151,14 @@ repo's related-work set:
 > system state is useful and learnable*; verisim adds the one thing the domain uniquely
 > permits and they both lack — **a deterministic oracle in the loop, spent on a budget.**
 
+And note what the foils share: CWM is a 32B transformer, WebDreamer is a prompted LLM — *different
+model classes, same missing piece*. That is the point. The tiered oracle (§5) grounds **whatever**
+sits in the proposer slot — a CWM-style transducer, the service-graph GNN of §6, an RSSM, or an LLM
+caller — because the loop verifies the *prediction*, not the *predictor*. So the distributed
+`H_ε(ρ)` curve and the tiered-oracle result (H17) are, like every prior world's, claims about the
+oracle-loop rather than any one architecture: the distributed-layer instance of **deterministic
+verification as a model-agnostic primitive** (SPEC.md §6 commitment 4, H22).
+
 ### 1.4 Why it is worth building for the community, not just for us
 
 A deterministic, oracle-grounded, partially-observable model of a *distributed system* is a

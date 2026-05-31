@@ -302,6 +302,8 @@ To make later phases additive rather than rewrites, v0 commits to exactly two ab
 - **`Oracle` protocol (§3.2)** — so `SandboxOracle` (Phase 1, real shell) and future network/syscall oracles drop in unchanged.
 - **`Environment` boundary** — `State`/`Action`/`Delta`/serialization behind a small interface, so Phase 4's network state is a new `Environment` implementation, not a fork.
 
+(A third seam, the **`Model` protocol** of M5/§6.3, already exists and is load-bearing *now*, not future-proofing: the loop is generic over any proposer, so the from-scratch transformer, the oracle-backed baseline, and — later — a JEPA-style latent model or an LLM-as-proposer all drop in unchanged. This is what makes Verisim's most general claim — that the favorable-consultation behavior belongs to the oracle-loop, not the model class — *testable* rather than asserted: SPEC.md §6 commitment 4 and hypothesis H22.)
+
 Everything else (partial observability, counterfactual harness, agent training) is explicitly deferred and must not add abstraction weight to v0.
 
 ---
