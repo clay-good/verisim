@@ -326,6 +326,51 @@ expected to appear. K3 (the difficulty dial) and K4 (re-run E1) are next; the
 **bits-to-correct** gate (SPEC-2.1 §3) and the tested **hard-negative mining** loop
 (`mine_hard_negatives`, active learning over the oracle) are in place to drive the search.
 
+## K3+K4 — the knee hunt: an honest negative that licenses the network world (SPEC-2.1)
+
+With a competent model in hand (K2), K3/K4 implemented the difficulty dial and ran the loop to
+look for the knee — the prime directive of SPEC-2.1
+([`k4_knee.png`](../figures/k4_knee.png), [`k4_policies.png`](../figures/k4_policies.png);
+`verisim.experiments.k4`, `configs/k4.json`).
+
+**K3 — the difficulty dial.** The deferred SPEC-2 §2.4 dial is implemented as `max_depth` on the
+driver (`verisim.data.drivers.path_depth`, threaded through `build_dataset`/`eval_actions`). At
+the chosen sweet spot (`structural`, `max_depth=4`, rollout length `T=48`) the K2 model's
+per-step acceptance is ~0.875 and the unaided (ρ=0) faithful horizon is ~10/48 — **floor well
+below ceiling, so there is genuine room** for consultation to buy horizon back. The dial gate is
+met.
+
+**K4 — the curve, and the honest negative.** The competent model is a real, large win over v0:
+the ρ=0 floor rose from ~0 (original v0) to **~10/48**. But the `H_ε(ρ)` curve is a **floor +
+cliff, not a knee** — at ε=0.05, `H_ε` is 10.3 (ρ=0) → 11.3 (ρ=0.2) → 13.8 (ρ=0.5) → 48 (ρ=1):
+
+| ρ | 0 | 0.1 | 0.2 | 0.3 | 0.5 | 1.0 |
+|---|---|-----|-----|-----|-----|-----|
+| `H_ε` (ε=0.05) | 10.3 | 10.3 | 11.3 | 12.2 | 13.8 | 48.0 |
+
+And **smart consultation does not help** (E2 with the competent model, equal budget at ρ=0.2):
+`fixed` 11.3 vs `uncertainty` 10.7 vs `drift` 10.9 — overlapping CIs, the H2 negative persisting
+even now. So **C-knee (a favorable knee on the single-filesystem world) is refuted at this
+scale** — the SPEC.md §9 "approximately linear, no free lunch" refutation condition.
+
+**Why — the mechanism, now fully characterized.** Filesystem prediction errors are *discrete*:
+one wrong edit spikes the set-difference divergence past ε in a single step. So `H_ε`
+(first-exceedance) is governed by the position of the *first* error, which evenly-spaced resets
+cannot push out — and the model's decode-entropy uncertainty does not localize *which* steps
+will err, so error-targeting consultation cannot catch them either. A fixed-interval knee would
+need per-step acceptance ≈0.98, which leaves no room (horizon ≈ ceiling). This is not a tuning
+miss; it is a property of *this world's metric* (discrete set-difference) and *this model's
+uncertainty* (uncalibrated decode entropy).
+
+**This is the result the plan anticipated, and it is load-bearing.** Per SPEC-2.1 §10, a refuted
+C-knee — *after* the learner is proven (K0) and the floor is lifted (K1/K2) — is exactly what
+**licenses the network world (SPEC-5)**: a knee needs *gradual* drift (continuous quantities like
+RTT/throughput that accumulate smoothly, where periodic resets keep divergence under ε) and a
+*calibrated* uncertainty (the RSSM belief-variance partial observability supplies), neither of
+which the fully-observable, discrete-state filesystem has. SPEC-2.1 did its job: the learner
+works, the floor is gone, and the evidence now says the knee lives one world up. The paused
+SPEC-5 is no longer a hopeful bet — it is an evidence-backed next step.
+
 ## Threats to validity
 
 - **Scale.** The committed model is ~tiny and trains for a few hundred iterations on

@@ -211,10 +211,10 @@ Phases are gated by **evidence**, not calendar: **no stage graduates from design
 > **Build order & status (updated 2026-05) — this is the canonical sequence.** After v0's apparatus shipped, the `H_ε(ρ)` curve was an honest null (no knee; the model drifts at step 0 — [docs/report.md](../report.md)). The program therefore **paused its roadmap** to finish Phase 0 first. The single active spec is **[SPEC-2.1 — Earning the Knee](./SPEC-2.1.md)**; every design spec below it is on hold until its predecessor's knee exists.
 >
 > 0. **✅ v0 apparatus** — deterministic core + propose-verify-correct loop + neural model + E1–E4 experiments (SPEC-2 §13, M0–M8). Built and tested.
-> 1. **▶ ACTIVE — Earn the knee** ([SPEC-2.1](./SPEC-2.1.md)): **K0** diagnose → **K1** data-at-coverage → **K2** train properly → **K3** difficulty sweet-spot → **K4** re-run E1. **Gate: a real knee, or the honest negative that licenses Stage 2.**
-> 2. **⏸ System oracle** (SPEC-3 §2, milestone **S1**): re-run the knee against a *real* sandboxed shell. Gate: **H4** (mechanism survives reality).
+> 1. **✅ Earn the knee** ([SPEC-2.1](./SPEC-2.1.md)): **K0** diagnose → **K1** data → **K2** train → **K3** difficulty → **K4** curve. **Done.** The learner is proven and the floor lifted (clean faithfulness ~0 → 0.86), but C-knee is **refuted on the single-FS world** (floor+cliff under every policy; discrete errors make first-exceedance `H_ε` reset-resistant). Per SPEC-2.1 §10 the honest negative **licenses the network world** → Stage 4 is now active.
+> 2. **⏸ System oracle** (SPEC-3 §2, milestone **S1**): re-run against a *real* sandboxed shell. Gate: **H4** (mechanism survives reality). *(Orthogonal "faithful-to-reality" upgrade; can run anytime.)*
 > 3. **⏸ Package the working simulator** — the agent-callable "what-if" tool + faithfulness benchmark + RL env (the community artifact, SPEC-2 §15).
-> 4. **⏸ Network world** ([SPEC-5](./SPEC-5.md)): earn the *network* knee. Gate: **H8**.
+> 4. **▶ ACTIVE — Network world** ([SPEC-5](./SPEC-5.md)): earn the *network* knee, where drift is gradual and partial observability supplies a calibrated signal (the regime the single-FS world lacked). Gate: **H8**.
 > 5. **⏸ Host world** ([SPEC-6](./SPEC-6.md)): earn the *host* knee + composition law. Gate: **H13**.
 > 6. **⏸ Distributed world** ([SPEC-7](./SPEC-7.md)): earn the *distributed* knee + the tiered oracle. Gate: **H17**.
 >

@@ -62,16 +62,28 @@ build process. The cross-spec gating (what comes after the knee) lives in
   ~0.09 to **exact 0.859 / acceptance@0.05 0.875 / graded 0.988 — gate 0.5 → PASS**. The K0
   bottleneck was coverage/training, *not* representation (the K3 copy-rep lever is unneeded at
   this scale). See [report §K1+K2](../report.md), `configs/k2.json`, `figures/k2_faithfulness.*`.
-- [ ] **K3 — Difficulty sweet-spot** (§7). Implement the deferred SPEC-2 §2.4 difficulty dial;
-  tune to per-step acceptance **0.7–0.95** with room below the ceiling. *Gate:* such a
-  difficulty exists.
-- [ ] **K4 — Earn the knee** (§8). Re-run E1 (then E2/E3 honestly). **Gate / prime directive:
-  a knee meeting §0, or the honest negative (§10).**
-- [ ] **Engine** (§9, runs alongside K1–K3). Upgrade the autoresearch ratchet's gate to
-  bits-to-correct and expand its space to data/training/difficulty; let it co-tune overnight.
+- [x] **K3 — Difficulty sweet-spot** (§7). ✅ **Done.** The SPEC-2 §2.4 dial is implemented as
+  `max_depth` on the driver (`path_depth`, threaded through `build_dataset`/`eval_actions`). At
+  the sweet spot (`structural`, `max_depth=4`, `T=48`) the K2 model's acceptance is ~0.875 and
+  the ρ=0 horizon is ~10/48 — room below the ceiling. *Gate met.*
+- [x] **K4 — Earn the knee** (§8). ✅ **Done — honest negative (C-knee refuted on single-FS).**
+  The competent model lifts the ρ=0 floor from ~0 to **~10/48**, but `H_ε(ρ)` is **floor+cliff,
+  not a knee** (ε=0.05: 10.3 → 11.3 at ρ=0.2 → 48 at ρ=1), and smart consultation does **not**
+  beat fixed (E2: fixed 11.3 vs uncertainty 10.7 vs drift 10.9, overlapping CIs — H2 negative
+  persists). *Mechanism:* filesystem errors are **discrete** (one wrong edit spikes the
+  set-difference past ε; first-exceedance `H_ε` can't be reset-extended) and decode-entropy
+  **doesn't localize errors**. See [report §K3+K4](../report.md), `figures/k4_knee.*`,
+  `figures/k4_policies.*`. Per §10 this **licenses SPEC-5** (the knee needs gradual drift +
+  calibrated belief, which networks have and the discrete fully-observable filesystem does not).
+- [x] **Engine** (§9). bits-to-correct (SPEC-2.1 §3) shipped as the smooth gate and used by the
+  K1/K2 hard-negative mining; the autoresearch ratchet space extension is available behind the
+  same gate.
 
-Only after K4 produces the knee does the program move to the **next** stage — the system
-oracle (SPEC-3 **S1**), *not* a new world (§11).
+**SPEC-2.1 is complete.** The learner is proven (K0), the floor is gone (K1/K2: ~0 → competent),
+and the knee hunt returned a clean, mechanistic negative (K3/K4) that — exactly as §10 planned —
+**licenses the network world**. The next stage is **SPEC-5** (the network `H_ε(ρ)` curve), where
+drift is gradual and partial observability supplies a calibrated signal — *not* more single-FS
+tuning. (The system oracle, SPEC-3 S1, remains the orthogonal "faithful-to-reality" upgrade.)
 
 ---
 
@@ -268,6 +280,12 @@ max tree depth, breadth, and fraction of destructive/cascading commands, plus ro
 > **and** the `ρ=0` faithful horizon is materially below the `ρ=1` ceiling (room to buy back).
 > This is the regime the knee lives in.
 
+**Result (2026-05) — gate met.** The dial is `max_depth` on the driver
+(`verisim.data.drivers.path_depth`, threaded through `build_dataset`/`eval_actions`,
+`verisim.experiments.k4`). The committed sweet spot is `structural`, `max_depth=4`, `T=48`:
+acceptance ~0.875 (in band) and ρ=0 horizon ~10/48 (room below ceiling). *Note:* the band itself
+turned out to be **necessary but not sufficient** for a knee on this world — see §8.
+
 ---
 
 ## 8. Phase K4 — Earn the knee (re-run E1, then E2/E3 honestly)
@@ -286,6 +304,18 @@ structure (`experiments/e1.py`, `e2.py`, `e3.py` already exist):
 - **E3 (H3) — operator.** Still expected to be an identity under a *full*-state oracle (the v0
   theoretical result stands); the operators only diverge under **partial verification**, which
   is SPEC-3/SPEC-5 work and stays paused. Report E3 as the confirmed identity, not as a failure.
+
+**Result (2026-05) — C-knee refuted on the single-FS world (the honest negative §10 anticipated).**
+*E1:* the competent model lifts the ρ=0 floor from ~0 to **~10/48**, but `H_ε(ρ)` is **floor+cliff**
+(ε=0.05: 10.3 → 11.3 at ρ=0.2 → 13.8 at ρ=0.5 → 48 at ρ=1) — the §0 knee target is **not** met.
+*E2:* smart consultation does **not** beat fixed at equal budget (fixed 11.3 vs uncertainty 10.7
+vs drift 10.9, overlapping CIs) — the H2 negative survives even for the competent model.
+**Mechanism:** filesystem errors are *discrete* — one wrong edit spikes the set-difference past ε
+in a single step, so first-exceedance `H_ε` is set by the *first* error's position and cannot be
+reset-extended; and decode-entropy uncertainty does not localize which steps will err, so
+error-targeting consultation cannot catch them. A fixed-interval knee would need acceptance ≈0.98,
+which leaves no room. This is a property of *this world* (discrete, fully-observable, set-difference
+metric), not a tuning miss — and per §10 it **licenses SPEC-5**.
 
 ---
 
@@ -315,6 +345,12 @@ budget, safety), per SPEC-4 §8.
 > **Working claim (C-knee, a sharpened test of H1):** there exists a `(data, training,
 > difficulty)` configuration of the single-filesystem world at which clean per-step
 > faithfulness exceeds the ~0.5 acceptance floor and `H_ε(ρ)` exhibits a knee (§0 target).
+
+> **Outcome (2026-05): C-knee is REFUTED on the single-filesystem world (§8).** The first half
+> held — clean per-step faithfulness reached 0.875 ≫ 0.5 (K2) — but no consultation policy
+> (fixed *or* smart) produced a knee, because the world's *discrete* errors and *uncalibrated*
+> uncertainty make first-exceedance `H_ε` reset-resistant. This is the §10 honest-negative path,
+> and it **licenses SPEC-5** (see below).
 
 **If C-knee holds:** H1 is supported at v0 scale, the apparatus is validated end-to-end, and
 the harder worlds (SPEC-5+) inherit a *working* method rather than a hopeful one.

@@ -33,9 +33,10 @@ def examples_from_rollout(
     driver: str,
     seed: int,
     n_steps: int,
+    max_depth: int | None = None,
 ) -> list[Example]:
     """``(prompt_ids, target_ids)`` for each step of one seeded rollout."""
-    driver_obj = Driver(name=driver, config=config, rng=random.Random(seed))
+    driver_obj = Driver(name=driver, config=config, rng=random.Random(seed), max_depth=max_depth)
     state = State.empty()
     examples: list[Example] = []
     for _ in range(n_steps):
@@ -58,6 +59,7 @@ def state_examples_from_rollout(
     driver: str,
     seed: int,
     n_steps: int,
+    max_depth: int | None = None,
 ) -> list[Example]:
     """Like :func:`examples_from_rollout` but with the *full next state* as target.
 
@@ -65,7 +67,7 @@ def state_examples_from_rollout(
     ``<bos> state action <gen>``, but the target is :func:`encode_state_target`
     (the whole next state + ``<eos>``) instead of the encoded delta.
     """
-    driver_obj = Driver(name=driver, config=config, rng=random.Random(seed))
+    driver_obj = Driver(name=driver, config=config, rng=random.Random(seed), max_depth=max_depth)
     state = State.empty()
     examples: list[Example] = []
     for _ in range(n_steps):
@@ -90,16 +92,18 @@ def build_dataset(
     seeds: tuple[int, ...] = (0,),
     n_steps: int = 40,
     target: str = "delta",
+    max_depth: int | None = None,
 ) -> list[Example]:
     """Build supervised examples; ``target`` selects the prediction representation.
 
     ``"delta"`` (default) targets the structured edit sequence (the primary M_θ);
     ``"state"`` targets the full next state (the §9 representation-ablation arm).
+    ``max_depth`` is the K3 difficulty dial passed through to the driver (SPEC-2.1 §7).
     """
     builder = examples_from_rollout if target == "delta" else state_examples_from_rollout
     examples: list[Example] = []
     for seed in seeds:
-        examples += builder(oracle, vocab, config, driver, seed, n_steps)
+        examples += builder(oracle, vocab, config, driver, seed, n_steps, max_depth)
     return examples
 
 

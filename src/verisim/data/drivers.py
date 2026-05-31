@@ -92,13 +92,25 @@ _WEIGHTS: dict[str, dict[str, float]] = {
 DRIVERS = tuple(_WEIGHTS)
 
 
+def path_depth(path: str) -> int:
+    """Number of segments in an absolute path (``/`` → 0, ``/a`` → 1, ``/a/b`` → 2)."""
+    return sum(1 for seg in path.split("/") if seg)
+
+
 @dataclass
 class Driver:
-    """A seeded stochastic policy. ``sample(state)`` returns the next action."""
+    """A seeded stochastic policy. ``sample(state)`` returns the next action.
+
+    ``max_depth`` is the SPEC-2 §2.4 difficulty dial (K3): a cap on the depth of fresh
+    create targets for the ``trivial``/``structural`` drivers, so the per-step copy difficulty
+    (and hence the model's acceptance rate) can be tuned into the K3 sweet-spot band. ``None``
+    leaves depth unbounded (paths nest as deep as the tree grows).
+    """
 
     name: str
     config: EnvConfig
     rng: random.Random
+    max_depth: int | None = None
 
     def __post_init__(self) -> None:
         if self.name not in _WEIGHTS:
@@ -140,21 +152,34 @@ class Driver:
                 candidate = f"{parent_dir}{sep}{name}"
                 if candidate not in state.fs:
                     return candidate
-        return self._new_path(state)
+        # Exhausted: fall back to a path under one of the candidate parents, so an explicit
+        # ``dirs`` cap (the K3 max_depth dial) is respected even when no free name remains.
+        parent_dir = self.rng.choice(dirs) if dirs else "/"
+        name = self.rng.choice(self.config.name_pool)
+        sep = "" if parent_dir == "/" else "/"
+        return f"{parent_dir}{sep}{name}"
 
     def sample(self, state: State) -> Action:
         weights = _WEIGHTS[self.name]
         cmd = self.rng.choices(_COMMANDS, weights=[weights[c] for c in _COMMANDS])[0]
         return parse_action(self._build(cmd, state))
 
+    def _depth_capped_dirs(self, state: State) -> list[str]:
+        """Existing directories shallow enough that a child stays within ``max_depth``."""
+        if self.max_depth is None:
+            return self._dirs(state)
+        capped = [d for d in self._dirs(state) if path_depth(d) < self.max_depth]
+        return capped or ["/"]
+
     def _fresh(self, state: State) -> str:
         """A fresh create target. Trivial uses unused *depth-1* paths (copy-isolating, §4);
-        structural uses unused paths at *any depth* (multi-segment copy, §6); other drivers
-        use a random new path that may collide or go deep (their difficulty)."""
+        structural uses unused paths at *any depth* up to ``max_depth`` (multi-segment copy,
+        §6); other drivers use a random new path that may collide or go deep (their
+        difficulty)."""
         if self.name == "trivial":
             return self._unused_path(state, dirs=["/"])
         if self.name == "structural":
-            return self._unused_path(state)
+            return self._unused_path(state, dirs=self._depth_capped_dirs(state))
         return self._new_path(state)
 
     def _build(self, cmd: str, state: State) -> str:

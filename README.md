@@ -21,13 +21,16 @@ measure: **how much oracle consultation buys how much faithful horizon.**
 
 ## Status
 
-> **Active work: earning the knee.** v0's apparatus is built and tested (M0–M8), but the
-> headline `H_ε(ρ)` curve is currently an honest null — the model drifts at step 0 (see
-> [the report](docs/report.md)). The program has **paused its roadmap** to finish v0 first.
-> The single active spec is **[SPEC-2.1 — Earning the Knee](docs/specs/SPEC-2.1.md)** (K0
-> diagnose → K1 data → K2 train → K3 difficulty → K4 re-run E1), and no later world is built
-> until the knee exists. Canonical gated build order:
-> [SPEC §12](docs/specs/SPEC.md#12-research-roadmap). (All specs now live under
+> **Status: SPEC-2.1 complete — the knee hunt returned an honest negative that licenses the
+> network world.** [SPEC-2.1](docs/specs/SPEC-2.1.md) finished v0 properly: K0 proved the
+> learner works; K1/K2 dissolved the floor (clean per-step faithfulness ~0 → **0.86**); K3/K4
+> then found that **no consultation policy yields a favorable `H_ε(ρ)` knee on the
+> single-filesystem world** — its *discrete* errors spike the set-difference past ε in one step,
+> so first-exceedance `H_ε` is reset-resistant (see [the report](docs/report.md) §K3+K4). This is
+> exactly the SPEC-2.1 §10 outcome that **licenses [SPEC-5 (the network world)](docs/specs/SPEC-5.md)**,
+> where drift is gradual and partial observability supplies a calibrated signal — now the
+> evidence-backed next stage. Canonical gated build order:
+> [SPEC §12](docs/specs/SPEC.md#12-research-roadmap). (All specs live under
 > [`docs/specs/`](docs/specs/).)
 
 Pre-experiment (v0). The deterministic foundation — milestones **M0–M3** of

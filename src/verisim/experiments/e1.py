@@ -89,9 +89,10 @@ class E1Config:
 
 
 def eval_actions(
-    oracle: Oracle, config: EnvConfig, driver: str, seed: int, n_steps: int
+    oracle: Oracle, config: EnvConfig, driver: str, seed: int, n_steps: int,
+    max_depth: int | None = None,
 ) -> list[Action]:
-    driver_obj = Driver(name=driver, config=config, rng=random.Random(seed))
+    driver_obj = Driver(name=driver, config=config, rng=random.Random(seed), max_depth=max_depth)
     state = State.empty()
     actions: list[Action] = []
     for _ in range(n_steps):
