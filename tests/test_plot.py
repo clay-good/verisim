@@ -179,3 +179,46 @@ def test_plot_auto_writes_figure_and_csv(tmp_path):
     assert result.returncode == 0, result.stderr
     assert out.exists() and out.stat().st_size > 0
     assert "trial,score,best_score,kept" in csv.read_text()
+
+
+def _k0_records() -> list[RunRecord]:
+    control = RunRecord(
+        config={
+            "experiment": "k0", "part": "control", "world": "trivial",
+            "clean_faithfulness_exact": 0.96, "clean_faithfulness_graded": 0.99,
+            "gate": 0.95, "gate_passed": True, "n_train_transitions": 384,
+        },
+        seed=0, epsilon=0.0, divergences=[],
+    )
+    diagnostics = RunRecord(
+        config={
+            "experiment": "k0", "part": "diagnostics",
+            "baseline_train_accuracy": 0.9, "baseline_val_accuracy": 0.12,
+            "baseline_mean_bits_to_correct": 18.0,
+            "per_command": {"write": [3, 10], "mkdir": [6, 10], "cat": [0, 5]},
+            "per_edit_pr": {"create": [5, 8, 9]},
+            "accuracy_by_position": [[2, 3], [1, 3]],
+        },
+        seed=0, epsilon=0.0, divergences=[],
+    )
+    return [control, diagnostics]
+
+
+def test_plot_k0_writes_figure_and_csv(tmp_path):
+    recs = tmp_path / "k0.jsonl"
+    write_records(_k0_records(), recs)
+    out = tmp_path / "k0.png"
+    csv = tmp_path / "k0.csv"
+    result = subprocess.run(
+        [
+            sys.executable, "figures/plot_k0.py",
+            "--records", str(recs), "--out", str(out), "--csv", str(csv),
+        ],
+        capture_output=True,
+        text=True,
+    )
+    assert result.returncode == 0, result.stderr
+    assert out.exists() and out.stat().st_size > 0
+    text = csv.read_text()
+    assert "trivial_control_exact" in text
+    assert "baseline_val_accuracy" in text

@@ -21,6 +21,15 @@ measure: **how much oracle consultation buys how much faithful horizon.**
 
 ## Status
 
+> **Active work: earning the knee.** v0's apparatus is built and tested (M0–M8), but the
+> headline `H_ε(ρ)` curve is currently an honest null — the model drifts at step 0 (see
+> [the report](docs/report.md)). The program has **paused its roadmap** to finish v0 first.
+> The single active spec is **[SPEC-2.1 — Earning the Knee](docs/specs/SPEC-2.1.md)** (K0
+> diagnose → K1 data → K2 train → K3 difficulty → K4 re-run E1), and no later world is built
+> until the knee exists. Canonical gated build order:
+> [SPEC §12](docs/specs/SPEC.md#12-research-roadmap). (All specs now live under
+> [`docs/specs/`](docs/specs/).)
+
 Pre-experiment (v0). The deterministic foundation — milestones **M0–M3** of
 SPEC-2 §13 — is implemented and tested:
 
@@ -32,7 +41,7 @@ SPEC-2 §13 — is implemented and tested:
 | **M3** | Divergence `d(s,ŝ)`, faithful horizon `H_ε`, run-record schema | ✅ |
 | **M5** | Propose–verify–correct loop: `fixed` policy + `hard_reset` operator + baselines (b2/b3) | ✅ |
 | **M4** | Neural world model `M_θ`: tokenizer, from-scratch transformer, constrained decoder, supervised training | ✅ |
-| **M6** | E1 — the `H_ε(ρ)` curve: sweep harness + bootstrap-CI aggregation + figure (curve plotted; tuning ongoing) | ◐ |
+| **M6** | E1 — the `H_ε(ρ)` curve: sweep harness + bootstrap-CI aggregation + figure (curve plotted; **knee not yet — active in [SPEC-2.1](docs/specs/SPEC-2.1.md)**) | ◐ |
 | **M7** | Smart policies (`drift`/`uncertainty`) + operators (`residual`/`projection`); E2/E3 equal-budget comparisons with CIs | ✅ |
 | **M8** | Write-up ([`docs/report.md`](./docs/report.md)) + packaging: faithfulness benchmark (Inspect eval) + oracle-as-reward RL environment (verifiers-spec) | ◐ |
 

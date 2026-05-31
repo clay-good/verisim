@@ -6,6 +6,8 @@
 >
 > **Scope discipline.** The long-term vision is a world model of *reality across every signal stream* — biological, chemical, the five senses for robotics. **That vision is stated once, in §16, and then deliberately deferred.** Everything normative in §1–§15 is **computers and networks only**, because that is the one domain where the oracle is *cheap, real, deterministic, and resettable today* (SPEC.md §2). We earn the right to the rest of reality by first being unambiguously correct here.
 
+> **⏸ PAUSED — design only (2026-05).** Gated behind the v0 knee. Do not build SPEC-3 until **[SPEC-2.1](./SPEC-2.1.md)** earns the `H_ε(ρ)` knee (or its honest negative). When unpaused, the **first** thing built from SPEC-3 is the system oracle (§2, milestone **S1**) — re-running the knee against a real shell — *not* the network/partial-obs/self-healing depth. SPEC-3 §5's "model lift" is already being realized at v0 scale by SPEC-2.1. Canonical build order: [SPEC §12](./SPEC.md#12-research-roadmap).
+
 **License:** MIT. **Status:** design spec, pre-implementation. **Audience:** the author, collaborators, reviewers, and the autonomous research engine (SPEC-4) that will read this file as part of its context.
 
 ---

@@ -4,6 +4,8 @@
 >
 > SPEC-3 says *what to build*. SPEC-4 says *who builds it* — and the answer is Verisim itself.
 
+> **◐ TOOL — partially active (2026-05).** SPEC-4 is not a build *stage*; it is the cross-cutting engine used at every stage. Its **AR0 ratchet already ships** and is the search engine for **[SPEC-2.1](./SPEC-2.1.md) §9** (its gate now upgraded to bits-to-correct). The higher autonomy levels (AR3+ LLM/code proposers) stay **paused** until the knee exists — the autonomous code-editor inherits the reward-hacking surface and must earn its keep behind a proven config-search. Canonical build order: [SPEC §12](./SPEC.md#12-research-roadmap).
+
 **License:** MIT. **Status:** design spec; v0 of the engine (the keep-if-better config ratchet) already ships in [`src/verisim/auto/`](./src/verisim/auto/). **Audience:** the author, collaborators, and the engine itself, which reads this file as part of its operating context.
 
 ---

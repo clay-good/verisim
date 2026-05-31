@@ -240,6 +240,51 @@ about, here at the outer (config-search) layer that wraps the RLVR inner loop. T
 proposer is seeded coordinate hill-climbing; an LLM-agent proposer drops in behind the
 same oracle gate.
 
+## K0 — does the learner work, and where does it fail? (SPEC-2.1)
+
+[SPEC-2.1](specs/SPEC-2.1.md) paused the roadmap to earn an *interesting* `H_ε(ρ)` knee on
+the single-filesystem world, and its first phase (K0) asks the prerequisite question before
+any tuning: **can the pipeline fit the transition function at all, and if the floor persists,
+exactly where does it fail?** ([`k0_control.png`](../figures/k0_control.png),
+[`k0_control.csv`](../figures/k0_control.csv); `verisim.experiments.k0`, `configs/k0.json`).
+
+**The control — the learner works.** Trained on a *trivial* world (depth-1, single-segment
+`mkdir`/`touch`/`write` under root — collision-free successes, so the only thing to learn is
+to copy the action's one-token argument into the delta), with the new minibatch + warmup/cosine
++ val-early-stopping trainer (`train_batched`, SPEC-2.1 §6) on 768 transitions, the model reaches
+**clean per-step faithfulness = 1.000 (exact), gate 0.95 → PASS**. The full pipeline
+(data → tokenize → train → constrained decode → apply → divergence) can fit a deterministic
+computer-state transition to *bit-exact* ground truth. So the v0 floor is **not** a broken
+learner and **not** (per E4) a capacity wall.
+
+**The diagnosis — the floor is a generalization failure, localized to argument-copying.** On
+the baseline config, the model **memorizes its training transitions perfectly yet does not
+generalize**: train accuracy **1.000** vs. held-out **0.083** — the textbook under-data /
+under-coverage signature SPEC-2.1 §1 predicted. The per-edit-type breakdown pinpoints *where*:
+
+| signal | value | reading |
+|---|---|---|
+| `create` precision/recall | **0 / 0** (69 predicted, 34 true, 0 exact) | the model emits creates but **never at the exactly-correct path/content** — exact multi-token *argument copying* into the delta is the bottleneck |
+| `setresult` | 72/144 correct (~0.50) | it gets the *success* cases (empty stdout, exit 0) and misses the *failures* |
+| divergence by fact type | `exit` 138, `file` 96, `dir` 53 | dominated by **mispredicted failure/collision cases** (`exit`) and wrong created-node identity (`file`/`dir`); `cwd`/`env`/`stdout` are nearly learned |
+| mean bits-to-correct | 60.0 | the smooth gate (SPEC-2.1 §3) baseline the K-series and the ratchet will drive down |
+
+A separate convergence probe (25× more training, 160 → 768 transitions) confirmed the copy
+bottleneck is **not** dissolved by more steps alone: observation-class facts
+(`exit`/`stdout`/`cwd`/`env`) become fully learned, but the created-node residual persists,
+while depth-1 (one-token copy) reaches 1.0. So the floor's mechanism is now specific and
+testable: **exact reproduction of multi-token action arguments (deep paths, content) in the
+delta, plus coverage of failure/collision cases** — not generic under-training.
+
+**What this redirects (K1/K2).** (1) Coverage-balanced data + hard-negative mining over the
+path-copy distribution and the failure cases the baseline driver under-samples (K1); (2) the
+`train_batched` budget that took the trivial world to 1.0 (K2); and (3) an open representation
+question for K3/architecture — whether a *copy-aware* delta (referencing action arguments by
+pointer rather than re-emitting path tokens) is the lever, since copying is the precise hard
+spot. The gate metric moves from sparse 0/1 accuracy to **bits-to-correct** (smooth, monotone)
+for the search. This is the K0 contract met: the learner is proven, and the floor is no longer
+a mystery but a named, falsifiable target.
+
 ## Threats to validity
 
 - **Scale.** The committed model is ~tiny and trains for a few hundred iterations on

@@ -1,0 +1,16 @@
+{
+  "name": "k0",
+  "train_driver": "trivial",
+  "steps_per_traj": 8,
+  "eval_steps": 8,
+  "n_layer": 2,
+  "n_head": 2,
+  "n_embd": 128,
+  "block_size": 512,
+  "train_steps": 2500,
+  "lr": 0.003,
+  "batch_size": 64,
+  "eval_interval": 250,
+  "model_seed": 0,
+  "gate": 0.95
+}

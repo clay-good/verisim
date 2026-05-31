@@ -206,10 +206,24 @@ The project lives or dies by these. Each is stated so that a clean experiment ca
 
 ## 12. Research roadmap
 
-Phases are gated by hypotheses, not calendar. Detailed engineering milestones for Phase 0–1 are in SPEC-2 §13.
+Phases are gated by **evidence**, not calendar: **no stage graduates from design to build until the prior stage has produced a committed figure showing its knee — `H_ε(ρ)` materially above the floor — or an honest negative that explicitly licenses the next.** Detailed engineering milestones for Phase 0–1 are in SPEC-2 §13; the active, gated build sequence is below.
 
-- **Phase 0 — v0 shell/filesystem world, reference oracle.** Establish `H_ε(ρ)` (H1), fixed vs. triggered consultation (H2), correction operators (H3). Smallest world with the hard (compounding-state) property. *This is the first paper / artifact.* (SPEC-2 is entirely about this phase.)
-- **Phase 1 — system oracle.** Swap the reference interpreter for a real sandboxed shell; test H4 (mechanism survives real-OS nondeterminism). Introduce controlled nondeterminism handling.
+> **Build order & status (updated 2026-05) — this is the canonical sequence.** After v0's apparatus shipped, the `H_ε(ρ)` curve was an honest null (no knee; the model drifts at step 0 — [docs/report.md](../report.md)). The program therefore **paused its roadmap** to finish Phase 0 first. The single active spec is **[SPEC-2.1 — Earning the Knee](./SPEC-2.1.md)**; every design spec below it is on hold until its predecessor's knee exists.
+>
+> 0. **✅ v0 apparatus** — deterministic core + propose-verify-correct loop + neural model + E1–E4 experiments (SPEC-2 §13, M0–M8). Built and tested.
+> 1. **▶ ACTIVE — Earn the knee** ([SPEC-2.1](./SPEC-2.1.md)): **K0** diagnose → **K1** data-at-coverage → **K2** train properly → **K3** difficulty sweet-spot → **K4** re-run E1. **Gate: a real knee, or the honest negative that licenses Stage 2.**
+> 2. **⏸ System oracle** (SPEC-3 §2, milestone **S1**): re-run the knee against a *real* sandboxed shell. Gate: **H4** (mechanism survives reality).
+> 3. **⏸ Package the working simulator** — the agent-callable "what-if" tool + faithfulness benchmark + RL env (the community artifact, SPEC-2 §15).
+> 4. **⏸ Network world** ([SPEC-5](./SPEC-5.md)): earn the *network* knee. Gate: **H8**.
+> 5. **⏸ Host world** ([SPEC-6](./SPEC-6.md)): earn the *host* knee + composition law. Gate: **H13**.
+> 6. **⏸ Distributed world** ([SPEC-7](./SPEC-7.md)): earn the *distributed* knee + the tiered oracle. Gate: **H17**.
+>
+> The **autonomous research engine** ([SPEC-4](./SPEC-4.md)) is the cross-cutting *tool* used at every stage (its AR0 ratchet already drives the SPEC-2.1 search); it advances its own autonomy levels AR0→AR5 as the science allows, and is not itself a stage.
+
+The original phase list, retained for the science framing (each now gated as above):
+
+- **Phase 0 — v0 shell/filesystem world, reference oracle.** Establish `H_ε(ρ)` (H1), fixed vs. triggered consultation (H2), correction operators (H3). Smallest world with the hard (compounding-state) property. *This is the first paper / artifact — and is **not complete** until [SPEC-2.1](./SPEC-2.1.md) earns the knee.*
+- **Phase 1 — system oracle.** Swap the reference interpreter for a real sandboxed shell; test H4 (mechanism survives real-OS nondeterminism). Introduce controlled nondeterminism handling. *(Gated on the Phase-0 knee.)*
 - **Phase 2 — partial observability.** Hide part of the state (the realistic case: you can't observe all of an OS). Study faithfulness under partial observation and oracle-assisted state estimation.
 - **Phase 3 — counterfactuals & causality.** Interventional/counterfactual queries (H5); oracle-generated counterfactual training data.
 - **Phase 4 — network scale & ACD.** Multi-host network state; integrate with / compare against CybORG-class ACD simulators; demonstrate the sim-to-emulation contribution.
