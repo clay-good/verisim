@@ -743,7 +743,7 @@ experience stream). It adds one genuinely new wall and one hard wall:
 
 ## 12. Experiments (ED-series)
 
-Non-colliding with E1–E4, the reserved E5/E6 (SPEC-2 §9), EN1–EN6 (SPEC-5), and EH1–EH6
+Non-colliding with E1–E4, the reserved E5/E6 (SPEC-2 §9), EN1–EN9 (SPEC-5), and EH1–EH6
 (SPEC-6). The distributed suite is its own namespace, **ED1–ED6**. Each mirrors a prior
 experiment's role and names the hypotheses it tests (§10). Every figure regenerates from
 config + seeds (the `figures/reproduce.sh` discipline) and **negative results are

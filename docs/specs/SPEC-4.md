@@ -213,6 +213,8 @@ When the engine searches over *training-objective* changes (SPEC-2 §9 objective
 - **Prefer GRPO over PPO** for the inner RL: critic-free (group-relative advantage), cheaper, and — decisively — **no learned critic to hack** (a learned value function is exactly the gameable surface R1 avoided).
 - **Keep the reward strictly oracle-derived** (per-field bit match / faithful-horizon), **never** a learned divergence proxy, to preserve the anti-hacking guarantee. The known gap (research §5): RLVR is charted for *reasoners*, less so for *next-state predictors*, so the reward must be **dense** (per-step / per-field), not sparse-outcome — which is also what the §6 self-healing signal provides.
 
+**RLVR is the *cherry*, not the whole search space.** The engine's "training-objective" axis is broader than RL: the same oracle can supply *supervised* targets (oracle-labeled deltas, SPEC-2.1 §5) and *self-supervised* ones (oracle-anchored targets, bits-to-correct residual loss, oracle-mined hard negatives — [SPEC-8](./SPEC-8.md)). So the `Proposer` may search over objectives across all three of LeCun's cake layers, not only RL hyperparameters, and the gate (oracle-grounded, frozen) ranks them on one comparable scale regardless of which layer the change lives in. The nearest external precedent is **Absolute Zero Reasoner** (Zhao et al., arXiv:2505.03335, 2025): a code executor that *both* generates its own curriculum *and* verifies it, with zero human data — exactly the autoresearch ratchet's "the verifier is the teacher," but confined to the RLVR cherry over Q&A. Verisim's engine generalizes that to objective-search across the cake, with a *world-transition* oracle rather than an answer-checker.
+
 ---
 
 ## 11. Implementation plan (engine milestones)

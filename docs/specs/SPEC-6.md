@@ -692,7 +692,7 @@ It adds one genuinely new wall and names two hard walls:
 
 ## 12. Experiments (EH-series)
 
-Non-colliding with E1–E4, the reserved E5/E6 (SPEC-2 §9), and EN1–EN6 (SPEC-5). The host
+Non-colliding with E1–E4, the reserved E5/E6 (SPEC-2 §9), and EN1–EN9 (SPEC-5). The host
 suite is its own namespace, **EH1–EH6**. Each mirrors a prior experiment's role and names
 the hypotheses it tests (§10). Every figure regenerates from config + seeds (the
 `figures/reproduce.sh` discipline) and **negative results are first-class** (the repo norm).

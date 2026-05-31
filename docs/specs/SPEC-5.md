@@ -625,6 +625,17 @@ per SPEC.md §9 ("the favorable curve might not exist").
   *Honest negative:* the control-plane oracle is redundant given the data-plane oracle →
   reachability is already implied by the state the model predicts.
 
+### 10.3 Cross-cutting hypotheses this spec is the first to host (SPEC-8)
+
+The network world is also the first place the [SPEC-8](./SPEC-8.md) method (oracle-grounded
+self-supervision — putting the oracle's truth in the *bulk* of LeCun's cake, not only the RLVR
+cherry) becomes testable, because the NW8 graph+RSSM/JEPA arm supplies the latent predictor those
+claims ablate. **H23** (an oracle-anchored target removes JEPA's collapse tax), **H24** (bits-to-correct
+residual supervision beats raw-likelihood supervision), and **H25** (oracle hard-negatives are an exact
+anti-collapse referent) are coined in SPEC.md §9 and operationalized here as **EN8/EN9** (§12). They are
+claims about the *training signal*, complementary to H10–H12 (about the *world* and *probe*) and H22
+(about the *proposer*); EN7–EN9 are designed to run together.
+
 ---
 
 ## 11. Walls (relative to SPEC-3)
@@ -645,8 +656,11 @@ It adds one genuinely new wall to SPEC-3's taxonomy:
 ## 12. Experiments (EN-series)
 
 Non-colliding with E1–E4 and with the *reserved* E5/E6 (Phase-1 system oracle / Phase-3
-counterfactuals, SPEC-2 §9). The network suite is its own namespace, **EN1–EN6**. Each
-mirrors a v0 experiment's role and names the hypothesis it tests (§10).
+counterfactuals, SPEC-2 §9). The network suite is its own namespace, **EN1–EN9**. Each
+mirrors a v0 experiment's role and names the hypothesis it tests (§10). EN1–EN6 are the
+core network program; EN7 tests model-invariance (H22); EN8–EN9 instantiate the
+cross-cutting [SPEC-8](./SPEC-8.md) method (oracle-grounded self-supervision, H23–H25) in
+the network world — they are gated on the NW8 latent arm.
 
 - **EN1 — the network `H_ε(ρ)` curve** (role of E1; the prime directive, NW6). Sweep
   `ρ × ε × difficulty`. Bootstrap-CI aggregation. *Does the knee appear — **H8**?*
@@ -680,6 +694,23 @@ mirrors a v0 experiment's role and names the hypothesis it tests (§10).
   curve's shape depends strongly on the proposer (a knee for one class, none for another at
   matched acceptance) → the benefit is model-specific, and H22 is refuted (a narrower but
   still-reportable result).
+- **EN8 — objective grounding × collapse machinery** (**H23**, **H24**, [SPEC-8](./SPEC-8.md) §4.1–4.2):
+  on the NW8 graph+RSSM/JEPA arm, cross the *training objective* (raw next-state likelihood vs
+  **bits-to-correct residual**, masking the oracle-decidable bits) with the *target & collapse machinery*
+  (learned EMA target + VICReg vs **oracle-anchored target**, with the VICReg/EMA terms on vs **ablated**).
+  Report `H_ε(ρ)`, bits-to-correct, and representation health (embedding rank/variance). *Does an
+  oracle-anchored target remove JEPA's collapse tax (H23)? Does residual supervision beat likelihood
+  (H24)?* This is where the oracle moves from the cherry (EN5's RLVR) into the **self-supervised bulk** —
+  SPEC-8's core claim. *Honest negative:* the oracle-grounded cells do not beat the proxy cells → pressing
+  truth into the bulk buys little here; report the bound.
+- **EN9 — oracle hard-negative / counterfactual contrastive** (**H25**, **H5**, [SPEC-8](./SPEC-8.md) §4.3):
+  add an oracle-mined contrastive loss (one-edit-wrong successors + action-branch counterfactuals, each
+  labeled against the Tier-A oracle) to SSL pretraining; ablate against VICReg-only and no-contrastive.
+  Measure collapse, faithful horizon, and **interventional fidelity** on the EN6 branch-replay set. *Do
+  exact near-miss negatives beat statistical regularizers, and do counterfactual negatives lift
+  interventional fidelity?* The hard-negative generator generalizes K1's (SPEC-2.1 §5) to contrastive
+  pairs. *Honest negative:* exact negatives add nothing over VICReg → near-miss structure was not the
+  collapse mechanism.
 
 **External harness (optional, for community legibility).** Where it is cheap to do so,
 EN1/EN3/EN5 are additionally reported against a **CAGE-4 / CybORG**-class scenario

@@ -401,6 +401,16 @@ the proposer slot, and the oracle grounds whichever one does. That is the broade
 knee is a down payment on: **deterministic verification as a model-agnostic primitive** (SPEC.md §6
 commitment 4, H22), demonstrated here on the smallest world before it is claimed on any larger one.
 
+One thing K1 did without naming it: **it was oracle-supervised learning.** The "free, infinite teacher"
+of §5 — the oracle emitting perfectly-labeled, coverage-balanced deltas and hard negatives on demand — is
+the oracle entering training as the *icing* layer of LeCun's cake (supervised), distinct from the loop's
+inference-time correction and from the RLVR *cherry* ([`verisim.rl`](../../src/verisim/rl/)). Naming it
+that opens the obvious next question: the same free exact signal could ground the *bulk* (self-supervised
+pretraining), the largest layer, where verisim has put none of its truth. That question is its own
+cross-cutting method spec — [SPEC-8](./SPEC-8.md) (oracle-grounded self-supervision) — first tested on the
+network world's latent arm (EN8/EN9, H23–H25). K1 is the existence proof that the oracle is a usable
+training teacher; SPEC-8 asks how far up the cake that teacher reaches.
+
 ---
 
 ## 12. Definition of done
