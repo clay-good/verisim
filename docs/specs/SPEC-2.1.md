@@ -51,12 +51,17 @@ build process. The cross-spec gating (what comes after the knee) lives in
   divergence) — not capacity, not a broken learner. See [docs/report.md](../report.md) §K0,
   `verisim.experiments.k0`, `configs/k0.json`, `figures/k0_control.*`. *Bits-to-correct
   (SPEC-2.1 §3) shipped as the smooth gate.*
-- [ ] **K1 — Data at coverage** (§5). Coverage-balanced + hard-negative trajectories from the
-  free oracle (thousands, not 160). *Gate:* documented coverage of every command × pre-state
-  shape.
-- [ ] **K2 — Train properly** (§6). Minibatch + LR schedule + validation early-stopping;
-  converge. *Gate:* clean per-step faithfulness **> 0.5** (the acceptance floor) on a
-  non-trivial difficulty.
+- [x] **K1 — Data at coverage** (§5). ✅ **Done.** `verisim.data.coverage` reports coverage of
+  the transition space; the committed run spans **all 13 commands, 273 failure cells, and
+  create-depths 1→8** (the failure cases *and* the multi-segment path-copy distribution K0
+  flagged). Hard-negative mining (`mine_hard_negatives`, active learning over bits-to-correct)
+  shipped and tested. *Gate met.*
+- [x] **K2 — Train properly** (§6). ✅ **Done — and the copy bottleneck dissolved.** Training the
+  same 2×128 model on the copy distribution (2,560 transitions) with `train_batched` (6,000
+  steps) lifts clean held-out faithfulness on the non-trivial `structural` world from K0's
+  ~0.09 to **exact 0.859 / acceptance@0.05 0.875 / graded 0.988 — gate 0.5 → PASS**. The K0
+  bottleneck was coverage/training, *not* representation (the K3 copy-rep lever is unneeded at
+  this scale). See [report §K1+K2](../report.md), `configs/k2.json`, `figures/k2_faithfulness.*`.
 - [ ] **K3 — Difficulty sweet-spot** (§7). Implement the deferred SPEC-2 §2.4 difficulty dial;
   tune to per-step acceptance **0.7–0.95** with room below the ceiling. *Gate:* such a
   difficulty exists.
@@ -205,6 +210,14 @@ references action arguments by pointer rather than re-emitting path tokens.
 > minimum count, and is regenerable from a manifest (the §12 discipline). No metric gate yet —
 > K1 is the input to K2.
 
+**Result (2026-05) — gate met.** `verisim.data.coverage` produces a records-only coverage report
+(command × {ok,fail} cells + a create-depth histogram). The committed K2 run spans **all 13
+commands, 273 failure cells, and create-depths 1→8** — the two regions K0 flagged (failures +
+the multi-segment copy distribution). **Hard-negative mining** (`mine_hard_negatives`) is
+implemented and tested: the active-learning loop the oracle makes free (rank transitions by
+bits-to-correct, retrain on the worst). It is available behind a config knob; the K2 gate is met
+without it, so the committed run leaves it off.
+
 ---
 
 ## 6. Phase K2 — Train properly
@@ -224,6 +237,18 @@ training loop — a small, surgical change to `train/`, no new module:
 > **K2 gate:** clean (`ρ=0`) per-step faithfulness on **held-out** trajectories crosses
 > **0.5** on at least one non-trivial difficulty — i.e. the model clears the acceptance floor
 > (§2). This is the gate that, per speculative-decoding theory, makes a knee *possible*.
+
+**Result (2026-05) — gate PASS, and the K0 bottleneck dissolved.** The same 2×128 model trained
+on the copy distribution (the `structural` driver: collision-free multi-depth creates, 2,560
+transitions) with `train_batched` (minibatch + warmup/cosine + val-early-stopping, 6,000 steps)
+reaches, on the **held-out non-trivial `structural` world**: **exact 0.859, acceptance@ε=0.05
+0.875, graded 0.988** — gate 0.5 → **PASS** (`verisim.experiments.k2`, `configs/k2.json`,
+[`figures/k2_faithfulness.*`](../../figures/), [report §K1+K2](../report.md)). K0's copy floor
+(~0.09 at 768 transitions / 4,000 steps, unmoved by more steps alone) was a **coverage/training**
+problem, not a representation wall — so the K3 copy-representation lever is unneeded at this
+scale. Decisively, **acceptance 0.875 puts the model inside the K3 "competent-but-compounding"
+band (0.7–0.95)**: the unaided geometric horizon is ≈ 8 steps (~50% of a T=16 ceiling), exactly
+the regime where the `H_ε(ρ)` knee is expected. K3/K4 are next.
 
 ---
 

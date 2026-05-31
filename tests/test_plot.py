@@ -222,3 +222,45 @@ def test_plot_k0_writes_figure_and_csv(tmp_path):
     text = csv.read_text()
     assert "trivial_control_exact" in text
     assert "baseline_val_accuracy" in text
+
+
+def _k2_records() -> list[RunRecord]:
+    coverage = RunRecord(
+        config={
+            "experiment": "k2", "part": "coverage",
+            "cells": {"mkdir:ok": 30, "rmdir:fail": 5, "rm:fail": 4},
+            "create_depths": {"1": 40, "2": 25, "3": 8},
+            "n_failures": 9, "missing_commands": [],
+        },
+        seed=0, epsilon=0.0, divergences=[],
+    )
+    faith = RunRecord(
+        config={
+            "experiment": "k2", "part": "faithfulness", "eval_driver": "structural",
+            "exact": 0.62, "acceptance": 0.71, "graded": 0.95, "epsilon": 0.05,
+            "gate": 0.5, "gate_passed": True, "n_train_transitions": 2560,
+            "train_steps": 6000, "hard_negative_rounds": 0,
+        },
+        seed=0, epsilon=0.0, divergences=[],
+    )
+    return [coverage, faith]
+
+
+def test_plot_k2_writes_figure_and_csv(tmp_path):
+    recs = tmp_path / "k2.jsonl"
+    write_records(_k2_records(), recs)
+    out = tmp_path / "k2.png"
+    csv = tmp_path / "k2.csv"
+    result = subprocess.run(
+        [
+            sys.executable, "figures/plot_k2.py",
+            "--records", str(recs), "--out", str(out), "--csv", str(csv),
+        ],
+        capture_output=True,
+        text=True,
+    )
+    assert result.returncode == 0, result.stderr
+    assert out.exists() and out.stat().st_size > 0
+    text = csv.read_text()
+    assert "n_failure_cells" in text
+    assert "create_count" in text

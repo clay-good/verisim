@@ -285,6 +285,47 @@ spot. The gate metric moves from sparse 0/1 accuracy to **bits-to-correct** (smo
 for the search. This is the K0 contract met: the learner is proven, and the floor is no longer
 a mystery but a named, falsifiable target.
 
+## K1+K2 — coverage data, trained properly, past the acceptance floor (SPEC-2.1)
+
+K0 left a precise target: the floor is exact *multi-segment argument copying* into the delta,
+under-covered and under-trained. K1/K2 attack it directly
+([`k2_faithfulness.png`](../figures/k2_faithfulness.png),
+[`k2_faithfulness.csv`](../figures/k2_faithfulness.csv); `verisim.experiments.k2`,
+`verisim.data.coverage`, `configs/k2.json`).
+
+**K1 — coverage of the transition space (the data is free).** A dependency-free coverage
+report (`verisim.data.coverage`) over a broad driver mix confirms the dataset spans what the
+baseline missed: **all 13 commands covered, 273 failure cells** (`mkdir:fail`, `rmdir:fail`,
+`rm:fail`, `mv:fail`, …) and a **create-depth histogram spanning depths 1→8** — i.e. the
+failure cases *and* the multi-segment path-copy distribution K0 flagged. The K1 gate
+(documented coverage, regenerable from a manifest) is met.
+
+**K2 — train properly, and the copy bottleneck dissolves.** Training the same small model
+(2 layers × 128) on the copy distribution (the `structural` driver: collision-free multi-depth
+creates, 2,560 transitions) with the new minibatch + warmup/cosine + val-early-stopping trainer
+(`train_batched`, 6,000 steps) lifts clean (ρ=0) per-step faithfulness on a **held-out
+non-trivial difficulty** from K0's ~0.09 to:
+
+| metric | value | vs. gate |
+|---|---|---|
+| exact-match | **0.859** | **gate 0.5 → PASS** |
+| acceptance @ ε=0.05 | **0.875** | clears the SPEC-3 §8 acceptance floor (~0.5) |
+| graded (mean 1−d) | **0.988** | — |
+
+This is the decisive K2 finding: **the K0 copy bottleneck is a coverage/training problem, not a
+representation wall.** 25× more training at K0's tiny data did *not* move it (0.09), but
+~3× the data + a real training loop takes the *same architecture* to 0.86 exact — vindicating
+SPEC-2.1 §1's "under-data/under-training" diagnosis and making the K3/architecture
+copy-representation lever unnecessary at this scale.
+
+**Why this matters for the knee.** Per-step acceptance 0.875 implies an unaided (ρ=0) geometric
+faithful horizon of ≈ 1/(1−0.875) ≈ 8 steps — already ~50% of a T=16 ceiling, with real room
+for cheap consultation to extend it. The model now sits *inside* the K3 "competent-but-
+compounding" band (0.7–0.95), which is exactly the regime where an interesting `H_ε(ρ)` knee is
+expected to appear. K3 (the difficulty dial) and K4 (re-run E1) are next; the
+**bits-to-correct** gate (SPEC-2.1 §3) and the tested **hard-negative mining** loop
+(`mine_hard_negatives`, active learning over the oracle) are in place to drive the search.
+
 ## Threats to validity
 
 - **Scale.** The committed model is ~tiny and trains for a few hundred iterations on

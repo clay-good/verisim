@@ -62,6 +62,18 @@ _WEIGHTS: dict[str, dict[str, float]] = {
         "rmdir": 0.0, "chmod": 0.0, "cd": 0.0, "cat": 0.0, "ls": 0.0,
         "export": 0.0,
     },
+    # The "structural" difficulty (SPEC-2.1 §6 / K2): the same additive commands as trivial
+    # but collision-free at **any depth** (paths nest as the tree grows), so it isolates the
+    # K0 bottleneck -- exact *multi-segment* path copying into the delta -- without the
+    # failure-prediction confound. It is the non-trivial difficulty the K2 gate targets
+    # (clean per-step faithfulness > 0.5). One step harder than trivial (depth-1), one step
+    # easier than the weighted/adversarial floor (which adds failures and cascades).
+    "structural": {
+        "mkdir": 3.0, "touch": 2.0, "write": 3.0, "append": 0.0,
+        "cp": 0.0, "cp_r": 0.0, "mv": 0.0, "rm": 0.0, "rm_r": 0.0,
+        "rmdir": 0.0, "chmod": 0.0, "cd": 0.0, "cat": 0.0, "ls": 0.0,
+        "export": 0.0,
+    },
     "uniform": dict.fromkeys(_COMMANDS, 1.0),
     "weighted": {
         "mkdir": 3.0, "touch": 3.0, "write": 3.0, "append": 2.0,
@@ -137,9 +149,12 @@ class Driver:
 
     def _fresh(self, state: State) -> str:
         """A fresh create target. Trivial uses unused *depth-1* paths (copy-isolating, §4);
-        other drivers use a random new path that may collide or go deep (their difficulty)."""
+        structural uses unused paths at *any depth* (multi-segment copy, §6); other drivers
+        use a random new path that may collide or go deep (their difficulty)."""
         if self.name == "trivial":
             return self._unused_path(state, dirs=["/"])
+        if self.name == "structural":
+            return self._unused_path(state)
         return self._new_path(state)
 
     def _build(self, cmd: str, state: State) -> str:

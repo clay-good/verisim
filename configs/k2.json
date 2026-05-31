@@ -1,0 +1,22 @@
+{
+  "name": "k2",
+  "coverage_drivers": ["trivial", "structural", "weighted", "adversarial"],
+  "coverage_seeds": [0, 1, 2, 3, 4, 5, 6, 7],
+  "coverage_steps": 40,
+  "train_drivers": ["structural"],
+  "steps_per_traj": 16,
+  "eval_driver": "structural",
+  "eval_steps": 16,
+  "epsilon": 0.05,
+  "n_layer": 2,
+  "n_head": 2,
+  "n_embd": 128,
+  "block_size": 512,
+  "train_steps": 6000,
+  "lr": 0.003,
+  "batch_size": 64,
+  "eval_interval": 500,
+  "hard_negative_rounds": 0,
+  "model_seed": 0,
+  "gate": 0.5
+}
