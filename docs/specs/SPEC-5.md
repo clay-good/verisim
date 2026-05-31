@@ -3,7 +3,14 @@
 **Engineering & experiment specification for the multi-host, partially-observable
 computer-network world: the next smallest world with the *hard* property.**
 
-> **⏸ PAUSED — design only (2026-05).** Gated behind the v0 knee *and* the system oracle. Do not build the network world until **[SPEC-2.1](./SPEC-2.1.md)** earns the single-filesystem knee and it has been re-validated against a real shell (SPEC-3 **S1**). SPEC-5 must then earn its *own* network knee (**H8**) before SPEC-6 is built. Canonical build order: [SPEC §12](./SPEC.md#12-research-roadmap).
+> **▶ ACTIVE — deterministic core shipped (2026-05).** SPEC-2.1 refuted the knee on the
+> single-filesystem world (discrete errors), which **licenses this network world** — where drift
+> is gradual and observation is partial (SPEC §12). The **deterministic core NW0–NW3 is built and
+> tested** (no GPU): the typed-graph reachability world ([`net/`](../../src/verisim/net/)), the
+> Tier-A reference oracle ([`netoracle/`](../../src/verisim/netoracle/)), graph deltas
+> ([`netdelta/`](../../src/verisim/netdelta/)), drivers ([`netdata/`](../../src/verisim/netdata/)),
+> and metrics ([`netmetrics/`](../../src/verisim/netmetrics/)) — see [`docs/network-semantics.md`](../network-semantics.md)
+> and §13. **Next: NW4** (the message-passing/RSSM model) → NW6 (the network `H_ε(ρ)` curve, H8).
 
 This is to the network what [SPEC-2](./SPEC-2.md) is to the filesystem. SPEC-2 made
 the single-host shell/filesystem world buildable and proved the *method* —
@@ -642,13 +649,13 @@ SPEC-2's `M0–M8` were to the v0 sketch: the same staging discipline, where the
 deterministic core (NW0–NW3) ships and is fully tested with **no runtime dependencies and
 no GPU** before any learned model. It does not collide with `M0–M8`, `S1–S6`, or `AR0–AR5`.
 
-| Milestone | What | Gate |
-|---|---|---|
-| **NW0** | Network env: typed-graph `State`, action grammar, canonical serialization + **Tier-A reference oracle** (DES) + `docs/network-semantics.md` + golden trajectories | property tests + goldens |
-| **NW1** | Graph `Delta` types, `apply(state, delta)`, delta↔serialization; the `apply == oracle` invariant | invariant tests |
-| **NW2** | Drivers (uniform/weighted/adversarial topologies + traffic), trajectory JSONL, versioned manifests/splits, topology generators | data tests |
-| **NW3** | Graph divergence `d`, reachability-faithfulness, `H_ε`, bits-to-correct, run-record schema | metric tests |
-| **NW4** | `M_θ`: message-passing + RSSM model, constrained delta decode, supervised training (SLM-sized) | model tests (torch extra) |
+| Milestone | What | Gate | Status |
+|---|---|---|---|
+| **NW0** | Network env: typed-graph `State` ([`net/`](../../src/verisim/net/)), action grammar, canonical serialization + **Tier-A reference oracle** ([`netoracle/`](../../src/verisim/netoracle/)) + [`docs/network-semantics.md`](../network-semantics.md) + golden trajectories | property tests + goldens | ✅ |
+| **NW1** | Graph `Delta` types, `apply(state, delta)`, delta↔serialization ([`netdelta/`](../../src/verisim/netdelta/)); the `apply == oracle` invariant | invariant tests | ✅ |
+| **NW2** | Drivers (uniform/weighted/adversarial topology+traffic), trajectory generation ([`netdata/`](../../src/verisim/netdata/)) | data tests | ✅ |
+| **NW3** | Graph divergence `d`, reachability-faithfulness, bits-to-correct ([`netmetrics/`](../../src/verisim/netmetrics/)); `H_ε` + run-record schema reused from v0 | metric tests | ✅ |
+| **NW4** | `M_θ`: message-passing + RSSM model, constrained delta decode, supervised training (SLM-sized) | model tests (torch extra) | ◐ next |
 | **NW5** | Propose-verify-correct loop with **partial-observation oracle**, probe-policy interface, correction/belief operators, baselines | loop invariants |
 | **NW6** | **EN1 network `H_ε(ρ)` curve** + bootstrap-CI aggregation + figure | **the prime directive** |
 | **NW7** | Smart probe policies + belief operators + drift mitigations; EN2/EN3/EN4 (equal-budget, CIs) | comparison figures |

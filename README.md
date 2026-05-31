@@ -11,121 +11,86 @@ a deterministic oracle can be placed in the loop to bound a neural world model's
 drift. Verisim builds that loop and measures the central tradeoff nobody else can
 measure: **how much oracle consultation buys how much faithful horizon.**
 
-- **The science:** [SPEC.md](./SPEC.md) — why the project exists, what it claims,
-  and how we would know if we were wrong.
-- **The build:** [SPEC-2.md](./SPEC-2.md) — the concrete v0 environment, oracle,
-  model, metrics, baselines, repo layout, and milestones.
-- **Semantics:** [docs/semantics.md](./docs/semantics.md) — the normative
-  description of the v0 shell/filesystem command semantics (paired with the
-  reference oracle, which is the executable truth).
+All specs live under [`docs/specs/`](docs/specs/), with the canonical, evidence-gated
+build order in [SPEC §12](docs/specs/SPEC.md#12-research-roadmap):
+
+- **The science:** [SPEC.md](docs/specs/SPEC.md) — why the project exists, what it
+  claims, and how we would know if we were wrong.
+- **The v0 build:** [SPEC-2.md](docs/specs/SPEC-2.md) (the shell/filesystem world) and
+  [SPEC-2.1.md](docs/specs/SPEC-2.1.md) (the focused effort that earned a competent
+  model and a clean knee result).
+- **The network world:** [SPEC-5.md](docs/specs/SPEC-5.md) — the current build front.
+- **Semantics:** [docs/semantics.md](docs/semantics.md) (filesystem) and
+  [docs/network-semantics.md](docs/network-semantics.md) (network) — the normative command
+  semantics, paired with the reference oracles, which are the executable truth.
+- **The full result write-up:** [docs/report.md](docs/report.md).
 
 ## Status
 
-> **Status: SPEC-2.1 complete — the knee hunt returned an honest negative that licenses the
-> network world.** [SPEC-2.1](docs/specs/SPEC-2.1.md) finished v0 properly: K0 proved the
-> learner works; K1/K2 dissolved the floor (clean per-step faithfulness ~0 → **0.86**); K3/K4
-> then found that **no consultation policy yields a favorable `H_ε(ρ)` knee on the
-> single-filesystem world** — its *discrete* errors spike the set-difference past ε in one step,
-> so first-exceedance `H_ε` is reset-resistant (see [the report](docs/report.md) §K3+K4). This is
-> exactly the SPEC-2.1 §10 outcome that **licenses [SPEC-5 (the network world)](docs/specs/SPEC-5.md)**,
-> where drift is gradual and partial observability supplies a calibrated signal — now the
-> evidence-backed next stage. Canonical gated build order:
-> [SPEC §12](docs/specs/SPEC.md#12-research-roadmap). (All specs live under
-> [`docs/specs/`](docs/specs/).)
+> **Where things stand (2026-05): v0 is done; the network world's deterministic core is built.**
+> The filesystem v0 (M0–M8) and the focused **[SPEC-2.1](docs/specs/SPEC-2.1.md)** effort are
+> complete: K0 proved the learner works; K1/K2 lifted clean per-step faithfulness from ~0 to
+> **0.86** (dissolving the diagnosed copy bottleneck); K3/K4 then found that **no consultation
+> policy yields a favorable `H_ε(ρ)` knee on the single-filesystem world** — its *discrete* errors
+> spike the set-difference past ε in one step, so first-exceedance `H_ε` is reset-resistant (the
+> honest negative, [report §K3+K4](docs/report.md)). Per SPEC-2.1 §10 that **licenses
+> [SPEC-5 (the network world)](docs/specs/SPEC-5.md)**, where drift is gradual and observation is
+> partial — and its **deterministic core (NW0–NW3) now ships**: a typed-graph reachability world,
+> a free Tier-A reference oracle, graph deltas, drivers, and graph/reachability metrics, all
+> dependency-free and tested (no GPU). Canonical build order:
+> [SPEC §12](docs/specs/SPEC.md#12-research-roadmap).
 
-Pre-experiment (v0). The deterministic foundation — milestones **M0–M3** of
-SPEC-2 §13 — is implemented and tested:
+**v0 — shell/filesystem world (`src/verisim/`, SPEC-2 §13): complete.**
 
 | Milestone | What | Status |
 |-----------|------|--------|
-| **M0** | Env (state, command grammar, canonical serialization) + `ReferenceOracle` | ✅ |
-| **M1** | `Delta` types, `apply(state, delta)`, delta↔serialization | ✅ |
-| **M2** | Drivers, trajectory JSONL, versioned manifests/splits | ✅ |
-| **M3** | Divergence `d(s,ŝ)`, faithful horizon `H_ε`, run-record schema | ✅ |
-| **M5** | Propose–verify–correct loop: `fixed` policy + `hard_reset` operator + baselines (b2/b3) | ✅ |
-| **M4** | Neural world model `M_θ`: tokenizer, from-scratch transformer, constrained decoder, supervised training | ✅ |
-| **M6** | E1 — the `H_ε(ρ)` curve: sweep harness + bootstrap-CI aggregation + figure (curve plotted; **knee not yet — active in [SPEC-2.1](docs/specs/SPEC-2.1.md)**) | ◐ |
-| **M7** | Smart policies (`drift`/`uncertainty`) + operators (`residual`/`projection`); E2/E3 equal-budget comparisons with CIs | ✅ |
-| **M8** | Write-up ([`docs/report.md`](./docs/report.md)) + packaging: faithfulness benchmark (Inspect eval) + oracle-as-reward RL environment (verifiers-spec) | ◐ |
+| **M0–M3** | Env + `ReferenceOracle`, `Delta`/`apply`, drivers/data, divergence + `H_ε` + run-records | ✅ |
+| **M4–M5** | Neural `M_θ` (from-scratch transformer, constrained decoder) + propose–verify–correct loop | ✅ |
+| **M6–M8** | E1–E4 experiments, smart policies/operators, report, faithfulness benchmark + RL env | ✅ |
+| **SPEC-2.1** | K0 (learner works) → K1/K2 (floor ~0 → **0.86**) → K3/K4 (knee refuted on single-FS; licenses SPEC-5) | ✅ |
 
-M0–M3 plus the M5 loop are the deterministic core; they have **no runtime
-dependencies** and need no GPU. The propose–verify–correct loop is built
-model-agnostically, so the learned model `M_θ` (M4) — a from-scratch decoder-only
-transformer that predicts structured deltas under grammar-constrained decoding —
-drops straight into the loop via `NeuralWorldModel`. PyTorch is an optional
-`[model]` extra (see [docs/model-representation.md](./docs/model-representation.md)
-for the tokenization/representation decisions). **Stage-2 RLVR** — REINFORCE against
-the oracle's faithful-horizon reward (`verisim.train.train_rlvr`, SPEC-2 §5.3) — is
-implemented and tested, and the supervised-vs-RLVR objective ablation (E4) has been
-run — an honest null at this scale (see below).
+**Network world (`src/verisim/net*`, SPEC-5 §13): deterministic core built.**
 
-### The headline result (E1)
+| Milestone | What | Status |
+|-----------|------|--------|
+| **NW0** | Typed-graph `NetworkState`, action grammar, canonical serialization + **Tier-A reference oracle** + [network semantics](docs/network-semantics.md) + golden trajectories | ✅ |
+| **NW1** | Graph `Delta` types, `apply`, serialization; the `apply == oracle` invariant | ✅ |
+| **NW2** | Drivers (uniform/weighted/adversarial topology+traffic) + trajectory generation | ✅ |
+| **NW3** | Graph divergence, **reachability-faithfulness**, bits-to-correct (`H_ε` + run-records reused from v0) | ✅ |
+| **NW4–NW8** | Message-passing/RSSM `M_θ` → the network `H_ε(ρ)` curve (the prime directive, H8) → packaging | ☐ next |
 
-The whole point of v0 is to plot `H_ε(ρ)` — faithful horizon vs. oracle-consultation
-budget — once, cleanly (SPEC-2 §9). The reproducible pipeline is in place:
+The deterministic cores (filesystem and network) have **no runtime dependencies** and need
+no GPU. The propose–verify–correct loop is model-agnostic, so the learned model `M_θ` — a
+from-scratch decoder-only transformer predicting structured deltas under grammar-constrained
+decoding — drops in via `NeuralWorldModel`. PyTorch is an optional `[model]` extra (see
+[docs/model-representation.md](docs/model-representation.md)).
 
-```bash
-python -m verisim.experiments.e1 --config configs/e1.json --out runs/e1/records.jsonl
-python figures/plot_e1.py --records runs/e1/records.jsonl   # -> figures/e1_curve.{png,csv}
-```
+### The v0 result, honestly (E1 → SPEC-2.1)
 
-![E1 faithful-horizon vs consultation-budget curve](figures/e1_curve.png)
+The point of v0 is to plot `H_ε(ρ)` — faithful horizon vs. oracle-consultation budget — and
+ask whether cheap consultation buys a *favorable knee*. The original tiny config sat on the
+floor (`H_ε≈0` at ρ=0). The focused **SPEC-2.1** effort then diagnosed and fixed *why*:
 
-The figure and its CSV are generated *only* from run-records (regenerable from the
-config + seeds). **Honest status:** with the small, fast committed config the curve
-shows `H_ε≈0` at ρ=0 and `H_ε=T` at ρ=1 with an interior near the floor — i.e. it
-does **not** yet show H1's favorable knee. That is a reportable result, not a
-failure (SPEC.md §9); making the interior informative is a model-capacity /
-difficulty tuning problem ([SPEC-2 §17.5](./SPEC-2.md)) and is the continuing M6
-work.
+1. **K0** — a depth-1 control reaches exact-match **1.0**, proving the pipeline can fit a
+   deterministic transition; the floor is a generalization gap, localized to exact
+   *multi-token path copying* in the delta (not capacity, not a broken learner).
+2. **K1/K2** — coverage-balanced data + a proper minibatch/schedule/early-stopping trainer take
+   clean per-step faithfulness from ~0.09 to **0.86** on a non-trivial world — the copy
+   bottleneck was *coverage/training*, not representation.
+3. **K3/K4** — with that competent model the ρ=0 floor rises to ~10/48, but `H_ε(ρ)` is a
+   **floor + cliff, not a knee**, under *every* consultation policy (fixed and smart alike):
 
-### Policy and operator comparisons (E2 / E3)
+   ![K4 H_ε(ρ) on the structural world](figures/k4_knee.png)
 
-E2 fixes the budget at a knee `ρ` and compares the §6.1 consultation policies
-(`fixed` vs. `uncertainty_triggered` vs. `drift_triggered`); E3 fixes the policy
-and compares the §6.2 correction operators (`hard_reset` vs. `residual` vs.
-`projection`). Both are *equal-budget* by construction — the runner spends exactly
-`floor(ρ·T)` oracle calls per arm — so the comparison isolates **where** the budget
-is spent (E2) and **how** corrections are applied (E3).
+   Filesystem errors are **discrete** — one wrong edit spikes the set-difference past ε in a
+   single step — so first-exceedance `H_ε` is governed by the first error and resets can't push
+   it out. **C-knee / H1 is refuted on the single-filesystem world**, and per SPEC-2.1 §10 that
+   honest negative is exactly what **licenses the network world** (gradual drift, partial
+   observability with a calibrated signal).
 
-```bash
-python -m verisim.experiments.e2 --config configs/e2.json --out runs/e2/records.jsonl
-python figures/plot_comparison.py --records runs/e2/records.jsonl --key policy \
-    --out figures/e2_policies.png --csv figures/e2_policies.csv
-python -m verisim.experiments.e3 --config configs/e3.json --out runs/e3/records.jsonl
-python figures/plot_comparison.py --records runs/e3/records.jsonl --key operator \
-    --out figures/e3_operators.png --csv figures/e3_operators.csv
-```
-
-**Honest findings** (small committed config, not a tuned run):
-
-- **E2 (H2):** at equal budget `fixed` (`H_ε≈1.4`) *beats* both triggered policies
-  (`uncertainty≈0.6`, `drift≈0.1`). The model's decode-entropy uncertainty signal
-  ([SPEC-2 §7.2](./SPEC-2.md)) is not yet calibrated enough at this scale to beat
-  naive even-spacing. The **calibration diagnostic** ([`figures/calibration.png`](figures/calibration.png),
-  Pearson ≈ 0.11) measures exactly this: confidence barely predicts error, so the
-  signal — not a new policy — is the lever to move next.
-- **E3 (H3):** all three operators give an **identical** `H_ε≈1.3` with identical
-  CIs. This is the expected v0 *identity*: with a full-state one-step oracle truth,
-  every operator snaps the coupled state to the same `s'`. `residual` and
-  `projection` differ only in the diagnostic they expose (the online-learning signal
-  magnitude / per-correction repair cost), which is where H3 will bite once partial
-  verification or Stage-2 online learning lands.
-- **E4 (ablation):** scaling the model 4× (tiny `1×32` → medium `4×128`) does **not**
-  lift clean per-step accuracy off its ~0.1–0.2 floor
-  ([`figures/e4_ablation.png`](figures/e4_ablation.png)). So the H1 floor is not a raw
-  capacity problem at this scale; the open lever is training budget / difficulty
-  co-tuning ([SPEC-2 §17.5](./SPEC-2.md)), not parameters. The **objective axis**
-  (supervised vs. +RLVR, [`figures/objective.png`](figures/objective.png)) is likewise
-  an honest null here: training against the oracle's faithful-horizon reward leaves
-  clean accuracy within overlapping CIs of supervised, because the reward is sparse
-  exactly at the H1 floor — RLVR has signal to amplify only once the model sustains a
-  horizon to extend.
-
-The full write-up — every figure, the honest H1/H2/H3 negatives, the calibration and
-ablation diagnostics, threats to validity, and exact reproduction — is in
-[docs/report.md](./docs/report.md). Every figure regenerates from its config + seeds
-with `bash figures/reproduce.sh`.
+The full write-up — every figure (E1–E4, calibration, K0/K2/K4), the honest negatives, the
+mechanism, threats to validity, and exact reproduction — is in [docs/report.md](docs/report.md).
+Every figure regenerates from its config + seeds with `bash figures/reproduce.sh`.
 
 ## Packaging for reuse
 
@@ -177,19 +142,27 @@ for cmd in ["mkdir /a", "write /a/f alpha", "mv /a /b", "cat /b/f"]:
 
 ## Layout
 
-See [SPEC-2.md §10](./SPEC-2.md). The implemented packages live under
-[src/verisim/](src/verisim/): `env/`, `oracle/`, `delta/`, `data/`, `metrics/`,
-`loop/` (the propose–verify–correct runner, policies, operators, baseline
-models), `experiments/` (the baseline sweep and E1/E2/E3), `model/` (the learned model `M_θ`:
-vocab, tokenizer, grammar, transformer, constrained decoder), `train/`
-(Stage-1 supervised training), and the M8 packaging `eval/` (faithfulness benchmark
-+ Inspect adapter) and `rl/` (oracle-as-reward environment). The experiment configs
-live in [configs/](configs/) and the plotting scripts + figures in [figures/](figures/).
+See [SPEC-2 §10](docs/specs/SPEC-2.md) (filesystem) and [SPEC-5 §16](docs/specs/SPEC-5.md)
+(network). Packages under [src/verisim/](src/verisim/):
+
+- **v0 filesystem world:** `env/`, `oracle/`, `delta/`, `data/`, `metrics/`,
+  `loop/` (propose–verify–correct runner, policies, operators, baselines),
+  `model/` (`M_θ`: vocab, tokenizer, grammar, transformer, constrained decoder),
+  `train/` (supervised + minibatch + RLVR), `experiments/` (baselines, E1–E4, K0/K2/K4,
+  diagnostics, the autoresearch ratchet `auto/`), and the packaging `eval/` (faithfulness
+  benchmark + Inspect adapter) and `rl/` (oracle-as-reward environment).
+- **Network world (SPEC-5):** `net/` (typed-graph `NetworkState`, action grammar,
+  serialization), `netoracle/` (Tier-A reference oracle), `netdelta/` (graph deltas + `apply`),
+  `netdata/` (drivers + generation), `netmetrics/` (graph divergence, reachability-faithfulness,
+  bits-to-correct).
+
+Experiment configs live in [configs/](configs/); plotting scripts + figures in
+[figures/](figures/); the run-records they read are git-ignored and regenerable from config + seeds.
 
 ## License & posture
 
 MIT (see [LICENSE](./LICENSE)). This is a research repo: **no telemetry, no
 network calls at runtime, no commercial path.** The framing and downstream agents
-are defensive; see [SPEC.md §13](./SPEC.md) for the ethics and dual-use posture.
+are defensive; see [SPEC.md §13](docs/specs/SPEC.md) for the ethics and dual-use posture.
 
 Author: Clay Good.
