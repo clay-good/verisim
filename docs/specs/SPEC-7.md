@@ -719,6 +719,47 @@ might not exist").
   negative:* fault-free training transfers to faulting rollout for free → the fault
   distribution is already implied by the fault-free dynamics.
 
+### 10.3 Outcome → implication: where each distributed result routes the program
+
+Per the epistemic engine (SPEC.md §10.1), each hypothesis is pre-registered to a forward move on *both*
+branches. The distributed world is the sharpest illustration of the project's defining move — **a
+limitation, faced honestly, becomes the contribution.** Here the limitation is fundamental: bit-exact
+full-state truth is *intractable* (serializability/SI checking is NP-complete; there is no consistent
+global state without coordination — the wall W7). A lesser program would call that the end of the road.
+Instead it is the *premise* of SPEC-7: precisely *because* the full oracle is too expensive, faithfulness
+must be verified at **tiered** cost (metamorphic → consistency-cycle → symbolic → bit-exact), and choosing
+the cheapest sufficient tier (`π_w`) becomes the central new science. The wall did not stop us; it
+*defined the spec*.
+
+- **H17 (tiered oracles dominate single-tier).** *Confirmed* → the central claim holds: budgeted cheap
+  tiers buy more faithful horizon per dollar than all-bit-exact → tiering is the distributed-world method.
+  *Refuted* → the cheap tiers refute too rarely to matter and all value is in the expensive tier → the
+  distributed world is no different *in kind* from the host world, only in cost — a clean simplification
+  that retires a whole axis of complexity. Either branch is a real answer to "is tiering worth it?"
+- **H18 (the loop has a bounded competitive ratio).** *Confirmed* → propose-verify-correct is a
+  learning-augmented algorithm with a provable ratio that degrades gracefully with model error → the loop
+  gets *theory*, not just curves (DD-D4, §2.4). *Refuted* → the ratio is unbounded / grows with horizon →
+  cheap-tier correction does not bound drift and only bit-exact reset does, which **sharpens *why*** and
+  tells us exactly where the cheap tiers fail — a negative that advances the theory by ruling out the easy
+  conjecture.
+- **H19 (consistency-faithful outlasts bit-faithful).** *Confirmed* → many bit-states map to one
+  admissible history, so predicting *observable consistency* buys real slack → the right faithfulness
+  target under weak consistency. *Refuted* → the horizons coincide and W7's "no global state" buys no
+  forgiveness → a precise statement of when consistency-level abstraction *doesn't* help.
+- **H20 (weaker consistency is harder to predict).** *Confirmed* → `H_ε(consistency-level)` is the first
+  quantification of consistency-strength vs. predictability — a genuinely new measurement. *Refuted* →
+  horizon is set by fault intensity, not consistency strength → redirects modeling effort to fault
+  handling, a useful reprioritization.
+- **H21 (fault-injected training beats fault-free — the DST/BUGGIFY lesson).** *Confirmed* → seeded-fault
+  trajectories (the FoundationDB/TigerBeetle tradition, §2.1) train fault-robustness factual data cannot →
+  validates DST as a *data factory*, not just a test harness. *Refuted* → fault-free transfers for free →
+  bounds the value of fault injection for *modeling* (as opposed to testing).
+
+The throughline, stated for the hardest world so it is unmistakable: **we do not retreat from
+intractability; we tier around it, measure what the tiers buy, and report the number whichever way it
+falls.** A wall that is named, quantified, and engineered around is not a limit on the program — it is the
+program's next theorem.
+
 ---
 
 ## 11. Walls (relative to SPEC-3 / SPEC-5 / SPEC-6)

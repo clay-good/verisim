@@ -220,6 +220,23 @@ For each cell in the sweep, run `N` seeds; aggregate with bootstrap confidence i
 
 Each experiment maps to exactly one hypothesis and one figure. If E1 refutes H1 (linear curve), that is reported as the finding, not buried.
 
+**Outcome → implication (pre-registered; the epistemic engine, SPEC.md §10.1).** Every cell above is
+wired to a forward move on *both* branches, so no run is wasted — and because the oracle makes a v0
+negative *bankable* (a fact about the world, not a broken measurement, SPEC.md §10.1 point 1), the
+negative branch is as load-bearing as the positive one:
+
+| Experiment | If it confirms | If it refutes (the honest negative) | Either way we learn |
+|---|---|---|---|
+| **E1 (H1)** | the favorable curve exists at v0 scale; the apparatus is validated; harder worlds inherit a *working* method | faithful simulation costs oracle calls ~linearly in this world → **licenses the harder worlds** (SPEC-5/6/7) designed for the missing regime | the *shape* of `H_ε(ρ)` for a real computer world — a number the oracle-free field cannot produce |
+| **E2 (H2)** | smart consultation dominates dumb at equal budget → the policy axis is real and transfers to oracle-scarce domains (§4) | scheduling does not matter, only rate does → simplifies the loop and redirects effort to the operator/representation axes | the *value of timing* vs. frequency, quantified |
+| **E3 (H3)** | correction *teaches* (residual/projection reduce future drift) → online adaptation is a lever (→ SPEC-3 §6 self-healing) | hard-reset is as good → corrections overwrite, they do not teach, at this scale (a clean result that sharpens *why*) | how a scarce consultation is best *spent* |
+| **E4 (ablation)** | the winning representation/objective/scale is identified and carried up the ladder | a null axis (e.g. scale, RLVR) → rules out a lever and concentrates compute on the ones that move the floor | which knob actually buys faithful horizon — and which does not |
+
+This is exactly how v0 played out: E4's scale/RLVR axes returned nulls (capacity and sparse-reward were
+*not* the levers), and E1 returned a null curve — and those nulls *diagnosed* under-data/under-training
+and *licensed* the focused SPEC-2.1 effort, which lifted clean faithfulness from ≈0.1 to **0.86**. The
+program moved forward *because of* the negatives, not despite them.
+
 ---
 
 ## 10. Repo layout

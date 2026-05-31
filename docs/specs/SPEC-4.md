@@ -155,6 +155,18 @@ Every trial appends one `RunRecord` (SPEC-2 §7.3) carrying: the full resolved c
 - **Lineage:** a kept change points to its parent, so the improvement path (base → … → best) is a traceable chain — and so a regression can be bisected.
 - **Git-ignored, regenerable** (SPEC-2 §10: `runs/` is ignored); only the *summary* figure/CSV is committed (records-only discipline, SPEC-2 §7.3).
 
+> **Every trial is kept as data — including (especially) the rejected ones.** This is the engine's
+> embodiment of the project's "all data is good data" stance (SPEC.md §10.1). The ratchet *keeps* only
+> improvements, but the ledger *records* every trial with its full config and gate result, kept **and**
+> rejected. The rejects are not waste: they are the empirical map of the loss landscape — the directions
+> that did *not* help are exactly what a sample-efficient controller (§7: UCB/bandit, novelty pressure)
+> needs to allocate the next trials, and what a human reads to understand the *shape* of the search, not
+> just its best point. A rejected trial under a deterministic gate is a *bankable* negative (SPEC.md §10.1
+> point 1): because the score is oracle-grounded and the eval frozen, "this change did not improve
+> faithfulness" is a fact, not a fluke — so the engine learns from its failures as rigorously as from its
+> wins, and never has to re-explore a direction it has already disproven. An autonomous program that
+> discards its negatives is doomed to rediscover them; one that banks them compounds.
+
 ---
 
 ## 7. The Controller: search strategy

@@ -365,6 +365,20 @@ which were designed for exactly this regime (combinatorial reachability, partial
 intractable oracle). The roadmap specs stop being a hopeful bet and become an *evidence-backed*
 next step. Either way, v0.1 produces the result that should gate the rest of the program.
 
+**This is the canonical worked example of the epistemic engine (SPEC.md §10.1).** K4's refutation is
+exactly the kind of result the project is built to metabolize, and it is worth being explicit about *why
+it was progress, not a setback*: (i) it is **bankable** — under the deterministic oracle, "no knee here"
+is a fact about the single-filesystem world (its errors are *discrete*, so one wrong edit spikes the
+set-difference past ε and first-exceedance `H_ε` is reset-resistant), not a suspicion about a broken
+metric (SPEC.md §10.1 point 1); (ii) it was **pre-registered** — the §10 "if refuted" branch was written
+*before* K4 ran, so the conclusion could not be reinterpreted after the fact; (iii) it **routed the
+program forward** — it named the precise property the next world must have (gradual, continuous drift with
+a *calibrated* uncertainty signal), which is the exact design center of SPEC-5's network world. A negative
+that is bankable, pre-registered, and forward-routing is not a dead end; it is the most informative single
+figure v0 produced, and it is *why* SPEC-5 exists as an evidence-backed step rather than a hope. The duty
+is to keep iterating against the oracle — every curve, knee or cliff, tightens the next question. We do not
+quit on a negative; we *spend* it.
+
 ---
 
 ## 11. After the knee: the honest direction to a world-simulation AI

@@ -670,6 +670,38 @@ honest negative (SPEC.md §9: "the favorable curve might not exist").
   *Honest negative:* counterfactual data adds nothing over factual — the factual
   distribution already covers the interventions that matter.
 
+### 10.3 Outcome → implication: where each host result routes the program
+
+Per the epistemic engine (SPEC.md §10.1), each hypothesis is pre-registered to a forward move on *both*
+branches. The host world's distinctive feature is that **its honest negatives are often the more valuable
+result**, because they characterize *coupling* and *concurrency* — the two phenomena the simpler worlds
+could not exhibit — and the oracle makes those characterizations bankable.
+
+- **H13 (composition law).** *Confirmed* → the multiplicative acceptance law holds, the optimal `π_w`
+  (spend the oracle on the weakest subsystem) is *derivable*, and "model subsystems independently" is
+  validated — a clean, reusable result. *Refuted* → composition is **not** lawful because cross-subsystem
+  coupling (an fd tying FS and process state) makes `H_ε` un-predictable from the parts. This is not a
+  setback: it is the **discovery that coupling is the load-bearing structure**, which *reshapes the
+  architecture* toward interaction-graph conditioning (§6.1) — the refutation literally tells us what to
+  build next. The limitation is the contribution.
+- **H14 (concurrency is a measurable dial).** *Confirmed* → `H_ε(interleaving-entropy)` is the first
+  quantification of HW-1's cost, and recorded-schedule determinization recovers horizon — a knob, not a
+  wall. *Refuted* → the model learns schedule-invariant effects and concurrency is a non-issue at this
+  scale, a *surprising* result that would simplify every downstream world. Both branches turn the field's
+  vague "concurrency is hard" into a number.
+- **H15 (experience stream beats batch).** *Confirmed* → the Era-of-Experience claim survives contact with
+  a real oracle → streaming/continual training is a lever for long horizons. *Refuted* → plasticity
+  loss/forgetting (HW-4) wins, and the plasticity probe (§9.4) *localizes why* — a precise negative that
+  the continual-learning field needs, grounded rather than anecdotal.
+- **H16 (counterfactual training is unique to the oracle).** *Confirmed* → oracle-replayed counterfactuals
+  train interventional fidelity that factual data cannot → a capability physical-domain causal world
+  models structurally lack (§2.8). *Refuted* → the factual distribution already covers the interventions
+  that matter, which *bounds* how much counterfactual augmentation buys — useful for budgeting data.
+
+The throughline: in the host world a wall, once hit, does not stop the program — it *names the next
+problem* (coupling → interaction graphs; concurrency → determinization dials; forgetting → plasticity
+probes). We climb by metabolizing the obstacle, never by pretending it isn't there.
+
 ---
 
 ## 11. Walls (relative to SPEC-3 / SPEC-5)

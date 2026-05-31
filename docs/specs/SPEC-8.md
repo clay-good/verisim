@@ -401,6 +401,22 @@ non-obvious about *why* JEPA needs its crutches (a cause the external referent d
 are designed so either outcome is a result. The plate is real either way; the open question this spec
 opens is only *how much* pressing truth into the bulk actually buys.
 
+Made fully explicit as the pre-registered outcome→implication map (the epistemic engine, SPEC.md §10.1) —
+every cell is a forward move, and because the verdict is oracle-grounded, every negative is *bankable*:
+
+| Hypothesis | If confirmed → the contribution | If refuted → the (often deeper) contribution |
+|---|---|---|
+| **H23** (oracle-anchored target removes the collapse tax) | a *constructive* result for SSL: where an external referent exists, EMA+VICReg are unnecessary → simpler, more stable world-model pretraining | the **more interesting** branch: the representation collapses *even with* the oracle-anchored target → collapse has a cause the referent does not reach → a non-obvious, *bankable* fact about *why* JEPA needs its crutches that the oracle-free field structurally cannot establish |
+| **H24** (bits-to-correct residual beats raw-likelihood) | the partition (§3) is load-bearing → "offload the decidable bits, learn only the residual" is a real training principle, and the objective now matches the inference-time metric | the decidable part `D` was already cheap for the model to learn → masking it buys nothing → a clean bound on *when* the partition matters (it will matter more as worlds grow, SPEC-6/7) |
+| **H25** (oracle hard-negatives are an exact anti-collapse referent) | exact near-miss/counterfactual negatives match or beat statistical regularizers *and* lift interventional fidelity (the H5 lift) → a second, independent route to grounded SSL | near-miss structure was not the collapse mechanism → narrows precisely *what* anti-collapse fixes → a map of the failure surface contrastive SSL has lacked |
+
+The pattern across all three is the project's stance in one frame: **the refutation branch is never empty,
+and is frequently the branch worth more.** We can ask "what is the collapse-prevention machinery a
+workaround for?" and get a *trustworthy* answer — confirm or refute — because we hold the one thing the
+self-supervised world-model field lacks: a free, exact, generative oracle. That is why SPEC-8 is worth
+building before we know how the figure falls, and why it is worth building with full energy regardless of
+which way it falls.
+
 ---
 
 ## 11. Provenance and reading order

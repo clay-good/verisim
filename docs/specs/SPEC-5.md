@@ -723,6 +723,29 @@ the way learned network simulators report speedup vs. ns-3.
 Every figure regenerates from config + seeds (the `figures/reproduce.sh` discipline),
 and **negative results are first-class** (the v0 norm).
 
+### 12.1 Outcome → implication: where each EN result routes the program
+
+Per the epistemic engine (SPEC.md §10.1), the EN-series is pre-registered to a forward move on *both*
+branches. The network world is the first place several of these become testable at all, so the routing is
+explicit — and because every verdict is oracle-grounded, each negative is *bankable* (a fact about the
+network world, not a measurement artifact), which is exactly what lets a refutation redirect the program
+with confidence rather than doubt.
+
+| Result | If confirmed → | If refuted (bankable negative) → |
+|---|---|---|
+| **EN1 / H8** (the network knee) | the favorable interior is real where the single-FS world's was not; networks are the substrate; double down on the NW7 levers | the knee is *not* about world hardness but model/metric design → the lever is representation/objective, so **pivot to SPEC-8** (EN8/EN9), not to a new world |
+| **EN2 / H9–H10** (when × what to consult) | smart scheduling *and* active sensing beat dumb at equal budget → the policy axes transfer to oracle-scarce domains (SPEC.md §4) | timing/sensing ties rate → simplify the loop; the value is elsewhere (operators, representation) — a real result that *saves* the field effort |
+| **EN3 / H7** (correction teaches) | partial-obs operators differ and correction reduces future drift → online TTT (§8.4) is load-bearing | the v0 operator-identity survives → corrections overwrite, not teach → drop TTT from the critical path |
+| **EN4 / H11** (graph+belief beats flat) | structure is the lever once the world is a graph → carry the GNN/RSSM arm up the ladder (SPEC-6/7) | a flat serializer suffices at this scale → *don't* pay for structure yet — a negative that directly cuts cost |
+| **EN8 / H23–H24** (oracle in the *bulk*) | the collapse tax falls away and residual supervision wins → a genuine SSL contribution; oracle-grounding belongs in pretraining, not just RLVR | **the more interesting branch**: even with a free exact oracle in the bulk, JEPA still needs its crutches → a non-obvious fact about *why* the collapse tax exists, which the oracle-free field cannot establish |
+| **EN9 / H25, H5** (oracle hard-negatives) | exact near-miss/counterfactual negatives beat statistical regularizers and lift interventional fidelity | near-miss structure was not the collapse mechanism → narrows *what* anti-collapse actually fixes — still a clean, publishable map of the failure surface |
+
+The italic note on EN8 is deliberate and is the project's stance in miniature: **we do not need EN8 to
+"win" for it to be worth running.** A refutation there would say something the entire self-supervised
+world-model field wants to know and structurally cannot ask — *what, exactly, is the collapse-prevention
+machinery a workaround for?* — and we can ask it because we hold the one thing they lack. Either figure is
+a contribution. That is what "all data is good data" buys when the data is oracle-grounded.
+
 ---
 
 ## 13. Milestones (NW0–NW8)

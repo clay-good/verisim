@@ -178,7 +178,7 @@ Verisim is *not* claiming to invent world models, neuro-symbolic methods, or cyb
 
 ## 9. Hypotheses (falsifiable)
 
-The project lives or dies by these. Each is stated so that a clean experiment can refute it.
+The project lives or dies by these. Each is stated so that a clean experiment can refute it — and, per the epistemic engine (§10.1), each is pre-registered to a *forward move on both branches*: every hypothesis below names what a refutation (its "honest negative") teaches and which spec it licenses, so no outcome is wasted. Under the oracle a refutation is *bankable* (§10.1, point 1), which is exactly why we can afford to state these as sharply as possible.
 
 - **H1 (the curve exists and is favorable).** There is a regime `0 < ρ* < 1` where the coupled system achieves faithful horizon `H_ε` close to the `ρ=1` ceiling at consultation cost far below it (target: ≥80% of ceiling horizon at ≤20% consultation, on v0). *Refuted if* `H_ε(ρ)` is approximately linear (no free lunch — every faithful step costs a proportional oracle call) across all environments tested.
 - **H2 (smart beats dumb).** Drift- or uncertainty-triggered consultation achieves materially higher `H_ε` than fixed-interval consultation at equal `ρ`. *Refuted if* no policy beats fixed-interval within confidence intervals.
@@ -202,6 +202,63 @@ The next three concern *where the oracle's truth enters training* — the superv
 - **Baselines:** (b0) pure neural, `ρ=0`; (b1) oracle every step, `ρ=1` (ceiling/sanity); (b2) symbolic-only (the oracle alone — trivially perfect, included to frame what the neural model is *for*: cheap rollout between consultations); (b3) trivial/frequency predictor (floor). The contribution is the interior and the policy/operator comparisons, not beating b1 (which is unbeatable on fidelity but maximally expensive).
 - **Ablations:** representation (delta vs full-state), model size, training objective (supervised vs +RLVR), `ε` sweep, environment size sweep.
 - **Reporting:** every claim ties to a hypothesis in §9 and a figure. Negative results are first-class and reported (the field needs honest faithful-horizon numbers more than it needs a hero result).
+
+### 10.1 The epistemic engine — why every result advances the program ("all data is good data")
+
+This is the project's operating stance, and it is not a motivational slogan — it is a property the
+oracle *earns* for us, and it is the reason this program can run indefinitely without ever producing
+a wasted experiment.
+
+**1. The oracle makes a negative result *trustworthy*.** In an oracle-free domain (vision, language,
+robotics) you can never cleanly separate *"the hypothesis is false"* from *"my measurement is broken."*
+A flat curve might mean there is no favorable regime, or it might mean the proxy metric is miscalibrated,
+the held-out set leaked, or the simulator was subtly wrong. The ambiguity is structural, and it is why
+the field accumulates irreproducible "negative" folklore that no one can build on. **A deterministic
+oracle removes the ambiguity.** Because ground truth is exact, free, and re-executable, a negative result
+is a *fact about the world*, not an artifact of the instrument: when `H_ε(ρ)` is flat under the oracle,
+faithful simulation genuinely costs oracle calls roughly linearly *in that world*, and that statement is
+as solid as the positive ones. This is the deeper, less-obvious dividend of §2's asymmetry — the oracle
+does not only make positive curves measurable; **it makes negative curves *bankable*.** A bankable
+negative is the most valuable kind of data, because the whole field can build on it.
+
+**2. Every outcome is pre-registered to an action.** For each hypothesis in §9, and each experiment in
+the world/method specs, we state *in advance* what we will conclude and what we will build next under
+**both** confirmation and refutation — never only the hoped-for branch. This is pre-registration in the
+clinical-trial sense (a "line of retreat" fixed before the data arrives, so no result can be quietly
+reinterpreted into a win), and it is what guarantees the property the title claims: an experiment with a
+pre-registered implication on *every* branch *cannot* fail to inform. The worked example is already in the
+record: v0's E1 returned a null (no knee; the model drifts at step 0), and that null did not stall the
+program — it *diagnosed* under-data/under-training and *licensed* SPEC-2.1, which lifted clean faithfulness
+from ≈0 to 0.86; SPEC-2.1's own K4 then refuted the knee on the single-filesystem world, and *that*
+negative *licensed* the network world (SPEC-5), where drift is gradual and observation is partial. Two
+negatives in a row, and the program moved *forward* on both — because each was bankable (point 1) and
+pre-registered to a next step.
+
+**3. The program is a ratchet against the test harness of reality.** The roadmap (§12) is gated on
+evidence, not calendar: each world graduates only when it produces a committed figure — a knee *or* a
+bankable negative that explicitly licenses the next world. The autonomous research engine (SPEC-4) is the
+inner ratchet (keep-if-better, with *every* rejected trial logged as data that maps the loss landscape,
+SPEC-4 §6); the world-to-world progression (SPEC-2 → 5 → 6 → 7) is the outer ratchet; the system oracle
+(SPEC-3 §2) is the move from "faithful to a model of reality" to "faithful to reality itself." No rung is
+ever lost: a refuted hypothesis tightens the next hypothesis, a hit wall (§11, and the per-world wall
+taxonomies) *names* the next world's central problem, and a metric that saturates motivates the next
+metric (bits-to-correct succeeding exact-match, SPEC-3 §7). The intent is dedication to the duty of the
+scientific method, iterated against the one judge that cannot be argued with.
+
+**4. Trade-offs are named, not hidden — and each names the next move.** Rigor demands we state the limits
+plainly; persistence demands we treat each limit as the next problem, not a stop sign. The standing
+trade-offs, each with its forward move: the reference oracle is a *model* of reality, not reality → the
+system oracle (SPEC-3 §2) closes it. A world may be too easy to drift → engineer difficulty and move up
+the world ladder (SPEC-2 §2.4 → SPEC-5/6/7). The favorable curve may not exist in a given world → that is
+a bankable negative that licenses the next (point 1). The oracle is cheap only in computer domains → that
+is the *whole point* (the asymmetry, §2), and the *techniques* (consultation policy, correction operators,
+oracle-grounded objectives) transfer even where the oracle does not (§4). None of these is a reason to
+slow down; each is a reason the next spec exists.
+
+> **The commitment, stated once:** we will report what is true with the same energy whether it confirms or
+> refutes, because under the oracle both are real signal — and we will always have already decided, before
+> the figure is plotted, how a refutation moves the program forward. That is how a research program becomes
+> un-stoppable without becoming dishonest.
 
 ---
 

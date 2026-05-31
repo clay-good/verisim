@@ -328,7 +328,15 @@ The discipline of SPEC-2 §10 holds: **no new top-level directory**, exactly the
 - **H8 (the interesting interior lives in networks).** The multi-host world (§3) exhibits H1's favorable knee (≥80% of ceiling horizon at ≤20% consultation) where the single-FS world did not. *Refuted if* the network curve is also flat/linear.
 - **H9 (speculative scheduling dominates).** Consultation policies derived from acceptance-rate estimates (§8/DD-7) beat fixed-interval at equal budget — H2, finally, with a calibrated signal. *Refuted if* they do not.
 
-Each maps to one experiment and one figure (SPEC-2 §9 discipline). Negatives are first-class (SPEC.md §10).
+Each maps to one experiment and one figure (SPEC-2 §9 discipline). Negatives are first-class (SPEC.md §10), and each negative is pre-registered to a forward move (the epistemic engine, SPEC.md §10.1):
+
+- **H4 refuted** (real-OS nondeterminism collapses the horizon) → the *determinism contract* is the bottleneck, not the model → invest in record/replay and controlled-nondeterminism handling (§2.2) before any further model work. A clean, bankable "reality is harder than the reference" — which is precisely the gap the system oracle exists to measure.
+- **H6 refuted** (matched-compute scaling beats curriculum) → capacity *is* the lever at this scale after all → the data-centric bet is wrong here and compute should go to parameters. (v0's E4 makes this the *less* likely branch, which is why H6 is worth testing — a surprise here would be highly informative.)
+- **H7 refuted** (self-healing ties hard-reset) → corrections overwrite rather than teach even at depth → drop online TTT from the critical path and lean on cheaper reset; the TTT-stability literature (§6.3) predicted this risk, so a null *confirms a known failure mode* rather than wasting the run.
+- **H8 refuted** (the network curve is also flat) → the knee is not about world hardness but about model/metric design → the lever is representation/objective (SPEC-8), not the world, and the program pivots there rather than climbing the world ladder blindly.
+- **H9 refuted** (smart scheduling ties fixed) → timing does not beat rate even with a calibrated signal → simplify the loop and concentrate on *what* to observe (SPEC-5's `π_o` axis) rather than *when*.
+
+**Why bits-to-correct (§7) is load-bearing for this stance.** Exact-match accuracy is a *binary* verdict; it cannot tell a near-miss from a catastrophe, so a negative on it is coarse. Bits-to-correct is *smooth* and `0` iff faithful — so it turns every refutation into a *graded* measurement (how far from faithful, in description-length bits), which is what makes a negative diagnostic rather than merely discouraging. The right scalar is what lets "all data is good data" be operational rather than aspirational: a smooth metric means even a failing model emits a usable gradient of information about *how* it fails.
 
 ---
 
