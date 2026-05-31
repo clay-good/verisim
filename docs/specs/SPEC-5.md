@@ -444,8 +444,12 @@ is the autoresearch gate (§14) and a per-step diagnostic.
 > training, and *oracle-relabeled state-noise augmentation* — the GNS lever made exact by the free total
 > oracle (corrupt the input state, relabel the target with `O(s̃, a)`). The K0-analog learner check
 > passes: the graph arm fits oracle transitions to **>0.9** teacher-forced accuracy
-> (`tests/test_graph_train.py`, 4 cases). **Next:** the EN4 graph-vs-flat comparison (H11) on the same
-> EN1 machinery, then the self-forcing and latent-overshooting levers and the EN8/EN9 (SPEC-8) runs.
+> (`tests/test_graph_train.py`, 4 cases). **EN4 ran** ([`experiments/en4_graph.py`](../../src/verisim/experiments/en4_graph.py),
+> [`figures/en4_graph_vs_flat.png`](../../figures/en4_graph_vs_flat.png)): a *split* H11 verdict — the graph
+> arm is a **+16.5-pt** better one-step predictor (0.838 vs 0.673) but neither arm yet converts that to
+> free-running horizon (`H_ε(ρ=0)=0` even at ε=0.1), localizing the wall to the one-step→horizon conversion
+> ([report §NW8](../report.md), §12.1). **Next:** the self-forcing and latent-overshooting §6.3 levers + a
+> delta-exact metric + scale, then the EN8/EN9 (SPEC-8) oracle-grounded-SSL runs on this same arm.
 
 ### 6.1 Architecture
 
@@ -759,6 +763,14 @@ with confidence rather than doubt.
 | **EN2 / H9–H10** (when × what to consult) | smart scheduling *and* active sensing beat dumb at equal budget → the policy axes transfer to oracle-scarce domains (SPEC.md §4) | timing/sensing ties rate → simplify the loop; the value is elsewhere (operators, representation) — a real result that *saves* the field effort |
 | **EN3 / H7** (correction teaches) | partial-obs operators differ and correction reduces future drift → online TTT (§8.4) is load-bearing | the v0 operator-identity survives → corrections overwrite, not teach → drop TTT from the critical path |
 | **EN4 / H11** (graph+belief beats flat) | structure is the lever once the world is a graph → carry the GNN/RSSM arm up the ladder (SPEC-6/7) | a flat serializer suffices at this scale → *don't* pay for structure yet — a negative that directly cuts cost |
+
+**EN4 first datum (NW8 smoke, [report](../report.md)):** a *split* verdict on H11. On one-step held-out
+accuracy the graph+RSSM arm beats the flat arm **0.838 vs 0.673 (+16.5 pts)** — structure helps generalization.
+But that does **not** yet convert to free-running horizon: `H_ε(ρ=0) = 0` for both arms even at ε=0.1 (discrete
+per-step errors spike divergence past ε in one step — EN1's H8 / SPEC-2.1's K4, echoed). The wall is *localized*
+to the one-step→horizon conversion, not the learner (the graph arm fits to >0.9 teacher-forced accuracy). Routes
+to the remaining §6.3 levers (self-forcing, latent overshooting) + a delta-exact metric + scale — the apparatus
+EN8/EN9 also plug into.
 | **EN8 / H23–H24** (oracle in the *bulk*) | the collapse tax falls away and residual supervision wins → a genuine SSL contribution; oracle-grounding belongs in pretraining, not just RLVR | **the more interesting branch**: even with a free exact oracle in the bulk, JEPA still needs its crutches → a non-obvious fact about *why* the collapse tax exists, which the oracle-free field cannot establish |
 | **EN9 / H25, H5** (oracle hard-negatives) | exact near-miss/counterfactual negatives beat statistical regularizers and lift interventional fidelity | near-miss structure was not the collapse mechanism → narrows *what* anti-collapse actually fixes — still a clean, publishable map of the failure surface |
 
@@ -789,7 +801,7 @@ no GPU** before any learned model. It does not collide with `M0–M8`, `S1–S6`
 | **NW5** | Propose-verify-correct loop with **partial-observation oracle** (full / probe modes), probe-policy interface `π_o`, correction/belief operators, baselines, model-agnostic runner ([`netloop/`](../../src/verisim/netloop/)). The **message-passing + RSSM `M_θ`** is deferred to NW7, where partial observability makes the belief non-degenerate (§6.2) and the graph arm becomes the H11 contender — exactly as v0 shipped the M5 loop with baselines before the neural model bit | loop invariants | ✅ (graph arm → NW7) |
 | **NW6** | **EN1 network `H_ε(ρ)` curve** + bootstrap-CI aggregation + figure ([`experiments/en1.py`](../../src/verisim/experiments/en1.py), [`figures/en1_curve.png`](../../figures/en1_curve.png)) | **the prime directive** | ✅ (H8 honest negative on the flat arm) |
 | **NW7** | Smart probe policies + belief operators + drift mitigations; EN2/EN3/EN4 (equal-budget, CIs). **EN2** (consultation policy `π_c`, H9) and **EN3** (correction/belief operators, §8.3) ship on the flat arm ([`en2.py`](../../src/verisim/experiments/en2.py), [`en3.py`](../../src/verisim/experiments/en3.py)): EN3 breaks v0's operator identity collapse and shows the probe earns ~2.3× more faithful horizon per oracle-bit. The graph/RSSM arm (H11), the smart info-gain `π_o` (H10), the drift mitigations, and EN4 remain | comparison figures | ◐ EN2/EN3 (flat arm) |
-| **NW8** | RLVR + online-TTT (EN5), counterfactual training (EN6), **model-invariance sweep (EN7/H22)** — the LLM-as-proposer arm rides the new simulator protocol, **LLM-callable simulator protocol** (§7), Inspect benchmark + `verifiers`-spec network RL env, technical report | packaging + report |
+| **NW8** | **Message-passing + RSSM graph arm** ([`netmodel/graph.py`](../../src/verisim/netmodel/graph.py), [`graph_model.py`](../../src/verisim/netmodel/graph_model.py), [`graph_train.py`](../../src/verisim/netmodel/graph_train.py)) + the §6.3 noise-injection lever + **EN4 graph-vs-flat (H11)** ([`en4_graph.py`](../../src/verisim/experiments/en4_graph.py)). Then RLVR + online-TTT (EN5), counterfactual (EN6), **model-invariance sweep (EN7/H22)**, **EN8/EN9** (SPEC-8 oracle-grounded SSL), the **LLM-callable simulator protocol** (§7), Inspect benchmark + `verifiers`-spec network RL env, report | model tests + comparison figures | ◐ graph arm + EN4 shipped (split H11: +16.5-pt one-step, horizon not yet) |
 
 NW0–NW3 + the NW5 loop are the deterministic core. `M_θ` (NW4) drops into the loop via
 the same model-agnostic interface v0 uses (`NeuralWorldModel`).

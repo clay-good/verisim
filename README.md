@@ -74,7 +74,7 @@ build order in [SPEC §12](docs/specs/SPEC.md#12-research-roadmap):
 | **NW5** | Partial-observation propose-verify-correct loop ([`netloop/`](src/verisim/netloop/)): two-mode (full / **probe**) oracle, probe policies `π_o`, correction/belief operators, baselines, model-agnostic runner — loop invariants tested | ✅ |
 | **NW6** | **EN1 network `H_ε(ρ)` curve** ([`en1_curve.png`](figures/en1_curve.png)) — the prime directive (H8). Honest negative on the flat arm: near-flat interior | ✅ |
 | **NW7** | Equal-budget comparisons. **EN2** (consultation policy `π_c`, H9) + **EN3** (correction/belief operators, §8.3) ship on the flat arm: EN3 breaks v0's operator identity collapse — the probe earns **~2.3× more faithful horizon per oracle-bit**. Graph/RSSM arm (H11), smart info-gain `π_o` (H10), drift mitigations, EN4 remain | ◐ EN2/EN3 |
-| **NW8** | **Message-passing + RSSM** graph arm → RLVR/online-TTT (EN5) + counterfactual + two-oracle (EN6) + LLM-callable simulator + packaging | ☐ next |
+| **NW8** | **Message-passing + RSSM graph arm** ([`netmodel/graph_model.py`](src/verisim/netmodel/graph_model.py)) + the §6.3 noise lever + **EN4 graph-vs-flat (H11)** — then RLVR/online-TTT (EN5), counterfactual (EN6), EN7/H22, EN8/EN9 (SPEC-8 SSL), LLM-callable simulator, packaging | ◐ graph arm + EN4 |
 
 The deterministic cores (filesystem and network) have **no runtime dependencies** and need
 no GPU. The propose–verify–correct loop is model-agnostic, so the learned model `M_θ` — a

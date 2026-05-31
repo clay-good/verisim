@@ -455,6 +455,44 @@ faithful horizon** (0.063 vs 0.027). Cheap, localized sensing is the *efficient*
 horizon — which is exactly the probe-efficiency axis (§9.4) the smart information-gain `π_o`
 (H10, NW7) is built to optimize, and the first network result with no v0 analogue.
 
+## NW8 (graph arm) — EN4 graph-vs-flat, a split verdict on H11 (SPEC-5 §6.1-6.2, §12)
+
+The NW8 message-passing + RSSM graph arm now ships ([`netmodel/graph.py`](../src/verisim/netmodel/graph.py),
+[`graph_model.py`](../src/verisim/netmodel/graph_model.py), [`graph_train.py`](../src/verisim/netmodel/graph_train.py)),
+and EN4 ([`experiments/en4_graph.py`](../src/verisim/experiments/en4_graph.py)) runs the H11 comparison:
+the flat-Markov transformer and the graph+belief arm trained on the **same** oracle data and scored with
+the **same** eval primitives EN1 uses. A small, fast smoke instance
+([`figures/en4_graph_vs_flat.png`](../figures/en4_graph_vs_flat.png),
+[`.csv`](../figures/en4_graph_vs_flat.csv)) gives a clean, two-sided first datum:
+
+| arm | one-step held-out acc | `H_ε` (ρ=0), ε ∈ {0, 0.05, 0.1} |
+|---|---|---|
+| flat-Markov (NW4) | 0.673 | 0.000 / 0.000 / 0.000 |
+| **graph + RSSM (NW8)** | **0.838** | 0.000 / 0.000 / 0.000 |
+| graph + RSSM + noise lever | 0.829 | 0.000 / 0.000 / 0.000 |
+
+**The positive (H11, generalization axis): structure helps, materially.** On never-trained eval seeds the
+graph arm is a **+16.5-point** better one-step predictor than the flat arm (0.838 vs 0.673) — the message-passing
+inductive bias over the host graph generalizes where the flat serializer memorizes (the m4/GNS bet, §2.2-2.3,
+realized). This is the first network result to move a metric in the graph arm's favor.
+
+**The honest negative (horizon axis): better one-step ≠ horizon — yet.** That accuracy gain does *not* convert
+to free-running faithful horizon: `H_ε` is **0 for all three arms even at ε=0.1** — every arm drifts on the first
+unaided step. This is exactly EN1's H8 negative and SPEC-2.1's K4 echoing in the network world: per-step errors
+are *discrete* (one wrong edit spikes the graph divergence past ε in a single step), so token-level accuracy gains
+do not buy first-exceedance horizon without the *exposure-bias* levers. The noise-injection lever, at this tiny
+scale, slightly *lowered* one-step accuracy (0.829 vs 0.838) and bought no horizon — a clean "needs scale/tuning"
+datum, not a refutation of the lever.
+
+**Where this routes the program (the epistemic engine, SPEC.md §10.1).** The result *localizes* the wall: it is
+the **one-step→horizon conversion**, not the per-step learner (the graph arm fits to >0.9 teacher-forced accuracy,
+the K0-analog check). The pre-registered next levers are therefore the remaining §6.3 mitigations —
+**self-forcing / scheduled sampling** (close the train/deploy exposure-bias gap that token-teacher-forcing hides)
+and the **multi-step latent-overshooting** objective — plus reporting the **delta-exact** rate (not just token
+accuracy) and scaling training/coverage. The graph arm is the apparatus those levers now plug into; EN8/EN9 (the
+SPEC-8 oracle-grounded-SSL runs) sit on this same arm. A +16.5-point one-step gain with a measured conversion
+gap is a better starting point than the flat arm offered, and every number here is bankable under the oracle.
+
 ## Threats to validity
 
 - **Scale.** The committed model is ~tiny and trains for a few hundred iterations on
@@ -506,6 +544,9 @@ python figures/plot_comparison.py --records runs/en2/records.jsonl --key policy 
 python -m verisim.experiments.en3 --config configs/en3.json --out runs/en3/records.jsonl
 python figures/plot_comparison.py --records runs/en3/records.jsonl --key operator \
     --out figures/en3_operators.png --csv figures/en3_operators.csv
+# NW8 graph arm — EN4 graph-vs-flat (H11); writes the CSV + figure directly:
+python -m verisim.experiments.en4_graph --graph-iters 1500 \
+    --out figures/en4_graph_vs_flat.csv
 ```
 
 The run-records are git-ignored (regenerable); the figures and their CSVs are
