@@ -424,6 +424,16 @@ is the autoresearch gate (§14) and a per-step diagnostic.
 > probe-driven partial observability makes the belief non-degenerate (§6.2): under full
 > observability it degenerates to exactly this Markov predictor, so building it earlier would
 > be unused machinery; the graph-vs-flat comparison it enables is EN4 (§12).
+>
+> **Build status (NW8, in progress).** The graph arm is being built in increments, deterministic
+> core first (the NW0-NW3 discipline). **Shipped:** the torch-free graph *featurization*
+> ([`netmodel/graph.py`](../../src/verisim/netmodel/graph.py)) — `NetworkState` × `NetAction` →
+> a typed `NetGraph` (host nodes with up/service/firewall/action-role features, link edges, flow
+> edges, action+clock+exit graph features, `symlog` on the unbounded clock), over the **same closed
+> world** the flat arm serializes so the H11 comparison is fair. Tested with no torch/GPU
+> (`tests/test_netgraph.py`, 14 cases). **Next:** the torch GNN message-passing encoder + GRU-RSSM
+> belief (§6.2) + conditioned grammar-constrained decoder implementing the `NetModel` protocol, then
+> the §6.3 drift-mitigation training levers.
 
 ### 6.1 Architecture
 
