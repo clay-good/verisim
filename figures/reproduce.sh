@@ -56,4 +56,14 @@ python -m verisim.experiments.en1 --config configs/en1.json --out runs/en1/recor
 python figures/plot_en1.py --records runs/en1/records.jsonl \
     --out figures/en1_curve.png --csv figures/en1_curve.csv
 
-echo "== done: figures/{e1_curve,e2_policies,e3_operators,calibration,e4_ablation,objective,representation,auto_search,en1_curve}.{png,csv} =="
+echo "== EN2: network consultation-policy comparison (SPEC-5 NW7, H9) =="
+python -m verisim.experiments.en2 --config configs/en2.json --out runs/en2/records.jsonl
+python figures/plot_comparison.py --records runs/en2/records.jsonl --key policy \
+    --out figures/en2_policies.png --csv figures/en2_policies.csv
+
+echo "== EN3: network correction/belief-operator comparison (SPEC-5 NW7, §8.3) =="
+python -m verisim.experiments.en3 --config configs/en3.json --out runs/en3/records.jsonl
+python figures/plot_comparison.py --records runs/en3/records.jsonl --key operator \
+    --out figures/en3_operators.png --csv figures/en3_operators.csv
+
+echo "== done: figures/{e1_curve,e2_policies,e3_operators,calibration,e4_ablation,objective,representation,auto_search,en1_curve,en2_policies,en3_operators}.{png,csv} =="

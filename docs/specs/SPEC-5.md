@@ -19,9 +19,16 @@ computer-network world: the next smallest world with the *hard* property.**
 > **NW6 plots the headline EN1 `H_ε(ρ)` curve** ([`experiments/en1.py`](../../src/verisim/experiments/en1.py),
 > [`figures/en1_curve.png`](../../figures/en1_curve.png)): on the flat-Markov `M_θ` the
 > network interior is **near-flat (the H8 honest negative)** — the network analogue of v0's
-> H1 floor (§10.1, [report](../report.md)). **Next: NW7** — the message-passing + RSSM graph
-> arm and the drift mitigations (noise injection, self-forcing; the GNS/m4 levers v0 lacked)
-> that must lift `M_θ` off that floor, with the EN2/EN3/EN4 comparisons.
+> H1 floor (§10.1, [report](../report.md)). **NW7 is underway on the flat arm:** EN2
+> ([`en2.py`](../../src/verisim/experiments/en2.py)) compares consultation policies `π_c`
+> (H9 — the uncertainty-triggered policy *leads* but with overlapping CIs, suggestive not
+> conclusive, unlike v0's clean negative), and EN3 ([`en3.py`](../../src/verisim/experiments/en3.py))
+> shows the partial-observation payoff directly: the full-consult operators coincide (the v0
+> identity) **but the cheap one-host probe + belief filter breaks that collapse** and earns
+> **~2.3× more faithful horizon per oracle-bit** (§8.3, §9.4). **Remaining NW7:** the
+> message-passing + RSSM graph arm (H11), the smart information-gain probe policy `π_o` (H10),
+> the drift mitigations (noise injection, self-forcing; the GNS/m4 levers v0 lacked), and EN4
+> — the levers that must lift `M_θ` off the EN1 floor.
 
 This is to the network what [SPEC-2](./SPEC-2.md) is to the filesystem. SPEC-2 made
 the single-host shell/filesystem world buildable and proved the *method* —
@@ -681,7 +688,7 @@ no GPU** before any learned model. It does not collide with `M0–M8`, `S1–S6`
 | **NW4** | `M_θ`: constrained graph-delta decode + supervised training (SLM-sized) ([`netmodel/`](../../src/verisim/netmodel/)). The **flat** arm — a from-scratch transducer over serialized `(state, action) → Δ` reusing v0's transformer + trainer — ships and is tested; it is the H11 flat-Markov baseline and the NW5-loop drop-in | model tests (torch extra) | ◐ flat arm shipped |
 | **NW5** | Propose-verify-correct loop with **partial-observation oracle** (full / probe modes), probe-policy interface `π_o`, correction/belief operators, baselines, model-agnostic runner ([`netloop/`](../../src/verisim/netloop/)). The **message-passing + RSSM `M_θ`** is deferred to NW7, where partial observability makes the belief non-degenerate (§6.2) and the graph arm becomes the H11 contender — exactly as v0 shipped the M5 loop with baselines before the neural model bit | loop invariants | ✅ (graph arm → NW7) |
 | **NW6** | **EN1 network `H_ε(ρ)` curve** + bootstrap-CI aggregation + figure ([`experiments/en1.py`](../../src/verisim/experiments/en1.py), [`figures/en1_curve.png`](../../figures/en1_curve.png)) | **the prime directive** | ✅ (H8 honest negative on the flat arm) |
-| **NW7** | Smart probe policies + belief operators + drift mitigations; EN2/EN3/EN4 (equal-budget, CIs) | comparison figures |
+| **NW7** | Smart probe policies + belief operators + drift mitigations; EN2/EN3/EN4 (equal-budget, CIs). **EN2** (consultation policy `π_c`, H9) and **EN3** (correction/belief operators, §8.3) ship on the flat arm ([`en2.py`](../../src/verisim/experiments/en2.py), [`en3.py`](../../src/verisim/experiments/en3.py)): EN3 breaks v0's operator identity collapse and shows the probe earns ~2.3× more faithful horizon per oracle-bit. The graph/RSSM arm (H11), the smart info-gain `π_o` (H10), the drift mitigations, and EN4 remain | comparison figures | ◐ EN2/EN3 (flat arm) |
 | **NW8** | RLVR + online-TTT (EN5), counterfactual training (EN6), **LLM-callable simulator protocol** (§7), Inspect benchmark + `verifiers`-spec network RL env, technical report | packaging + report |
 
 NW0–NW3 + the NW5 loop are the deterministic core. `M_θ` (NW4) drops into the loop via

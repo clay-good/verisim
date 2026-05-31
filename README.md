@@ -65,7 +65,8 @@ build order in [SPEC §12](docs/specs/SPEC.md#12-research-roadmap):
 | **NW4** | Network `M_θ` ([`netmodel/`](src/verisim/netmodel/)): closed vocab, tokenizer, LL(1) graph-delta grammar, constrained decode, supervised training. The **flat** arm (the H11 flat-Markov baseline, reusing v0's transformer + trainer) ships and is tested | ◐ flat arm |
 | **NW5** | Partial-observation propose-verify-correct loop ([`netloop/`](src/verisim/netloop/)): two-mode (full / **probe**) oracle, probe policies `π_o`, correction/belief operators, baselines, model-agnostic runner — loop invariants tested | ✅ |
 | **NW6** | **EN1 network `H_ε(ρ)` curve** ([`en1_curve.png`](figures/en1_curve.png)) — the prime directive (H8). Honest negative on the flat arm: near-flat interior | ✅ |
-| **NW7–NW8** | **Message-passing + RSSM** graph arm and drift mitigations (EN2/EN3/EN4) → RLVR/online-TTT + counterfactual + packaging | ☐ next |
+| **NW7** | Equal-budget comparisons. **EN2** (consultation policy `π_c`, H9) + **EN3** (correction/belief operators, §8.3) ship on the flat arm: EN3 breaks v0's operator identity collapse — the probe earns **~2.3× more faithful horizon per oracle-bit**. Graph/RSSM arm (H11), smart info-gain `π_o` (H10), drift mitigations, EN4 remain | ◐ EN2/EN3 |
+| **NW8** | **Message-passing + RSSM** graph arm → RLVR/online-TTT (EN5) + counterfactual + two-oracle (EN6) + LLM-callable simulator + packaging | ☐ next |
 
 The deterministic cores (filesystem and network) have **no runtime dependencies** and need
 no GPU. The propose–verify–correct loop is model-agnostic, so the learned model `M_θ` — a
@@ -117,6 +118,15 @@ message-passing + RSSM graph arm (H11) and the drift mitigations v0 never had (n
 rollout training, self-forcing; the GNS/m4 levers). The EN1 machinery now exists to measure,
 reproducibly, whether any of them lifts `M_θ` off the floor ([report §NW5+NW6](docs/report.md)).
 
+The first NW7 comparisons already run on that machinery. **EN3** (correction/belief operators)
+shows the payoff partial observability buys that v0 could not: the full-consult operators
+coincide on `H_ε` (v0's identity), but a cheap one-host **probe + belief filter breaks that
+collapse** and earns **~2.3× more faithful horizon per oracle-bit** — cheap, localized sensing
+is the efficient way to buy horizon. **EN2** (consultation policy) finds the uncertainty-triggered
+policy leading `fixed` (3.4 vs 1.9 `H_ε`), reversing v0's clean negative — suggestive but with
+overlapping CIs, awaiting the calibrated belief-variance signal the RSSM arm supplies
+([report §NW7](docs/report.md)).
+
 ### Verification
 
 The claims above are audited empirically in [docs/verification.md](docs/verification.md):
@@ -127,9 +137,10 @@ oracle transitions with zero failures** by the dependency-free, torch-free
 **entire action space** (448,260 state×action pairs), **by construction**, and with
 **negative controls** confirming each check detects deliberate corruptions. Every
 quantitative number in the report *and* this README is machine-checked against the committed
-figure CSVs; all 13 CSVs (including the NW6 network `H_ε(ρ)` curve) regenerate from config +
-seeds with `maxΔ = 0`; the NW5 partial-observation loop invariants are tested (ρ=1 full-consult
-is exact; a one-host probe corrects strictly less than a full consult); and the packaging is
+figure CSVs; all 15 CSVs (including the NW6 network `H_ε(ρ)` curve and the NW7 EN2/EN3
+comparisons) regenerate from config + seeds with `maxΔ = 0`; the NW5 partial-observation loop
+invariants are tested (ρ=1 full-consult is exact; a one-host probe corrects strictly less than
+a full consult); and the packaging is
 verified end-to-end (the RL-env return equals the faithful horizon, the benchmark separates a
 perfect from a trivial model, coverage spans all 13 commands). The audit found and fixed two
 stale-documentation drifts (an E2 table and the K1 coverage diagnostic), with no invariant,

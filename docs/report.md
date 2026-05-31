@@ -411,6 +411,50 @@ machinery now exists to measure, cleanly and reproducibly, whether any of them l
 this floor. As in v0, the negative is reported first-class and the apparatus (loop invariants,
 determinism, the CI-tested core) is proven independently of the model's faithfulness.
 
+## NW7 (flat arm) — EN2 consultation policy (H9) and EN3 operators (the partial-observation payoff)
+
+With the loop in hand, two of NW7's equal-budget comparisons run on the flat `M_θ` now (the
+graph/RSSM arm, the smart information-gain probe, and the drift mitigations are the remaining
+NW7 work). Both fix the budget at the EN1 interior ρ=0.3 and compare at *equal* consultation
+count (the spend-down backstop makes every arm spend exactly the budget).
+
+**EN2 — consultation policy `π_c` (H9; `en2_policies.csv`, `verisim.experiments.en2`).** Does
+spending the budget on the steps the model is least sure about *earn* more horizon than
+spreading it evenly? At ε=0 (high+low pooled, 7 calls each):
+
+| policy | `H_ε` | 95% CI |
+|---|---|---|
+| `uncertainty` | **3.4** | [1.1, 6.0] |
+| `drift` | 2.0 | [0.7, 3.9] |
+| `fixed` | 1.9 | [1.1, 3.1] |
+
+The uncertainty-triggered policy *leads*, and — unlike v0's E2/K4, where `fixed` won with
+**disjoint** CIs (a clean H2/H9 negative) — here the direction has flipped to favor smart
+scheduling. But the CIs **overlap**, so this is **suggestive, not conclusive**: the flat
+model's decode-entropy signal is a coarse proxy, and the calibrated belief-variance signal that
+H9 really wants is what the RSSM belief (NW7 graph arm) supplies. Honest read: encouraging
+movement off v0's negative, awaiting the model that can confirm it.
+
+**EN3 — correction/belief operators (§8.3; `en3_operators.csv`, `verisim.experiments.en3`).**
+This is the result partial observability buys that v0 could not show. At ε=0:
+
+| operator | mode | `H_ε` | oracle-bits / consult | `H_ε` per oracle-bit |
+|---|---|---|---|---|
+| `hard_reset` | full | 1.9 | 10.1 | 0.027 |
+| `residual` | full | 1.9 | 10.1 | 0.027 |
+| `projection` | full | 1.9 | 10.1 | 0.027 |
+| `belief_filter` | **probe** | 0.9 | **2.1** | **0.063** |
+
+The three full-consultation operators give **identical** `H_ε` — the v0 full-truth identity
+(they all snap the coupled state to the same `s'`), persisting exactly as predicted. But the
+probe + belief filter **breaks the identity collapse**: a one-host probe corrects only the
+observed subgraph, so it earns *less* horizon per consult (0.9 vs 1.9). The honest — and, framed
+as an incentive rather than a penalty, the *better* — read is the cost lens: the probe reveals
+~2.1 facts where a full consult reveals ~10, so per **oracle-bit** the probe earns **~2.3× more
+faithful horizon** (0.063 vs 0.027). Cheap, localized sensing is the *efficient* way to buy
+horizon — which is exactly the probe-efficiency axis (§9.4) the smart information-gain `π_o`
+(H10, NW7) is built to optimize, and the first network result with no v0 analogue.
+
 ## Threats to validity
 
 - **Scale.** The committed model is ~tiny and trains for a few hundred iterations on
@@ -452,10 +496,16 @@ python figures/plot_objective.py --records runs/objective/records.jsonl
 python -m verisim.experiments.representation --config configs/representation.json \
     --out runs/representation/records.jsonl
 python figures/plot_representation.py --records runs/representation/records.jsonl
-# SPEC-5 network world (NW6, the prime-directive curve):
+# SPEC-5 network world (NW6 prime-directive curve; NW7 EN2/EN3 comparisons):
 python -m verisim.experiments.en1 --config configs/en1.json --out runs/en1/records.jsonl
 python figures/plot_en1.py --records runs/en1/records.jsonl \
     --out figures/en1_curve.png --csv figures/en1_curve.csv
+python -m verisim.experiments.en2 --config configs/en2.json --out runs/en2/records.jsonl
+python figures/plot_comparison.py --records runs/en2/records.jsonl --key policy \
+    --out figures/en2_policies.png --csv figures/en2_policies.csv
+python -m verisim.experiments.en3 --config configs/en3.json --out runs/en3/records.jsonl
+python figures/plot_comparison.py --records runs/en3/records.jsonl --key operator \
+    --out figures/en3_operators.png --csv figures/en3_operators.csv
 ```
 
 The run-records are git-ignored (regenerable); the figures and their CSVs are

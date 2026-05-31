@@ -16,8 +16,8 @@
 |---|---|---|
 | 1 | Core invariants (`apply == oracle`, round-trips, NW4 tokenizer, metric well-formedness, exit codes, determinism) — sampled, **exhaustive over the full action space**, **by construction**, and with **negative controls** (the checks have teeth) | **13 families × 48,000 transitions + 448,260 exhaustive pairs — 0 failures; 9/9 corruptions detected** |
 | 2 | Every quantitative number in [`report.md`](report.md) **and the README** vs. the committed figure CSVs | report 59/65 matched (**1 stale section fixed**, 1 benign rounding); README **6/6** |
-| 3 | Each committed figure CSV regenerated from its config + seeds | all 13 reproduced **exactly** (maxΔ = 0) — see table |
-| 4 | "No runtime deps", "no network calls", cross-process determinism, README examples, **packaging (RL reward == faithful horizon, benchmark, coverage)**, test suite | all confirmed (deterministic core imports with torch/numpy blocked; 239 tests pass) |
+| 3 | Each committed figure CSV regenerated from its config + seeds | all 15 reproduced **exactly** (maxΔ = 0) — see table |
+| 4 | "No runtime deps", "no network calls", cross-process determinism, README examples, **packaging (RL reward == faithful horizon, benchmark, coverage)**, test suite | all confirmed (deterministic core imports with torch/numpy blocked; 243 tests pass) |
 
 The apparatus is sound: the load-bearing invariants hold at far larger scale than the
 test suite checks, the committed figures regenerate bit-for-bit, and the one
@@ -134,6 +134,14 @@ section (teacher-forced accuracy `1.0` train / `~0.71` held-out, `~0.2` free-run
 exact-delta match) are reproducible measurements from `verisim.experiments.en1.train_model`,
 not committed-CSV artifacts, and are reported as such.
 
+**NW7 / EN2+EN3 (added 2026-05-31).** The report's EN2 policy table (`uncertainty 3.4`,
+`drift 2.0`, `fixed 1.9` at ε=0) and EN3 operator table (`hard_reset`/`residual`/`projection`
+`1.9`, `belief_filter 0.9`) were machine-checked against `en2_policies.csv` / `en3_operators.csv`
+— **all match**. The EN3 oracle-bit costs (`hard_reset` 10.1, `belief_filter` 2.1 bits/consult →
+the ~2.3× faithful-horizon-per-oracle-bit claim) are read from the records' `oracle_bits` field,
+which the loop computes deterministically; the operator-identity (full operators coincide,
+`belief_filter` strictly cheaper) is additionally asserted in `tests/test_en3.py`.
+
 ---
 
 ## 3. Reproducibility — every figure CSV regenerated from config + seeds
@@ -157,8 +165,10 @@ all numeric cells). `maxΔ = 0` means bit-for-bit identical.
 | K4 (knee curve) | `k4_knee.csv` | **EXACT** | 0 | 588 |
 | K4 (policies) | `k4_policies.csv` | **EXACT** | 0 | 567 |
 | EN1 (network `H_ε(ρ)` curve, NW6) | `en1_curve.csv` | **EXACT** | 0 | 33 |
+| EN2 (network consultation policy, NW7) | `en2_policies.csv` | **EXACT** | 0 | 34 |
+| EN3 (network correction/belief operators, NW7) | `en3_operators.csv` | **EXACT** | 0 | 47 |
 
-**All 13 committed figure CSVs reproduce from HEAD with `maxΔ = 0`.** (K2's faithfulness
+**All 15 committed figure CSVs reproduce from HEAD with `maxΔ = 0`.** (K2's faithfulness
 rows were always exact; only its K1-coverage rows were stale — fixed per §5, after which
 the whole CSV reproduces.) The reproduction discipline (`figures/reproduce.sh`) therefore
 holds: a stranger with the repo and the `[dev,model,viz]` extras regenerates the committed
@@ -179,8 +189,9 @@ figures exactly.
 | Benchmark **separates** perfect from trivial | `score_model` on `OracleBackedModel` vs `NullModel` (50 rollouts) | perfect `1.0`, null `0.0` |
 | Coverage spans **all 13 commands** (K1 claim) | `missing_commands` over the broad driver mix | **13/13, none missing** |
 | **NW5** partial-observation loop invariants | `tests/test_net_loop.py`: ρ=1 full-consult exact; perfect model never drifts; budget never exceeded; a one-host **probe corrects strictly less than full** (probe horizon < full at ρ=1) | **11/11 pass** |
+| **NW7 EN3** operator identity broken | `tests/test_en3.py`: full operators coincide on H_ε; `belief_filter` (probe) earns ≤ horizon but spends strictly fewer oracle-bits | **2/2 pass** |
 | `load_environment` entrypoint | Construct via the hub entrypoint | returns a working `WorldModelEnv` |
-| Test suite | `pytest` | **224 passed, 1 skipped** (skip = optional `inspect_ai` adapter) |
+| Test suite | `pytest` | **243 passed, 1 skipped** (skip = optional `inspect_ai` adapter) |
 | Lint / types / build | `ruff check .`; `mypy --strict`; `python -m build` | all green |
 
 ---
