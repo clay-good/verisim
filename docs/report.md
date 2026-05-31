@@ -77,14 +77,14 @@ exactly 4 calls per arm), 10 rollouts/arm
 
 | policy | `H_ε` | 95% CI | oracle calls |
 |--------|------|--------|--------------|
-| `fixed` | **1.4** | [1.1, 1.8] | 4.0 |
-| `uncertainty` | 0.6 | [0.2, 1.0] | 4.0 |
+| `fixed` | **1.3** | [1.0, 1.8] | 4.0 |
+| `uncertainty` | 0.2 | [0.0, 0.5] | 4.0 |
 | `drift` | 0.1 | [0.0, 0.3] | 4.0 |
 
 The dumb baseline wins — so this is not a wash, it is a **reversal**: at this scale
 spending the budget where the model is *least confident* is worse than spreading it
-evenly. `fixed` beats `drift` unambiguously (disjoint CIs) and beats `uncertainty`
-at `ε = 0` (`[1.1, 1.8]` vs. `[0.2, 1.0]`). The reason is calibration: the triggered
+evenly. `fixed` beats both triggered policies with **disjoint CIs** — `[1.0, 1.8]` vs.
+`uncertainty`'s `[0.0, 0.5]` and `drift`'s `[0.0, 0.3]`. The reason is calibration: the triggered
 policies key off the mean entropy of the constrained decode (SPEC-2 §7.2), and for a
 model this small that entropy does not track actual divergence. **H2 is refuted at
 this scale**, and the next lever is explicit: calibrate the uncertainty signal
@@ -295,7 +295,7 @@ under-covered and under-trained. K1/K2 attack it directly
 
 **K1 — coverage of the transition space (the data is free).** A dependency-free coverage
 report (`verisim.data.coverage`) over a broad driver mix confirms the dataset spans what the
-baseline missed: **all 13 commands covered, 273 failure cells** (`mkdir:fail`, `rmdir:fail`,
+baseline missed: **all 13 commands covered, 359 failure cells** (`mkdir:fail`, `rmdir:fail`,
 `rm:fail`, `mv:fail`, …) and a **create-depth histogram spanning depths 1→8** — i.e. the
 failure cases *and* the multi-segment path-copy distribution K0 flagged. The K1 gate
 (documented coverage, regenerable from a manifest) is met.

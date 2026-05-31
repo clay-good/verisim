@@ -95,6 +95,18 @@ The full write-up — every figure (E1–E4, calibration, K0/K2/K4), the honest 
 mechanism, threats to validity, and exact reproduction — is in [docs/report.md](docs/report.md).
 Every figure regenerates from its config + seeds with `bash figures/reproduce.sh`.
 
+### Verification
+
+The claims above are audited empirically in [docs/verification.md](docs/verification.md):
+the core invariants (`apply == oracle`, serialization round-trips, the NW4 tokenizer,
+metric bounds, exit codes, in- and cross-process determinism) are proven over **48,000
+oracle transitions with zero failures** by the dependency-free, torch-free
+[`scripts/verify_invariants.py`](scripts/verify_invariants.py); every quantitative number
+in the report is machine-checked against the committed figure CSVs; and each committed CSV
+is regenerated from its config + seeds and diffed (`maxΔ = 0`). The audit found and fixed two
+stale-documentation drifts (an E2 table and the K1 coverage diagnostic), with no invariant,
+reproducibility, or packaging claim refuted.
+
 ## Packaging for reuse
 
 The env + metric are packaged where researchers already look (SPEC-2 §15):

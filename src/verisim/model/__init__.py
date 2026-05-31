@@ -1,8 +1,10 @@
 """The neural world model `M_θ`: vocabulary, tokenizer, grammar, transformer.
 
-Importing this package pulls in PyTorch (the transformer/decoder). The pure-Python
-pieces -- :mod:`vocab`, :mod:`tokenizer`, :mod:`grammar` -- are importable directly
-without torch if needed.
+Importing this package pulls in PyTorch (the transformer/decoder), so it is part of the
+optional ``[model]`` layer, not the dependency-free deterministic core. The :mod:`vocab`,
+:mod:`tokenizer`, and :mod:`grammar` modules carry no torch dependency of their own
+(importing those *module files* directly stays torch-free); importing them *via this
+package* still runs this ``__init__`` and therefore pulls torch.
 """
 
 from __future__ import annotations
