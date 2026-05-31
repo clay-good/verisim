@@ -439,8 +439,13 @@ is the autoresearch gate (§14) and a per-step diagnostic.
 > `parse_target`, so every prediction is a valid delta by construction. It implements the
 > `NetModel`/`NetUncertaintyModel` loop protocols (drops into the NW5 loop unchanged), is deterministic,
 > and gradients flow through the full graph→RSSM→decoder stack (`tests/test_graph_model.py`, 5 cases).
-> **Next:** the §6.3 drift-mitigation training levers (noise injection first) and the EN4 graph-vs-flat
-> comparison.
+> The **supervised trainer + the §6.3 noise-injection lever** also ship
+> ([`netmodel/graph_train.py`](../../src/verisim/netmodel/graph_train.py)): minibatch teacher-forced
+> training, and *oracle-relabeled state-noise augmentation* — the GNS lever made exact by the free total
+> oracle (corrupt the input state, relabel the target with `O(s̃, a)`). The K0-analog learner check
+> passes: the graph arm fits oracle transitions to **>0.9** teacher-forced accuracy
+> (`tests/test_graph_train.py`, 4 cases). **Next:** the EN4 graph-vs-flat comparison (H11) on the same
+> EN1 machinery, then the self-forcing and latent-overshooting levers and the EN8/EN9 (SPEC-8) runs.
 
 ### 6.1 Architecture
 
