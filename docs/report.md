@@ -469,7 +469,8 @@ the **same** eval primitives EN1 uses. A small, fast smoke instance
 |---|---|---|---|
 | flat-Markov (NW4) | 0.673 | 0.264 | 0.000 / 0.000 / 0.000 |
 | **graph + RSSM (NW8)** | **0.838** | **0.569** | 0.000 / 0.000 / 0.000 |
-| graph + RSSM + noise lever | 0.828 | 0.556 | 0.000 / 0.000 / 0.000 |
+| graph + RSSM + noise lever (§6.3) | 0.828 | 0.556 | 0.000 / 0.000 / 0.000 |
+| graph + RSSM + self-forcing lever (§6.3) | 0.803 | 0.500 | 0.000 / 0.000 / 0.000 |
 
 The **delta-exact** column ([`netmetrics/exact.py`](../src/verisim/netmetrics/exact.py)) is the honest middle
 the report previously flagged as missing: not token accuracy (which is inflated — most tokens of a delta are
@@ -487,24 +488,29 @@ token accuracy understates how much structure buys, because the flat arm gets th
 while missing the edit that matters. This is the clearest network result yet in the graph arm's favor.
 
 **The honest negative (horizon axis): even 57% delta-exact ≠ horizon — yet.** Neither gain converts to
-free-running faithful horizon: `H_ε` is **0 for all three arms even at ε=0.1** — every arm drifts on the first
+free-running faithful horizon: `H_ε` is **0 for all four arms even at ε=0.1** — every arm drifts on the first
 unaided step. This is exactly EN1's H8 negative and SPEC-2.1's K4 echoing in the network world, and the
 delta-exact number now *quantifies* why: at 0.569 per-step exact, the probability of surviving even a few
 unaided steps decays geometrically (≈0.57·0.57·… ), and first-exceedance is discrete — one wrong edit spikes the
 graph divergence past ε in a single step. Per-step exactness this far below 1.0 cannot buy horizon without the
-*exposure-bias* levers. The noise-injection lever, at this tiny scale, slightly *lowered* both metrics
-(0.828/0.556 vs 0.838/0.569) and bought no horizon — a clean "needs scale/tuning" datum, not a refutation of
-the lever.
+*exposure-bias* levers — and **both §6.3 levers now confirm that bound, identically**. The noise-injection lever
+slightly *lowered* both metrics (0.828/0.556) and the self-forcing / scheduled-sampling lever lowered them a bit
+more (0.803/0.500); neither bought any horizon. That the two levers — random-corruption and the model's own-drift
+distribution — behave the *same* way is itself informative: at this scale the exposure-bias correction trades a
+little one-step accuracy for off-distribution coverage that does not yet convert, a clean "needs scale/tuning"
+datum, not a refutation of either lever.
 
 **Where this routes the program (the epistemic engine, SPEC.md §10.1).** The result *localizes* the wall: it is
 the **one-step→horizon conversion**, not the per-step learner (the graph arm fits to >0.9 teacher-forced accuracy,
 the K0-analog check; held-out, it is delta-exact on 57% of steps). The **delta-exact metric just shipped**
 ([`netmetrics/exact.py`](../src/verisim/netmetrics/exact.py)) and is now an EN4 column — it converts the wall from
 a qualitative claim into a number: 0.569 per-step exact is far enough below 1.0 that geometric decay kills horizon,
-so the conversion levers must raise *whole-delta* exactness, not just token accuracy. The pre-registered next
-levers are therefore the remaining §6.3 mitigations — **self-forcing / scheduled sampling** (close the train/deploy
-exposure-bias gap that token-teacher-forcing hides) and the **multi-step latent-overshooting** objective — plus
-scaling training/coverage. The **SPEC-8 OG1/OG2 deterministic machinery also shipped** (the oracle-grounded-SSL
+so the conversion levers must raise *whole-delta* exactness, not just token accuracy. **Both §6.3 exposure-bias
+levers have now shipped and run** — noise-injection and self-forcing / scheduled sampling
+([`graph_train.py`](../src/verisim/netmodel/graph_train.py)) — and both land the same banked negative at this
+scale (above): the gap is not closed by exposure-bias correction alone here, which points the remaining budget at
+**scale** and the **multi-step latent-overshooting** objective, and at *objective grounding* rather than only
+input-distribution fixes. The **SPEC-8 OG1/OG2 deterministic machinery also shipped** (the oracle-grounded-SSL
 target/`D`-mask factory [`netdata/grounding.py`](../src/verisim/netdata/grounding.py) and the hard-negative /
 counterfactual factory [`netdata/negatives.py`](../src/verisim/netdata/negatives.py); both torch-free and
 property-tested), so the EN8/EN9 oracle-grounded-SSL runs (SPEC-8 §7) have their data layer ready and sit on this

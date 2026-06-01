@@ -24,7 +24,7 @@ def test_en4_comparison_runs_and_returns_all_arms() -> None:
         graph_noise_prob=0.3,
     )
     results = run_en4_graph(cfg)
-    assert set(results) == {"flat", "graph", "graph+noise"}
+    assert set(results) == {"flat", "graph", "graph+noise", "graph+selfforce"}
     for arm in results:
         row = results[arm]
         assert 0.0 <= row["onestep_acc"] <= 1.0

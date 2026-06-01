@@ -40,6 +40,7 @@ from verisim.netmodel.graph_train import (
     build_graph_dataset,
     graph_teacher_forced_accuracy,
     train_graph_model,
+    train_graph_model_self_forced,
 )
 from verisim.netoracle import ReferenceNetworkOracle
 from verisim.train.supervised import teacher_forced_accuracy
@@ -60,6 +61,9 @@ class EN4Config:
     mp_rounds: int = 3
     graph_iters: int = 800
     graph_noise_prob: float = 0.3
+    # §6.3 self-forcing / scheduled-sampling lever
+    selfforce_sample_prob: float = 0.5
+    selfforce_refresh_every: int = 200
     model_seed: int = 0
 
 
@@ -155,6 +159,17 @@ def run_en4_graph(config: EN4Config | None = None) -> dict[str, dict[str, float]
     graph_wm = _train_graph(0.0)
     graph_noise_wm = _train_graph(config.graph_noise_prob)
 
+    # --- graph arm with the §6.3 self-forcing / scheduled-sampling lever ---------
+    selfforce_wm = build_graph_model(
+        vocab, net, d_model=config.d_model, mp_rounds=config.mp_rounds, seed=config.model_seed
+    )
+    train_graph_model_self_forced(
+        selfforce_wm, oracle, vocab, net, driver=flat_cfg.train_driver, seeds=config.train_seeds,
+        n_steps=config.train_steps_per_traj, steps=config.graph_iters,
+        refresh_every=config.selfforce_refresh_every, max_sample_prob=config.selfforce_sample_prob,
+        seed=config.model_seed,
+    )
+
     # --- held-out one-step teacher-forced accuracy ------------------------------
     flat_eval = build_net_dataset(
         oracle, vocab, net, driver="weighted", seeds=config.eval_seeds, n_steps=config.eval_steps
@@ -166,6 +181,7 @@ def run_en4_graph(config: EN4Config | None = None) -> dict[str, dict[str, float]
         "flat": teacher_forced_accuracy(flat_model, flat_eval, vocab.pad),
         "graph": graph_teacher_forced_accuracy(graph_wm, graph_eval),  # type: ignore[arg-type]
         "graph+noise": graph_teacher_forced_accuracy(graph_noise_wm, graph_eval),  # type: ignore[arg-type]
+        "graph+selfforce": graph_teacher_forced_accuracy(selfforce_wm, graph_eval),
     }
 
     # --- held-out per-step delta-exact rate (free decode, all arms via NetModel) ---
@@ -173,7 +189,8 @@ def run_en4_graph(config: EN4Config | None = None) -> dict[str, dict[str, float]
 
     out: dict[str, dict[str, float]] = {}
     arms_wm: list[tuple[str, NetModel]] = [
-        ("flat", flat_wm), ("graph", graph_wm), ("graph+noise", graph_noise_wm)
+        ("flat", flat_wm), ("graph", graph_wm), ("graph+noise", graph_noise_wm),
+        ("graph+selfforce", selfforce_wm),
     ]
     for arm, wm in arms_wm:
         horizons = _mean_horizons(wm, oracle, net, config)
@@ -197,7 +214,7 @@ def main() -> None:  # pragma: no cover - CLI entry point
     )
     results = run_en4_graph(cfg)
 
-    arms = ("flat", "graph", "graph+noise")
+    arms = ("flat", "graph", "graph+noise", "graph+selfforce")
     eps = cfg.epsilons
     header = (
         f"{'arm':<12} {'onestep_acc':>12} {'delta_exact':>12}"
@@ -241,7 +258,7 @@ def _plot(
     ax1.bar([i + 0.2 for i in x], [results[a]["delta_exact"] for a in arms],
             width=0.4, color="#16a", label="delta-exact rate")
     ax1.set_xticks(list(x))
-    ax1.set_xticklabels(arms)
+    ax1.set_xticklabels(arms, rotation=20, ha="right", fontsize=8)
     ax1.set_title("one-step held-out: token acc vs delta-exact")
     ax1.set_ylim(0, 1)
     ax1.legend(fontsize=8)

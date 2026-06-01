@@ -454,8 +454,12 @@ is the autoresearch gate (§14) and a per-step diagnostic.
 > **SPEC-8 OG1/OG2 deterministic machinery** (the oracle-grounded-SSL target/negative factory,
 > [`netdata/grounding.py`](../../src/verisim/netdata/grounding.py),
 > [`netdata/negatives.py`](../../src/verisim/netdata/negatives.py); torch-free, property-tested) that the
-> EN8/EN9 GPU runs consume. **Next:** the self-forcing and latent-overshooting §6.3 levers + scale, then the
-> EN8/EN9 (SPEC-8) oracle-grounded-SSL runs on this same arm.
+> EN8/EN9 GPU runs consume; and the **§6.3 self-forcing / scheduled-sampling lever**
+> ([`graph_train.py`](../../src/verisim/netmodel/graph_train.py), now a 4th EN4 arm) — roll the model on its own
+> drift and oracle-relabel each step. Both exposure-bias levers (noise + self-forcing) now land the *same* banked
+> negative at this scale: a small one-step dip, no horizon yet — so the gap is not closed by input-distribution
+> fixes alone here. **Next:** scale + the multi-step latent-overshooting objective, then the EN8/EN9 (SPEC-8)
+> oracle-grounded-SSL runs on this same arm.
 
 ### 6.1 Architecture
 
@@ -488,9 +492,11 @@ lacked when its decode-entropy signal failed calibration (SPEC-2 §7.2).
   distribution matches the noisy distribution the model eats during oracle-free rollout.
   Noise scale `σ` is a key hyperparameter, not a default (too much hurts one-step
   accuracy, too little fails to cover drift).
-- **Self-forcing / scheduled sampling** (§2.4): roll the model out on *its own* outputs
-  during training, not pure teacher forcing, to close the train/deploy exposure-bias gap.
-  Noise injection and self-forcing attack the same problem from two angles; both are levers.
+- **Self-forcing / scheduled sampling** (§2.4) — **shipped**
+  ([`train_graph_model_self_forced`](../../src/verisim/netmodel/graph_train.py)): roll the model out on *its own*
+  outputs during training (a ramping `sample_prob`), oracle-relabeling each visited state, to close the
+  train/deploy exposure-bias gap pure teacher forcing hides. Noise injection and self-forcing attack the same
+  problem from two angles; both are EN4 levers, and both currently land the same banked negative (§12.1).
 - **Multi-step (latent-overshooting) objective** (RSSM/PlaNet, §2.4): penalize compounding
   error directly by training k-step-ahead predictions, not only one-step.
 
@@ -777,9 +783,11 @@ accuracy the graph+RSSM arm beats the flat arm **0.838 vs 0.673 (+16.5 pts)** in
 free-running horizon: `H_ε(ρ=0) = 0` for both arms even at ε=0.1 (discrete per-step errors spike divergence past
 ε in one step — EN1's H8 / SPEC-2.1's K4, echoed), and the 0.569 delta-exact rate now *quantifies* why (geometric
 decay of whole-delta correctness over unaided steps). The wall is *localized* to the one-step→horizon conversion,
-not the learner (the graph arm fits to >0.9 teacher-forced accuracy). Routes to the remaining §6.3 levers
-(self-forcing, latent overshooting) + scale; the **delta-exact metric and the SPEC-8 OG1/OG2 data factory have
-shipped**, so EN8/EN9 plug into a ready apparatus.
+not the learner (the graph arm fits to >0.9 teacher-forced accuracy). **Both §6.3 exposure-bias levers
+(noise-injection + self-forcing) have now run** and land the same banked negative at this scale (a small one-step
+dip, no horizon), so the gap is not closed by input-distribution fixes alone here — routing the remaining budget to
+scale + the latent-overshooting objective and to *objective grounding*. The **delta-exact metric and the SPEC-8
+OG1/OG2 data factory have shipped**, so EN8/EN9 plug into a ready apparatus.
 | **EN8 / H23–H24** (oracle in the *bulk*) | the collapse tax falls away and residual supervision wins → a genuine SSL contribution; oracle-grounding belongs in pretraining, not just RLVR | **the more interesting branch**: even with a free exact oracle in the bulk, JEPA still needs its crutches → a non-obvious fact about *why* the collapse tax exists, which the oracle-free field cannot establish |
 | **EN9 / H25, H5** (oracle hard-negatives) | exact near-miss/counterfactual negatives beat statistical regularizers and lift interventional fidelity | near-miss structure was not the collapse mechanism → narrows *what* anti-collapse actually fixes — still a clean, publishable map of the failure surface |
 
@@ -810,7 +818,7 @@ no GPU** before any learned model. It does not collide with `M0–M8`, `S1–S6`
 | **NW5** | Propose-verify-correct loop with **partial-observation oracle** (full / probe modes), probe-policy interface `π_o`, correction/belief operators, baselines, model-agnostic runner ([`netloop/`](../../src/verisim/netloop/)). The **message-passing + RSSM `M_θ`** is deferred to NW7, where partial observability makes the belief non-degenerate (§6.2) and the graph arm becomes the H11 contender — exactly as v0 shipped the M5 loop with baselines before the neural model bit | loop invariants | ✅ (graph arm → NW7) |
 | **NW6** | **EN1 network `H_ε(ρ)` curve** + bootstrap-CI aggregation + figure ([`experiments/en1.py`](../../src/verisim/experiments/en1.py), [`figures/en1_curve.png`](../../figures/en1_curve.png)) | **the prime directive** | ✅ (H8 honest negative on the flat arm) |
 | **NW7** | Smart probe policies + belief operators + drift mitigations; EN2/EN3/EN4 (equal-budget, CIs). **EN2** (consultation policy `π_c`, H9) and **EN3** (correction/belief operators, §8.3) ship on the flat arm ([`en2.py`](../../src/verisim/experiments/en2.py), [`en3.py`](../../src/verisim/experiments/en3.py)): EN3 breaks v0's operator identity collapse and shows the probe earns ~2.3× more faithful horizon per oracle-bit. The graph/RSSM arm (H11), the smart info-gain `π_o` (H10), the drift mitigations, and EN4 remain | comparison figures | ◐ EN2/EN3 (flat arm) |
-| **NW8** | **Message-passing + RSSM graph arm** ([`netmodel/graph.py`](../../src/verisim/netmodel/graph.py), [`graph_model.py`](../../src/verisim/netmodel/graph_model.py), [`graph_train.py`](../../src/verisim/netmodel/graph_train.py)) + the §6.3 noise-injection lever + **EN4 graph-vs-flat (H11)** ([`en4_graph.py`](../../src/verisim/experiments/en4_graph.py)) + the **delta-exact** per-step metric ([`netmetrics/exact.py`](../../src/verisim/netmetrics/exact.py)) + the **SPEC-8 OG1/OG2** oracle-grounded-SSL data factory ([`netdata/grounding.py`](../../src/verisim/netdata/grounding.py), [`netdata/negatives.py`](../../src/verisim/netdata/negatives.py)). Then RLVR + online-TTT (EN5), counterfactual (EN6), **model-invariance sweep (EN7/H22)**, **EN8/EN9** (SPEC-8 oracle-grounded SSL), the **LLM-callable simulator protocol** (§7), Inspect benchmark + `verifiers`-spec network RL env, report | model tests + comparison figures | ◐ graph arm + EN4 + delta-exact + OG1/OG2 machinery shipped (split H11: +16.5-pt one-step, horizon not yet) |
+| **NW8** | **Message-passing + RSSM graph arm** ([`netmodel/graph.py`](../../src/verisim/netmodel/graph.py), [`graph_model.py`](../../src/verisim/netmodel/graph_model.py), [`graph_train.py`](../../src/verisim/netmodel/graph_train.py)) + the §6.3 **noise-injection and self-forcing** levers + **EN4 graph-vs-flat (H11)** ([`en4_graph.py`](../../src/verisim/experiments/en4_graph.py)) + the **delta-exact** per-step metric ([`netmetrics/exact.py`](../../src/verisim/netmetrics/exact.py)) + the **SPEC-8 OG1/OG2** oracle-grounded-SSL data factory ([`netdata/grounding.py`](../../src/verisim/netdata/grounding.py), [`netdata/negatives.py`](../../src/verisim/netdata/negatives.py)). Then RLVR + online-TTT (EN5), counterfactual (EN6), **model-invariance sweep (EN7/H22)**, **EN8/EN9** (SPEC-8 oracle-grounded SSL), the **LLM-callable simulator protocol** (§7), Inspect benchmark + `verifiers`-spec network RL env, report | model tests + comparison figures | ◐ graph arm + EN4 + delta-exact + both §6.3 levers + OG1/OG2 shipped (split H11: +16.5-pt one-step, horizon not yet) |
 
 NW0–NW3 + the NW5 loop are the deterministic core. `M_θ` (NW4) drops into the loop via
 the same model-agnostic interface v0 uses (`NeuralWorldModel`).
