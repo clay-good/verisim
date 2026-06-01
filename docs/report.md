@@ -517,6 +517,59 @@ property-tested), so the EN8/EN9 oracle-grounded-SSL runs (SPEC-8 §7) have thei
 same arm. A +16.5-pt token / +30.6-pt delta-exact one-step gain with a measured conversion gap is a better starting
 point than the flat arm offered, and every number here is bankable under the oracle.
 
+## EN8 (oracle-grounded SSL) — the oracle in the *bulk* of the cake, a second split verdict (SPEC-8 §7)
+
+The EN1/K4 negative pre-registered a pivot: if consultation budget alone does not lift the curve, the lever
+is *representation and objective*, so route to SPEC-8 — put the oracle's exact truth in the **self-supervised
+bulk**, not only the RL cherry. OG1/OG2 shipped the deterministic data factory (the decidable/residual
+partition and the exact hard-negative generator, torch-free and property-tested); **EN8 is the GPU consumer**
+that ablates it on the NW8 graph+RSSM arm ([`experiments/en8.py`](../src/verisim/experiments/en8.py),
+[`netmodel/grounded_train.py`](../src/verisim/netmodel/grounded_train.py)). Two pre-registered axes
+([`figures/en8_grounding.png`](../figures/en8_grounding.png), [`.csv`](../figures/en8_grounding.csv)); like EN4,
+a committed *smoke* instance — and like EN4, a clean two-sided result.
+
+**H23 — the collapse axis: the oracle-anchored target removes the collapse tax (a positive).** A JEPA-style
+latent predictor over the graph summary, with the prediction target either *learned* (the BYOL/JEPA EMA
+encoder) or *oracle-anchored* (a fixed projection of the **true next state's** features — an external referent
+with full variance by construction, §4.1), crossed with the collapse-prevention machinery (EMA target +
+VICReg) on/off. The readout is representation health: embedding std and effective rank (→ 0 / → 1 under
+collapse). Embedding std is the robust signal at this scale:
+
+| target | collapse machinery | embedding std | effective rank (d=48) |
+|---|---|---|---|
+| learned (EMA) | **on** (the JEPA baseline) | 0.557 | 41.8 |
+| learned | **off** (ablated) | **0.276** | **13.4** |
+| oracle-anchored | on | 0.597 | 43.4 |
+| **oracle-anchored** | **off** (ablated) | **0.528** | **25.8** |
+
+With the machinery ablated, the naked *learned* target collapses — embedding std halves (0.557 → 0.276) and
+effective rank drops 3× (41.8 → 13.4). The **oracle-anchored target does not**: with the *same* ablation it
+holds std at 0.528 (≈ the EMA+VICReg baseline) and rank at 25.8 (≈ 2× the collapsed learned arm). This is H23
+confirmed at smoke scale: where an external referent exists, the EMA+VICReg crutches are *substantially*
+unnecessary — exactly SPEC-8's claim that the collapse tax is a workaround for a missing oracle. (Honest
+nuance: the machinery still adds some health on top of the oracle target — rank 43.4 vs 25.8 — so it is a
+strong substitute, not yet a total one at this size.)
+
+**H24 — the objective axis: residual supervision is a near-tie here (the honest negative).** Under partial
+observation (half the hosts observed, so the decidable/residual partition is non-degenerate), training the
+decoder on the **residual** bits only — masking the oracle-decidable tokens, *verify don't learn* (§4.2) —
+versus the raw-likelihood baseline gives, on the residual tokens `R` the model is actually responsible for:
+raw-likelihood **0.463** vs residual **0.426** (the baseline edges it by 3.7 pts). At this well-trained smoke
+scale that is essentially a tie — the H24 refutation branch: the decidable part `D` was cheap enough to learn
+that masking it buys nothing *yet*. The partition is pre-registered to matter more as worlds grow (SPEC-6/7), where `D` is a larger fraction
+of a much bigger next-state; EN8 banks the bound, it does not close the question. (The residual arm's *overall*
+token accuracy drops to 0.11 by construction — it deliberately never learns `D`, which the oracle supplies for
+free — so a full-delta free-decode is a category error for it, not a result; the fair metric is residual-token
+accuracy above.)
+
+**Where this routes the program.** EN8's split mirrors EN4's: a clean positive on the *representation*
+mechanism (H23 — the oracle is a real anti-collapse referent) and an honest near-tie on the *objective*
+mechanism at this scale (H24 — the partition's payoff is world-size-gated). The H23 positive says the
+oracle-grounded latent arm is worth carrying up the ladder; the H24 bound says don't over-invest in residual
+masking until the worlds are large enough for `D` to dominate. EN9 (oracle hard-negative contrastive, OG4) sits
+on the same arm and consumes the OG2 factory next. Every cell here is bankable under the oracle — including, as
+always, the negative.
+
 ## Threats to validity
 
 - **Scale.** The committed model is ~tiny and trains for a few hundred iterations on
@@ -571,6 +624,8 @@ python figures/plot_comparison.py --records runs/en3/records.jsonl --key operato
 # NW8 graph arm — EN4 graph-vs-flat (H11); writes the CSV + figure directly:
 python -m verisim.experiments.en4_graph --graph-iters 1500 \
     --out figures/en4_graph_vs_flat.csv
+# SPEC-8 EN8 — oracle-grounded-SSL ablation (H23/H24); writes the CSV + figure directly:
+python -m verisim.experiments.en8 --out figures/en8_grounding.csv
 ```
 
 The run-records are git-ignored (regenerable); the figures and their CSVs are

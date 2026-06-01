@@ -147,13 +147,14 @@ class GraphRSSMNet(nn.Module):
 
     # -- encoder ----------------------------------------------------------------
 
-    def encode(
-        self, node: Tensor, gfeat: Tensor, a_link: Tensor, a_flow: Tensor, *, sample: bool
+    def _message_pass(
+        self, node: Tensor, gfeat: Tensor, a_link: Tensor, a_flow: Tensor
     ) -> tuple[Tensor, Tensor]:
-        """Message-pass + RSSM. Returns ``(cond[B,d], belief_var[B])``.
+        """Run the message-passing encoder. Returns ``(pooled[B,d], g[B,d])``.
 
-        ``belief_var`` is the mean RSSM posterior variance — the §6.2 calibrated uncertainty
-        signal. ``sample`` draws the stochastic state (training); else it uses the mean (decode).
+        ``pooled`` is the permutation-invariant graph summary; ``g`` the action/clock projection.
+        Shared by :meth:`encode` (which adds the RSSM belief) and :meth:`embed` (which exposes the
+        bare summary as the SSL representation EN8's collapse diagnostic measures, SPEC-8 §4.1).
         """
         h = self.node_in(node)  # [B,N,d]
         g = self.graph_in(gfeat)  # [B,d]
@@ -168,6 +169,22 @@ class GraphRSSMNet(nn.Module):
             upd = upd + g[:, None, :]  # broadcast action/clock conditioning to every node
             h = self.mp_norm[r](h + torch.nn.functional.gelu(upd))
         pooled = h.mean(dim=1)  # [B,d] permutation-invariant graph summary
+        return pooled, g
+
+    def embed(self, node: Tensor, gfeat: Tensor, a_link: Tensor, a_flow: Tensor) -> Tensor:
+        """The message-passed graph summary ``pooled[B,d]`` — the SSL representation (EN8, §4.1)."""
+        pooled, _ = self._message_pass(node, gfeat, a_link, a_flow)
+        return pooled
+
+    def encode(
+        self, node: Tensor, gfeat: Tensor, a_link: Tensor, a_flow: Tensor, *, sample: bool
+    ) -> tuple[Tensor, Tensor]:
+        """Message-pass + RSSM. Returns ``(cond[B,d], belief_var[B])``.
+
+        ``belief_var`` is the mean RSSM posterior variance — the §6.2 calibrated uncertainty
+        signal. ``sample`` draws the stochastic state (training); else it uses the mean (decode).
+        """
+        pooled, g = self._message_pass(node, gfeat, a_link, a_flow)
 
         # RSSM: deterministic recurrence (zero prior under full obs) + stochastic state.
         h0 = torch.zeros_like(pooled)

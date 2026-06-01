@@ -1,0 +1,17 @@
+section,key,subkey,metric,value
+objective,likelihood,,overall_acc,0.834951
+objective,likelihood,,residual_acc,0.462963
+objective,residual,,overall_acc,0.113269
+objective,residual,,residual_acc,0.425926
+collapse,learned,on,emb_std,0.557116
+collapse,learned,on,eff_rank,41.818817
+collapse,learned,on,jepa_loss,0.628494
+collapse,learned,off,emb_std,0.276043
+collapse,learned,off,eff_rank,13.430545
+collapse,learned,off,jepa_loss,0.015240
+collapse,oracle,on,emb_std,0.597369
+collapse,oracle,on,eff_rank,43.445770
+collapse,oracle,on,jepa_loss,0.581227
+collapse,oracle,off,emb_std,0.528349
+collapse,oracle,off,eff_rank,25.821718
+collapse,oracle,off,jepa_loss,0.001578

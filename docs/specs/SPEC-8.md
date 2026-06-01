@@ -374,14 +374,21 @@ stage graduates without a committed figure or an honest negative.
 | **OG0** | The framing as a committed artifact: this spec + the SPEC.md §8 / §9 anchors (H23–H25) + the SPEC-5 §12 EN8/EN9 entries. No code. | the specs cross-reference cleanly; numbering does not collide (H≤25, EN≤9, OG-series new) | ✅ |
 | **OG1** | Oracle target + `D`-mask machinery in `netdata`/`netmodel`: emit the true next-state target, the exact divergence target, and the decidable-bit mask for any `(s, a)`. Dependency-free, no GPU. ([`netdata/grounding.py`](../../src/verisim/netdata/grounding.py)) | property test: the mask exactly partitions `D` ∪ `R = s'`; the divergence target equals `netmetrics` `d` by construction | ✅ ([`test_grounding.py`](../../tests/test_grounding.py), 5 cases) |
 | **OG2** | Oracle hard-negative & counterfactual sampler: one-edit-wrong successors and action-branch counterfactuals, each labeled against the oracle. ([`netdata/negatives.py`](../../src/verisim/netdata/negatives.py)) | property test: every emitted negative is `≠ O(s,a)` and every counterfactual equals `O(s, a')`; coverage spans the action grammar | ✅ ([`test_negatives.py`](../../tests/test_negatives.py), 5 cases) |
-| **OG3** | **EN8** runs (objective × collapse-machinery ablation) on the NW8 arm; committed figure. | the `H23`/`H24` cells are populated with bootstrap CIs; regenerates from config+seed with `maxΔ=0` | ☐ gated on NW8 latent arm |
-| **OG4** | **EN9** runs (oracle-contrastive); committed figure incl. interventional fidelity. | the `H25`/`H5` cells populated; honest negative reported if the proxy is not beaten | ☐ gated on NW8 latent arm |
+| **OG3** | **EN8** runs (objective × collapse-machinery ablation) on the NW8 arm; committed figure. ([`experiments/en8.py`](../../src/verisim/experiments/en8.py), [`netmodel/grounded_train.py`](../../src/verisim/netmodel/grounded_train.py)) | the `H23`/`H24` cells are populated; regenerates from config+seed with `maxΔ=0` | ◐ smoke shipped ([`test_en8.py`](../../tests/test_en8.py), [`test_grounded_train.py`](../../tests/test_grounded_train.py)): H23 positive, H24 near-tie; CIs/scale-up remain |
+| **OG4** | **EN9** runs (oracle-contrastive); committed figure incl. interventional fidelity. | the `H25`/`H5` cells populated; honest negative reported if the proxy is not beaten | ☐ gated on the OG2 factory (shipped) + EN8 arm (shipped) |
 
-OG3/OG4 are gated on **NW8** (the graph+RSSM/JEPA arm) shipping in SPEC-5 — they have nothing to ablate
-until the latent arm exists. **OG0–OG2 have shipped** (framing + deterministic, property-tested, no-GPU
-machinery); the EN8/EN9 trainers consume them next, exactly as the deterministic cores always precede the
-GPU work. The delta-exact per-step metric the EN8/EN9 ablations report on
-([`netmetrics/exact.py`](../../src/verisim/netmetrics/exact.py)) also shipped, as an EN4 column.
+**OG0–OG3 have shipped.** OG0–OG2 are the framing + deterministic, property-tested, no-GPU data factory;
+**OG3 (EN8)** is the GPU consumer that ablates it on the NW8 graph+RSSM arm, and lands a *split* smoke
+verdict ([report](../report.md)): **H23 confirmed** — with the collapse-prevention machinery ablated, the
+naked learned (EMA) target collapses (embedding std 0.557 → 0.276, effective rank 41.8 → 13.4) while the
+**oracle-anchored** target holds (std 0.528, rank 25.8 ≈ 2× the collapsed arm), so the external referent
+substitutes for EMA+VICReg, exactly as the "collapse tax is a workaround for a missing oracle" claim
+predicts; **H24 a near-tie** at this scale (residual-token accuracy 0.426 vs 0.463 raw-likelihood — the
+baseline edges it), the honest-negative branch — the decidable part `D` was cheap enough that masking it buys
+nothing *yet*, a bound pre-registered to grow with world size (SPEC-6/7). What remains for full OG3 is bootstrap CIs and a tuned,
+scaled run; OG4 (EN9) consumes the OG2 hard-negative factory on the same arm next. The delta-exact per-step
+metric the ablations report on ([`netmetrics/exact.py`](../../src/verisim/netmetrics/exact.py)) shipped as an
+EN4 column.
 
 ---
 
@@ -429,8 +436,10 @@ which way it falls.
   inherits, not a vertical. SPEC-2/5/6/7 are worlds; SPEC-4 is the engine; SPEC-8 is where the oracle's
   truth enters training.
 - **Hypotheses:** H23–H25 (§6) extend SPEC.md §9; they are operationalized as EN8/EN9 (§7) in SPEC-5 §12.
-- **Status:** design, 2026-05-31. Built only after NW8's latent arm ships, gated on a committed figure
-  (OG3/OG4). Nothing here is believed until then.
+- **Status:** OG0–OG2 shipped (the deterministic factory); **OG3 (EN8) shipped as a committed smoke
+  figure** ([`figures/en8_grounding.png`](../../figures/en8_grounding.png)) — H23 confirmed, H24 a near-tie
+  (§9). OG4 (EN9) is next on the same arm. CIs and a scaled run are the remaining OG3 work; nothing beyond
+  the committed figure is believed until it is run.
 - **Citations** are name + venue + year (and the arXiv id where verified: AZR 2505.03335; GrndCtrl
   2512.01952; WAV 2604.01985), with no fabricated links, per the repo convention.
 - **Author:** Clay Good. **License:** MIT. No telemetry, no commercial path — a research repo.

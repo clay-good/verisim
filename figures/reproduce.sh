@@ -66,4 +66,10 @@ python -m verisim.experiments.en3 --config configs/en3.json --out runs/en3/recor
 python figures/plot_comparison.py --records runs/en3/records.jsonl --key operator \
     --out figures/en3_operators.png --csv figures/en3_operators.csv
 
-echo "== done: figures/{e1_curve,e2_policies,e3_operators,calibration,e4_ablation,objective,representation,auto_search,en1_curve,en2_policies,en3_operators}.{png,csv} =="
+echo "== EN4: graph-vs-flat comparison (SPEC-5 NW8, H11; writes CSV+PNG directly) =="
+python -m verisim.experiments.en4_graph --graph-iters 1500 --out figures/en4_graph_vs_flat.csv
+
+echo "== EN8: oracle-grounded SSL ablation (SPEC-8 OG3, H23/H24; writes CSV+PNG directly) =="
+python -m verisim.experiments.en8 --out figures/en8_grounding.csv
+
+echo "== done: figures/{e1_curve,e2_policies,e3_operators,calibration,e4_ablation,objective,representation,auto_search,en1_curve,en2_policies,en3_operators,en4_graph_vs_flat,en8_grounding}.{png,csv} =="
