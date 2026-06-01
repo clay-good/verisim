@@ -375,18 +375,32 @@ stage graduates without a committed figure or an honest negative.
 | **OG1** | Oracle target + `D`-mask machinery in `netdata`/`netmodel`: emit the true next-state target, the exact divergence target, and the decidable-bit mask for any `(s, a)`. Dependency-free, no GPU. ([`netdata/grounding.py`](../../src/verisim/netdata/grounding.py)) | property test: the mask exactly partitions `D` ∪ `R = s'`; the divergence target equals `netmetrics` `d` by construction | ✅ ([`test_grounding.py`](../../tests/test_grounding.py), 5 cases) |
 | **OG2** | Oracle hard-negative & counterfactual sampler: one-edit-wrong successors and action-branch counterfactuals, each labeled against the oracle. ([`netdata/negatives.py`](../../src/verisim/netdata/negatives.py)) | property test: every emitted negative is `≠ O(s,a)` and every counterfactual equals `O(s, a')`; coverage spans the action grammar | ✅ ([`test_negatives.py`](../../tests/test_negatives.py), 5 cases) |
 | **OG3** | **EN8** runs (objective × collapse-machinery ablation) on the NW8 arm; committed figure. ([`experiments/en8.py`](../../src/verisim/experiments/en8.py), [`netmodel/grounded_train.py`](../../src/verisim/netmodel/grounded_train.py)) | the `H23`/`H24` cells are populated; regenerates from config+seed with `maxΔ=0` | ◐ smoke shipped ([`test_en8.py`](../../tests/test_en8.py), [`test_grounded_train.py`](../../tests/test_grounded_train.py)): H23 positive, H24 near-tie; CIs/scale-up remain |
-| **OG4** | **EN9** runs (oracle-contrastive); committed figure incl. interventional fidelity. | the `H25`/`H5` cells populated; honest negative reported if the proxy is not beaten | ☐ gated on the OG2 factory (shipped) + EN8 arm (shipped) |
+| **OG4** | **EN9** runs (oracle-contrastive); committed figure incl. interventional fidelity. ([`experiments/en9.py`](../../src/verisim/experiments/en9.py), [`netmodel/grounded_train.py`](../../src/verisim/netmodel/grounded_train.py) `train_contrastive`) | the `H25`/`H5` cells populated; honest negative reported if the proxy is not beaten | ◐ smoke shipped ([`test_en9.py`](../../tests/test_en9.py)): H25 confirmed, H5 lift ~2× over VICReg; CIs/scale-up remain |
 
-**OG0–OG3 have shipped.** OG0–OG2 are the framing + deterministic, property-tested, no-GPU data factory;
-**OG3 (EN8)** is the GPU consumer that ablates it on the NW8 graph+RSSM arm, and lands a *split* smoke
-verdict ([report](../report.md)): **H23 confirmed** — with the collapse-prevention machinery ablated, the
+**OG0–OG4 have shipped.** OG0–OG2 are the framing + deterministic, property-tested, no-GPU data factory;
+**OG3 (EN8)** is the GPU consumer that ablates the *objective × collapse* axes on the NW8 graph+RSSM arm,
+and **OG4 (EN9)** the one that ablates the *contrastive* axis (consuming the OG2 hard-negative factory).
+Both land *split, honest* smoke verdicts ([report](../report.md)).
+
+**OG3 (EN8):** **H23 confirmed** — with the collapse-prevention machinery ablated, the
 naked learned (EMA) target collapses (embedding std 0.557 → 0.276, effective rank 41.8 → 13.4) while the
 **oracle-anchored** target holds (std 0.528, rank 25.8 ≈ 2× the collapsed arm), so the external referent
 substitutes for EMA+VICReg, exactly as the "collapse tax is a workaround for a missing oracle" claim
 predicts; **H24 a near-tie** at this scale (residual-token accuracy 0.426 vs 0.463 raw-likelihood — the
 baseline edges it), the honest-negative branch — the decidable part `D` was cheap enough that masking it buys
-nothing *yet*, a bound pre-registered to grow with world size (SPEC-6/7). What remains for full OG3 is bootstrap CIs and a tuned,
-scaled run; OG4 (EN9) consumes the OG2 hard-negative factory on the same arm next. The delta-exact per-step
+nothing *yet*, a bound pre-registered to grow with world size (SPEC-6/7).
+
+**OG4 (EN9):** **H25 confirmed, with an honest nuance.** The naked contrastive target collapses (std 0.276);
+both the VICReg regularizer (std 0.499) and the **oracle hard-negatives** (std 0.699) prevent it, so on the
+collapse axis the exact referent *matches* the statistical stand-in — and VICReg's covariance term even buys
+slightly higher effective rank (39.0 vs 31.4). But the **H5 lift is decisive**: only the oracle's
+*counterfactual* negatives carry interventional content, so its branch-retrieval fidelity nearly doubles
+VICReg's (top-1 **0.519 vs 0.282**, MRR 0.694 vs 0.500) — VICReg keeps the representation full-rank but
+interventionally *blind*, while the oracle makes it faithful to the branches the model will be asked to
+predict. The honest nuance (VICReg wins on rank, loses on intervention) is the sharper finding: it localizes
+*what* the exact negatives buy that a statistical regularizer structurally cannot.
+
+What remains for full OG3/OG4 is bootstrap CIs and tuned, scaled runs. The delta-exact per-step
 metric the ablations report on ([`netmetrics/exact.py`](../../src/verisim/netmetrics/exact.py)) shipped as an
 EN4 column.
 
@@ -436,10 +450,11 @@ which way it falls.
   inherits, not a vertical. SPEC-2/5/6/7 are worlds; SPEC-4 is the engine; SPEC-8 is where the oracle's
   truth enters training.
 - **Hypotheses:** H23–H25 (§6) extend SPEC.md §9; they are operationalized as EN8/EN9 (§7) in SPEC-5 §12.
-- **Status:** OG0–OG2 shipped (the deterministic factory); **OG3 (EN8) shipped as a committed smoke
-  figure** ([`figures/en8_grounding.png`](../../figures/en8_grounding.png)) — H23 confirmed, H24 a near-tie
-  (§9). OG4 (EN9) is next on the same arm. CIs and a scaled run are the remaining OG3 work; nothing beyond
-  the committed figure is believed until it is run.
+- **Status:** OG0–OG2 shipped (the deterministic factory); **OG3 (EN8) and OG4 (EN9) shipped as committed
+  smoke figures** ([`figures/en8_grounding.png`](../../figures/en8_grounding.png),
+  [`figures/en9_contrastive.png`](../../figures/en9_contrastive.png)) — H23 confirmed / H24 a near-tie (EN8),
+  H25 confirmed with the H5 lift ~2× over VICReg (EN9) (§9). CIs and scaled runs are the remaining work;
+  nothing beyond the committed figures is believed until it is run.
 - **Citations** are name + venue + year (and the arXiv id where verified: AZR 2505.03335; GrndCtrl
   2512.01952; WAV 2604.01985), with no fabricated links, per the repo convention.
 - **Author:** Clay Good. **License:** MIT. No telemetry, no commercial path — a research repo.

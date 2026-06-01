@@ -1,9 +1,10 @@
-"""Oracle-grounded SSL training for the NW8 graph arm — the EN8 apparatus (SPEC-8 §4, §7; OG3).
+"""Oracle-grounded SSL training for the NW8 graph arm — the EN8/EN9 apparatus (SPEC-8 §4, §7).
 
 OG1/OG2 (:mod:`verisim.netdata.grounding`, :mod:`verisim.netdata.negatives`) shipped the
 *deterministic* target machinery — the decidable/residual partition and the exact
 hard-negative factory — ahead of any GPU. This module is the **trainer** that consumes it on the
-graph+RSSM latent arm, i.e. the thing EN8 ablates. It instantiates the two SPEC-8 axes:
+graph+RSSM latent arm, i.e. the thing EN8 (OG3) and EN9 (OG4) ablate. It instantiates all three
+SPEC-8 axes:
 
   - **H24 — the objective axis** (:func:`train_grounded_decoder`): cross-entropy over *all* delta
     tokens (raw-likelihood, today's supervised baseline) versus cross-entropy over the **residual**
@@ -20,6 +21,16 @@ graph+RSSM latent arm, i.e. the thing EN8 ablates. It instantiates the two SPEC-
     an on/off lever. The diagnostic is :func:`representation_health` (embedding variance + effective
     rank, the standard collapse readout): the H23 question is whether the oracle-anchored target
     keeps the representation healthy *with the machinery ablated*.
+
+  - **H25 — the contrastive axis** (:func:`train_contrastive`, EN9/OG4): a contrastive predictor
+    over the same graph summary whose anti-collapse referent is one of three — **none** (naked
+    BYOL: regress onto the stop-grad online target; collapses), **VICReg** (the statistical
+    stand-in, §4.3), or **oracle** (InfoNCE against the OG2 hard negatives — one-edit-wrong
+    successors and action-branch counterfactuals, each labeled ``≠`` the true successor by the
+    oracle). H25 asks whether *exact* near-miss negatives match or beat the statistical regularizer
+    at preventing collapse, and whether the counterfactual negatives additionally lift
+    **interventional fidelity** (:func:`interventional_fidelity`, the H5 / EN6 branch-replay
+    readout): can the representation map each intervention ``a'`` to its true successor?
 
 Per the repo's discipline the deterministic data factory (OG1/OG2) and the per-step delta-exact
 metric were committed and property-tested first; this is the GPU consumer that turns them into the
@@ -439,15 +450,295 @@ def representation_health(
     return emb_std, eff_rank
 
 
+# --- H25: the contrastive axis (oracle hard-negatives vs VICReg vs none; EN9/OG4) --------
+
+
+@dataclass(frozen=True)
+class ContrastiveExample:
+    """One step's oracle-contrastive datum (SPEC-8 §4.3, EN9).
+
+    The anchor graph ``(s, a)``, the true successor ``O(s, a)`` (the positive), and ``K`` exact
+    hard negatives from the OG2 factory — counterfactual successors ``O(s, a')`` and one-edit-wrong
+    neighbors of the positive, each ``≠`` the true successor by the oracle's construction.
+    """
+
+    graph: NetGraph
+    pos_graph: NetGraph
+    neg_graphs: tuple[NetGraph, ...]
+
+
+@dataclass(frozen=True)
+class BranchSet:
+    """A held-out state's distinct counterfactual branches — the interventional-fidelity probe.
+
+    ``anchor_graphs[i]`` is ``(s, a'_i)`` and ``succ_graphs[i]`` its true successor ``O(s, a'_i)``;
+    the successors are pairwise distinct (deduped by oracle divergence), so retrieval is well-posed.
+    """
+
+    anchor_graphs: tuple[NetGraph, ...]
+    succ_graphs: tuple[NetGraph, ...]
+
+
+def _mine_negatives(
+    state: NetworkState,
+    true_next: NetworkState,
+    oracle: NetOracle,
+    config: NetConfig,
+    *,
+    k: int,
+    rng: random.Random,
+) -> list[NetworkState]:
+    """Exactly ``k`` oracle-mined hard negatives: counterfactual branches first, one-edit fill.
+
+    Counterfactual successors ``O(s, a')`` that differ from the true successor come first (the
+    branches the model is asked to predict — the interventionally-informative negatives, §4.3);
+    one-edit-wrong neighbors of the positive top it up to ``k`` (the near-miss neighborhood). Both
+    are ``≠ O(s, a)`` by :func:`is_hard_negative`.
+    """
+    from verisim.netdata.negatives import (
+        counterfactual_branches,
+        is_hard_negative,
+        one_edit_negatives,
+    )
+
+    negs: list[NetworkState] = [
+        succ
+        for _a, succ in counterfactual_branches(state, oracle, config)
+        if is_hard_negative(succ, true_next)
+    ]
+    if len(negs) < k:
+        negs.extend(one_edit_negatives(true_next, config, limit=k - len(negs), rng=rng))
+    return negs[:k]
+
+
+def _branch_set(state: NetworkState, oracle: NetOracle, config: NetConfig) -> BranchSet | None:
+    """Distinct-successor counterfactual branches of ``state`` (``None`` if fewer than two)."""
+    from verisim.netdata.negatives import counterfactual_branches, is_hard_negative
+
+    anchors: list[NetGraph] = []
+    succs: list[NetGraph] = []
+    distinct: list[NetworkState] = []
+    for action, succ in counterfactual_branches(state, oracle, config):
+        if any(not is_hard_negative(succ, kept) for kept in distinct):
+            continue  # an identical successor is already represented (ambiguous target)
+        distinct.append(succ)
+        anchors.append(build_graph(state, action, config))
+        succs.append(build_graph(succ, None, config))
+    if len(distinct) < 2:
+        return None
+    return BranchSet(anchor_graphs=tuple(anchors), succ_graphs=tuple(succs))
+
+
+def build_contrastive_dataset(
+    oracle: NetOracle,
+    vocab: NetVocab,
+    config: NetConfig,
+    *,
+    driver: str = "weighted",
+    seeds: tuple[int, ...] = (0,),
+    n_steps: int = 40,
+    k_negatives: int = 8,
+) -> tuple[list[ContrastiveExample], list[BranchSet]]:
+    """Seeded rollouts → ``(contrastive examples, branch sets)`` for EN9 (SPEC-8 §4.3).
+
+    Each step yields one :class:`ContrastiveExample` (anchor, positive, ``k_negatives`` oracle
+    hard negatives) and one :class:`BranchSet` (its distinct counterfactual branches, the
+    interventional-fidelity probe). The trajectory advances on the **true** next state — the oracle
+    is the label source, never the rollout. ``vocab`` is unused by the contrastive objective but
+    kept in the signature to mirror :func:`build_grounded_dataset`.
+    """
+    from verisim.netdata.drivers import NetDriver
+
+    del vocab  # contrastive objective is over representations, not tokens
+    examples: list[ContrastiveExample] = []
+    branches: list[BranchSet] = []
+    for seed in seeds:
+        driver_obj = NetDriver(name=driver, config=config, rng=random.Random(seed))
+        neg_rng = random.Random(seed ^ 0x5EED)
+        state = NetworkState.initial(config.hosts)
+        for _ in range(n_steps):
+            action = driver_obj.sample(state)
+            result = oracle.step(state, action)
+            negs = _mine_negatives(
+                state, result.state, oracle, config, k=k_negatives, rng=neg_rng
+            )
+            examples.append(
+                ContrastiveExample(
+                    graph=build_graph(state, action, config),
+                    pos_graph=build_graph(result.state, None, config),
+                    neg_graphs=tuple(build_graph(s, None, config) for s in negs),
+                )
+            )
+            bset = _branch_set(state, oracle, config)
+            if bset is not None:
+                branches.append(bset)
+            state = result.state
+    return examples, branches
+
+
+@dataclass(frozen=True)
+class ContrastiveResult:
+    """The EN9 cell readout: training loss, collapse diagnostics, and interventional fidelity."""
+
+    final_loss: float
+    emb_std: float
+    eff_rank: float
+    intervention_top1: float
+    intervention_mrr: float
+
+
+def train_contrastive(
+    model: GraphRSSMWorldModel,
+    examples: list[ContrastiveExample],
+    branches: list[BranchSet],
+    *,
+    mode: str = "oracle",
+    steps: int = 400,
+    lr: float = 3e-3,
+    batch_size: int = 32,
+    temperature: float = 0.1,
+    vicreg_coef: float = 1.0,
+    seed: int = 0,
+) -> ContrastiveResult:
+    """Contrastive pretraining of the graph encoder with one of three anti-collapse referents (H25).
+
+    ``mode='none'`` regresses the predicted anchor embedding onto the stop-grad online embedding of
+    the true successor (naked BYOL — collapses); ``mode='vicreg'`` adds the VICReg
+    variance/covariance term (the statistical stand-in); ``mode='oracle'`` uses an InfoNCE loss
+    whose negatives are the OG2 oracle-mined hard negatives (the exact external referent, §4.3). The
+    target space is the stop-grad online encoder throughout, so the *only* thing that differs across
+    cells is the anti-collapse mechanism. Returns the final loss, representation health, and
+    interventional fidelity on the held-out branch sets.
+    """
+    if mode not in ("none", "vicreg", "oracle"):
+        raise ValueError(f"mode must be 'none', 'vicreg', or 'oracle', got {mode!r}")
+    torch.manual_seed(seed)
+    gen = torch.Generator()
+    gen.manual_seed(seed)
+    device = model.net.device
+    d = model.net.config.d_model
+    predictor = JEPAPredictor(d, d).to(device)
+    params = list(model.net.parameters()) + list(predictor.parameters())
+    optimizer = torch.optim.AdamW(params, lr=lr)
+    n = len(examples)
+    perm: list[int] = []
+    cursor = 0
+    final_loss = 0.0
+    for _ in range(steps):
+        if cursor + batch_size > n or not perm:
+            perm = torch.randperm(n, generator=gen).tolist()
+            cursor = 0
+        batch = [examples[i] for i in perm[cursor : cursor + batch_size]]
+        cursor += batch_size
+        model.net.train()
+
+        node, gfeat, a_link, a_flow = graphs_to_tensors([ex.graph for ex in batch], device)
+        z = model.net.embed(node, gfeat, a_link, a_flow)  # online anchor representation [B,d]
+        pred = predictor(z)
+
+        pnode, pgfeat, pa_link, pa_flow = graphs_to_tensors([ex.pos_graph for ex in batch], device)
+        pos = model.net.embed(pnode, pgfeat, pa_link, pa_flow).detach()  # stop-grad target [B,d]
+
+        if mode == "oracle":
+            k = len(batch[0].neg_graphs)
+            flat = [g for ex in batch for g in ex.neg_graphs]
+            nnode, ngfeat, na_link, na_flow = graphs_to_tensors(flat, device)
+            neg_emb = model.net.embed(nnode, ngfeat, na_link, na_flow).detach()
+            negs = neg_emb.reshape(len(batch), k, d)
+            # InfoNCE: cosine sim of the prediction to [positive, K negatives], label = 0.
+            pn = nn.functional.normalize(pred, dim=-1)
+            posn = nn.functional.normalize(pos, dim=-1)
+            negn = nn.functional.normalize(negs, dim=-1)
+            pos_logit = (pn * posn).sum(dim=-1, keepdim=True)  # [B,1]
+            neg_logit = torch.einsum("bd,bkd->bk", pn, negn)  # [B,K]
+            logits = torch.cat([pos_logit, neg_logit], dim=1) / temperature
+            labels = torch.zeros(len(batch), dtype=torch.long, device=device)
+            loss = nn.functional.cross_entropy(logits, labels)
+        else:
+            loss = nn.functional.mse_loss(pred, pos)
+            if mode == "vicreg":
+                loss = loss + vicreg_coef * _vicreg(z)
+
+        optimizer.zero_grad()
+        loss.backward()
+        optimizer.step()
+        final_loss = float(loss.item())
+
+    std, rank = _contrastive_health(model, examples)
+    top1, mrr = interventional_fidelity(model, predictor, branches)
+    return ContrastiveResult(
+        final_loss=final_loss, emb_std=std, eff_rank=rank,
+        intervention_top1=top1, intervention_mrr=mrr,
+    )
+
+
+@torch.no_grad()
+def _contrastive_health(
+    model: GraphRSSMWorldModel, examples: list[ContrastiveExample]
+) -> tuple[float, float]:
+    """``(emb_std, eff_rank)`` of the anchor summaries — the collapse readout for the EN9 cells."""
+    model.net.eval()
+    device = model.net.device
+    node, gfeat, a_link, a_flow = graphs_to_tensors([ex.graph for ex in examples], device)
+    z = model.net.embed(node, gfeat, a_link, a_flow)
+    emb_std = float(z.std(dim=0).mean().item())
+    zc = z - z.mean(dim=0, keepdim=True)
+    sv = torch.linalg.svdvals(zc)
+    p = sv / sv.sum().clamp_min(1e-12)
+    entropy = -(p * (p.clamp_min(1e-12)).log()).sum()
+    return emb_std, float(torch.exp(entropy).item())
+
+
+@torch.no_grad()
+def interventional_fidelity(
+    model: GraphRSSMWorldModel, predictor: JEPAPredictor, branches: list[BranchSet]
+) -> tuple[float, float]:
+    """``(top-1 accuracy, mean reciprocal rank)`` of mapping each branch ``a'`` to ``O(s, a')``.
+
+    For each held-out state, the predicted embedding of ``(s, a'_i)`` is matched (cosine) against
+    the embeddings of *all* the branch successors; fidelity is whether branch ``i`` retrieves
+    successor ``i`` (the H5 interventional question, EN6 branch-replay set). Chance top-1 for a set
+    of ``m`` distinct branches is ``1/m``.
+    """
+    if not branches:
+        return 0.0, 0.0
+    model.net.eval()
+    device = model.net.device
+    correct = total = 0
+    rr_sum = 0.0
+    for bset in branches:
+        anode, agfeat, aa_link, aa_flow = graphs_to_tensors(list(bset.anchor_graphs), device)
+        pred = nn.functional.normalize(
+            predictor(model.net.embed(anode, agfeat, aa_link, aa_flow)), dim=-1
+        )
+        snode, sgfeat, sa_link, sa_flow = graphs_to_tensors(list(bset.succ_graphs), device)
+        succ = nn.functional.normalize(model.net.embed(snode, sgfeat, sa_link, sa_flow), dim=-1)
+        sims = pred @ succ.T  # [m, m]: row i = branch i scored against every successor
+        m = sims.size(0)
+        for i in range(m):
+            order = torch.argsort(sims[i], descending=True).tolist()
+            rank = order.index(i) + 1
+            correct += int(rank == 1)
+            rr_sum += 1.0 / rank
+            total += 1
+    return (correct / total if total else 0.0), (rr_sum / total if total else 0.0)
+
+
 __all__ = [
+    "BranchSet",
+    "ContrastiveExample",
+    "ContrastiveResult",
     "GroundedExample",
     "JEPAResult",
+    "build_contrastive_dataset",
     "build_grounded_dataset",
     "edit_hosts",
     "edit_is_decidable",
+    "interventional_fidelity",
     "representation_health",
     "residual_token_accuracy",
     "residual_token_mask",
+    "train_contrastive",
     "train_grounded_decoder",
     "train_jepa",
 ]

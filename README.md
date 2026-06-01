@@ -13,13 +13,14 @@
 
 ## Results at a glance
 
-Four committed, oracle-grounded figures — the whole bet in one screen. Every number regenerates from
+Five committed, oracle-grounded figures — the whole bet in one screen. Every number regenerates from
 config + seeds (`bash figures/reproduce.sh`); each is detailed below.
 
 | | |
 |---|---|
 | [![EN4 graph-vs-flat](figures/en4_graph_vs_flat.png)](figures/en4_graph_vs_flat.png)<br>**Structure helps (EN4 / H11).** The message-passing graph+RSSM world model beats the flat serializer by **+16.5 pts** one-step token accuracy and **+30.6 pts** delta-exact rate — and the gap *widens* on the honest metric. | [![EN8 oracle-grounded SSL](figures/en8_grounding.png)](figures/en8_grounding.png)<br>**The oracle removes the collapse tax (EN8 / H23).** Ablate JEPA's EMA+VICReg crutches and a learned target collapses (eff-rank 41.8→13.4); an **oracle-anchored** target stays healthy (25.8) — the external referent the field lacks. |
-| [![EN1 / K4 the floor](figures/en1_curve.png)](figures/en1_curve.png)<br>**A floor, not a knee (EN1 / K4 / H8).** Faithful horizon vs consultation budget `H_ε(ρ)` is flat-then-cliff on *both* worlds: consultation budget alone does not buy horizon. The honest negative that drove every later design choice. | [![EN3 probe efficiency](figures/en3_operators.png)](figures/en3_operators.png)<br>**What you consult beats whether (EN3).** Under partial observation a cheap one-host **probe + belief filter** earns **~2.3×** more faithful horizon per oracle-bit than full consultation — active sensing is a real lever. |
+| [![EN9 oracle hard-negatives](figures/en9_contrastive.png)](figures/en9_contrastive.png)<br>**Exact negatives beat statistical ones where it counts (EN9 / H25 / H5).** VICReg and the oracle both stop contrastive collapse — but only the oracle's *counterfactual* negatives teach which intervention leads where: branch-retrieval top-1 **0.519 vs VICReg's 0.282**. The statistical regularizer is full-rank but interventionally blind. | [![EN1 / K4 the floor](figures/en1_curve.png)](figures/en1_curve.png)<br>**A floor, not a knee (EN1 / K4 / H8).** Faithful horizon vs consultation budget `H_ε(ρ)` is flat-then-cliff on *both* worlds: consultation budget alone does not buy horizon. The honest negative that drove every later design choice. |
+| [![EN3 probe efficiency](figures/en3_operators.png)](figures/en3_operators.png)<br>**What you consult beats whether (EN3).** Under partial observation a cheap one-host **probe + belief filter** earns **~2.3×** more faithful horizon per oracle-bit than full consultation — active sensing is a real lever. | |
 
 ## What we've found so far
 
@@ -112,6 +113,33 @@ establish. The companion **objective axis (H24)** — train only the genuinely-u
 let the oracle supply the decidable ones — is an honest near-tie at this smoke scale (residual-token
 accuracy 0.426 vs 0.463 raw-likelihood), the pre-registered negative branch: the decidable part is cheap to
 learn until the worlds grow. A split EN8 verdict, like EN4 — and every cell is bankable under the oracle.
+
+### 7. Exact negatives don't just stop collapse — they teach *interventions* (network EN9 / H25 / H5, shipped)
+
+EN8 grounded the *predictive* target on the oracle; **EN9** grounds the *contrastive* one and spends the
+OG2 hard-negative factory. A contrastive predictor over the same graph summary, with the only anti-collapse
+referent varying across three cells: *none* (naked BYOL), *vicreg* (the field's statistical regularizer), or
+*oracle* (InfoNCE against exact one-edit-wrong and counterfactual negatives). Two readouts — representation
+health, and **interventional fidelity**: can the representation map each intervention `a'` to its true
+successor `O(s, a')` (scored as branch-retrieval top-1 / MRR)?
+
+![EN9: oracle hard-negative contrastive — the collapse axis (H25) and the interventional axis (H5)](figures/en9_contrastive.png)
+
+| anti-collapse referent | embedding std | effective rank (d=48) | intervention top-1 | intervention MRR |
+|---|---|---|---|---|
+| none (naked BYOL) | 0.276 (collapsed) | 13.4 | 0.214 | 0.426 |
+| vicreg (statistical) | 0.499 | **39.0** | 0.282 | 0.500 |
+| **oracle (exact)** | **0.699** | 31.4 | **0.519** | **0.694** |
+
+The split is the finding. On **collapse (H25)** the exact referent only *matches* the statistical one — both
+hold the representation open, and VICReg's covariance term even buys higher effective rank (39.0 vs 31.4). But
+on **intervention (H5)** the oracle wins decisively: its counterfactual negatives nearly double VICReg's
+branch-retrieval fidelity (top-1 0.519 vs 0.282). The honest, sharper reading: **VICReg keeps the
+representation full-rank but interventionally blind** (0.282 is barely above the naked 0.214), while the
+oracle makes it faithful to the very branches the loop will be asked to predict. A statistical regularizer can
+prevent collapse; it structurally cannot teach counterfactual structure it has no access to. This is the
+H5 / change-safety lift arriving through the *self-supervised* objective rather than the RL cherry — a third
+split verdict, every cell bankable under the oracle.
 
 ## The problem, and what we're trying to accomplish
 
@@ -206,16 +234,18 @@ write-up is [docs/report.md](docs/report.md).
 ## Status
 
 > **Where things stand (2026-06): v0 is done; the network graph arm shipped and split the H11 verdict;
-> both §6.3 drift levers, the SPEC-8 data factory, and the SPEC-8 EN8 ablation shipped.** Filesystem v0
+> both §6.3 drift levers, the SPEC-8 data factory, and the SPEC-8 EN8 + EN9 ablations shipped.** Filesystem v0
 > (M0–M8) and the focused [SPEC-2.1](docs/specs/SPEC-2.1.md) effort are complete (K0 learner works → K1/K2
 > floor ~0 → **0.86** → K3/K4 knee refuted, licensing SPEC-5). The network deterministic core (NW0–NW3),
 > flat `M_θ` (NW4), partial-observation loop (NW5), prime-directive EN1 curve (NW6, the H8 negative), and
 > EN2/EN3 equal-budget comparisons (NW7, the ~2.3× probe-efficiency result) all ship. **NW8** adds the
 > GNN+RSSM graph arm, the EN4 graph-vs-flat comparison (the +16.5/+30.6-pt split verdict), the
 > **delta-exact** metric, **both §6.3 exposure-bias levers** (noise-injection + self-forcing), the **SPEC-8
-> OG1/OG2** oracle-grounded-SSL data factory, and now the **SPEC-8 EN8 / OG3** ablation that consumes it —
-> a second split verdict: **H23 confirmed** (the oracle-anchored target removes the collapse tax) and
-> **H24 a near-tie** (residual masking buys nothing at this scale). Next: EN9, then EN5–EN7.
+> OG1/OG2** oracle-grounded-SSL data factory, and now both **SPEC-8 EN8 / OG3** and **EN9 / OG4** ablations
+> that consume it — two more split verdicts: **H23 confirmed** (the oracle-anchored target removes the
+> collapse tax), **H24 a near-tie** (residual masking buys nothing at this scale), **H25 confirmed** (exact
+> negatives match VICReg at preventing collapse) with a decisive **H5 lift** (the oracle's counterfactual
+> negatives nearly double VICReg's interventional fidelity). Next: bootstrap CIs + scaled runs, then EN5–EN7.
 
 **v0 — shell/filesystem world (`src/verisim/`, SPEC-2 §13): complete.**
 
@@ -226,7 +256,7 @@ write-up is [docs/report.md](docs/report.md).
 | **M6–M8** | E1–E4 experiments, smart policies/operators, report, faithfulness benchmark + RL env | ✅ |
 | **SPEC-2.1** | K0 (learner works) → K1/K2 (floor ~0 → **0.86**) → K3/K4 (knee refuted on single-FS; licenses SPEC-5) | ✅ |
 
-**Network world (`src/verisim/net*`, SPEC-5 §13): graph arm + EN4 + delta-exact + both §6.3 levers + SPEC-8 factory.**
+**Network world (`src/verisim/net*`, SPEC-5 §13): graph arm + EN4 + delta-exact + both §6.3 levers + SPEC-8 factory + EN8/EN9.**
 
 | Milestone | What | Status |
 |-----------|------|--------|
@@ -238,7 +268,7 @@ write-up is [docs/report.md](docs/report.md).
 | **NW5** | Partial-observation loop ([`netloop/`](src/verisim/netloop/)): two-mode (full / **probe**) oracle, probe policies `π_o`, correction/belief operators, baselines, model-agnostic runner | ✅ |
 | **NW6** | **EN1 network `H_ε(ρ)` curve** ([`en1_curve.png`](figures/en1_curve.png)) — the prime directive. Honest H8 negative on the flat arm: near-flat interior | ✅ |
 | **NW7** | Equal-budget comparisons. **EN2** (policy `π_c`, H9) + **EN3** (operators, §8.3): EN3 breaks v0's operator-identity collapse — the probe earns **~2.3×** more faithful horizon per oracle-bit | ◐ EN2/EN3 |
-| **NW8** | **GNN + RSSM graph arm** ([`graph_model.py`](src/verisim/netmodel/graph_model.py)) + §6.3 **noise + self-forcing** levers + **EN4 graph-vs-flat (H11)** + **delta-exact metric** ([`exact.py`](src/verisim/netmetrics/exact.py)) + **SPEC-8 OG1/OG2 data factory** ([`grounding.py`](src/verisim/netdata/grounding.py), [`negatives.py`](src/verisim/netdata/negatives.py)) + **SPEC-8 EN8/OG3 ablation** ([`en8.py`](src/verisim/experiments/en8.py), [`grounded_train.py`](src/verisim/netmodel/grounded_train.py): H23 collapse-tax removed, H24 near-tie). Then EN9, RLVR/TTT (EN5), counterfactual (EN6), EN7/H22 | ◐ graph arm + EN4 + both levers + OG1/OG2 + EN8/OG3 |
+| **NW8** | **GNN + RSSM graph arm** ([`graph_model.py`](src/verisim/netmodel/graph_model.py)) + §6.3 **noise + self-forcing** levers + **EN4 graph-vs-flat (H11)** + **delta-exact metric** ([`exact.py`](src/verisim/netmetrics/exact.py)) + **SPEC-8 OG1/OG2 data factory** ([`grounding.py`](src/verisim/netdata/grounding.py), [`negatives.py`](src/verisim/netdata/negatives.py)) + **SPEC-8 EN8/OG3 ablation** ([`en8.py`](src/verisim/experiments/en8.py), [`grounded_train.py`](src/verisim/netmodel/grounded_train.py): H23 collapse-tax removed, H24 near-tie) + **SPEC-8 EN9/OG4 ablation** ([`en9.py`](src/verisim/experiments/en9.py): H25 confirmed, H5 fidelity ~2× over VICReg). Then RLVR/TTT (EN5), counterfactual (EN6), EN7/H22 | ◐ graph arm + EN4 + both levers + OG1/OG2 + EN8/OG3 + EN9/OG4 |
 
 The deterministic cores (filesystem and network) have **no runtime dependencies** and need no GPU.
 PyTorch is an optional `[model]` extra (see [docs/model-representation.md](docs/model-representation.md)).
@@ -335,14 +365,15 @@ for cmd in ["mkdir /a", "write /a/f alpha", "mv /a /b", "cat /b/f"]:
 ```
 
 Reproduce every figure (E1–E4, calibration, K0/K2/K4, the EN1 curve, EN2/EN3, the EN4 graph-vs-flat
-comparison, the EN8 oracle-grounded-SSL ablation) from config + seeds — `figures/reproduce.sh` runs them
-all, including EN4 and EN8:
+comparison, the EN8 oracle-grounded-SSL ablation, the EN9 oracle-contrastive ablation) from config +
+seeds — `figures/reproduce.sh` runs them all:
 
 ```bash
 bash figures/reproduce.sh
-# or the two NW8 figures on their own (they write CSV + PNG directly):
+# or the three NW8/SPEC-8 figures on their own (they write CSV + PNG directly):
 python -m verisim.experiments.en4_graph --graph-iters 1500 --out figures/en4_graph_vs_flat.csv
 python -m verisim.experiments.en8 --out figures/en8_grounding.csv
+python -m verisim.experiments.en9 --out figures/en9_contrastive.csv
 ```
 
 ## Layout
@@ -358,9 +389,10 @@ Packages under [src/verisim/](src/verisim/):
   oracle), `netdelta/` (graph deltas + `apply`), `netdata/` (drivers + generation + the **SPEC-8
   grounding/negatives factory**), `netmetrics/` (graph divergence, reachability-faithfulness,
   bits-to-correct, **delta-exact**), `netmodel/` (the flat NW4 `M_θ` + the **NW8 GNN+RSSM graph arm** with
-  the noise/self-forcing levers + the **EN8 oracle-grounded-SSL trainer** `grounded_train.py`), and
-  `netloop/` (the NW5 partial-observation runner, two-mode oracle, probe policies, operators). Experiments:
-  `experiments/en1.py` … `en4_graph.py`, `en8.py`.
+  the noise/self-forcing levers + the **EN8/EN9 oracle-grounded-SSL trainer** `grounded_train.py`: the
+  residual/JEPA objectives *and* the oracle-contrastive `train_contrastive`), and `netloop/` (the NW5
+  partial-observation runner, two-mode oracle, probe policies, operators). Experiments: `experiments/en1.py`
+  … `en4_graph.py`, `en8.py`, `en9.py`.
 
 Experiment configs live in [configs/](configs/); plotting scripts + figures in [figures/](figures/); the
 run-records they read are git-ignored and regenerable from config + seeds.

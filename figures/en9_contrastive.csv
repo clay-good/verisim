@@ -1,0 +1,16 @@
+mode,metric,value
+none,emb_std,0.276043
+none,eff_rank,13.430545
+none,intervention_top1,0.214286
+none,intervention_mrr,0.426114
+none,final_loss,0.015240
+vicreg,emb_std,0.499156
+vicreg,eff_rank,38.974613
+vicreg,intervention_top1,0.282143
+vicreg,intervention_mrr,0.500156
+vicreg,final_loss,0.738259
+oracle,emb_std,0.699263
+oracle,eff_rank,31.392595
+oracle,intervention_top1,0.519048
+oracle,intervention_mrr,0.694147
+oracle,final_loss,0.759885

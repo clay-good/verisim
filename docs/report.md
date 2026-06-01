@@ -513,8 +513,8 @@ scale (above): the gap is not closed by exposure-bias correction alone here, whi
 input-distribution fixes. The **SPEC-8 OG1/OG2 deterministic machinery also shipped** (the oracle-grounded-SSL
 target/`D`-mask factory [`netdata/grounding.py`](../src/verisim/netdata/grounding.py) and the hard-negative /
 counterfactual factory [`netdata/negatives.py`](../src/verisim/netdata/negatives.py); both torch-free and
-property-tested), so the EN8/EN9 oracle-grounded-SSL runs (SPEC-8 §7) have their data layer ready and sit on this
-same arm. A +16.5-pt token / +30.6-pt delta-exact one-step gain with a measured conversion gap is a better starting
+property-tested), and the **EN8/EN9 oracle-grounded-SSL runs (SPEC-8 §7) have now shipped on this same arm**
+(below). A +16.5-pt token / +30.6-pt delta-exact one-step gain with a measured conversion gap is a better starting
 point than the flat arm offered, and every number here is bankable under the oracle.
 
 ## EN8 (oracle-grounded SSL) — the oracle in the *bulk* of the cake, a second split verdict (SPEC-8 §7)
@@ -566,9 +566,50 @@ accuracy above.)
 mechanism (H23 — the oracle is a real anti-collapse referent) and an honest near-tie on the *objective*
 mechanism at this scale (H24 — the partition's payoff is world-size-gated). The H23 positive says the
 oracle-grounded latent arm is worth carrying up the ladder; the H24 bound says don't over-invest in residual
-masking until the worlds are large enough for `D` to dominate. EN9 (oracle hard-negative contrastive, OG4) sits
-on the same arm and consumes the OG2 factory next. Every cell here is bankable under the oracle — including, as
-always, the negative.
+masking until the worlds are large enough for `D` to dominate. Every cell here is bankable under the oracle —
+including, as always, the negative.
+
+## EN9 (oracle hard-negative contrastive) — the exact referent vs. the statistical one, a third split (SPEC-8 §7)
+
+EN8 grounded the *predictive* target on the oracle (H23/H24). EN9 grounds the *contrastive* one — the second
+SPEC-8 mechanism (§4.3) and the consumer of the OG2 hard-negative factory. A contrastive predictor over the
+same graph summary, with the **only** anti-collapse referent varying across three cells: *none* (naked BYOL,
+regress onto the stop-grad online target), *vicreg* (the field's statistical "push apart" regularizer), or
+*oracle* (InfoNCE against the OG2 exact hard negatives — counterfactual successors `O(s, a')` and
+one-edit-wrong neighbors of the true successor, each labeled `≠` the truth by the oracle). Two readouts:
+representation health (the collapse diagnostic) and **interventional fidelity** — does the representation map
+each intervention `a'` to its true successor `O(s, a')`, scored as branch-retrieval top-1 / MRR on held-out
+states (the H5 / EN6 branch-replay question)? A committed *smoke* instance
+([`figures/en9_contrastive.png`](../figures/en9_contrastive.png), [`.csv`](../figures/en9_contrastive.csv)),
+and like EN4/EN8 a two-sided result — the split is the finding.
+
+| mode | embedding std | effective rank (d=48) | intervention top-1 | intervention MRR |
+|---|---|---|---|---|
+| none (naked) | **0.276** | 13.4 | 0.214 | 0.426 |
+| vicreg | 0.499 | **39.0** | 0.282 | 0.500 |
+| **oracle** | **0.699** | 31.4 | **0.519** | **0.694** |
+
+**H25 — the collapse axis: the exact referent matches the statistical one.** The naked contrastive target
+collapses (std 0.276); both VICReg (0.499) and the oracle hard-negatives (0.699) prevent it. On *raw* collapse
+the oracle is at least as good — but VICReg's covariance term, which explicitly decorrelates dimensions, buys
+slightly higher effective rank (39.0 vs 31.4). So H25's "match or beat at preventing collapse" lands on
+*match*: the exact near-miss structure is a real anti-collapse referent, not a strictly dominant one for the
+rank metric.
+
+**H5 — the interventional axis: the oracle wins decisively (the lift).** This is where the exactness pays. Only
+the oracle's *counterfactual* negatives carry information about which intervention leads where, so its
+branch-retrieval fidelity nearly doubles VICReg's — top-1 **0.519 vs 0.282**, MRR 0.694 vs 0.500. The honest,
+sharper reading of the split: VICReg keeps the representation full-rank but interventionally **blind** (its
+0.282 top-1 is barely above the naked 0.214), while the oracle makes it faithful to the very branches the loop
+will be asked to predict. A statistical regularizer can stop collapse; it structurally cannot teach
+counterfactual structure it has no access to.
+
+**Where this routes the program.** EN9 localizes *what* an exact referent buys over a statistical one: not
+better collapse resistance per se, but **interventional content**. That is the H5/RQ4 lift arriving through the
+SSL objective rather than the RL cherry — evidence that oracle-grounding belongs in pretraining for *change-safety*
+tasks specifically. Carry the counterfactual-negative objective up the ladder (SPEC-6/7) where interventional
+fidelity is the headline; do not expect it to beat VICReg on plain collapse. CIs and a scaled run remain;
+every cell is bankable under the oracle.
 
 ## Threats to validity
 
@@ -626,6 +667,8 @@ python -m verisim.experiments.en4_graph --graph-iters 1500 \
     --out figures/en4_graph_vs_flat.csv
 # SPEC-8 EN8 — oracle-grounded-SSL ablation (H23/H24); writes the CSV + figure directly:
 python -m verisim.experiments.en8 --out figures/en8_grounding.csv
+# SPEC-8 EN9 — oracle hard-negative contrastive (H25/H5); writes the CSV + figure directly:
+python -m verisim.experiments.en9 --out figures/en9_contrastive.csv
 ```
 
 The run-records are git-ignored (regenerable); the figures and their CSVs are

@@ -458,8 +458,11 @@ is the autoresearch gate (§14) and a per-step diagnostic.
 > ([`graph_train.py`](../../src/verisim/netmodel/graph_train.py), now a 4th EN4 arm) — roll the model on its own
 > drift and oracle-relabel each step. Both exposure-bias levers (noise + self-forcing) now land the *same* banked
 > negative at this scale: a small one-step dip, no horizon yet — so the gap is not closed by input-distribution
-> fixes alone here. **Next:** scale + the multi-step latent-overshooting objective, then the EN8/EN9 (SPEC-8)
-> oracle-grounded-SSL runs on this same arm.
+> fixes alone here. **The EN8/EN9 (SPEC-8) oracle-grounded-SSL runs have now shipped on this same arm** —
+> EN8's objective × collapse ablation (H23 confirmed, H24 a near-tie) and EN9's oracle hard-negative
+> contrastive (H25 confirmed; the oracle's counterfactual negatives nearly double VICReg's interventional
+> fidelity). **Next:** scale + bootstrap CIs on the SPEC-8 cells, and the multi-step latent-overshooting
+> objective.
 
 ### 6.1 Architecture
 
@@ -802,6 +805,19 @@ learn; the partition's payoff is pre-registered to grow with world size). The EN
 and a scaled run remain. This is the EN1/H8 pivot ("the lever is representation/objective → SPEC-8") cashed out.
 | **EN9 / H25, H5** (oracle hard-negatives) | exact near-miss/counterfactual negatives beat statistical regularizers and lift interventional fidelity | near-miss structure was not the collapse mechanism → narrows *what* anti-collapse actually fixes — still a clean, publishable map of the failure surface |
 
+**EN9 first datum (OG4 smoke, [report](../report.md)):** a *split* verdict like EN4/EN8, and the split is
+the finding. On the **collapse axis (H25)** the exact oracle negatives only *match* the statistical
+stand-in: the naked contrastive target collapses (embedding std 0.276), both VICReg (0.499) and the
+oracle hard-negatives (0.699) hold it open, and VICReg's covariance term even buys slightly higher
+effective rank (39.0 vs 31.4). But on the **interventional axis (H5)** the oracle wins decisively —
+branch-retrieval top-1 **0.519 vs VICReg's 0.282** (MRR 0.694 vs 0.500), because only the *counterfactual*
+negatives ``O(s, a')`` teach which intervention leads where. The honest reading: VICReg keeps the
+representation full-rank but interventionally **blind**; the oracle's exact branches make it faithful to
+the very interventions the loop will be asked to predict (the H5 lift, EN6 branch-replay). The EN9
+apparatus ([`experiments/en9.py`](../../src/verisim/experiments/en9.py),
+[`netmodel/grounded_train.py`](../../src/verisim/netmodel/grounded_train.py) `train_contrastive`) consumes
+the OG2 hard-negative factory; CIs and a scaled run remain.
+
 The italic note on EN8 is deliberate and is the project's stance in miniature: **we do not need EN8 to
 "win" for it to be worth running.** A refutation there would say something the entire self-supervised
 world-model field wants to know and structurally cannot ask — *what, exactly, is the collapse-prevention
@@ -829,7 +845,7 @@ no GPU** before any learned model. It does not collide with `M0–M8`, `S1–S6`
 | **NW5** | Propose-verify-correct loop with **partial-observation oracle** (full / probe modes), probe-policy interface `π_o`, correction/belief operators, baselines, model-agnostic runner ([`netloop/`](../../src/verisim/netloop/)). The **message-passing + RSSM `M_θ`** is deferred to NW7, where partial observability makes the belief non-degenerate (§6.2) and the graph arm becomes the H11 contender — exactly as v0 shipped the M5 loop with baselines before the neural model bit | loop invariants | ✅ (graph arm → NW7) |
 | **NW6** | **EN1 network `H_ε(ρ)` curve** + bootstrap-CI aggregation + figure ([`experiments/en1.py`](../../src/verisim/experiments/en1.py), [`figures/en1_curve.png`](../../figures/en1_curve.png)) | **the prime directive** | ✅ (H8 honest negative on the flat arm) |
 | **NW7** | Smart probe policies + belief operators + drift mitigations; EN2/EN3/EN4 (equal-budget, CIs). **EN2** (consultation policy `π_c`, H9) and **EN3** (correction/belief operators, §8.3) ship on the flat arm ([`en2.py`](../../src/verisim/experiments/en2.py), [`en3.py`](../../src/verisim/experiments/en3.py)): EN3 breaks v0's operator identity collapse and shows the probe earns ~2.3× more faithful horizon per oracle-bit. The graph/RSSM arm (H11), the smart info-gain `π_o` (H10), the drift mitigations, and EN4 remain | comparison figures | ◐ EN2/EN3 (flat arm) |
-| **NW8** | **Message-passing + RSSM graph arm** ([`netmodel/graph.py`](../../src/verisim/netmodel/graph.py), [`graph_model.py`](../../src/verisim/netmodel/graph_model.py), [`graph_train.py`](../../src/verisim/netmodel/graph_train.py)) + the §6.3 **noise-injection and self-forcing** levers + **EN4 graph-vs-flat (H11)** ([`en4_graph.py`](../../src/verisim/experiments/en4_graph.py)) + the **delta-exact** per-step metric ([`netmetrics/exact.py`](../../src/verisim/netmetrics/exact.py)) + the **SPEC-8 OG1/OG2** oracle-grounded-SSL data factory ([`netdata/grounding.py`](../../src/verisim/netdata/grounding.py), [`netdata/negatives.py`](../../src/verisim/netdata/negatives.py)). **EN8** (SPEC-8 oracle-grounded SSL: objective × collapse ablation, [`en8.py`](../../src/verisim/experiments/en8.py), [`grounded_train.py`](../../src/verisim/netmodel/grounded_train.py)). Then RLVR + online-TTT (EN5), counterfactual (EN6), **model-invariance sweep (EN7/H22)**, **EN9** (oracle hard-negative contrastive), the **LLM-callable simulator protocol** (§7), Inspect benchmark + `verifiers`-spec network RL env, report | model tests + comparison figures | ◐ graph arm + EN4 + delta-exact + both §6.3 levers + OG1/OG2 + **EN8/OG3** shipped (split H11: +16.5-pt one-step, horizon not yet; split EN8: H23 collapse-tax confirmed, H24 near-tie) |
+| **NW8** | **Message-passing + RSSM graph arm** ([`netmodel/graph.py`](../../src/verisim/netmodel/graph.py), [`graph_model.py`](../../src/verisim/netmodel/graph_model.py), [`graph_train.py`](../../src/verisim/netmodel/graph_train.py)) + the §6.3 **noise-injection and self-forcing** levers + **EN4 graph-vs-flat (H11)** ([`en4_graph.py`](../../src/verisim/experiments/en4_graph.py)) + the **delta-exact** per-step metric ([`netmetrics/exact.py`](../../src/verisim/netmetrics/exact.py)) + the **SPEC-8 OG1/OG2** oracle-grounded-SSL data factory ([`netdata/grounding.py`](../../src/verisim/netdata/grounding.py), [`netdata/negatives.py`](../../src/verisim/netdata/negatives.py)). **EN8** (SPEC-8 oracle-grounded SSL: objective × collapse ablation, [`en8.py`](../../src/verisim/experiments/en8.py), [`grounded_train.py`](../../src/verisim/netmodel/grounded_train.py)). **EN9** (oracle hard-negative contrastive, [`en9.py`](../../src/verisim/experiments/en9.py)). Then RLVR + online-TTT (EN5), counterfactual (EN6), **model-invariance sweep (EN7/H22)**, the **LLM-callable simulator protocol** (§7), Inspect benchmark + `verifiers`-spec network RL env, report | model tests + comparison figures | ◐ graph arm + EN4 + delta-exact + both §6.3 levers + OG1/OG2 + **EN8/OG3 + EN9/OG4** shipped (split H11: +16.5-pt one-step, horizon not yet; split EN8: H23 collapse-tax confirmed, H24 near-tie; split EN9: H25 confirmed, H5 fidelity ~2× over VICReg) |
 
 NW0–NW3 + the NW5 loop are the deterministic core. `M_θ` (NW4) drops into the loop via
 the same model-agnostic interface v0 uses (`NeuralWorldModel`).
