@@ -465,33 +465,51 @@ the **same** eval primitives EN1 uses. A small, fast smoke instance
 ([`figures/en4_graph_vs_flat.png`](../figures/en4_graph_vs_flat.png),
 [`.csv`](../figures/en4_graph_vs_flat.csv)) gives a clean, two-sided first datum:
 
-| arm | one-step held-out acc | `H_ε` (ρ=0), ε ∈ {0, 0.05, 0.1} |
-|---|---|---|
-| flat-Markov (NW4) | 0.673 | 0.000 / 0.000 / 0.000 |
-| **graph + RSSM (NW8)** | **0.838** | 0.000 / 0.000 / 0.000 |
-| graph + RSSM + noise lever | 0.829 | 0.000 / 0.000 / 0.000 |
+| arm | one-step token acc | **delta-exact** rate | `H_ε` (ρ=0), ε ∈ {0, 0.05, 0.1} |
+|---|---|---|---|
+| flat-Markov (NW4) | 0.673 | 0.264 | 0.000 / 0.000 / 0.000 |
+| **graph + RSSM (NW8)** | **0.838** | **0.569** | 0.000 / 0.000 / 0.000 |
+| graph + RSSM + noise lever | 0.828 | 0.556 | 0.000 / 0.000 / 0.000 |
 
-**The positive (H11, generalization axis): structure helps, materially.** On never-trained eval seeds the
-graph arm is a **+16.5-point** better one-step predictor than the flat arm (0.838 vs 0.673) — the message-passing
-inductive bias over the host graph generalizes where the flat serializer memorizes (the m4/GNS bet, §2.2-2.3,
-realized). This is the first network result to move a metric in the graph arm's favor.
+The **delta-exact** column ([`netmetrics/exact.py`](../src/verisim/netmetrics/exact.py)) is the honest middle
+the report previously flagged as missing: not token accuracy (which is inflated — most tokens of a delta are
+easy structural scaffolding) and not horizon (which is `0` the instant any step exceeds ε), but the per-step
+question a delta predictor is actually asked — *did the model freely decode the exact true edit set this step?*
+It is `1` iff `bits_to_correct = 0`, computed by running each arm's own constrained decode (no teacher forcing)
+and matching the assembled `NetDelta` as a multiset.
 
-**The honest negative (horizon axis): better one-step ≠ horizon — yet.** That accuracy gain does *not* convert
-to free-running faithful horizon: `H_ε` is **0 for all three arms even at ε=0.1** — every arm drifts on the first
-unaided step. This is exactly EN1's H8 negative and SPEC-2.1's K4 echoing in the network world: per-step errors
-are *discrete* (one wrong edit spikes the graph divergence past ε in a single step), so token-level accuracy gains
-do not buy first-exceedance horizon without the *exposure-bias* levers. The noise-injection lever, at this tiny
-scale, slightly *lowered* one-step accuracy (0.829 vs 0.838) and bought no horizon — a clean "needs scale/tuning"
-datum, not a refutation of the lever.
+**The positive (H11, generalization axis): structure helps, and helps *more* on the honest metric.** On
+never-trained eval seeds the graph arm is a **+16.5-point** better one-step token predictor than the flat arm
+(0.838 vs 0.673) — and a **+30.6-point** better *delta-exact* predictor (0.569 vs 0.264), more than double the
+flat arm's whole-delta exactness. The message-passing inductive bias over the host graph generalizes where the
+flat serializer memorizes (the m4/GNS bet, §2.2-2.3, realized), and the gap *widens* on the stricter metric:
+token accuracy understates how much structure buys, because the flat arm gets the easy scaffolding tokens right
+while missing the edit that matters. This is the clearest network result yet in the graph arm's favor.
+
+**The honest negative (horizon axis): even 57% delta-exact ≠ horizon — yet.** Neither gain converts to
+free-running faithful horizon: `H_ε` is **0 for all three arms even at ε=0.1** — every arm drifts on the first
+unaided step. This is exactly EN1's H8 negative and SPEC-2.1's K4 echoing in the network world, and the
+delta-exact number now *quantifies* why: at 0.569 per-step exact, the probability of surviving even a few
+unaided steps decays geometrically (≈0.57·0.57·… ), and first-exceedance is discrete — one wrong edit spikes the
+graph divergence past ε in a single step. Per-step exactness this far below 1.0 cannot buy horizon without the
+*exposure-bias* levers. The noise-injection lever, at this tiny scale, slightly *lowered* both metrics
+(0.828/0.556 vs 0.838/0.569) and bought no horizon — a clean "needs scale/tuning" datum, not a refutation of
+the lever.
 
 **Where this routes the program (the epistemic engine, SPEC.md §10.1).** The result *localizes* the wall: it is
 the **one-step→horizon conversion**, not the per-step learner (the graph arm fits to >0.9 teacher-forced accuracy,
-the K0-analog check). The pre-registered next levers are therefore the remaining §6.3 mitigations —
-**self-forcing / scheduled sampling** (close the train/deploy exposure-bias gap that token-teacher-forcing hides)
-and the **multi-step latent-overshooting** objective — plus reporting the **delta-exact** rate (not just token
-accuracy) and scaling training/coverage. The graph arm is the apparatus those levers now plug into; EN8/EN9 (the
-SPEC-8 oracle-grounded-SSL runs) sit on this same arm. A +16.5-point one-step gain with a measured conversion
-gap is a better starting point than the flat arm offered, and every number here is bankable under the oracle.
+the K0-analog check; held-out, it is delta-exact on 57% of steps). The **delta-exact metric just shipped**
+([`netmetrics/exact.py`](../src/verisim/netmetrics/exact.py)) and is now an EN4 column — it converts the wall from
+a qualitative claim into a number: 0.569 per-step exact is far enough below 1.0 that geometric decay kills horizon,
+so the conversion levers must raise *whole-delta* exactness, not just token accuracy. The pre-registered next
+levers are therefore the remaining §6.3 mitigations — **self-forcing / scheduled sampling** (close the train/deploy
+exposure-bias gap that token-teacher-forcing hides) and the **multi-step latent-overshooting** objective — plus
+scaling training/coverage. The **SPEC-8 OG1/OG2 deterministic machinery also shipped** (the oracle-grounded-SSL
+target/`D`-mask factory [`netdata/grounding.py`](../src/verisim/netdata/grounding.py) and the hard-negative /
+counterfactual factory [`netdata/negatives.py`](../src/verisim/netdata/negatives.py); both torch-free and
+property-tested), so the EN8/EN9 oracle-grounded-SSL runs (SPEC-8 §7) have their data layer ready and sit on this
+same arm. A +16.5-pt token / +30.6-pt delta-exact one-step gain with a measured conversion gap is a better starting
+point than the flat arm offered, and every number here is bankable under the oracle.
 
 ## Threats to validity
 

@@ -28,5 +28,6 @@ def test_en4_comparison_runs_and_returns_all_arms() -> None:
     for arm in results:
         row = results[arm]
         assert 0.0 <= row["onestep_acc"] <= 1.0
+        assert 0.0 <= row["delta_exact"] <= 1.0  # the per-step free-decode exact-match rate
         assert "h@0.0" in row and "h@0.1" in row
         assert row["h@0.1"] >= row["h@0.0"]  # looser tolerance never shortens the horizon

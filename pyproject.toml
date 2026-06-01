@@ -49,11 +49,15 @@ python_version = "3.11"
 strict = true
 files = ["src", "tests"]
 # Tests build small ad-hoc states; allow untyped test functions without noise,
-# but still type-check their bodies (so real type errors surface).
+# but still type-check their bodies (so real type errors surface). The model tests
+# call into PyTorch's incompletely-typed API (e.g. ``loss.backward()``), so relax the
+# torch-specific ``disallow_untyped_calls`` here too — the same rationale as the
+# model/train/netmodel source override below; real type errors still surface.
 [[tool.mypy.overrides]]
 module = "tests.*"
 disallow_untyped_defs = false
 disallow_incomplete_defs = false
+disallow_untyped_calls = false
 
 # PyTorch's public API is incompletely typed; under strict mypy that produces
 # unavoidable Any-propagation noise in the model/train modules. Relax the

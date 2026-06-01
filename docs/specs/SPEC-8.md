@@ -369,17 +369,19 @@ Non-colliding with `M0–M8 / S1–S6 / AR0–AR5 / NW0–NW8 / HC0–HC8 / DS0�
 milestone: the deterministic data/target machinery is built and tested before any training claim, and no
 stage graduates without a committed figure or an honest negative.
 
-| Milestone | What | Verify |
-|---|---|---|
-| **OG0** | The framing as a committed artifact: this spec + the SPEC.md §8 / §9 anchors (H23–H25) + the SPEC-5 §12 EN8/EN9 entries. No code. | the specs cross-reference cleanly; numbering does not collide (H≤25, EN≤9, OG-series new) |
-| **OG1** | Oracle target + `D`-mask machinery in `netdata`/`netmodel`: emit the true next-state target, the exact divergence target, and the decidable-bit mask for any `(s, a)`. Dependency-free, no GPU. | property test: the mask exactly partitions `D` ∪ `R = s'`; the divergence target equals `netmetrics` `d` by construction |
-| **OG2** | Oracle hard-negative & counterfactual sampler: one-edit-wrong successors and action-branch counterfactuals, each labeled against the oracle. | property test: every emitted negative is `≠ O(s,a)` and every counterfactual equals `O(s, a')`; coverage spans the action grammar |
-| **OG3** | **EN8** runs (objective × collapse-machinery ablation) on the NW8 arm; committed figure. | the `H23`/`H24` cells are populated with bootstrap CIs; regenerates from config+seed with `maxΔ=0` |
-| **OG4** | **EN9** runs (oracle-contrastive); committed figure incl. interventional fidelity. | the `H25`/`H5` cells populated; honest negative reported if the proxy is not beaten |
+| Milestone | What | Verify | Status |
+|---|---|---|---|
+| **OG0** | The framing as a committed artifact: this spec + the SPEC.md §8 / §9 anchors (H23–H25) + the SPEC-5 §12 EN8/EN9 entries. No code. | the specs cross-reference cleanly; numbering does not collide (H≤25, EN≤9, OG-series new) | ✅ |
+| **OG1** | Oracle target + `D`-mask machinery in `netdata`/`netmodel`: emit the true next-state target, the exact divergence target, and the decidable-bit mask for any `(s, a)`. Dependency-free, no GPU. ([`netdata/grounding.py`](../../src/verisim/netdata/grounding.py)) | property test: the mask exactly partitions `D` ∪ `R = s'`; the divergence target equals `netmetrics` `d` by construction | ✅ ([`test_grounding.py`](../../tests/test_grounding.py), 5 cases) |
+| **OG2** | Oracle hard-negative & counterfactual sampler: one-edit-wrong successors and action-branch counterfactuals, each labeled against the oracle. ([`netdata/negatives.py`](../../src/verisim/netdata/negatives.py)) | property test: every emitted negative is `≠ O(s,a)` and every counterfactual equals `O(s, a')`; coverage spans the action grammar | ✅ ([`test_negatives.py`](../../tests/test_negatives.py), 5 cases) |
+| **OG3** | **EN8** runs (objective × collapse-machinery ablation) on the NW8 arm; committed figure. | the `H23`/`H24` cells are populated with bootstrap CIs; regenerates from config+seed with `maxΔ=0` | ☐ gated on NW8 latent arm |
+| **OG4** | **EN9** runs (oracle-contrastive); committed figure incl. interventional fidelity. | the `H25`/`H5` cells populated; honest negative reported if the proxy is not beaten | ☐ gated on NW8 latent arm |
 
 OG3/OG4 are gated on **NW8** (the graph+RSSM/JEPA arm) shipping in SPEC-5 — they have nothing to ablate
-until the latent arm exists. OG0–OG2 (framing + deterministic machinery) can proceed in parallel, exactly
-as the deterministic cores always precede the GPU work.
+until the latent arm exists. **OG0–OG2 have shipped** (framing + deterministic, property-tested, no-GPU
+machinery); the EN8/EN9 trainers consume them next, exactly as the deterministic cores always precede the
+GPU work. The delta-exact per-step metric the EN8/EN9 ablations report on
+([`netmetrics/exact.py`](../../src/verisim/netmetrics/exact.py)) also shipped, as an EN4 column.
 
 ---
 

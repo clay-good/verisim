@@ -9,6 +9,8 @@ from verisim.netdelta.edits import FlowOpen, LinkAdd, NetDelta, SvcUp
 from verisim.netmetrics import (
     bits_to_correct,
     correction_symbols,
+    delta_exact,
+    delta_exact_rate,
     divergence,
     reachability_faithfulness,
 )
@@ -50,6 +52,25 @@ def test_bits_to_correct_zero_iff_equal_and_monotone():
     # an invented edit counts as residual.
     extra: NetDelta = [LinkAdd("h0", "h1"), SvcUp("h1", 80), FlowOpen("h0", "h1", 80)]
     assert correction_symbols(extra, true) > 0
+
+
+def test_delta_exact_matches_bits_to_correct_gate():
+    true: NetDelta = [LinkAdd("h0", "h1"), SvcUp("h1", 80)]
+    # exact iff bits-to-correct is 0; order-independent (multiset), like the bits gate.
+    assert delta_exact(list(reversed(true)), true) is True
+    assert bits_to_correct(list(reversed(true)), true) == 0.0
+    wrong = [LinkAdd("h0", "h1")]
+    assert delta_exact(wrong, true) is False
+    assert bits_to_correct(wrong, true) > 0.0
+
+
+def test_delta_exact_rate():
+    true: NetDelta = [SvcUp("h1", 80)]
+    pairs: list[tuple[NetDelta, NetDelta]] = [
+        (list(true), true), ([LinkAdd("h0", "h1")], true), (list(true), true)
+    ]
+    assert delta_exact_rate(pairs) == 2 / 3
+    assert delta_exact_rate([]) == 1.0  # vacuous: no steps to be wrong on
 
 
 def test_divergence_in_unit_interval_over_trajectories():

@@ -19,16 +19,21 @@ starts to pay and is reported as-is (SPEC-5 §12.1, the all-data-is-good-data st
 from __future__ import annotations
 
 import argparse
+import random
 from dataclasses import dataclass
 from pathlib import Path
 
 from verisim.experiments.en1 import EN1Config, eval_actions
 from verisim.experiments.en1 import train_model as train_flat
 from verisim.loop.policy import fixed_interval_for_rho
+from verisim.net.action import NetAction
 from verisim.net.config import DEFAULT_NET_CONFIG, NetConfig
 from verisim.net.state import NetworkState
+from verisim.netdata.drivers import NetDriver
+from verisim.netdelta.edits import NetDelta
 from verisim.netloop import PartialNetOracle, budget_for_rho, run_net_rollout
 from verisim.netloop.model import NetModel
+from verisim.netmetrics.exact import delta_exact_rate
 from verisim.netmodel import NetVocab, NeuralNetworkWorldModel, build_net_dataset
 from verisim.netmodel.graph_model import build_graph_model
 from verisim.netmodel.graph_train import (
@@ -67,6 +72,34 @@ def _faithful_horizon(divergences: list[float], epsilon: float) -> int:
         else:
             break
     return h
+
+
+EvalTriple = tuple[NetworkState, NetAction, NetDelta]
+
+
+def _eval_triples(
+    oracle: ReferenceNetworkOracle,
+    net: NetConfig,
+    seeds: tuple[int, ...],
+    n_steps: int,
+    driver: str = "weighted",
+) -> list[EvalTriple]:
+    """Seeded ``(state, action, true_delta)`` triples for the held-out delta-exact eval."""
+    triples: list[EvalTriple] = []
+    for seed in seeds:
+        driver_obj = NetDriver(name=driver, config=net, rng=random.Random(seed))
+        state = NetworkState.initial(net.hosts)
+        for _ in range(n_steps):
+            action = driver_obj.sample(state)
+            result = oracle.step(state, action)
+            triples.append((state, action, result.delta))
+            state = result.state
+    return triples
+
+
+def _delta_exact_rate(wm: NetModel, triples: list[EvalTriple]) -> float:
+    """Fraction of held-out steps whose freely decoded delta exactly matches the oracle's."""
+    return delta_exact_rate((wm.predict_delta(s, a), true) for s, a, true in triples)
 
 
 def _mean_horizons(
@@ -135,13 +168,16 @@ def run_en4_graph(config: EN4Config | None = None) -> dict[str, dict[str, float]
         "graph+noise": graph_teacher_forced_accuracy(graph_noise_wm, graph_eval),  # type: ignore[arg-type]
     }
 
+    # --- held-out per-step delta-exact rate (free decode, all arms via NetModel) ---
+    triples = _eval_triples(oracle, net, config.eval_seeds, config.eval_steps)
+
     out: dict[str, dict[str, float]] = {}
     arms_wm: list[tuple[str, NetModel]] = [
         ("flat", flat_wm), ("graph", graph_wm), ("graph+noise", graph_noise_wm)
     ]
     for arm, wm in arms_wm:
         horizons = _mean_horizons(wm, oracle, net, config)
-        row = {"onestep_acc": accs[arm]}
+        row = {"onestep_acc": accs[arm], "delta_exact": _delta_exact_rate(wm, triples)}
         row.update({f"h@{e}": horizons[e] for e in config.epsilons})
         out[arm] = row
     return out
@@ -163,17 +199,21 @@ def main() -> None:  # pragma: no cover - CLI entry point
 
     arms = ("flat", "graph", "graph+noise")
     eps = cfg.epsilons
-    header = f"{'arm':<12} {'onestep_acc':>12}" + "".join(f"{'H@'+str(e):>10}" for e in eps)
+    header = (
+        f"{'arm':<12} {'onestep_acc':>12} {'delta_exact':>12}"
+        + "".join(f"{'H@'+str(e):>10}" for e in eps)
+    )
     print(header)
-    lines = ["arm,onestep_acc," + ",".join(f"h@{e}" for e in eps)]
+    lines = ["arm,onestep_acc,delta_exact," + ",".join(f"h@{e}" for e in eps)]
     for arm in arms:
         r = results[arm]
         print(
-            f"{arm:<12} {r['onestep_acc']:>12.4f}"
+            f"{arm:<12} {r['onestep_acc']:>12.4f} {r['delta_exact']:>12.4f}"
             + "".join(f"{r[f'h@{e}']:>10.3f}" for e in eps)
         )
         lines.append(
-            f"{arm},{r['onestep_acc']:.6f}," + ",".join(f"{r[f'h@{e}']:.6f}" for e in eps)
+            f"{arm},{r['onestep_acc']:.6f},{r['delta_exact']:.6f},"
+            + ",".join(f"{r[f'h@{e}']:.6f}" for e in eps)
         )
 
     out = Path(args.out)
@@ -195,9 +235,16 @@ def _plot(
     import matplotlib.pyplot as plt
 
     fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(10, 4))
-    ax1.bar(arms, [results[a]["onestep_acc"] for a in arms], color=["#888", "#2a7", "#16a"])
-    ax1.set_title("one-step held-out accuracy (generalization)")
+    x = range(len(arms))
+    ax1.bar([i - 0.2 for i in x], [results[a]["onestep_acc"] for a in arms],
+            width=0.4, color="#2a7", label="one-step token acc")
+    ax1.bar([i + 0.2 for i in x], [results[a]["delta_exact"] for a in arms],
+            width=0.4, color="#16a", label="delta-exact rate")
+    ax1.set_xticks(list(x))
+    ax1.set_xticklabels(arms)
+    ax1.set_title("one-step held-out: token acc vs delta-exact")
     ax1.set_ylim(0, 1)
+    ax1.legend(fontsize=8)
     for a in arms:
         ax2.plot(eps, [results[a][f"h@{e}"] for e in eps], marker="o", label=a)
     ax2.set_title("free-running faithful horizon H_ε (ρ=0)")
