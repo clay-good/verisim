@@ -787,7 +787,39 @@ do not lift plain *supervision*. So H5 is objective-dependent: grounding helps w
 interventional/contrastive, not where it is reconstruction. **Mild standalone positive:** change-safety
 (~0.93) ≫ delta-exact (~0.58) across all arms — the graph arm predicts the *reachability effect* of an
 intervention far better than the exact delta, which is exactly the metric the defense application cares
-about. *The two-oracle axis (H12) is deferred:* it needs a second, control-plane (Batfish-style) oracle.
+about. *The two-oracle axis (H12) is measured in EN10 below.*
+
+## EN10 — the control-plane oracle is redundant for verification but cheaper + decision-sufficient (H12)
+
+EN6 deferred the **two-oracle** axis; EN10 measures it. The data-plane oracle returns the exact next
+state (the full delta); a Batfish-style **control-plane oracle**
+([`netoracle/control_plane.py`](../src/verisim/netoracle/control_plane.py)) returns only the
+**reachability** truth. H12 asks whether the control-plane oracle is a *non-redundant* signal — does
+consulting it catch reachability errors a full-state data-plane consult misses? On held-out trajectory
+transitions of the trained graph arm (5 hosts, 2 difficulties × 3 seeds,
+[`en10_two_oracle.csv`](../figures/en10_two_oracle.csv)):
+
+| metric | mean | 95% CI |
+|---|---|---|
+| data-plane bits-to-correct (full delta) | 14.4 | [11.8, 17.2] |
+| control-plane bits-to-correct (reachability) | 0.4 | [0.20, 0.54] |
+| **non-redundant rate** | **0.000** | [0.000, 0.000] |
+| control-plane-sufficient rate | 0.299 | [0.22, 0.36] |
+| consult-bits ratio (control / data-plane) | 0.350 | [0.20, 0.49] |
+
+![EN10 / H12: the control-plane oracle is redundant for verification but cheaper + decision-sufficient](../figures/en10_two_oracle.png)
+
+**H12 ("non-redundant") is refuted — provably.** The non-redundant rate is **0.000 [0,0]**: the
+control-plane oracle *never* catches a reachability error the full-state data-plane consult misses,
+exactly the pre-registered honest negative — reachability is a deterministic function of the state, so
+getting the state right gets reachability right. **But the experiment reframes the control-plane oracle's
+value:** its bits-to-correct is **0.4 vs 14.4** for the full delta (~38× cheaper to satisfy), a
+control-plane consult costs **~35%** of a full one, and the model gets reachability **exactly right in
+~30% of the steps where its full delta is wrong** (the change-safety query is far more often satisfiable
+than the exact delta — echoing EN6). So the control-plane oracle is *redundant as a verification signal*
+on top of the data-plane oracle, but a **cheaper, decision-relevant** consultation for the change-safety
+question — which is precisely the tiered-oracle premise SPEC-7 builds on. The Batfish-style oracle ships
+as a property-tested deterministic component ([`test_control_plane.py`](../tests/test_control_plane.py)).
 
 ## Threats to validity
 

@@ -269,8 +269,33 @@ this honest. **The coherent contrast with EN9:** counterfactual *negatives* **di
 representation (structure matters there) — but counterfactual *examples* don't lift plain *supervision*. So
 H5 is objective-dependent. **Mild standalone positive:** change-safety (~0.93) ≫ delta-exact (~0.58) across
 all arms — the model predicts the *reachability effect* of interventions far better than the exact delta,
-which is the metric the defense use case cares about. *(The two-oracle axis H12 is deferred — it needs a
-second control-plane oracle.)*
+which is the metric the defense use case cares about. *(The two-oracle axis H12 is measured in §12.)*
+
+### 12. The control-plane oracle is redundant for verification but cheaper + decision-sufficient (network EN10 / H12)
+
+The two-oracle axis: alongside the data-plane oracle (exact next state), a Batfish-style
+[**control-plane oracle**](src/verisim/netoracle/control_plane.py) returns only the **reachability**
+truth. H12 asks whether it's a *non-redundant* signal — does it catch reachability errors a full-state
+consult misses? On held-out transitions of the trained graph arm:
+
+![EN10 / H12: the control-plane oracle is redundant for verification but cheaper + decision-sufficient](figures/en10_two_oracle.png)
+
+| metric | mean | 95% CI |
+|---|---|---|
+| data-plane bits-to-correct (full delta) | 14.4 | [11.8, 17.2] |
+| control-plane bits-to-correct (reachability) | 0.4 | [0.20, 0.54] |
+| **non-redundant rate** | **0.000** | [0.000, 0.000] |
+| control-plane-sufficient rate | 0.30 | [0.22, 0.36] |
+| consult-bits ratio (control / data) | 0.35 | [0.20, 0.49] |
+
+**H12 ("non-redundant") is refuted, provably.** Non-redundant rate is **exactly 0** — the control-plane
+oracle never catches a reachability error the full-state oracle misses, because reachability is a
+deterministic function of the state. **But the experiment reframes its value:** it's ~38× cheaper to
+satisfy (0.4 vs 14.4 bits-to-correct), a consult costs ~35% of a full one, and the model gets reachability
+*exactly right in ~30% of the steps where its full delta is wrong*. So the control-plane oracle is
+redundant as a *verification signal* but a **cheaper, decision-relevant consultation** for the
+change-safety question — the tiered-oracle premise [SPEC-7](docs/specs/SPEC-7.md) builds on. The oracle
+ships as a property-tested deterministic component (the NW0/OG1 "core-first" discipline).
 
 ## The problem, and what we're trying to accomplish
 
@@ -375,7 +400,8 @@ Package map (parallel structure; `net*` mirrors v0 for the graph world):
   v0 filesystem (SPEC-2)        network world (SPEC-5)            cross-cutting
   ─────────────────────         ──────────────────────            ────────────────────────────
   env/      state, actions      net/        typed-graph state     train/   supervised + RLVR
-  oracle/   O(s,a) truth        netoracle/  Tier-A oracle          eval/    faithfulness benchmark
+  oracle/   O(s,a) truth        netoracle/  Tier-A (data-plane)    eval/    faithfulness benchmark
+                                            + control-plane oracle
   delta/    Δ types, apply      netdelta/   graph Δ, apply         rl/      oracle-as-reward env
   metrics/  d, H_ε, bits        netmetrics/ d, reachability,       auto/    autoresearch ratchet
   loop/     runner, π_c, ops                delta-exact, bits      experiments/  E*, EN*, K*,
@@ -444,8 +470,11 @@ write-up is [docs/report.md](docs/report.md).
 > objective-dependent — it lifts the contrastive representation, not supervision). **The SPEC-9 LS3 hero
 > instance also ships** — at N=300 hosts (the largest oracle-grounded world proven on one machine) the H23
 > collapse gap is still disjoint-positive but nearly exhausted at fixed `d128` (rank 2.2, std 0.064),
-> confirming "persistent but attenuating" at the envelope's edge. Remaining: the two-oracle axis (H12,
-> needs a control-plane oracle).
+> confirming "persistent but attenuating" at the envelope's edge. **EN10/H12 two-oracle also ships** ([§12](#12-the-control-plane-oracle-is-redundant-for-verification-but-cheaper--decision-sufficient-network-en10--h12)):
+> a Batfish-style control-plane oracle is *redundant* for verification (it catches nothing the data-plane
+> misses) but a **cheaper, decision-sufficient** consultation. With EN1–EN10, the network EN-series is
+> complete; remaining work is the LLM-callable simulator protocol (§7), packaging, and the host/distributed
+> worlds (SPEC-6/7).
 
 **v0 — shell/filesystem world (`src/verisim/`, SPEC-2 §13): complete.**
 

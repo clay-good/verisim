@@ -102,8 +102,11 @@ echo "== LS3 hero: H23 collapse gap at the local-max world N=300 (SPEC-9 LS3; co
 python -m verisim.experiments.en8_scale --collapse-only --world-sizes 300 --d-models 128 \
     --seeds 0 1 2 --out figures/en8_ls3_hero.csv
 
+echo "== EN10: two-oracle grounding — control-plane vs data-plane (SPEC-5 H12; writes CSV+PNG) =="
+python -m verisim.experiments.en10 --out figures/en10_two_oracle.csv
+
 # The larger world x model SCALING SURFACE (SPEC-9 LS2) and HERO instance (LS3) are opt-in (slower):
 #   python -m verisim.experiments.en8_scale --world-sizes 25 50 100 200 --d-models 64 128 --seeds 0 1 2 --out figures/en8_surface.csv
 #   python -m verisim.experiments.en9_scale --world-sizes 25 50 100 200 --d-models 64 128 --seeds 0 1 2 --out figures/en9_surface.csv
 
-echo "== done: figures/{e1_curve,e2_policies,e3_operators,calibration,e4_ablation,objective,representation,auto_search,en1_curve,en2_policies,en3_operators,en4_graph_vs_flat,en8_grounding,en9_contrastive,en8_scale,en9_scale,en8_capacity,en9_negatives,en7_invariance,en5_selfheal,en6_counterfactual,en8_ls3_hero}.{png,csv} =="
+echo "== done: figures/{e1_curve,e2_policies,e3_operators,calibration,e4_ablation,objective,representation,auto_search,en1_curve,en2_policies,en3_operators,en4_graph_vs_flat,en8_grounding,en9_contrastive,en8_scale,en9_scale,en8_capacity,en9_negatives,en7_invariance,en5_selfheal,en6_counterfactual,en8_ls3_hero,en10_two_oracle}.{png,csv} =="

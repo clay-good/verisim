@@ -1,0 +1,6 @@
+metric,mean,ci_lo,ci_hi,n
+data_plane_btc,14.375000,11.750000,17.208333,6
+control_plane_btc,0.375000,0.201389,0.534722,6
+nonredundant_rate,0.000000,0.000000,0.000000,6
+cp_sufficient_rate,0.298611,0.222222,0.361111,6
+consult_bits_ratio,0.349846,0.198452,0.492905,6
