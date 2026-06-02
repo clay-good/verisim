@@ -27,15 +27,16 @@ from __future__ import annotations
 
 import argparse
 import copy
+import random
+from collections.abc import Callable
 from dataclasses import dataclass, field
 from pathlib import Path
 from statistics import fmean
-from typing import Any
 
 from verisim.loop.policy import StepContext, fixed_interval_for_rho
 from verisim.metrics.aggregate import bootstrap_ci
 from verisim.net.action import NetAction
-from verisim.net.config import NetConfig, scaled_net_config
+from verisim.net.config import scaled_net_config
 from verisim.net.state import NetworkState
 from verisim.netdelta import apply
 from verisim.netloop import PartialNetOracle, budget_for_rho
@@ -43,10 +44,11 @@ from verisim.netloop.model import NetModel
 from verisim.netloop.runner import ground_truth_rollout
 from verisim.netmetrics.divergence import divergence
 from verisim.netoracle import ReferenceNetworkOracle
+from verisim.netoracle.base import NetStepResult
 
 from .en1 import eval_actions
 
-ARMS = ("supervised", "+ttt")
+ARMS = ("supervised", "+ttt", "+ttt-replay")
 
 
 @dataclass(frozen=True)
@@ -66,6 +68,9 @@ class EN5Config:
     # online TTT (the discipline: few steps, small lr — SPEC-3 HW-2)
     ttt_steps: int = 3
     ttt_lr: float = 1e-3
+    # the pre-registered self-healing budget: a replay buffer of recent corrections (SPEC-3 §6)
+    replay_steps: int = 5  # minibatch updates per consult, sampled from the buffer
+    replay_batch: int = 8
     # evaluation / sweep
     difficulties: dict[str, str] = field(
         default_factory=lambda: {"low": "weighted", "high": "adversarial"}
@@ -105,24 +110,19 @@ def _faithful_horizon(divergences: list[float], epsilon: float) -> int:
 def _rollout(
     model: NetModel,
     partial: PartialNetOracle,
-    config: NetConfig,
     s0: NetworkState,
     actions: list[NetAction],
     rho: float,
     epsilon: float,
     *,
-    ttt: tuple[Any, ...] | None,
+    on_consult: Callable[[NetworkState, NetAction, NetStepResult], None] | None,
 ) -> int:
     """One full-consultation propose-verify-correct rollout; returns the faithful horizon.
 
     Mirrors :func:`verisim.netloop.runner.run_net_rollout` (full-consult path) so the supervised arm
-    is EN1-identical; the only addition is the optional ``ttt = (graph_model, optimizer, steps,
-    vocab)`` hook that takes online gradient steps on the oracle-revealed delta on each consult.
+    is EN1-identical; the only addition is the optional ``on_consult`` hook, called with the exact
+    one-step truth on each consultation so an arm can take a self-healing gradient step (TTT) on it.
     """
-    from verisim.netmodel.graph import build_graph
-    from verisim.netmodel.graph_train import online_update
-    from verisim.netmodel.tokenizer import encode_target
-
     n = len(actions)
     truth_states = ground_truth_rollout(partial, s0, actions)
     policy = fixed_interval_for_rho(rho)
@@ -139,10 +139,8 @@ def _rollout(
         if consult:
             calls += 1
             result = partial.full(state, action)  # VERIFY: the exact one-step truth
-            if ttt is not None:  # self-healing: teach the revealed (state, action) → true-delta
-                gmodel, optimizer, steps, vocab = ttt
-                example = (build_graph(state, action, config), encode_target(result.delta, vocab))
-                online_update(gmodel, optimizer, [example], steps=steps)
+            if on_consult is not None:  # self-healing: teach the revealed (state, action) -> truth
+                on_consult(state, action, result)
             state = result.state  # CORRECT (hard reset to truth)
         else:
             state = predicted
@@ -151,12 +149,19 @@ def _rollout(
 
 
 def run_en5(config: EN5Config | None = None) -> list[CurvePoint]:
-    """Train the base arm, then sweep H_ε(ρ) for {supervised, +ttt}; one point per cell."""
+    """Train the base arm, then sweep H_ε(ρ) for the three arms; one point per (arm, ρ) cell."""
     import torch
 
     from verisim.netmodel import NetVocab
-    from verisim.netmodel.graph_model import build_graph_model
-    from verisim.netmodel.graph_train import build_graph_dataset, train_graph_model
+    from verisim.netmodel.graph import build_graph
+    from verisim.netmodel.graph_model import GraphRSSMWorldModel, build_graph_model
+    from verisim.netmodel.graph_train import (
+        GraphExample,
+        build_graph_dataset,
+        online_update,
+        train_graph_model,
+    )
+    from verisim.netmodel.tokenizer import encode_target
 
     config = config or EN5Config()
     torch.set_num_threads(1)  # process-reproducibility (the EN1 discipline)
@@ -175,6 +180,34 @@ def run_en5(config: EN5Config | None = None) -> list[CurvePoint]:
     )
     train_graph_model(base, examples, steps=config.graph_iters, seed=config.model_seed)
 
+    def _make_arm(
+        arm: str, seed: int
+    ) -> tuple[NetModel, Callable[[NetworkState, NetAction, NetStepResult], None] | None]:
+        """Return ``(proposer, on_consult)`` for ``arm``; TTT arms get a fresh adapting copy."""
+        if arm == "supervised":
+            return base, None
+        model: GraphRSSMWorldModel = copy.deepcopy(base)
+        opt = torch.optim.AdamW(model.net.parameters(), lr=config.ttt_lr)
+        if arm == "+ttt":  # minimal: one update on the single revealed example
+
+            def single(s: NetworkState, a: NetAction, r: NetStepResult) -> None:
+                ex = (build_graph(s, a, net), encode_target(r.delta, vocab))
+                online_update(model, opt, [ex], steps=config.ttt_steps)
+
+            return model, single
+        # +ttt-replay: the pre-registered self-healing budget — a growing replay buffer of
+        # corrections, several minibatch updates per consult (SPEC-3 §6; the H7-null next lever).
+        buffer: list[GraphExample] = []
+        rng = random.Random(seed)
+
+        def replay(s: NetworkState, a: NetAction, r: NetStepResult) -> None:
+            buffer.append((build_graph(s, a, net), encode_target(r.delta, vocab)))
+            for _ in range(config.replay_steps):
+                batch = rng.sample(buffer, min(config.replay_batch, len(buffer)))
+                online_update(model, opt, batch, steps=1)
+
+        return model, replay
+
     points: list[CurvePoint] = []
     for arm in ARMS:
         per_rho: dict[float, list[float]] = {rho: [] for rho in config.rhos}
@@ -183,15 +216,10 @@ def run_en5(config: EN5Config | None = None) -> list[CurvePoint]:
                 actions = eval_actions(oracle, net, driver, seed, config.eval_steps)
                 for rho in config.rhos:
                     torch.manual_seed(seed)  # reproducible TTT sampling per rollout
-                    if arm == "+ttt":
-                        model = copy.deepcopy(base)
-                        opt = torch.optim.AdamW(model.net.parameters(), lr=config.ttt_lr)
-                        ttt: tuple[Any, ...] | None = (model, opt, config.ttt_steps, vocab)
-                    else:
-                        model, ttt = base, None
+                    model, on_consult = _make_arm(arm, seed)
                     horizon = _rollout(
-                        model, partial, net, NetworkState.initial(net.hosts), actions,
-                        rho, config.epsilon, ttt=ttt,
+                        model, partial, NetworkState.initial(net.hosts), actions,
+                        rho, config.epsilon, on_consult=on_consult,
                     )
                     per_rho[rho].append(horizon)
         for rho in config.rhos:
@@ -217,7 +245,7 @@ def _plot(points: list[CurvePoint], path: Path, config: EN5Config) -> None:  # p
     import matplotlib.pyplot as plt
 
     fig, ax = plt.subplots(figsize=(6.8, 4.6))
-    colors = {"supervised": "#9bd", "+ttt": "#16a"}
+    colors = {"supervised": "#9bd", "+ttt": "#c66", "+ttt-replay": "#16a"}
     for arm in ARMS:
         cells = sorted((p for p in points if p.arm == arm), key=lambda p: p.rho)
         xs = [p.rho for p in cells]

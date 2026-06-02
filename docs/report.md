@@ -737,20 +737,23 @@ trajectory. Two arms through the same loop (5 hosts, ε=0.05, T=24, 3 seeds × 2
 | arm | ρ=0 | ρ=0.1 | ρ=0.2 | ρ=0.3 | ρ=0.5 | ρ=1.0 |
 |---|---|---|---|---|---|---|
 | supervised (frozen) | 0.0 | 3.2 | 3.2 | 4.3 | 4.7 | 24.0 |
-| +ttt (self-healing) | 0.0 | 3.2 | 3.2 | 3.5 | 4.7 | 24.0 |
+| +ttt (single-example) | 0.0 | 3.2 | 3.2 | 3.5 | 4.7 | 24.0 |
+| +ttt-replay (replay buffer) | 0.0 | 3.2 | 3.2 | 3.5 | 4.7 | 24.0 |
 
 ![EN5 / H7: online self-healing (TTT) does not lift H_ε(ρ) at this scale](../figures/en5_selfheal.png)
 
-**H7 is a null at this scale.** The self-healing arm does not lift `H_ε(ρ)` above the frozen baseline —
-identical in kind, marginally *lower* at ρ=0.3 (a few single-example gradient steps occasionally perturb
-the weights without generalizing to the next unaided step). This is the v0 H3/RLVR null surviving into the
-network world, and it is *consistent*, not surprising: EN7 showed the floor is model-invariant and EN4
-localized the wall to the **one-step→horizon conversion**, so a handful of in-rollout steps on single
-examples cannot move the binding per-step competence. The TTT-stability literature (SPEC-3 §6.3) predicted
-exactly this risk for minimal updates — so a null *confirms a known failure mode* rather than wasting the
-run. **Pre-registered next lever:** a real self-healing budget — a replay buffer of recent corrections,
-more steps, a trust-region revert — not the minimal single-example update; and RLVR stays deferred (its
-reward is sparse exactly at the floor). The `online_update` primitive ships for that follow-up either way.
+**H7 is a robust null at this scale — and the pre-registered next lever was run, not just promised.** Both
+self-healing arms — the minimal single-example update *and* the **replay-buffer budget** (a growing buffer
+of corrections, 5 minibatch updates per consult, SPEC-3 §6) — match the frozen baseline (marginally *lower*
+at ρ=0.3); neither changes *where* the first drift happens, so the first-exceedance `H_ε` is unmoved. So
+the richer budget does not rescue H7: this is the **strong** form of the negative. It is *consistent*, not
+surprising: EN7 showed the floor is model-invariant and EN4 localized the wall to the
+**one-step→horizon conversion**, so online adaptation — in either form — cannot move the binding per-step
+competence. The TTT-stability literature (SPEC-3 §6.3) predicted exactly this for in-rollout updates.
+**Where this routes the floor:** self-healing-as-floor-lifter is closed at this scale; the floor's real
+levers are **scale (SPEC-9) and objective grounding (SPEC-8 oracle-anchored pretraining)**, not adaptation
+or correction-as-teaching. RLVR stays deferred (its reward is sparse exactly at the floor). The
+`online_update` primitive ships regardless, for the host/distributed worlds where horizons are longer.
 
 ## Threats to validity
 

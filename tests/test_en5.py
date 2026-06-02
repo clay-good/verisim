@@ -18,6 +18,8 @@ def _tiny() -> EN5Config:
         train_steps_per_traj=10,
         graph_iters=30,
         ttt_steps=2,
+        replay_steps=2,
+        replay_batch=4,
         difficulties={"low": "weighted"},
         eval_seeds=(100,),
         eval_steps=8,

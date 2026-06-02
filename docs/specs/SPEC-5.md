@@ -736,16 +736,17 @@ the network world — they are gated on the NW8 latent arm.
   > **Result — H7 a null at this scale ([`en5.py`](../../src/verisim/experiments/en5.py),
   > [`en5_selfheal.csv`](../../figures/en5_selfheal.csv); 5 hosts, ε=0.05, T=24, 3 seeds × 2
   > difficulties, the [`online_update`](../../src/verisim/netmodel/graph_train.py) TTT primitive).**
-  > Adding an in-rollout gradient step on each oracle-revealed delta (the self-healing arm) does **not**
-  > lift `H_ε(ρ)` above the frozen-weights baseline: supervised 0.0/3.2/3.2/4.3/4.7/24 vs +ttt
-  > 0.0/3.2/3.2/3.5/4.7/24 — identical in kind, marginally *lower* at ρ=0.3 (single-example updates
-  > occasionally perturb without generalizing to the next unaided step). This is the v0 H3/RLVR null
-  > surviving into the network world, and it is consistent: EN7 showed the floor is model-invariant and
-  > EN4 localized the wall to the one-step→horizon conversion, so a handful of in-rollout steps on single
-  > examples cannot move the binding per-step competence. *Pre-registered next lever (SPEC-3 §6):* a
-  > real self-healing budget — a **replay buffer** of recent corrections, more steps, trust-region revert
-  > — not the minimal single-example update; RLVR stays deferred (sparse reward at the floor). The
-  > `online_update` primitive ships either way. *RLVR arm deferred (rationale in the EN5 docstring).*
+  > Adding an in-rollout gradient step on each oracle-revealed delta does **not** lift `H_ε(ρ)` above
+  > the frozen-weights baseline, and **the pre-registered replay-buffer lever — run here as a third arm —
+  > is also null**: supervised 0.0/3.2/3.2/**4.3**/4.7/24, +ttt 0.0/3.2/3.2/**3.5**/4.7/24, +ttt-replay
+  > 0.0/3.2/3.2/**3.5**/4.7/24. Both TTT arms are identical and ≈ the frozen baseline (marginally *lower*
+  > at ρ=0.3) — neither changes *where* the first drift happens, so first-exceedance `H_ε` is unmoved.
+  > This is the **strong** form of the H7 negative: even a real self-healing budget (replay buffer + 5
+  > minibatch updates per consult) does not lift the floor at this scale. Consistent: EN7 showed the
+  > floor is model-invariant and EN4 localized the wall to the one-step→horizon conversion, so online
+  > adaptation cannot move the binding per-step competence — that needs **scale (SPEC-9) and objective
+  > grounding (SPEC-8)**, not adaptation. *RLVR stays deferred* (sparse reward at the floor; rationale in
+  > the EN5 docstring). The [`online_update`](../../src/verisim/netmodel/graph_train.py) primitive ships.
 - **EN6 — counterfactual & two-oracle grounding** (**H5**, **H12**): train with
   branched-replay counterfactuals; add the Batfish-style control-plane oracle (§5.1);
   measure faithfulness and downstream change-safety on held-out incidents.

@@ -232,16 +232,19 @@ the weights mid-rollout lift the curve where frozen weights cannot?
 | arm | ρ=0 | ρ=0.1 | ρ=0.3 | ρ=0.5 | ρ=1.0 |
 |---|---|---|---|---|---|
 | supervised (frozen) | 0.0 | 3.2 | 4.3 | 4.7 | 24.0 |
-| +ttt (self-healing) | 0.0 | 3.2 | 3.5 | 4.7 | 24.0 |
+| +ttt (single-example) | 0.0 | 3.2 | 3.5 | 4.7 | 24.0 |
+| +ttt-replay (replay buffer) | 0.0 | 3.2 | 3.5 | 4.7 | 24.0 |
 
-**A null at this scale.** The self-healing arm matches the frozen baseline (marginally *lower* at ρ=0.3 —
-single-example updates occasionally perturb without generalizing). This is consistent, not surprising:
+**A robust null — and the pre-registered lever was run, not just promised.** *Both* self-healing arms —
+the minimal single-example update **and** the replay-buffer budget (a growing buffer of corrections, 5
+minibatch updates per consult) — match the frozen baseline; neither changes *where* the first drift
+happens, so `H_ε` is unmoved. The richer budget does not rescue H7. This is consistent, not surprising:
 EN4 localized the wall to the **one-step→horizon conversion** and EN7 showed the floor is model-invariant,
-so a handful of in-rollout steps on single examples can't move the binding per-step competence. It's the
-v0 RLVR/H3 null surviving into the network world, and the TTT-stability literature predicted exactly this
-for minimal updates. *Pre-registered next lever:* a real self-healing budget — a **replay buffer** of
-recent corrections + trust-region revert, not the minimal single-example step. The
-[`online_update`](src/verisim/netmodel/graph_train.py) primitive ships for that follow-up.
+so online adaptation — in either form — can't move the binding per-step competence. **Where this routes
+the floor:** self-healing-as-floor-lifter is closed at this scale; the floor's real levers are **scale
+([SPEC-9](docs/specs/SPEC-9.md)) and objective grounding ([SPEC-8](docs/specs/SPEC-8.md))**, not
+adaptation. The [`online_update`](src/verisim/netmodel/graph_train.py) primitive ships for the
+host/distributed worlds where horizons are longer.
 
 ## The problem, and what we're trying to accomplish
 
@@ -407,10 +410,11 @@ write-up is [docs/report.md](docs/report.md).
 > modestly by scaling negatives with the world).** **EN7/H22 model-invariance now ships** ([§9](#9-the-no-knee-shape-is-the-loops-not-the-models-network-en7--h22)):
 > the floor+cliff `H_ε(ρ)` shape is the same across null / flat / graph proposers — the loop governs the
 > shape, the proposer sets the floor height (H22 supported in kind). **EN5/H7 self-healing also ships**
-> ([§10](#10-online-self-healing-ttt-does-not-lift-the-floor--yet-network-en5--h7-an-honest-null)): a
-> minimal in-rollout TTT step does *not* lift the floor (an honest null, consistent with EN4/EN7) — the
-> pre-registered fix is a real replay-buffer self-healing budget. Next: EN6 (counterfactual two-oracle),
-> the SPEC-9 LS3 hero instance (N~400–512), and the replay-buffer EN5 follow-up.
+> ([§10](#10-online-self-healing-ttt-does-not-lift-the-floor--yet-network-en5--h7-an-honest-null)):
+> *neither* a minimal in-rollout TTT step *nor* the pre-registered replay-buffer self-healing budget
+> lifts the floor (a robust null, consistent with EN4/EN7) — so the floor's levers are scale (SPEC-9) and
+> objective grounding (SPEC-8), not adaptation. Next: EN6 (counterfactual two-oracle, H12/H5 change-safety),
+> the SPEC-9 LS3 hero instance (N~400–512).
 
 **v0 — shell/filesystem world (`src/verisim/`, SPEC-2 §13): complete.**
 
@@ -433,7 +437,7 @@ write-up is [docs/report.md](docs/report.md).
 | **NW5** | Partial-observation loop ([`netloop/`](src/verisim/netloop/)): two-mode (full / **probe**) oracle, probe policies `π_o`, correction/belief operators, baselines, model-agnostic runner | ✅ |
 | **NW6** | **EN1 network `H_ε(ρ)` curve** ([`en1_curve.png`](figures/en1_curve.png)) — the prime directive. Honest H8 negative on the flat arm: near-flat interior | ✅ |
 | **NW7** | Equal-budget comparisons. **EN2** (policy `π_c`, H9) + **EN3** (operators, §8.3): EN3 breaks v0's operator-identity collapse — the probe earns **~2.3×** more faithful horizon per oracle-bit | ◐ EN2/EN3 |
-| **NW8** | **GNN + RSSM graph arm** ([`graph_model.py`](src/verisim/netmodel/graph_model.py)) + §6.3 **noise + self-forcing** levers + **EN4 graph-vs-flat (H11)** + **delta-exact metric** ([`exact.py`](src/verisim/netmetrics/exact.py)) + **SPEC-8 OG1/OG2 data factory** ([`grounding.py`](src/verisim/netdata/grounding.py), [`negatives.py`](src/verisim/netdata/negatives.py)) + **SPEC-8 EN8/OG3 ablation** ([`en8.py`](src/verisim/experiments/en8.py), [`grounded_train.py`](src/verisim/netmodel/grounded_train.py): H23 collapse-tax removed, H24 near-tie) + **SPEC-8 EN9/OG4 ablation** ([`en9.py`](src/verisim/experiments/en9.py): H25 confirmed, H5 fidelity ~2× over VICReg) + **EN7/H22 model-invariance** ([`en7.py`](src/verisim/experiments/en7.py): the floor+cliff `H_ε(ρ)` shape is invariant across null/flat/graph proposers — H22 supported in kind) + **EN5/H7 self-healing** ([`en5.py`](src/verisim/experiments/en5.py): a minimal online-TTT step is a null at this scale; the `online_update` primitive ships for the replay-buffer follow-up). Then counterfactual (EN6) | ◐ graph arm + EN4 + both levers + OG1/OG2 + EN8/OG3 + EN9/OG4 + EN7/H22 + EN5/H7 |
+| **NW8** | **GNN + RSSM graph arm** ([`graph_model.py`](src/verisim/netmodel/graph_model.py)) + §6.3 **noise + self-forcing** levers + **EN4 graph-vs-flat (H11)** + **delta-exact metric** ([`exact.py`](src/verisim/netmetrics/exact.py)) + **SPEC-8 OG1/OG2 data factory** ([`grounding.py`](src/verisim/netdata/grounding.py), [`negatives.py`](src/verisim/netdata/negatives.py)) + **SPEC-8 EN8/OG3 ablation** ([`en8.py`](src/verisim/experiments/en8.py), [`grounded_train.py`](src/verisim/netmodel/grounded_train.py): H23 collapse-tax removed, H24 near-tie) + **SPEC-8 EN9/OG4 ablation** ([`en9.py`](src/verisim/experiments/en9.py): H25 confirmed, H5 fidelity ~2× over VICReg) + **EN7/H22 model-invariance** ([`en7.py`](src/verisim/experiments/en7.py): the floor+cliff `H_ε(ρ)` shape is invariant across null/flat/graph proposers — H22 supported in kind) + **EN5/H7 self-healing** ([`en5.py`](src/verisim/experiments/en5.py): a robust null — neither single-example TTT nor a replay-buffer budget lifts the floor; the floor's levers are scale/objective, not adaptation). Then counterfactual (EN6) | ◐ graph arm + EN4 + both levers + OG1/OG2 + EN8/OG3 + EN9/OG4 + EN7/H22 + EN5/H7 |
 | **SPEC-9 LS0–LS2** | **Free-oracle scaling** ([`en8_scale.py`](src/verisim/experiments/en8_scale.py), [`en9_scale.py`](src/verisim/experiments/en9_scale.py), [`en8_capacity.py`](src/verisim/experiments/en8_capacity.py), [`scale_common.py`](src/verisim/experiments/scale_common.py)): the measured local envelope + the 8× world-size surface with bootstrap CIs ([§8](#8-which-wins-survive-scaling--the-honest-mixed-verdict-spec-9)). **S1** H23 attenuates, **S2** H25/H5 reverses, **S3** H24 regime-dependent. The [`en9_negatives.py`](src/verisim/experiments/en9_negatives.py) S2-recovery diagnostic **confirms** the lift recovers when negatives scale with the world (k 8→32 flips it back to disjoint-positive) | ✅ LS0–LS2 + S2-recovery + S3 frontier |
 
 The deterministic cores (filesystem and network) have **no runtime dependencies** and need no GPU.
