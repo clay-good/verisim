@@ -662,7 +662,36 @@ is precisely the **training-objective** form of the partition (mask `D` in the l
 partition — the oracle *supplies* `D`, so the model is never trusted on it — is untouched and is exactly
 what the propose–verify–correct loop already does. The bankable next variant keeps `D` in the loss and
 lets the oracle own `D` only at inference. This is the epistemic engine working: a pre-registered negative
-returning a sharp, mechanistic, oracle-trustworthy result that redirects the program.
+returning a sharp, mechanistic, oracle-trustworthy result that redirects the program. *(The scaling surface
+below adds a wrinkle this `d≤64` grid did not see: at `d_model=128` and small worlds the residual gap is
+small but disjoint-**positive**, so H24 is **regime-dependent**, not flatly refuted — SPEC-9 §4 S3.)*
+
+## The local scaling surface — H23 attenuates, H25/H5 reverses (SPEC-9 LS2)
+
+The first scale-up (5/10/15 hosts) confirmed H23-S and H25-S/H5 with disjoint CIs. The full local
+**surface** — 25/50/100/200 hosts × `d_model` ∈ {64, 128} × 3 seeds, the largest oracle-grounded sweep run
+on the 32 GB M4 ([`en8_surface.csv`](../figures/en8_surface.csv),
+[`en9_surface.csv`](../figures/en9_surface.csv); ~69 min + ~104 min CPU) — carries them up an 8× world
+range, and the smoke wins survive *unevenly*. That unevenness is the result.
+
+- **H23-S (collapse) — persists but attenuates (S1).** The collapse gap is disjoint-positive at **all 8
+  cells**, so the oracle's anti-collapse advantage is real across the whole range and both capacities — the
+  most robust of the three. But it *shrinks* with world size even normalized (raw eff-rank gap 13.4 → 4.1
+  over 25 → 200 hosts at `d128`); a larger `d_model` lifts it at fixed world but does not flatten the
+  decline. "Real everywhere, diminishing" — not the scale-stable form S1 pre-registered.
+- **H25-S/H5 (interventional lift) — scale-fragile: refuted and reversed (S2).** The oracle-over-VICReg
+  branch-retrieval lift is disjoint-positive only at the smallest world + smaller capacity (25 hosts/`d64`:
+  +0.106 [0.067, 0.179]); it decays with scale and **reverses** — VICReg *beats* the oracle at 100/`d128`
+  (−0.086 [−0.113, −0.060]) and 200/`d128` (−0.094 [−0.111, −0.067]). The ~2× small-world win (0.519 vs
+  0.282 at 5 hosts) does **not** survive to 100–200 hosts at `d128`. The likely cause is a fixable design
+  artifact, not a dead idea: `k_negatives` is fixed at 8 while the counterfactual branch space grows with
+  hosts, so the oracle's InfoNCE negatives become an ever-sparser sample while VICReg (needing no negatives)
+  is unaffected. **Pre-registered next test: scale `k_negatives` with the branch space and re-measure.**
+
+This is the single most important thing the scaling bought: a headline EN9 result that looked clean at
+smoke scale **evaporates and reverses** under an honest CI sweep — and the oracle is precisely what let us
+see it. A win that does not scale, caught and reported, is worth more than one asserted and later found
+hollow.
 
 ## Threats to validity
 

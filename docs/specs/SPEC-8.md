@@ -365,9 +365,9 @@ each a *difference* the oracle buys, reported with a bootstrap CI over seeds (re
 
 | Gap (the oracle's advantage) | Definition | The undismissable target |
 |---|---|---|
-| **collapse gap (H23-S)** | `eff_rank(oracle, machinery off) − eff_rank(learned, machinery off)` (and the `emb_std` analogue) | > 0 with disjoint CIs, *stable or growing* with world/model size |
-| **residual-objective gap (H24-S)** | `residual_acc(residual obj) − residual_acc(likelihood obj)` on the bits `R` | **Refuted at local scale (§7.2 Result):** no disjoint-positive cell; masking `D` removes beneficial training signal — the *training-objective* partition does not pay, the *inference-time* partition stands |
-| **interventional lift (H25-S / H5)** | `top1(oracle) − top1(vicreg)` (and MRR) on held-out counterfactual branches | > 0 with disjoint CIs, and *widening* as more hosts create more distinct branches (chance `1/m` falls) |
+| **collapse gap (H23-S)** | `eff_rank(oracle, machinery off) − eff_rank(learned, machinery off)` (and the `emb_std` analogue) | target was *stable or growing*; **Result (SPEC-9 S1):** disjoint-positive at every cell but **attenuates** with scale — H23-S persists everywhere, the *stable* form refuted |
+| **residual-objective gap (H24-S)** | `residual_acc(residual obj) − residual_acc(likelihood obj)` on the bits `R` | **Result (§7.2, SPEC-9 S3): regime-dependent** — small disjoint-positive at high capacity + moderate `R` + small world, negative where `R` is tiny; masking `D` in the *loss* removes beneficial signal, the *inference-time* partition stands |
+| **interventional lift (H25-S / H5)** | `top1(oracle) − top1(vicreg)` (and MRR) on held-out counterfactual branches | target was *widening*; **Result (SPEC-9 S2): scale-fragile — refuted and reversed** (disjoint-*negative* at 100–200 hosts/`d128`: VICReg overtakes; likely a fixed-`k_negatives` artifact) |
 
 These are scale-sharpened forms of the existing H23/H24/H25 (SPEC.md §9) — no new global hypothesis number;
 the `-S` suffix marks "the smoke verdict, now with CIs across scale." Either branch is a result: a separated
@@ -525,13 +525,26 @@ harness ran EN8/EN9 at 5/10/15 hosts × 4 seeds ([`en8_scale.csv`](../../figures
   size: top-1 +0.100 [0.059, 0.140], +0.354 [0.266, 0.448], +0.094 [0.055, 0.125]. Honest nuance: it is
   *non-monotone* (peaks at 10 hosts), which SPEC-9's S2 pre-registers as a fixed-capacity undertraining
   artifact to test against the model-size axis.
-- **H24-S a CI-bounded near-tie, then refuted with a mechanism.** The residual-objective gap straddles
-  zero at all three world sizes (+0.069 [−0.005, 0.130], 0.000 [−0.035, 0.035], +0.006 [−0.009, 0.028]) —
-  the smoke near-tie, now with error bars. The dedicated capacity-binding frontier sweep (SPEC-9 S3,
-  [`en8_capacity`](../../src/verisim/experiments/en8_capacity.py)) then **refuted** H24's training-objective
-  form: no cell is disjoint-positive and masking `D` is disjoint-*negative* where `D` is large, because it
-  *removes beneficial training signal* rather than freeing capacity (§7.2 Result). The inference-time
-  partition (the oracle supplies `D`) stands; only "mask `D` in the loss" is refuted.
+- **H24-S a CI-bounded near-tie at this datum.** The residual-objective gap straddles zero at all three
+  world sizes (+0.069 [−0.005, 0.130], 0.000 [−0.035, 0.035], +0.006 [−0.009, 0.028]) — the smoke near-tie,
+  now with error bars.
+
+**The full local surface (LS2/LS-S3, 25–200 hosts × {`d64`,`d128`}, and the 40-host capacity frontier)
+then resolved each `-S` claim — and the honest mix is the finding (SPEC-9 §4):**
+
+- **H23-S — persists but attenuates (S1).** The collapse gap is disjoint-positive at all 8 surface cells
+  too, so H23-S holds across the whole 8× range and both capacities — but it *shrinks* with scale even
+  normalized (raw eff-rank gap 13.4→4.1 over 25→200 hosts at `d128`); larger `d_model` lifts it at fixed
+  world but does not flatten the decline. Real everywhere, diminishing.
+- **H25-S/H5 — scale-fragile: refuted and reversed (S2).** The interventional lift is disjoint-positive
+  only at the smallest world + smaller capacity (25 hosts/`d64`: +0.106) and **reverses** at scale — VICReg
+  *beats* the oracle at 100/`d128` (−0.086 [−0.113, −0.060]) and 200/`d128` (−0.094 [−0.111, −0.067]). The
+  ~2× small-world lift does **not** survive to 100–200 hosts; the likely cause is the fixed `k_negatives=8`
+  under-sampling a branch space that grows with hosts (the next test: scale negatives with the branch space).
+- **H24 — regime-dependent (S3).** Across the capacity frontier (`d≤64`) masking `D` does not pay and hurts
+  where `R` is tiny (signal starvation); on the surface at `d128` it is small disjoint-*positive* at 25–50
+  hosts. So it is neither a clean win nor a clean refutation — the *training-objective* partition helps only
+  narrowly; the *inference-time* partition (oracle supplies `D`) stands.
 
 So the two representation-mechanism claims (H23, H25/H5) are now defensible against the "single-seed /
 toy-world" dismissal, and H24 remains an honestly-bounded negative. The larger world × model **scaling
@@ -566,9 +579,9 @@ every cell is a forward move, and because the verdict is oracle-grounded, every 
 | **H23** (oracle-anchored target removes the collapse tax) | a *constructive* result for SSL: where an external referent exists, EMA+VICReg are unnecessary → simpler, more stable world-model pretraining | the **more interesting** branch: the representation collapses *even with* the oracle-anchored target → collapse has a cause the referent does not reach → a non-obvious, *bankable* fact about *why* JEPA needs its crutches that the oracle-free field structurally cannot establish |
 | **H24** (bits-to-correct residual beats raw-likelihood) | the partition (§3) is load-bearing → "offload the decidable bits, learn only the residual" is a real training principle, and the objective now matches the inference-time metric | the decidable part `D` was already cheap for the model to learn → masking it buys nothing → a clean bound on *when* the partition matters (it will matter more as worlds grow, SPEC-6/7) |
 | **H25** (oracle hard-negatives are an exact anti-collapse referent) | exact near-miss/counterfactual negatives match or beat statistical regularizers *and* lift interventional fidelity (the H5 lift) → a second, independent route to grounded SSL | near-miss structure was not the collapse mechanism → narrows precisely *what* anti-collapse fixes → a map of the failure surface contrastive SSL has lacked |
-| **H23-S** (the collapse gap holds with CIs across scale) | the collapse gap stays > 0 with **disjoint** bootstrap CIs, stable or growing across world/model size → the smoke result was not an artifact of size; the SSL contribution is real and robust | the gap shrinks or its CIs overlap once seeds and scale are honest → the OG3 smoke "win" was a small-sample mirage → a *bankable* correction that the field needs and only the oracle can certify |
-| **H24-S** (residual supervision wins once `R` is hard and capacity binds, §7.2) | the residual gap crosses 0 into positive as the world grows at fixed capacity → the partition (§3) is load-bearing *exactly where the theory says* — when offloading `D` frees a binding budget for a hard `R` | even with `R` made hard and capacity made binding, masking `D` buys nothing (CI-bounded) → the **strong** form of the H24 negative: a sharp, scale-resolved bound on when the partition matters. **[Result: this branch — REFUTED with a mechanism (§7.2, SPEC-9 S3): masking `D` *removes beneficial training signal*, not wasted capacity, so the training-objective partition does not pay; the inference-time partition stands.]** |
-| **H25-S** (the interventional lift widens with branch count) | `top1(oracle) − top1(vicreg)` stays > 0 with disjoint CIs and *widens* as more hosts create more distinct branches (chance `1/m` falls) → exact counterfactuals are the scalable route to interventional fidelity | the lift narrows at scale → VICReg's statistical blindness is a small-world artifact → narrows *where* exact negatives are worth their cost |
+| **H23-S** (the collapse gap holds with CIs across scale) | the collapse gap stays > 0 with **disjoint** bootstrap CIs, stable or growing across world/model size → the smoke result was not an artifact of size; the SSL contribution is real and robust | the gap shrinks or its CIs overlap once seeds and scale are honest → the OG3 smoke "win" was a small-sample mirage → a *bankable* correction. **[Result (SPEC-9 S1): the *middle* path — disjoint-positive at every cell across the 8× range (H23 robust) but attenuating with scale; real everywhere, diminishing.]** |
+| **H24-S** (residual supervision wins once `R` is hard and capacity binds, §7.2) | the residual gap crosses 0 into positive as the world grows at fixed capacity → the partition (§3) is load-bearing *exactly where the theory says* — when offloading `D` frees a binding budget for a hard `R` | even with `R` made hard and capacity made binding, masking `D` buys nothing (CI-bounded) → the **strong** form of the H24 negative: a sharp, scale-resolved bound on when the partition matters. **[Result (§7.2, SPEC-9 S3): REGIME-DEPENDENT — small disjoint-positive at high capacity + moderate `R` + small world, negative where `R` is tiny; masking `D` in the loss removes beneficial signal, the inference-time partition stands.]** |
+| **H25-S** (the interventional lift widens with branch count) | `top1(oracle) − top1(vicreg)` stays > 0 with disjoint CIs and *widens* as more hosts create more distinct branches (chance `1/m` falls) → exact counterfactuals are the scalable route to interventional fidelity | the lift narrows at scale → VICReg's statistical blindness is a small-world artifact → narrows *where* exact negatives are worth their cost. **[Result (SPEC-9 S2): stronger than narrowing — the lift *reverses*, disjoint-negative at 100–200 hosts/`d128` (VICReg overtakes); scale-fragile, likely a fixed-`k_negatives` artifact — the headline EN9 win does not survive scaling as-built.]** |
 
 The pattern across all three is the project's stance in one frame: **the refutation branch is never empty,
 and is frequently the branch worth more.** We can ask "what is the collapse-prevention machinery a

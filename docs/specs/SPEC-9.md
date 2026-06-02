@@ -132,12 +132,38 @@ honest negative.
   scale-free) stays positive and roughly stable as `N` grows, and the raw gap is recovered by scaling
   `d_model` with `N`. *Refuted if* even the normalized gap decays to zero with scale — the oracle's
   anti-collapse advantage would then be a small-world effect, a bankable correction.
+
+  > **Result — H23-S survives scaling; S1's *stable* form does NOT** ([`en8_surface.csv`](../../figures/en8_surface.csv);
+  > 25/50/100/200 hosts × `d_model` ∈ {64,128} × 3 seeds). The collapse gap is **disjoint-positive at
+  > every one of the 8 cells** — so H23-S (the oracle removes the collapse tax) holds robustly across the
+  > whole 8× world range and both capacities; this is the strongest of the three results. But it
+  > **attenuates** with world size: raw eff-rank gap 13.4→13.2→6.9→4.1 at `d128` (and 7.5→6.1→5.3→3.2 at
+  > `d64`), and the *normalized* gap declines too (≈0.105→0.032 at `d128`). Scaling `d_model` lifts the raw
+  > gap at fixed world (`d128 > d64` everywhere) but does **not** flatten the decline. So S1's specific
+  > "scale-stable once normalized" prediction is refuted: the honest claim is **persistent but
+  > attenuating** — the oracle's anti-collapse advantage is real at every scale tested, and shrinking.
 - **S2 — the interventional lift's non-monotonicity is a capacity artifact (refines H25-S).** The
   oracle-over-VICReg lift was positive and disjoint at 5/10/15 hosts but *non-monotone* (peaked at 10).
   The claim: holding training adequate and scaling `d_model` with `N` restores monotone (or at least
   non-decreasing) lift; the dip is the larger world undertraining at fixed small capacity, not a real
   ceiling on what counterfactual negatives buy. *Refuted if* the lift stays non-monotone or narrows
   with capacity — then exact negatives have a genuine large-world limit worth mapping.
+
+  > **Result — S2 REFUTED, and the lift *reverses* at scale (the most important negative so far)**
+  > ([`en9_surface.csv`](../../figures/en9_surface.csv); 25/50/100/200 hosts × `d_model` ∈ {64,128} × 3
+  > seeds). The oracle-over-VICReg interventional lift (top-1) is disjoint-positive **only** at the
+  > smallest world and smaller capacity (25 hosts/`d64`: +0.106 [0.067, 0.179]); it **decays with world
+  > size and reverses** — at higher capacity it goes disjoint-**negative**, so VICReg *beats* the oracle
+  > on branch retrieval (100 hosts/`d128`: −0.086 [−0.113, −0.060]; 200/`d128`: −0.094 [−0.111, −0.067]).
+  > Capacity does the *opposite* of what S2 predicted: more `d_model` makes the lift worse at scale, not
+  > monotone. **So the headline EN9/H5 result (a ~2× lift at 5 hosts) is scale-fragile — it does not
+  > survive to 100–200 hosts at `d128`.** The most likely mechanism is a design artifact, not a death of
+  > the idea: `k_negatives` is fixed at 8 while the *counterfactual branch space grows with hosts*, so the
+  > oracle's InfoNCE negatives become an ever-sparser sample of the branches it must separate, while
+  > VICReg (which needs no negatives) is unaffected. The pre-registered next test: **scale `k_negatives`
+  > with the branch space** and re-measure. Until then, H25-S/H5 is **confirmed at small scale, refuted at
+  > large scale + high capacity** — a sharp, bankable bound on a result the README/report had presented as
+  > clean, and exactly why scaling with CIs was worth doing.
 - **S3 — the H24 capacity-binding frontier exists and is locatable (sharpens H24-S).** Residual-objective
   supervision was a CI-bounded tie at full capacity. The claim: there is a locatable frontier in the
   (world size, model capacity, observed-fraction) space where the residual gap turns *positive with a
@@ -145,21 +171,24 @@ honest negative.
   if* no such frontier appears anywhere in the local envelope — the strong form of the H24 negative:
   masking the decidable bits never pays at any scale one machine can reach, a sharp, scale-resolved bound.
 
-  > **Result — S3 REFUTED, with a mechanism ([`en8_capacity`](../../src/verisim/experiments/en8_capacity.py),
-  > [`en8_capacity.csv`](../../figures/en8_capacity.csv); 40-host world × `d_model` ∈ {16,32,64} ×
-  > observed-fraction ∈ {0.25,0.5,0.75} × 4 seeds).** No cell's residual gap is disjoint-positive — the
-  > frontier does not exist in the local envelope. The result is *stronger than a tie*: where the
-  > decidable part `D` is large (observed-fraction 0.75, so `R` is only ~11% of tokens) masking it is
-  > disjoint-**negative** and worsens with capacity (`d_model=64`: −0.094 [−0.130, −0.057]). The
-  > mechanism is the finding: **masking `D` does not free capacity for `R` — it removes training signal.**
-  > With the loss masked on `D`, the model is supervised on only the R-fraction of tokens per step, which
-  > *starves* the shared encoder/decoder; learning `D` is **beneficial multi-task auxiliary signal** for
-  > the representation `R` also uses, not wasted capacity. So at this scale capacity was never the binding
-  > constraint — supervision signal was — and H24's "burning capacity on `D` is waste" premise (SPEC-8 §3,
-  > DD-OG-2) does not hold here. **What is refuted is precisely the *training-objective* form of the
-  > partition (mask `D` in the loss); the *inference-time* partition — the oracle *supplies* `D` so the
-  > model is never trusted on it (DD-OG-3) — is untouched and stands.** A future H24 variant should keep
-  > `D` in the loss (it helps) and use the oracle only at inference, which is what the loop already does.
+  > **Result — S3 is REGIME-DEPENDENT, with a mechanism.** Two complementary sweeps, read together:
+  > the capacity frontier ([`en8_capacity.csv`](../../figures/en8_capacity.csv); 40-host world × `d_model`
+  > ∈ {16,32,64} × observed-fraction ∈ {0.25,0.5,0.75} × 4 seeds) finds **no** disjoint-positive cell and
+  > a disjoint-**negative** gap where the decidable part `D` is large (observed-fraction 0.75, `R` ~11% of
+  > tokens; `d64`: −0.094 [−0.130, −0.057]). But the scaling surface
+  > ([`en8_surface.csv`](../../figures/en8_surface.csv)), which the frontier sweep did not cover at
+  > `d_model=128`, finds a small but **disjoint-positive** gap at higher capacity + smaller world +
+  > moderate `R` (25 hosts/`d128`: +0.038 [0.013, 0.064]; 50/`d128`: +0.027 [0.023, 0.035]), vanishing by
+  > 100–200 hosts. So masking `D` is **not uniformly useless: it helps narrowly (high capacity, moderate
+  > `R`, small world) and hurts where `R` is tiny.** The mechanism is the tension: masking `D` *removes
+  > training signal* (the model is supervised on only the R-fraction of tokens/step, starving the shared
+  > encoder/decoder — learning `D` is **beneficial multi-task auxiliary signal**), and this cost dominates
+  > the capacity-allocation benefit except in the narrow regime where capacity is ample and `R` is large
+  > enough to matter. The earlier reading ("refuted") was too strong — it generalized the `d≤64` frontier
+  > past the `d128` cells it never tested. **What is genuinely bounded is the *training-objective* form of
+  > the partition (mask `D` in the loss); the *inference-time* partition — the oracle *supplies* `D` so the
+  > model is never trusted on it (DD-OG-3) — is untouched.** Next variant: keep `D` in the loss (the
+  > auxiliary signal helps) and let the oracle own `D` only at inference, as the loop already does.
 
 These reuse the SPEC-8 §7.1 harness ([`en8_scale`](../../src/verisim/experiments/en8_scale.py),
 [`en9_scale`](../../src/verisim/experiments/en9_scale.py)) extended along the **model-size axis** (S1/S2),
@@ -176,7 +205,7 @@ Non-colliding with `M*/S*/AR*/NW*/HC*/DS*/OG*`. Gated as ever: measure the envel
 |---|---|---|---|
 | **LS0** | The envelope, measured: time/memory vs host count, CPU vs MPS, the `O(N^2)` law and the memory-not-binding finding (§3). | the numbers regenerate from a probe script on the target machine | ✅ (§3 table) |
 | **LS1** | The enablers: configurable world size + model size threaded through EN8/EN9 ([`scaled_net_config`](../../src/verisim/net/config.py), the [`build_graph_model`](../../src/verisim/netmodel/graph_model.py) knobs), the SVD-on-CPU MPS fix, and the chunked [`_embed_all`](../../src/verisim/netmodel/grounded_train.py) eval (deep datasets at large `N` without OOM). | ruff/mypy clean; harness tests + full suite green; deterministic on CPU | ✅ |
-| **LS2** | The local-maximal **scaling surface**: EN8/EN9 over world size × model size × seeds up to the §3 sweep preset, committed CSV + scaling-curve figures with CIs, testing S1/S2. | the surface regenerates from config + seeds; S1/S2 verdicts populated with bootstrap CIs | ◐ running (25–200 hosts × {d64,d128} × 3 seeds) |
+| **LS2** | The local-maximal **scaling surface**: EN8/EN9 over world size × model size × seeds up to the §3 sweep preset, committed CSV + scaling-curve figures with CIs, testing S1/S2. | the surface regenerates from config + seeds; S1/S2 verdicts populated with bootstrap CIs | ✅ shipped (25–200 hosts × {d64,d128} × 3 seeds, [`en8_surface.csv`](../../figures/en8_surface.csv) / [`en9_surface.csv`](../../figures/en9_surface.csv); ~69 min + ~104 min CPU): **S1 — H23-S persists but attenuates** (collapse gap disjoint-positive at all 8 cells, declining with scale); **S2 — refuted and reversed** (the H25-S/H5 lift is scale-fragile: disjoint-negative at 100–200 hosts/`d128`) (§4) |
 | **LS-S3** | The **H24 capacity-binding frontier** ([`en8_capacity`](../../src/verisim/experiments/en8_capacity.py)): residual gap over `d_model` × observed-fraction at a fixed hard world, with CIs — the dedicated S3 test. | the frontier regenerates from config + seeds; S3 verdict populated | ✅ shipped ([`test_en8_capacity.py`](../../tests/test_en8_capacity.py), [`en8_capacity.csv`](../../figures/en8_capacity.csv)): **S3 refuted with a mechanism** — masking `D` removes beneficial training signal; the *training-objective* partition does not pay, the *inference-time* partition stands (§4) |
 | **LS3** | A **hero instance** at the §3 hero preset (`N` ~400–512), single large committed point, as the "largest oracle-grounded world proven on one machine" datum. | regenerates from config + seed; reported with its honest caveats (single point, capacity-limited) | ☐ planned |
 

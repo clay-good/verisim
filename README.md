@@ -18,8 +18,8 @@ config + seeds (`bash figures/reproduce.sh`); each is detailed below.
 
 | | |
 |---|---|
-| [![EN4 graph-vs-flat](figures/en4_graph_vs_flat.png)](figures/en4_graph_vs_flat.png)<br>**Structure helps (EN4 / H11).** The message-passing graph+RSSM world model beats the flat serializer by **+16.5 pts** one-step token accuracy and **+30.6 pts** delta-exact rate — and the gap *widens* on the honest metric. | [![EN8 oracle-grounded SSL](figures/en8_grounding.png)](figures/en8_grounding.png)<br>**The oracle removes the collapse tax (EN8 / H23).** Ablate JEPA's EMA+VICReg crutches and a learned target collapses (eff-rank 41.8→13.4); an **oracle-anchored** target stays healthy (25.8) — the external referent the field lacks. |
-| [![EN9 oracle hard-negatives](figures/en9_contrastive.png)](figures/en9_contrastive.png)<br>**Exact negatives beat statistical ones where it counts (EN9 / H25 / H5).** VICReg and the oracle both stop contrastive collapse — but only the oracle's *counterfactual* negatives teach which intervention leads where: branch-retrieval top-1 **0.519 vs VICReg's 0.282**. The statistical regularizer is full-rank but interventionally blind. | [![EN1 / K4 the floor](figures/en1_curve.png)](figures/en1_curve.png)<br>**A floor, not a knee (EN1 / K4 / H8).** Faithful horizon vs consultation budget `H_ε(ρ)` is flat-then-cliff on *both* worlds: consultation budget alone does not buy horizon. The honest negative that drove every later design choice. |
+| [![EN4 graph-vs-flat](figures/en4_graph_vs_flat.png)](figures/en4_graph_vs_flat.png)<br>**Structure helps (EN4 / H11).** The message-passing graph+RSSM world model beats the flat serializer by **+16.5 pts** one-step token accuracy and **+30.6 pts** delta-exact rate — and the gap *widens* on the honest metric. | [![EN8 oracle-grounded SSL](figures/en8_grounding.png)](figures/en8_grounding.png)<br>**The oracle removes the collapse tax (EN8 / H23).** Ablate JEPA's EMA+VICReg crutches and a learned target collapses (eff-rank 41.8→13.4); an **oracle-anchored** target stays healthy (25.8) — the external referent the field lacks. *Scaled to 200 hosts (SPEC-9 S1): the gap stays disjoint-positive everywhere but **attenuates** — real at every scale, diminishing.* |
+| [![EN9 oracle hard-negatives](figures/en9_contrastive.png)](figures/en9_contrastive.png)<br>**Exact negatives beat statistical ones where it counts (EN9 / H25 / H5).** VICReg and the oracle both stop contrastive collapse — but only the oracle's *counterfactual* negatives teach which intervention leads where: branch-retrieval top-1 **0.519 vs VICReg's 0.282**. The statistical regularizer is full-rank but interventionally blind. *⚠ Scaled (SPEC-9 S2): this lift is **scale-fragile** — it shrinks with world size and **reverses** by 100–200 hosts at higher capacity (VICReg overtakes). The small-world win does not survive scaling as-built; likely a fixed-negative-count artifact, the next test.* | [![EN1 / K4 the floor](figures/en1_curve.png)](figures/en1_curve.png)<br>**A floor, not a knee (EN1 / K4 / H8).** Faithful horizon vs consultation budget `H_ε(ρ)` is flat-then-cliff on *both* worlds: consultation budget alone does not buy horizon. The honest negative that drove every later design choice. |
 | [![EN3 probe efficiency](figures/en3_operators.png)](figures/en3_operators.png)<br>**What you consult beats whether (EN3).** Under partial observation a cheap one-host **probe + belief filter** earns **~2.3×** more faithful horizon per oracle-bit than full consultation — active sensing is a real lever. | |
 
 ## What we've found so far
@@ -140,6 +140,17 @@ oracle makes it faithful to the very branches the loop will be asked to predict.
 prevent collapse; it structurally cannot teach counterfactual structure it has no access to. This is the
 H5 / change-safety lift arriving through the *self-supervised* objective rather than the RL cherry — a third
 split verdict, every cell bankable under the oracle.
+
+> **⚠ Scaling caveat (SPEC-9 S2 — added after the surface run).** This lift is **scale-fragile**, and saying
+> so is the point of measuring it. On the 25–200-host surface (× `d64`/`d128` × 3 seeds) the oracle's top-1
+> advantage is disjoint-positive only at the smallest world + smaller capacity (25 hosts/`d64`: +0.106) and
+> **reverses** at scale — VICReg *overtakes* the oracle at 100 hosts/`d128` (−0.086 [−0.113, −0.060]) and
+> 200/`d128` (−0.094 [−0.111, −0.067]). The ~2× small-world win above does **not** survive to 100–200 hosts.
+> The most likely cause is a fixable design artifact — `k_negatives` is fixed at 8 while the counterfactual
+> branch space grows with hosts, so the oracle's negatives become an ever-sparser sample — and the
+> pre-registered next test is to scale the negative count with the branch space. But as-built, H5 is
+> **confirmed at small scale, refuted at large scale**, and the honest headline is that one: the oracle let us
+> *see* a smoke-scale win evaporate, which is exactly what it is for.
 
 ## The problem, and what we're trying to accomplish
 
