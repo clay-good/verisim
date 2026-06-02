@@ -268,7 +268,11 @@ because the model is trained on the very branches it will be asked to predict.
 
 - **DD-OG-1 — the oracle is the plate, not a fourth layer.** (§1.3) A placement, not a new algorithm.
 - **DD-OG-2 — respect the partition.** (§3) The model's capacity is for the residual `R`; the oracle
-  owns the decidable `D`; the objective enforces the split.
+  owns the decidable `D`; the objective enforces the split. **Empirical caveat (§7.2 Result, SPEC-9 S3):
+  the *training-objective* half of this — masking `D` in the loss — is refuted at local scale (it removes
+  beneficial multi-task signal, not wasted capacity). The decision survives in its *inference-time* form
+  (DD-OG-3): the oracle supplies `D` at consultation; the model is simply never *trusted* on it. Keep `D`
+  in the loss; let the oracle own `D` at inference.**
 - **DD-OG-3 — exact headline, internal grounding.** (§4) Oracle-grounded targets are internal; the
   reported number stays bit-exact and oracle-grounded.
 - **DD-OG-4 — never latent-ify the checkable part.** Inherited from DD-3 (SPEC-3 §4.2). The
@@ -362,7 +366,7 @@ each a *difference* the oracle buys, reported with a bootstrap CI over seeds (re
 | Gap (the oracle's advantage) | Definition | The undismissable target |
 |---|---|---|
 | **collapse gap (H23-S)** | `eff_rank(oracle, machinery off) − eff_rank(learned, machinery off)` (and the `emb_std` analogue) | > 0 with disjoint CIs, *stable or growing* with world/model size |
-| **residual-objective gap (H24-S)** | `residual_acc(residual obj) − residual_acc(likelihood obj)` on the bits `R` | crosses **0 into positive** as the world grows at fixed capacity (the capacity story, §7.2) — or an honest, CI-bounded near-tie everywhere, banked |
+| **residual-objective gap (H24-S)** | `residual_acc(residual obj) − residual_acc(likelihood obj)` on the bits `R` | **Refuted at local scale (§7.2 Result):** no disjoint-positive cell; masking `D` removes beneficial training signal — the *training-objective* partition does not pay, the *inference-time* partition stands |
 | **interventional lift (H25-S / H5)** | `top1(oracle) − top1(vicreg)` (and MRR) on held-out counterfactual branches | > 0 with disjoint CIs, and *widening* as more hosts create more distinct branches (chance `1/m` falls) |
 
 These are scale-sharpened forms of the existing H23/H24/H25 (SPEC.md §9) — no new global hypothesis number;
@@ -393,6 +397,22 @@ If, designed this way, the residual gap still does not open, that is the *strong
 "even with `R` made hard and capacity made binding, masking `D` buys nothing" — and it is bankable. What we
 will not do is scale model and world together so generously that both arms saturate and the tie is an
 artifact of over-provisioning; that would launder a non-result into a null.
+
+> **Result — the frontier was tested and H24 is REFUTED at local scale, with a mechanism**
+> ([`en8_capacity`](../../src/verisim/experiments/en8_capacity.py), [SPEC-9 §4 S3](./SPEC-9.md); 40-host
+> world × `d_model` ∈ {16,32,64} × observed-fraction ∈ {0.25,0.5,0.75} × 4 seeds). No cell is
+> disjoint-positive; where `D` is large (observed-fraction 0.75, `R` ~11% of tokens) masking it is
+> disjoint-*negative* and worse at higher capacity (`d_model=64`: −0.094 [−0.130, −0.057]). The reasoning
+> above had it backwards: masking `D` does not *free* capacity for `R`, it *removes training signal* —
+> the model is then supervised on only the R-fraction of tokens per step, starving the shared
+> encoder/decoder, and learning `D` turns out to be **beneficial multi-task auxiliary signal** for the
+> representation `R` also uses. Capacity was never the binding constraint at this scale; supervision was.
+> **What this refutes is precisely the *training-objective* form of the partition (§4.2 / DD-OG-2 — mask
+> `D` in the loss). The *inference-time* partition (DD-OG-3 — the oracle *supplies* `D`, so the model is
+> never trusted on it) is untouched and stands**, and is what the propose–verify–correct loop already
+> does. The bankable next variant: keep `D` in the loss (it helps) and let the oracle own `D` only at
+> inference. This is the epistemic engine working as designed — a pre-registered negative returning a
+> sharp, mechanistic, *trustworthy* result that redirects the program.
 
 ### 7.3 Local-first staging and the hardware envelope (the OG discipline, applied to scale)
 
@@ -467,7 +487,7 @@ stage graduates without a committed figure or an honest negative.
 | **OG3** | **EN8** runs (objective × collapse-machinery ablation) on the NW8 arm; committed figure. ([`experiments/en8.py`](../../src/verisim/experiments/en8.py), [`netmodel/grounded_train.py`](../../src/verisim/netmodel/grounded_train.py)) | the `H23`/`H24` cells are populated; regenerates from config+seed with `maxΔ=0` | ◐ smoke shipped ([`test_en8.py`](../../tests/test_en8.py), [`test_grounded_train.py`](../../tests/test_grounded_train.py)): H23 positive, H24 near-tie; CIs/scale-up remain |
 | **OG4** | **EN9** runs (oracle-contrastive); committed figure incl. interventional fidelity. ([`experiments/en9.py`](../../src/verisim/experiments/en9.py), [`netmodel/grounded_train.py`](../../src/verisim/netmodel/grounded_train.py) `train_contrastive`) | the `H25`/`H5` cells populated; honest negative reported if the proxy is not beaten | ◐ smoke shipped ([`test_en9.py`](../../tests/test_en9.py)): H25 confirmed, H5 lift ~2× over VICReg; CIs/scale-up remain |
 | **OG5** | The **scale harness** (§7.1, §7.3): configurable world size (`scaled_net_config`) + model size (`n_layer`/`n_head` exposed through `build_graph_model`) threaded through EN8/EN9; multi-seed **bootstrap CIs** (reuse [`metrics/aggregate.bootstrap_ci`](../../src/verisim/metrics/aggregate.py)); the curve runners ([`experiments/en8_scale.py`](../../src/verisim/experiments/en8_scale.py), [`experiments/en9_scale.py`](../../src/verisim/experiments/en9_scale.py)) with a `--device {cpu,mps,cuda}` flag. Built and proven **locally on CPU** before any scaled claim. | property tests: the harness is deterministic from seeds; the three gaps (H23-S/H24-S/H25-S, §7.1) + CIs are emitted; the smoke effect direction reproduces at small multi-seed scale | ✅ shipped ([`test_scale_common.py`](../../tests/test_scale_common.py), [`test_en8_scale.py`](../../tests/test_en8_scale.py), [`test_en9_scale.py`](../../tests/test_en9_scale.py)); the local SVD-on-CPU + chunked-eval enablers ([SPEC-9 §3](./SPEC-9.md)) ship with it |
-| **OG6** | The **scaled runs**: the *same* harness at the moderate target (≤ 50 hosts, `d_model ≤ 256`, many seeds, longer training, §7.3) → the committed **scaling-curve figures with disjoint CIs** — the "cannot be dismissed" deliverable. | H23-S/H24-S/H25-S verdicts populated *with bootstrap CIs across world/model size*; regenerates from config + seed; CPU-or-GPU identical code path | ◐ first datum shipped (5/10/15 hosts × 4 seeds, [`en8_scale.csv`](../../figures/en8_scale.csv) / [`en9_scale.csv`](../../figures/en9_scale.csv)): **H23-S confirmed** (collapse gap disjoint at every world size), **H25-S/H5 confirmed** (interventional lift disjoint-positive everywhere), **H24-S a CI-bounded near-tie**; the larger world × model surface (SPEC-9 LS2) is the remainder |
+| **OG6** | The **scaled runs**: the *same* harness at the moderate target (≤ 50 hosts, `d_model ≤ 256`, many seeds, longer training, §7.3) → the committed **scaling-curve figures with disjoint CIs** — the "cannot be dismissed" deliverable. | H23-S/H24-S/H25-S verdicts populated *with bootstrap CIs across world/model size*; regenerates from config + seed; CPU-or-GPU identical code path | ◐ first datum shipped (5/10/15 hosts × 4 seeds, [`en8_scale.csv`](../../figures/en8_scale.csv) / [`en9_scale.csv`](../../figures/en9_scale.csv)): **H23-S confirmed** (collapse gap disjoint at every world size), **H25-S/H5 confirmed** (interventional lift disjoint-positive everywhere), **H24-S refuted with a mechanism** ([`en8_capacity`](../../src/verisim/experiments/en8_capacity.py): masking `D` removes beneficial training signal, SPEC-9 S3); the larger world × model surface (SPEC-9 LS2) is the remainder |
 
 **OG0–OG5 have shipped; OG6's first scaled datum is in (the larger surface remains).** OG0–OG2 are the framing + deterministic, property-tested, no-GPU data factory;
 **OG3 (EN8)** is the GPU consumer that ablates the *objective × collapse* axes on the NW8 graph+RSSM arm,
@@ -505,9 +525,13 @@ harness ran EN8/EN9 at 5/10/15 hosts × 4 seeds ([`en8_scale.csv`](../../figures
   size: top-1 +0.100 [0.059, 0.140], +0.354 [0.266, 0.448], +0.094 [0.055, 0.125]. Honest nuance: it is
   *non-monotone* (peaks at 10 hosts), which SPEC-9's S2 pre-registers as a fixed-capacity undertraining
   artifact to test against the model-size axis.
-- **H24-S a CI-bounded near-tie.** The residual-objective gap straddles zero at all three sizes
-  (+0.069 [−0.005, 0.130], 0.000 [−0.035, 0.035], +0.006 [−0.009, 0.028]) — the smoke near-tie, now with
-  error bars; the capacity-binding frontier (SPEC-9 S3) is where it is pre-registered to open.
+- **H24-S a CI-bounded near-tie, then refuted with a mechanism.** The residual-objective gap straddles
+  zero at all three world sizes (+0.069 [−0.005, 0.130], 0.000 [−0.035, 0.035], +0.006 [−0.009, 0.028]) —
+  the smoke near-tie, now with error bars. The dedicated capacity-binding frontier sweep (SPEC-9 S3,
+  [`en8_capacity`](../../src/verisim/experiments/en8_capacity.py)) then **refuted** H24's training-objective
+  form: no cell is disjoint-positive and masking `D` is disjoint-*negative* where `D` is large, because it
+  *removes beneficial training signal* rather than freeing capacity (§7.2 Result). The inference-time
+  partition (the oracle supplies `D`) stands; only "mask `D` in the loss" is refuted.
 
 So the two representation-mechanism claims (H23, H25/H5) are now defensible against the "single-seed /
 toy-world" dismissal, and H24 remains an honestly-bounded negative. The larger world × model **scaling
@@ -543,7 +567,7 @@ every cell is a forward move, and because the verdict is oracle-grounded, every 
 | **H24** (bits-to-correct residual beats raw-likelihood) | the partition (§3) is load-bearing → "offload the decidable bits, learn only the residual" is a real training principle, and the objective now matches the inference-time metric | the decidable part `D` was already cheap for the model to learn → masking it buys nothing → a clean bound on *when* the partition matters (it will matter more as worlds grow, SPEC-6/7) |
 | **H25** (oracle hard-negatives are an exact anti-collapse referent) | exact near-miss/counterfactual negatives match or beat statistical regularizers *and* lift interventional fidelity (the H5 lift) → a second, independent route to grounded SSL | near-miss structure was not the collapse mechanism → narrows precisely *what* anti-collapse fixes → a map of the failure surface contrastive SSL has lacked |
 | **H23-S** (the collapse gap holds with CIs across scale) | the collapse gap stays > 0 with **disjoint** bootstrap CIs, stable or growing across world/model size → the smoke result was not an artifact of size; the SSL contribution is real and robust | the gap shrinks or its CIs overlap once seeds and scale are honest → the OG3 smoke "win" was a small-sample mirage → a *bankable* correction that the field needs and only the oracle can certify |
-| **H24-S** (residual supervision wins once `R` is hard and capacity binds, §7.2) | the residual gap crosses 0 into positive as the world grows at fixed capacity → the partition (§3) is load-bearing *exactly where the theory says* — when offloading `D` frees a binding budget for a hard `R` | even with `R` made hard and capacity made binding, masking `D` buys nothing (CI-bounded) → the **strong** form of the H24 negative: a sharp, scale-resolved bound on when the partition matters |
+| **H24-S** (residual supervision wins once `R` is hard and capacity binds, §7.2) | the residual gap crosses 0 into positive as the world grows at fixed capacity → the partition (§3) is load-bearing *exactly where the theory says* — when offloading `D` frees a binding budget for a hard `R` | even with `R` made hard and capacity made binding, masking `D` buys nothing (CI-bounded) → the **strong** form of the H24 negative: a sharp, scale-resolved bound on when the partition matters. **[Result: this branch — REFUTED with a mechanism (§7.2, SPEC-9 S3): masking `D` *removes beneficial training signal*, not wasted capacity, so the training-objective partition does not pay; the inference-time partition stands.]** |
 | **H25-S** (the interventional lift widens with branch count) | `top1(oracle) − top1(vicreg)` stays > 0 with disjoint CIs and *widens* as more hosts create more distinct branches (chance `1/m` falls) → exact counterfactuals are the scalable route to interventional fidelity | the lift narrows at scale → VICReg's statistical blindness is a small-world artifact → narrows *where* exact negatives are worth their cost |
 
 The pattern across all three is the project's stance in one frame: **the refutation branch is never empty,

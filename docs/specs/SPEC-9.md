@@ -145,9 +145,26 @@ honest negative.
   if* no such frontier appears anywhere in the local envelope — the strong form of the H24 negative:
   masking the decidable bits never pays at any scale one machine can reach, a sharp, scale-resolved bound.
 
+  > **Result — S3 REFUTED, with a mechanism ([`en8_capacity`](../../src/verisim/experiments/en8_capacity.py),
+  > [`en8_capacity.csv`](../../figures/en8_capacity.csv); 40-host world × `d_model` ∈ {16,32,64} ×
+  > observed-fraction ∈ {0.25,0.5,0.75} × 4 seeds).** No cell's residual gap is disjoint-positive — the
+  > frontier does not exist in the local envelope. The result is *stronger than a tie*: where the
+  > decidable part `D` is large (observed-fraction 0.75, so `R` is only ~11% of tokens) masking it is
+  > disjoint-**negative** and worsens with capacity (`d_model=64`: −0.094 [−0.130, −0.057]). The
+  > mechanism is the finding: **masking `D` does not free capacity for `R` — it removes training signal.**
+  > With the loss masked on `D`, the model is supervised on only the R-fraction of tokens per step, which
+  > *starves* the shared encoder/decoder; learning `D` is **beneficial multi-task auxiliary signal** for
+  > the representation `R` also uses, not wasted capacity. So at this scale capacity was never the binding
+  > constraint — supervision signal was — and H24's "burning capacity on `D` is waste" premise (SPEC-8 §3,
+  > DD-OG-2) does not hold here. **What is refuted is precisely the *training-objective* form of the
+  > partition (mask `D` in the loss); the *inference-time* partition — the oracle *supplies* `D` so the
+  > model is never trusted on it (DD-OG-3) — is untouched and stands.** A future H24 variant should keep
+  > `D` in the loss (it helps) and use the oracle only at inference, which is what the loop already does.
+
 These reuse the SPEC-8 §7.1 harness ([`en8_scale`](../../src/verisim/experiments/en8_scale.py),
-[`en9_scale`](../../src/verisim/experiments/en9_scale.py)) extended along the **model-size axis**, with
-the same bootstrap-CI discipline and the regenerate-from-seed rule. Negatives are first-class.
+[`en9_scale`](../../src/verisim/experiments/en9_scale.py)) extended along the **model-size axis** (S1/S2),
+plus the dedicated [`en8_capacity`](../../src/verisim/experiments/en8_capacity.py) frontier sweep (S3),
+with the same bootstrap-CI discipline and the regenerate-from-seed rule. Negatives are first-class.
 
 ---
 
@@ -159,7 +176,8 @@ Non-colliding with `M*/S*/AR*/NW*/HC*/DS*/OG*`. Gated as ever: measure the envel
 |---|---|---|---|
 | **LS0** | The envelope, measured: time/memory vs host count, CPU vs MPS, the `O(N^2)` law and the memory-not-binding finding (§3). | the numbers regenerate from a probe script on the target machine | ✅ (§3 table) |
 | **LS1** | The enablers: configurable world size + model size threaded through EN8/EN9 ([`scaled_net_config`](../../src/verisim/net/config.py), the [`build_graph_model`](../../src/verisim/netmodel/graph_model.py) knobs), the SVD-on-CPU MPS fix, and the chunked [`_embed_all`](../../src/verisim/netmodel/grounded_train.py) eval (deep datasets at large `N` without OOM). | ruff/mypy clean; harness tests + full suite green; deterministic on CPU | ✅ |
-| **LS2** | The local-maximal **scaling surface**: EN8/EN9 over world size × model size × seeds up to the §3 sweep preset, committed CSV + scaling-curve figures with CIs, testing S1–S3. | the surface regenerates from config + seeds; S1–S3 verdicts populated with bootstrap CIs | ☐ planned |
+| **LS2** | The local-maximal **scaling surface**: EN8/EN9 over world size × model size × seeds up to the §3 sweep preset, committed CSV + scaling-curve figures with CIs, testing S1/S2. | the surface regenerates from config + seeds; S1/S2 verdicts populated with bootstrap CIs | ◐ running (25–200 hosts × {d64,d128} × 3 seeds) |
+| **LS-S3** | The **H24 capacity-binding frontier** ([`en8_capacity`](../../src/verisim/experiments/en8_capacity.py)): residual gap over `d_model` × observed-fraction at a fixed hard world, with CIs — the dedicated S3 test. | the frontier regenerates from config + seeds; S3 verdict populated | ✅ shipped ([`test_en8_capacity.py`](../../tests/test_en8_capacity.py), [`en8_capacity.csv`](../../figures/en8_capacity.csv)): **S3 refuted with a mechanism** — masking `D` removes beneficial training signal; the *training-objective* partition does not pay, the *inference-time* partition stands (§4) |
 | **LS3** | A **hero instance** at the §3 hero preset (`N` ~400–512), single large committed point, as the "largest oracle-grounded world proven on one machine" datum. | regenerates from config + seed; reported with its honest caveats (single point, capacity-limited) | ☐ planned |
 
 ---

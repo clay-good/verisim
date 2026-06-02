@@ -637,6 +637,33 @@ The full world × model **scaling surface** (SPEC-9 LS2) extends this up the loc
 itself (how large the world can be made on one 32 GB machine before `O(N²)` message passing binds — not
 memory, and not the free oracle) is measured in [SPEC-9 §3](specs/SPEC-9.md).
 
+### H24 capacity-binding frontier — refuted with a mechanism (SPEC-9 S3)
+
+H24-S was a CI-bounded near-tie; SPEC-8 §7.2 pre-registered *why* (a capacity-allocation claim) and
+predicted a frontier where masking the decidable bits `D` and training only the residual `R` would
+*win* — where capacity binds against a hard `R`. The dedicated sweep
+([`en8_capacity.py`](../src/verisim/experiments/en8_capacity.py),
+[`en8_capacity.csv`](../figures/en8_capacity.csv); a 40-host world × `d_model` ∈ {16, 32, 64} ×
+observed-fraction ∈ {0.25, 0.5, 0.75} × 4 seeds) **refutes** it, and the refutation is the result:
+
+| observed-fraction (R-size) | d16 | d32 | d64 |
+|---|---|---|---|
+| 0.25 (R≈0.27) | +0.003 [−0.024, 0.032] | +0.003 [−0.016, 0.021] | +0.005 [−0.011, 0.021] |
+| 0.50 (R≈0.20) | +0.016 [−0.019, 0.050] | 0.000 [−0.019, 0.019] | −0.006 [−0.025, 0.013] |
+| 0.75 (R≈0.11) | −0.026 [−0.052, 0.000] | −0.026 [−0.052, −0.005] | **−0.094 [−0.130, −0.057]** |
+
+No cell's CI is disjoint-positive — the frontier does not exist in the local envelope. Stronger: where
+`D` is large (observed-fraction 0.75, `R` only ~11% of tokens) masking it is disjoint-*negative* and
+worsens with capacity. **The mechanism is the finding:** masking `D` does not free capacity for `R`, it
+*removes training signal* — the model is then supervised on only the R-fraction of tokens per step, which
+starves the shared encoder/decoder; learning `D` is **beneficial multi-task auxiliary signal**, not wasted
+capacity. So H24's "burning capacity on `D` is waste" premise does not hold at this scale. What is refuted
+is precisely the **training-objective** form of the partition (mask `D` in the loss); the **inference-time**
+partition — the oracle *supplies* `D`, so the model is never trusted on it — is untouched and is exactly
+what the propose–verify–correct loop already does. The bankable next variant keeps `D` in the loss and
+lets the oracle own `D` only at inference. This is the epistemic engine working: a pre-registered negative
+returning a sharp, mechanistic, oracle-trustworthy result that redirects the program.
+
 ## Threats to validity
 
 - **Scale.** The committed model is ~tiny and trains for a few hundred iterations on
