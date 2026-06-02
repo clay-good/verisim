@@ -5,7 +5,7 @@ making syscalls over a filesystem and a network — the world that *composes* th
 others, where concurrency makes truth hard and a deterministic kernel still makes it
 free.**
 
-> **⏸ PAUSED — design only (2026-05).** Gated behind the **network** knee. Do not build the host world until **[SPEC-5](./SPEC-5.md)** earns its network knee (**H8**); SPEC-6 must then earn the host knee + the composition law (**H13**) before SPEC-7. The active spec is **[SPEC-2.1](./SPEC-2.1.md)** (the v0 knee). Canonical build order: [SPEC §12](./SPEC.md#12-research-roadmap).
+> **▶ HC0 STARTED — the deterministic core (2026-06).** The network world is now exhaustively explored (EN1–EN10; the "knee" came back as the honest floor+cliff negative, EN1/H8), and per the program's "a negative licenses the next step" principle (SPEC-2.1 §10) the host world's **deterministic, no-GPU foundation** is buildable now — it makes no learning claim and gates nothing. **HC0 increment 1 ships:** the bundle `HostState` (process table + per-process fd tables + the **embedded v0 filesystem**), the syscall grammar (`fork`/`exit`/`setuid`/`open`/`write`/`close`), canonical serialization, and the **Tier-A reference host oracle composing the v0 FS sub-oracle** ([`verisim.host`](../../src/verisim/host/), [`verisim.hostoracle`](../../src/verisim/hostoracle/), [`docs/host-semantics.md`](../host-semantics.md), property-tested + golden). The *learned* model (HC4+) and the **composition-law experiment (H13)** remain future, gated as ever on a committed figure. Canonical build order: [SPEC §12](./SPEC.md#12-research-roadmap).
 
 This is to the *host* what [SPEC-2](./SPEC-2.md) is to the filesystem and
 [SPEC-5](./SPEC-5.md) is to the network. SPEC-2 proved the *method*
@@ -774,7 +774,7 @@ first (HC0–HC3, **no runtime deps, no GPU**), learned model after. It does not
 
 | Milestone | What | Gate |
 |---|---|---|
-| **HC0** | Host env: bundle `State` (procs/fds/fs/sockets/ipc), syscall grammar, canonical serialization, **Tier-A reference host oracle** composing the SPEC-2 FS sub-oracle + deterministic scheduler + `docs/host-semantics.md` + golden trajectories | property tests + goldens |
+| **HC0** | Host env: bundle `State` (procs/fds/fs/sockets/ipc), syscall grammar, canonical serialization, **Tier-A reference host oracle** composing the SPEC-2 FS sub-oracle + deterministic scheduler + `docs/host-semantics.md` + golden trajectories | property tests + goldens — ◐ **increment 1 shipped** ([`host/`](../../src/verisim/host/), [`hostoracle/`](../../src/verisim/hostoracle/), [`test_host_oracle.py`](../../tests/test_host_oracle.py)): procs (fork/exit) + per-process fds (open/write/close) + setuid privilege gating + the FS-composition write-through, property-tested + golden. Sockets/IPC/scheduler/cwd deferred |
 | **HC1** | Bundle `Delta` types, compositional `apply`, delta↔serialization; the `apply == oracle` invariant (reusing SPEC-2/SPEC-5 `apply` for embedded subsystems) | invariant tests |
 | **HC2** | Drivers (workload generators: fork trees, I/O, IPC, privilege), trajectory JSONL, manifests/splits, the **interleaving-entropy / chaos dial** | data tests |
 | **HC3** | Composed divergence `d` (+ per-subsystem), composition-faithfulness diagnostic, `H_ε`, bits-to-correct (per-subsystem), privilege-faithfulness, run-record schema | metric tests |
