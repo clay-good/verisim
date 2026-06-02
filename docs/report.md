@@ -755,6 +755,37 @@ levers are **scale (SPEC-9) and objective grounding (SPEC-8 oracle-anchored pret
 or correction-as-teaching. RLVR stays deferred (its reward is sparse exactly at the floor). The
 `online_update` primitive ships regardless, for the host/distributed worlds where horizons are longer.
 
+## EN6 — counterfactual grounding helps the contrastive objective, not supervision (H5)
+
+The oracle generates **counterfactual branches for free** — the exact next state `O(s, a')` of actions
+the trajectory didn't take. EN6 ([`en6.py`](../src/verisim/experiments/en6.py),
+[`en6_counterfactual.csv`](../figures/en6_counterfactual.csv)) asks whether *training* the delta predictor
+on them improves prediction of **interventions** at test time (the change-safety question a network-defense
+simulator is asked). A rigorous **3-arm, matched-example-count** design separates the counterfactual signal
+from raw volume (5 hosts, 3 eval seeds, held-out interventions):
+
+| arm | intervention delta-exact | change-safety (reachability) |
+|---|---|---|
+| trajectory | 0.551 [0.472, 0.674] | 0.924 [0.904, 0.940] |
+| trajectory-more (volume control) | **0.604** [0.542, 0.708] | 0.933 [0.908, 0.949] |
+| +counterfactual | 0.588 [0.500, 0.653] | 0.935 [0.908, 0.956] |
+
+![EN6 / H5: counterfactual grounding vs a matched-volume control on held-out intervention prediction](../figures/en6_counterfactual.png)
+
+**H5 is a null for the predictive model — beyond volume.** `+counterfactual` (0.588) does *not* beat the
+volume control `trajectory-more` (0.604); it is marginally lower, CIs fully overlapping, and change-safety
+(~0.93) is indistinguishable across all three. So the modest lift over the base trajectory is **data
+volume, not counterfactual structure** — for plain next-state *supervision*, a counterfactual branch is just
+another labeled transition that more trajectory data substitutes for. The `trajectory-more` control is what
+makes this trustworthy: without it, the 0.551→0.588 step would look like a counterfactual win. **The
+coherent contrast with EN9:** counterfactual *negatives* **did** lift the *contrastive* representation's
+interventional fidelity (structure matters for the contrastive objective) — but counterfactual *examples*
+do not lift plain *supervision*. So H5 is objective-dependent: grounding helps where the objective is
+interventional/contrastive, not where it is reconstruction. **Mild standalone positive:** change-safety
+(~0.93) ≫ delta-exact (~0.58) across all arms — the graph arm predicts the *reachability effect* of an
+intervention far better than the exact delta, which is exactly the metric the defense application cares
+about. *The two-oracle axis (H12) is deferred:* it needs a second, control-plane (Batfish-style) oracle.
+
 ## Threats to validity
 
 - **Scale.** The committed model is ~tiny and trains for a few hundred iterations on

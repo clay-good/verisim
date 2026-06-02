@@ -750,6 +750,21 @@ the network world — they are gated on the NW8 latent arm.
 - **EN6 — counterfactual & two-oracle grounding** (**H5**, **H12**): train with
   branched-replay counterfactuals; add the Batfish-style control-plane oracle (§5.1);
   measure faithfulness and downstream change-safety on held-out incidents.
+  > **Result — H5 a null for the *predictive* model, beyond volume ([`en6.py`](../../src/verisim/experiments/en6.py),
+  > [`en6_counterfactual.csv`](../../figures/en6_counterfactual.csv); 5 hosts, 3 eval seeds, held-out
+  > interventions).** A rigorous 3-arm design at matched example count — `trajectory` /
+  > `trajectory-more` (volume control) / `+counterfactual` (oracle branches) — shows the counterfactual
+  > arm does **not** beat the volume control: intervention delta-exact 0.551 → **0.604** (more) vs
+  > **0.588** (counterfactual), CIs fully overlapping; change-safety (reachability-faithfulness) ~0.93
+  > for all three, indistinguishable. So the small lift over the base trajectory is **data volume, not
+  > counterfactual structure** — for plain next-state *supervision*, a counterfactual branch is just
+  > another labeled transition that more trajectory data substitutes for. (Contrast EN9: counterfactual
+  > *negatives* **did** lift the *contrastive* representation's interventional fidelity — structure
+  > matters for the contrastive objective, not for supervision. The control arm is what makes this
+  > distinction trustworthy.) **Mild standalone positive:** change-safety (~0.93) ≫ delta-exact (~0.58)
+  > across all arms — the graph arm predicts the *reachability effect* of an intervention far better than
+  > the exact delta, which is the metric a defender cares about. *The two-oracle axis (H12) is deferred:*
+  > it needs a second, control-plane (Batfish-style) oracle (§5.1), pre-registered for when that ships.
 - **EN7 — model-invariance of the curve** (**H22**, SPEC.md §9): re-plot the EN1
   `H_ε(ρ)` curve with *materially different proposers* dropped into the same loop, at
   matched per-step competence — the flat-Markov transformer (shipped), the graph+RSSM arm

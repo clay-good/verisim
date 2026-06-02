@@ -246,6 +246,32 @@ the floor:** self-healing-as-floor-lifter is closed at this scale; the floor's r
 adaptation. The [`online_update`](src/verisim/netmodel/graph_train.py) primitive ships for the
 host/distributed worlds where horizons are longer.
 
+### 11. Counterfactual grounding helps the contrastive objective, not supervision (network EN6 / H5)
+
+The oracle generates **counterfactual branches for free** — the exact next state `O(s, a')` of actions
+not taken. EN6 asks whether *training* the delta predictor on them improves prediction of **interventions**
+(the change-safety question a network defender asks). A rigorous **3-arm, matched-example-count** design
+separates the counterfactual signal from raw volume:
+
+![EN6 / H5: counterfactual grounding vs a matched-volume control](figures/en6_counterfactual.png)
+
+| arm | intervention delta-exact | change-safety (reachability) |
+|---|---|---|
+| trajectory | 0.551 | 0.924 |
+| trajectory-more (volume control) | **0.604** | 0.933 |
+| +counterfactual | 0.588 | 0.935 |
+
+**H5 is a null for the predictive model — beyond volume.** `+counterfactual` (0.588) does *not* beat the
+volume control `trajectory-more` (0.604) — marginally lower, CIs overlapping; change-safety (~0.93) is
+indistinguishable. So the lift over the base is **data volume, not counterfactual structure** — for plain
+next-state supervision, a counterfactual is just another labeled transition. The control arm is what makes
+this honest. **The coherent contrast with EN9:** counterfactual *negatives* **did** lift the *contrastive*
+representation (structure matters there) — but counterfactual *examples* don't lift plain *supervision*. So
+H5 is objective-dependent. **Mild standalone positive:** change-safety (~0.93) ≫ delta-exact (~0.58) across
+all arms — the model predicts the *reachability effect* of interventions far better than the exact delta,
+which is the metric the defense use case cares about. *(The two-oracle axis H12 is deferred — it needs a
+second control-plane oracle.)*
+
 ## The problem, and what we're trying to accomplish
 
 ### The wall every world model hits
@@ -413,8 +439,10 @@ write-up is [docs/report.md](docs/report.md).
 > ([§10](#10-online-self-healing-ttt-does-not-lift-the-floor--yet-network-en5--h7-an-honest-null)):
 > *neither* a minimal in-rollout TTT step *nor* the pre-registered replay-buffer self-healing budget
 > lifts the floor (a robust null, consistent with EN4/EN7) — so the floor's levers are scale (SPEC-9) and
-> objective grounding (SPEC-8), not adaptation. Next: EN6 (counterfactual two-oracle, H12/H5 change-safety),
-> the SPEC-9 LS3 hero instance (N~400–512).
+> objective grounding (SPEC-8), not adaptation. **EN6/H5 change-safety also ships** ([§11](#11-counterfactual-grounding-helps-the-contrastive-objective-not-supervision-network-en6--h5)):
+> counterfactual training is a null for the predictive model beyond a matched-volume control (H5 is
+> objective-dependent — it lifts the contrastive representation, not supervision). Next: the two-oracle
+> axis (H12, needs a control-plane oracle) and the SPEC-9 LS3 hero instance (N~400–512).
 
 **v0 — shell/filesystem world (`src/verisim/`, SPEC-2 §13): complete.**
 
@@ -437,7 +465,7 @@ write-up is [docs/report.md](docs/report.md).
 | **NW5** | Partial-observation loop ([`netloop/`](src/verisim/netloop/)): two-mode (full / **probe**) oracle, probe policies `π_o`, correction/belief operators, baselines, model-agnostic runner | ✅ |
 | **NW6** | **EN1 network `H_ε(ρ)` curve** ([`en1_curve.png`](figures/en1_curve.png)) — the prime directive. Honest H8 negative on the flat arm: near-flat interior | ✅ |
 | **NW7** | Equal-budget comparisons. **EN2** (policy `π_c`, H9) + **EN3** (operators, §8.3): EN3 breaks v0's operator-identity collapse — the probe earns **~2.3×** more faithful horizon per oracle-bit | ◐ EN2/EN3 |
-| **NW8** | **GNN + RSSM graph arm** ([`graph_model.py`](src/verisim/netmodel/graph_model.py)) + §6.3 **noise + self-forcing** levers + **EN4 graph-vs-flat (H11)** + **delta-exact metric** ([`exact.py`](src/verisim/netmetrics/exact.py)) + **SPEC-8 OG1/OG2 data factory** ([`grounding.py`](src/verisim/netdata/grounding.py), [`negatives.py`](src/verisim/netdata/negatives.py)) + **SPEC-8 EN8/OG3 ablation** ([`en8.py`](src/verisim/experiments/en8.py), [`grounded_train.py`](src/verisim/netmodel/grounded_train.py): H23 collapse-tax removed, H24 near-tie) + **SPEC-8 EN9/OG4 ablation** ([`en9.py`](src/verisim/experiments/en9.py): H25 confirmed, H5 fidelity ~2× over VICReg) + **EN7/H22 model-invariance** ([`en7.py`](src/verisim/experiments/en7.py): the floor+cliff `H_ε(ρ)` shape is invariant across null/flat/graph proposers — H22 supported in kind) + **EN5/H7 self-healing** ([`en5.py`](src/verisim/experiments/en5.py): a robust null — neither single-example TTT nor a replay-buffer budget lifts the floor; the floor's levers are scale/objective, not adaptation). Then counterfactual (EN6) | ◐ graph arm + EN4 + both levers + OG1/OG2 + EN8/OG3 + EN9/OG4 + EN7/H22 + EN5/H7 |
+| **NW8** | **GNN + RSSM graph arm** ([`graph_model.py`](src/verisim/netmodel/graph_model.py)) + §6.3 **noise + self-forcing** levers + **EN4 graph-vs-flat (H11)** + **delta-exact metric** ([`exact.py`](src/verisim/netmetrics/exact.py)) + **SPEC-8 OG1/OG2 data factory** ([`grounding.py`](src/verisim/netdata/grounding.py), [`negatives.py`](src/verisim/netdata/negatives.py)) + **SPEC-8 EN8/OG3 ablation** ([`en8.py`](src/verisim/experiments/en8.py), [`grounded_train.py`](src/verisim/netmodel/grounded_train.py): H23 collapse-tax removed, H24 near-tie) + **SPEC-8 EN9/OG4 ablation** ([`en9.py`](src/verisim/experiments/en9.py): H25 confirmed, H5 fidelity ~2× over VICReg) + **EN7/H22 model-invariance** ([`en7.py`](src/verisim/experiments/en7.py): the floor+cliff `H_ε(ρ)` shape is invariant across null/flat/graph proposers — H22 supported in kind) + **EN5/H7 self-healing** ([`en5.py`](src/verisim/experiments/en5.py): a robust null — neither single-example TTT nor a replay-buffer budget lifts the floor; the floor's levers are scale/objective, not adaptation) + **EN6/H5 counterfactual change-safety** ([`en6.py`](src/verisim/experiments/en6.py): a null for the predictive model beyond a matched-volume control — H5 is objective-dependent). Then two-oracle (H12) | ◐ graph arm + EN4 + both levers + OG1/OG2 + EN8/OG3 + EN9/OG4 + EN7/H22 + EN5/H7 + EN6/H5 |
 | **SPEC-9 LS0–LS2** | **Free-oracle scaling** ([`en8_scale.py`](src/verisim/experiments/en8_scale.py), [`en9_scale.py`](src/verisim/experiments/en9_scale.py), [`en8_capacity.py`](src/verisim/experiments/en8_capacity.py), [`scale_common.py`](src/verisim/experiments/scale_common.py)): the measured local envelope + the 8× world-size surface with bootstrap CIs ([§8](#8-which-wins-survive-scaling--the-honest-mixed-verdict-spec-9)). **S1** H23 attenuates, **S2** H25/H5 reverses, **S3** H24 regime-dependent. The [`en9_negatives.py`](src/verisim/experiments/en9_negatives.py) S2-recovery diagnostic **confirms** the lift recovers when negatives scale with the world (k 8→32 flips it back to disjoint-positive) | ✅ LS0–LS2 + S2-recovery + S3 frontier |
 
 The deterministic cores (filesystem and network) have **no runtime dependencies** and need no GPU.
