@@ -1,4 +1,4 @@
-"""Tier-A reference host oracle (SPEC-6 §5.1, HC0 increment 1).
+"""Tier-A reference host oracle (SPEC-6 §5.1, HC0-HC1).
 
 A from-scratch deterministic model of the pinned syscall semantics: a process table, per-process fd
 tables, and the **embedded v0 filesystem**, with file effects *delegated* to the v0
@@ -7,19 +7,35 @@ oracle owns only the process/fd/credential glue — it does not reimplement file
 is the structural point of SPEC-6: **the host oracle is a composition of sub-oracles**, and its
 correctness is the correctness of the parts plus the glue. Pure, deterministic, no runtime deps, no
 GPU. The normative semantics are in ``docs/host-semantics.md``.
+
+Each syscall computes a **bundle delta** (HC1); the oracle returns it alongside the next state, with
+``apply(state, delta) == next_state`` by construction (the M1-analogue invariant). A file syscall's
+delta wraps the v0 FS sub-oracle's own delta in an :class:`~verisim.host.delta.FsDelta`.
 """
 
 from __future__ import annotations
 
-from dataclasses import replace
-
 from verisim.env.action import parse_action
 from verisim.env.state import resolve
 from verisim.host.action import HostAction
-from verisim.host.state import RUNNING, ZOMBIE, FdEntry, HostState, Process
+from verisim.host.delta import (
+    CredChange,
+    FdClose,
+    FdOpen,
+    FsDelta,
+    HostDelta,
+    ProcExit,
+    ProcSpawn,
+    SetExit,
+    apply,
+)
+from verisim.host.state import RUNNING, HostState
 from verisim.oracle.reference import ReferenceOracle
 
 from .base import EXIT_ERR, EXIT_OK, HostOracle, HostStepResult
+
+# A handler computes (bundle delta, exit code, stdout) from the current state + action.
+_Outcome = tuple[HostDelta, int, str]
 
 
 class ReferenceHostOracle(HostOracle):
@@ -33,7 +49,10 @@ class ReferenceHostOracle(HostOracle):
             "fork": self._fork, "exit": self._exit, "setuid": self._setuid,
             "open": self._open, "write": self._write, "close": self._close,
         }[action.name]
-        return handler(state.copy(), action)
+        delta, exit_code, stdout = handler(state, action)
+        return HostStepResult(
+            state=apply(state, delta), delta=delta, exit_code=exit_code, stdout=stdout
+        )
 
     # -- helpers --------------------------------------------------------------
 
@@ -43,91 +62,74 @@ class ReferenceHostOracle(HostOracle):
         return proc is not None and proc.state == RUNNING
 
     @staticmethod
-    def _fail(state: HostState) -> HostStepResult:
-        """A syscall that does not apply (bad pid/fd, EPERM): unchanged state, error exit."""
-        return HostStepResult(state=state.with_last(EXIT_ERR), exit_code=EXIT_ERR, stdout="")
-
-    @staticmethod
-    def _ok(state: HostState, stdout: str = "") -> HostStepResult:
-        return HostStepResult(state=state.with_last(EXIT_OK), exit_code=EXIT_OK, stdout=stdout)
+    def _fail() -> _Outcome:
+        """A syscall that does not apply (bad pid/fd, EPERM): only the exit code changes."""
+        return [SetExit(EXIT_ERR)], EXIT_ERR, ""
 
     # -- process table --------------------------------------------------------
 
-    def _fork(self, state: HostState, action: HostAction) -> HostStepResult:
+    def _fork(self, state: HostState, action: HostAction) -> _Outcome:
         if not self._running(state, action.pid):
-            return self._fail(state)
-        parent = state.procs[action.pid]
+            return self._fail()
         new_pid = state.next_pid
-        state.procs[new_pid] = Process(pid=new_pid, ppid=action.pid, state=RUNNING, uid=parent.uid)
-        state.next_pid += 1
-        return self._ok(state, stdout=str(new_pid))
+        uid = state.procs[action.pid].uid
+        delta: HostDelta = [ProcSpawn(pid=new_pid, ppid=action.pid, uid=uid), SetExit(EXIT_OK)]
+        return delta, EXIT_OK, str(new_pid)
 
-    def _exit(self, state: HostState, action: HostAction) -> HostStepResult:
+    def _exit(self, state: HostState, action: HostAction) -> _Outcome:
         if not self._running(state, action.pid):
-            return self._fail(state)
+            return self._fail()
         try:
             code = int(action.args[0])
         except ValueError:
-            return self._fail(state)
-        state.procs[action.pid] = replace(
-            state.procs[action.pid], state=ZOMBIE, exit_code=code
-        )
-        # a zombie releases its file descriptors
-        for key in [k for k in state.fds if k[0] == action.pid]:
-            del state.fds[key]
-        return self._ok(state)
+            return self._fail()
+        return [ProcExit(pid=action.pid, code=code), SetExit(EXIT_OK)], EXIT_OK, ""
 
-    def _setuid(self, state: HostState, action: HostAction) -> HostStepResult:
+    def _setuid(self, state: HostState, action: HostAction) -> _Outcome:
         if not self._running(state, action.pid):
-            return self._fail(state)
+            return self._fail()
         try:
             uid = int(action.args[0])
         except ValueError:
-            return self._fail(state)
+            return self._fail()
         if state.procs[action.pid].uid != 0:  # only root may change credentials (EPERM otherwise)
-            return self._fail(state)
-        state.procs[action.pid] = replace(state.procs[action.pid], uid=uid)
-        return self._ok(state)
+            return self._fail()
+        return [CredChange(pid=action.pid, uid=uid), SetExit(EXIT_OK)], EXIT_OK, ""
 
     # -- per-process fd table over the embedded filesystem --------------------
 
-    def _open(self, state: HostState, action: HostAction) -> HostStepResult:
+    def _open(self, state: HostState, action: HostAction) -> _Outcome:
         if not self._running(state, action.pid):
-            return self._fail(state)
+            return self._fail()
         path = resolve("/", action.args[0])  # absolute resolution (per-process cwd is a later step)
         used = {fd for (pid, fd) in state.fds if pid == action.pid}
         fd = next(i for i in range(len(used) + 1) if i not in used)  # smallest free fd
-        state.fds[(action.pid, fd)] = FdEntry(path=path)
-        return self._ok(state, stdout=str(fd))
+        return [FdOpen(pid=action.pid, fd=fd, path=path), SetExit(EXIT_OK)], EXIT_OK, str(fd)
 
-    def _write(self, state: HostState, action: HostAction) -> HostStepResult:
+    def _write(self, state: HostState, action: HostAction) -> _Outcome:
         if not self._running(state, action.pid):
-            return self._fail(state)
+            return self._fail()
         try:
             fd = int(action.args[0])
         except ValueError:
-            return self._fail(state)
+            return self._fail()
         entry = state.fds.get((action.pid, fd))
         if entry is None:  # EBADF
-            return self._fail(state)
+            return self._fail()
         token = action.args[1]
-        # DELEGATE the file effect to the v0 FS sub-oracle (the composition, SPEC-6 §5.1).
+        # DELEGATE the file effect to the v0 FS sub-oracle (the composition, SPEC-6 §5.1); wrap its
+        # delta in an FsDelta so the host apply reproduces the embedded fs through the v0 apply.
         fs_result = self._fs.step(state.fs, parse_action(f"write {entry.path} {token}"))
-        state.fs = fs_result.state
-        return HostStepResult(
-            state=state.with_last(fs_result.exit_code),
-            exit_code=fs_result.exit_code,
-            stdout=fs_result.stdout,
-        )
+        delta: HostDelta = [FsDelta(edits=fs_result.delta), SetExit(fs_result.exit_code)]
+        return delta, fs_result.exit_code, fs_result.stdout
 
-    def _close(self, state: HostState, action: HostAction) -> HostStepResult:
+    def _close(self, state: HostState, action: HostAction) -> _Outcome:
         if not self._running(state, action.pid):
-            return self._fail(state)
+            return self._fail()
         try:
             fd = int(action.args[0])
         except ValueError:
-            return self._fail(state)
+            return self._fail()
         if (action.pid, fd) not in state.fds:  # EBADF
-            return self._fail(state)
-        del state.fds[(action.pid, fd)]
-        return self._ok(state)
+            return self._fail()
+        return [FdClose(pid=action.pid, fd=fd), SetExit(EXIT_OK)], EXIT_OK, ""

@@ -1,4 +1,4 @@
-# Host semantics (SPEC-6, HC0)
+# Host semantics (SPEC-6, HC0-HC1)
 
 > The normative English description of the host world's syscall semantics, paired with the executable
 > truth — the Tier-A reference host oracle ([`verisim.hostoracle.ReferenceHostOracle`](../src/verisim/hostoracle/reference.py)).
@@ -7,7 +7,7 @@
 > ([`tests/test_host_oracle.py`](../tests/test_host_oracle.py)). Golden trajectories pin the semantics and
 > are denylisted from the autoresearch engine (SPEC-4 §5).
 
-This is the **HC0 increment 1** subset. The structural thesis of SPEC-6 is that the host oracle is a
+This is the **HC0 increment 1 + HC1** subset. The structural thesis of SPEC-6 is that the host oracle is a
 **composition of sub-oracles**: it owns the process/fd/credential glue and *delegates* file effects to the
 v0 filesystem oracle ([`ReferenceOracle`](../src/verisim/oracle/reference.py)) verbatim — it never
 reimplements filesystem semantics.
@@ -49,8 +49,32 @@ increment). A syscall on a non-`RUNNING` pid fails (`exit 1`) and leaves the sta
 never mutates its input. The composition invariant: a `write` produces exactly the next state the v0 FS
 oracle would, with the process/fd table updated by the glue.
 
+## The bundle delta + the `apply == oracle` invariant (HC1)
+
+`M_θ` will predict a **structured bundle delta**, not a full state — the v0 E4 result (delta prediction
+beats absolute-state prediction) carried up the ladder. The host delta vocabulary
+([`verisim.host.delta`](../../src/verisim/host/delta.py)) is one edit type per subsystem:
+`ProcSpawn` / `ProcExit` (process table), `FdOpen` / `FdClose` (per-process fd table), `CredChange`
+(credentials), `SetExit` (the syscall's host-level exit code), and — the composition — `FsDelta`, which
+**wraps a v0 filesystem `Delta` verbatim** and is applied by the v0 `apply`. A `write` syscall's bundle
+delta is therefore `[FsDelta(<the v0 sub-oracle's own delta>), SetExit(...)]`: the host layer never
+reimplements file semantics, it embeds them.
+
+`apply(state, delta)` is compositional and **builds a fresh state** (it never mutates its input): each
+edit touches one subsystem, `ProcExit` also releases the exiting pid's fds, and `FsDelta` re-applies
+through the v0 `apply`. The contract that keeps the loop model-agnostic — the analogue of v0's **M1** and
+the network's **NW1** — is
+
+```
+apply(state, oracle.step(state, a).delta) == oracle.step(state, a).state
+```
+
+for every transition, by construction. The bundle delta also round-trips through serialization
+(`delta_to_list` / `delta_from_list`, the embedded FS delta reusing v0's). Both are pinned by
+[`tests/test_host_delta.py`](../../tests/test_host_delta.py) over a mixed trajectory.
+
 ## Deferred (later HC increments)
 
 `wait`/`kill`, `dup`/`lseek`/`read`, `chdir` + per-process cwd, pipes/signals (IPC), sockets (the SPEC-5
-net sub-oracle), the scheduler (`yield`/`advance`) and its interleaving-entropy dial, and the
-compositional bundle `Delta` + `apply == oracle` invariant (HC1). This document grows with them.
+net sub-oracle), and the scheduler (`yield`/`advance`) and its interleaving-entropy dial. This document
+grows with them.
