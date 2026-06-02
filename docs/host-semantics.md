@@ -1,4 +1,4 @@
-# Host semantics (SPEC-6, HC0-HC1)
+# Host semantics (SPEC-6, HC0-HC3)
 
 > The normative English description of the host world's syscall semantics, paired with the executable
 > truth — the Tier-A reference host oracle ([`verisim.hostoracle.ReferenceHostOracle`](../src/verisim/hostoracle/reference.py)).
@@ -72,6 +72,42 @@ apply(state, oracle.step(state, a).delta) == oracle.step(state, a).state
 for every transition, by construction. The bundle delta also round-trips through serialization
 (`delta_to_list` / `delta_from_list`, the embedded FS delta reusing v0's). Both are pinned by
 [`tests/test_host_delta.py`](../../tests/test_host_delta.py) over a mixed trajectory.
+
+## Metrics (HC3)
+
+The deterministic metric core for the host world ([`verisim.hostmetrics`](../src/verisim/hostmetrics/),
+pinned by [`tests/test_host_metrics.py`](../tests/test_host_metrics.py)) — no runtime deps, no GPU, the
+M3/NW3 discipline. Every metric is a pure function of the bundle state/delta, is `0` (or `1.0`) iff
+faithful, and — the structural point of SPEC-6 — **decomposes by subsystem** (`proc` / `fd` / `fs` /
+`global`), because the per-subsystem breakdown is what the composition law (H13) needs and what a single
+scalar hides (SPEC-6 §5.4, §9).
+
+- **Composed divergence `d`** (`divergence`, §9.1): normalized symmetric difference over the *union* of
+  all subsystem facts, `0.0` iff every subsystem agrees. `divergence_by_subsystem` reports the same
+  metric *within* each subsystem (each normalized independently); the embedded filesystem reuses v0's
+  `state_facts` verbatim, so the composition is visible right down to the metric. `next_pid` is omitted
+  from the fact set — it is a derived allocator and would double-penalize a mispredicted `fork`.
+- **Bits-to-correct** (`bits_to_correct`, `bits_to_correct_by_subsystem`, §5.4): the scale-free MDL gate
+  over bundle deltas, `Σ_subsystem MDL(correction)`. The `fs` subsystem's correction is **delegated to
+  v0's own gate** over the embedded edits, exactly as the oracle delegates the file effect. `0` iff the
+  predicted delta equals truth as a multiset; `delta_exact` is the `bits_to_correct == 0` predicate.
+- **Faithful horizon `H_ε`** (§9.3): reused **verbatim** from v0 (`verisim.metrics.horizon`) — its
+  definition (longest faithful prefix of a per-step divergence trajectory) is world-independent.
+- **Composition-faithfulness diagnostic** (`composition_law`, the headline-new metric, §9.2, H13):
+  given the per-step per-subsystem faithfulness booleans, it measures composed per-step acceptance `a`
+  against two candidate laws over the per-subsystem rates `a_i`. Because a step fails if *any* subsystem
+  fails, `∏_i a_i ≤ a ≤ min_i a_i`; the verdict reports whether `a` sits at the **multiplicative**
+  (independent failures) end, the **weakest-link** (coincident failures) end, or is **coupled**
+  (anti-correlated — the honest negative where "model subsystems independently" is the wrong bet).
+- **Privilege-faithfulness** (`privilege_faithfulness`, §9.4): the security-relevant metric — the
+  agreement rate on the *denied/allowed* outcome over privilege-relevant transitions, because a
+  defender's trust in the simulator hinges on it getting **failures** (EPERM, EBADF) right, not just
+  successes.
+- **Run-record schema** (`HostRunRecord`, §9): one structured record per rollout — config, seed, `ε`,
+  the **composed** divergence trajectory *and* the **per-subsystem** trajectories, and the consultation
+  schedule — from which `faithful_horizon`, `subsystem_horizons`, and `oracle_calls` are derived and the
+  EH1 curve / H13 measurement (HC6) will be read. Round-trips through JSONL. Figures come *only* from
+  these records (the SPEC-2 §7.3 discipline).
 
 ## Deferred (later HC increments)
 

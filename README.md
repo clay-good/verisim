@@ -410,10 +410,11 @@ Package map (parallel structure; `net*` mirrors v0 for the graph world):
                                 netdata/    drivers + OG1/OG2 factory           en9_negatives
                                 netloop/    partial-obs runner, probe, belief filter
 
-  host world (SPEC-6, HC0-HC2 — the next world; the host oracle *composes* the FS + net sub-oracles)
+  host world (SPEC-6, HC0-HC3 — the next world; the host oracle *composes* the FS + net sub-oracles)
   host/      bundle state (procs + per-process fds + embedded v0 fs), syscall grammar, bundle delta, config
   hostoracle/  Tier-A reference host oracle: process/fd/credential glue over the v0 FS sub-oracle
   hostdata/  workload drivers (uniform/forky/adversarial) + trajectory JSONL + manifests/splits
+  hostmetrics/  composed + per-subsystem d, bits, composition-law (H13), privilege-faithfulness, run-record
 ```
 
 The deterministic cores (oracle, delta/apply, divergence, the loop, the OG1/OG2 data factory) ship and are
@@ -434,7 +435,7 @@ host → distributed); three specs are *cross-cutting methods* every world inher
 | [SPEC-3](docs/specs/SPEC-3.md) | depth | how the toy grows into a real simulator (system oracle, partial obs, online self-healing, info-theoretic metric) |
 | [SPEC-4](docs/specs/SPEC-4.md) | **the engine** | the autonomous research engine — Verisim improving Verisim, human out of the loop |
 | [SPEC-5](docs/specs/SPEC-5.md) | **world: network** | the reachability/connectivity world — **the current build front** |
-| [SPEC-6](docs/specs/SPEC-6.md) | world: host | the running computer (process tree, fds, scheduler) — **HC0-HC2 deterministic core started**: the host oracle *composes* the v0 FS sub-oracle; bundle delta + `apply == oracle` invariant; workload drivers + datasets |
+| [SPEC-6](docs/specs/SPEC-6.md) | world: host | the running computer (process tree, fds, scheduler) — **HC0-HC3 deterministic core started**: the host oracle *composes* the v0 FS sub-oracle; bundle delta + `apply == oracle` invariant; workload drivers + datasets; composed + **per-subsystem** metrics with the **composition-law diagnostic** (H13) |
 | [SPEC-7](docs/specs/SPEC-7.md) | world: distributed | replicated services, transactions, consensus — design |
 | [SPEC-8](docs/specs/SPEC-8.md) | **method: oracle-grounded SSL** | put the oracle's truth in the *bulk* of the cake (self-supervised pretraining), not just the cherry (RL) |
 | [SPEC-9](docs/specs/SPEC-9.md) | **method: free-oracle scaling** | because the oracle labels for free, world size is a *compute* choice, not a labeling-budget one — how large/deep the world goes on one machine, and what holds as it grows |
@@ -478,14 +479,18 @@ write-up is [docs/report.md](docs/report.md).
 > confirming "persistent but attenuating" at the envelope's edge. **EN10/H12 two-oracle also ships** ([§12](#12-the-control-plane-oracle-is-redundant-for-verification-but-cheaper--decision-sufficient-network-en10--h12)):
 > a Batfish-style control-plane oracle is *redundant* for verification (it catches nothing the data-plane
 > misses) but a **cheaper, decision-sufficient** consultation. With EN1–EN10, the network EN-series is
-> complete. **The host world (SPEC-6) has now begun:** HC0 increment 1 + HC1 + HC2 ship the deterministic
-> core — the bundle host state (process table + fd tables + embedded v0 fs), the Tier-A oracle that *composes
-> the v0 FS sub-oracle*, the **compositional bundle delta + `apply == oracle` invariant** (the M1/NW1-analogue;
-> a `write`'s delta embeds the v0 FS sub-oracle's own `Delta` verbatim), and the **data factory** — three
-> state-reading workload drivers (`uniform`/`forky`/`adversarial`) + regenerable trajectory JSONL/manifests
-> whose recorded deltas replay to every next_state — property-, invariant-, and data-tested, no GPU.
-> Remaining: the rest of HC0–HC3 (sockets/IPC/scheduler + the interleaving-entropy dial, composed metrics),
-> the host model + composition-law experiment (H13), and packaging.
+> complete. **The host world (SPEC-6) has now begun:** HC0 increment 1 + HC1 + HC2 + HC3 ship the
+> deterministic core — the bundle host state (process table + fd tables + embedded v0 fs), the Tier-A oracle
+> that *composes the v0 FS sub-oracle*, the **compositional bundle delta + `apply == oracle` invariant** (the
+> M1/NW1-analogue; a `write`'s delta embeds the v0 FS sub-oracle's own `Delta` verbatim), the **data factory**
+> — three state-reading workload drivers (`uniform`/`forky`/`adversarial`) + regenerable trajectory
+> JSONL/manifests whose recorded deltas replay to every next_state — and now the **composed metric core**
+> ([`hostmetrics/`](src/verisim/hostmetrics/)): composed **and per-subsystem** divergence and bits-to-correct
+> (`proc`/`fd`/`fs`/`global`, the embedded fs reusing v0's gates verbatim), the **composition-faithfulness
+> diagnostic** (`composition_law` — multiplicative ↔ weakest-link ↔ coupled, the §9.2 headline-new metric for
+> H13), privilege-faithfulness, and the `HostRunRecord` schema — property-, invariant-, data-, and
+> metric-tested, no GPU. Remaining: the scheduler + sockets/IPC + the interleaving-entropy dial, the host
+> model + composed loop + composition-law experiment (H13), and packaging.
 
 **v0 — shell/filesystem world (`src/verisim/`, SPEC-2 §13): complete.**
 
@@ -521,10 +526,11 @@ PyTorch is an optional `[model]` extra (see [docs/model-representation.md](docs/
 | `O(s, a)` | the **oracle**: deterministic interpreter returning the exact next state + delta | `oracle/`, `netoracle/` |
 | `Δ` (delta) | the structured edit set a step makes; `apply(s, Δ)` reconstructs `s'` | `delta/`, `netdelta/` |
 | `Mθ` | the **learned proposer** (`predict_delta`); any model behind the `Model` protocol | `model/`, `netmodel/` |
-| `d(a, b)` | **divergence**: normalized symmetric set/graph difference, `0` iff identical | `metrics/`, `netmetrics/` |
+| `d(a, b)` | **divergence**: normalized symmetric set/graph/bundle difference, `0` iff identical (host: composed + per-subsystem) | `metrics/`, `netmetrics/`, `hostmetrics/` |
 | `H_ε(ρ)` | **faithful horizon**: first step where `d > ε`, as a function of consultation budget `ρ` | `metrics/horizon.py` |
 | `ρ` | **consultation budget** ∈ [0,1]: fraction of steps the oracle is consulted | `loop/policy.py` |
-| bits-to-correct | MDL of the oracle's correction of `Δ̂`; `0` iff the prediction is exactly right | `metrics/bits.py` |
+| bits-to-correct | MDL of the oracle's correction of `Δ̂`; `0` iff the prediction is exactly right (host: per-subsystem) | `metrics/bits.py`, `hostmetrics/bits.py` |
+| composition-law | host H13 diagnostic: is composed `H_ε` multiplicative (∏ aᵢ) ↔ weakest-link (min aᵢ) ↔ coupled? | `hostmetrics/composition.py` |
 | **delta-exact** | per-step: did free decode assemble the exact edit set? (`bits_to_correct = 0`) | `netmetrics/exact.py` |
 | full / probe | oracle consultation modes: whole next-state vs one host's local view (cheap) | `netloop/observe.py` |
 | `D` / `R` | next-state bits the oracle **decides** vs the genuine **residual** (SPEC-8 partition) | `netdata/grounding.py` |
