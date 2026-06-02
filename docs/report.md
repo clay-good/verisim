@@ -679,19 +679,24 @@ range, and the smoke wins survive *unevenly*. That unevenness is the result.
   most robust of the three. But it *shrinks* with world size even normalized (raw eff-rank gap 13.4 → 4.1
   over 25 → 200 hosts at `d128`); a larger `d_model` lifts it at fixed world but does not flatten the
   decline. "Real everywhere, diminishing" — not the scale-stable form S1 pre-registered.
-- **H25-S/H5 (interventional lift) — scale-fragile: refuted and reversed (S2).** The oracle-over-VICReg
-  branch-retrieval lift is disjoint-positive only at the smallest world + smaller capacity (25 hosts/`d64`:
-  +0.106 [0.067, 0.179]); it decays with scale and **reverses** — VICReg *beats* the oracle at 100/`d128`
-  (−0.086 [−0.113, −0.060]) and 200/`d128` (−0.094 [−0.111, −0.067]). The ~2× small-world win (0.519 vs
-  0.282 at 5 hosts) does **not** survive to 100–200 hosts at `d128`. The likely cause is a fixable design
-  artifact, not a dead idea: `k_negatives` is fixed at 8 while the counterfactual branch space grows with
-  hosts, so the oracle's InfoNCE negatives become an ever-sparser sample while VICReg (needing no negatives)
-  is unaffected. **Pre-registered next test: scale `k_negatives` with the branch space and re-measure.**
+- **H25-S/H5 (interventional lift) — reverses at fixed `k`, then recovers when negatives scale (S2).** The
+  oracle-over-VICReg branch-retrieval lift is disjoint-positive at the smallest world + smaller capacity
+  (25 hosts/`d64`: +0.106 [0.067, 0.179]); it decays with scale and **reverses** with the fixed
+  `k_negatives=8` — VICReg *beats* the oracle at 100/`d128` (−0.086 [−0.113, −0.060]) and 200/`d128`
+  (−0.094 [−0.111, −0.067]). The pre-registered diagnosis — a fixable **negative-count artifact** — then
+  proved correct ([`en9_negatives.csv`](../figures/en9_negatives.csv); 100/`d128`, 3 seeds): scaling
+  `k_negatives` 8→16→32 flips `lift_top1` −0.075 → +0.017 → **+0.032 [0.024, 0.044]** (disjoint-positive),
+  with `lift_mrr` tracking it. Recovery is *modest* (not the +0.10–0.35 small-world magnitude), so the rule
+  is **scale negatives with the world**; the lift is real, just starved at a fixed negative count. (This
+  refuted the experiment's own stated prior — that more *one-edit* negatives wouldn't help because the
+  counterfactual branch set is fixed — but they did, by sharpening the contrastive geometry, not by adding
+  branches.)
 
-This is the single most important thing the scaling bought: a headline EN9 result that looked clean at
-smoke scale **evaporates and reverses** under an honest CI sweep — and the oracle is precisely what let us
-see it. A win that does not scale, caught and reported, is worth more than one asserted and later found
-hollow.
+This is the single most valuable thing the scaling bought, and the full arc is the lesson: a headline EN9
+result that looked clean at smoke scale **reversed** under an honest CI sweep at 100–200 hosts — and then,
+when the pre-registered lever was applied, **recovered**. The oracle is precisely what let us see both the
+reversal and the fix. A win caught reversing and then honestly repaired is worth far more than one asserted
+and never stress-tested.
 
 ## Threats to validity
 

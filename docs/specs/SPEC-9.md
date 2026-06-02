@@ -161,9 +161,22 @@ honest negative.
   > the idea: `k_negatives` is fixed at 8 while the *counterfactual branch space grows with hosts*, so the
   > oracle's InfoNCE negatives become an ever-sparser sample of the branches it must separate, while
   > VICReg (which needs no negatives) is unaffected. The pre-registered next test: **scale `k_negatives`
-  > with the branch space** and re-measure. Until then, H25-S/H5 is **confirmed at small scale, refuted at
-  > large scale + high capacity** — a sharp, bankable bound on a result the README/report had presented as
-  > clean, and exactly why scaling with CIs was worth doing.
+  > with the branch space** and re-measure.
+  >
+  > **Follow-up — S2's fixable-artifact hypothesis CONFIRMED ([`en9_negatives.csv`](../../figures/en9_negatives.csv);
+  > the reversed regime, 100 hosts/`d128`, 3 seeds, ``k_negatives`` ∈ {8, 16, 32}).** Scaling the negative
+  > count flips the lift from negative back to **disjoint-positive**: `lift_top1` −0.075 (k=8, reproducing
+  > the reversal) → +0.017 (k=16) → **+0.032 [0.024, 0.044] (k=32)**, with `lift_mrr` tracking it
+  > (+0.024 [0.001, 0.053] at k=32). **The reversal is a negative-count artifact, not a real large-world
+  > limit — and it is fixed by scaling negatives with the world.** Two honest caveats: (i) the recovered
+  > magnitude is *modest* (+0.032 vs the +0.10–0.35 small-world lift), so the fix restores the *sign*, not
+  > the full effect — `k_negatives` should scale with world size as standard, and larger `k` likely buys
+  > more; (ii) this also **refutes the prior in [`en9_negatives.py`](../../src/verisim/experiments/en9_negatives.py)**,
+  > which expected *no* recovery on the reasoning that raising `k` adds only one-edit negatives, not
+  > counterfactual branches. It recovered anyway: more near-miss negatives sharpen the contrastive geometry
+  > enough to restore branch retrieval *without* more branches — a mechanism worth its own line. Net:
+  > H25-S/H5 is **confirmed at small scale, reverses at large scale with a fixed negative count, and
+  > recovers when negatives scale with the world.**
 - **S3 — the H24 capacity-binding frontier exists and is locatable (sharpens H24-S).** Residual-objective
   supervision was a CI-bounded tie at full capacity. The claim: there is a locatable frontier in the
   (world size, model capacity, observed-fraction) space where the residual gap turns *positive with a
@@ -205,7 +218,8 @@ Non-colliding with `M*/S*/AR*/NW*/HC*/DS*/OG*`. Gated as ever: measure the envel
 |---|---|---|---|
 | **LS0** | The envelope, measured: time/memory vs host count, CPU vs MPS, the `O(N^2)` law and the memory-not-binding finding (§3). | the numbers regenerate from a probe script on the target machine | ✅ (§3 table) |
 | **LS1** | The enablers: configurable world size + model size threaded through EN8/EN9 ([`scaled_net_config`](../../src/verisim/net/config.py), the [`build_graph_model`](../../src/verisim/netmodel/graph_model.py) knobs), the SVD-on-CPU MPS fix, and the chunked [`_embed_all`](../../src/verisim/netmodel/grounded_train.py) eval (deep datasets at large `N` without OOM). | ruff/mypy clean; harness tests + full suite green; deterministic on CPU | ✅ |
-| **LS2** | The local-maximal **scaling surface**: EN8/EN9 over world size × model size × seeds up to the §3 sweep preset, committed CSV + scaling-curve figures with CIs, testing S1/S2. | the surface regenerates from config + seeds; S1/S2 verdicts populated with bootstrap CIs | ✅ shipped (25–200 hosts × {d64,d128} × 3 seeds, [`en8_surface.csv`](../../figures/en8_surface.csv) / [`en9_surface.csv`](../../figures/en9_surface.csv); ~69 min + ~104 min CPU): **S1 — H23-S persists but attenuates** (collapse gap disjoint-positive at all 8 cells, declining with scale); **S2 — refuted and reversed** (the H25-S/H5 lift is scale-fragile: disjoint-negative at 100–200 hosts/`d128`) (§4) |
+| **LS2** | The local-maximal **scaling surface**: EN8/EN9 over world size × model size × seeds up to the §3 sweep preset, committed CSV + scaling-curve figures with CIs, testing S1/S2. | the surface regenerates from config + seeds; S1/S2 verdicts populated with bootstrap CIs | ✅ shipped (25–200 hosts × {d64,d128} × 3 seeds, [`en8_surface.csv`](../../figures/en8_surface.csv) / [`en9_surface.csv`](../../figures/en9_surface.csv); ~69 min + ~104 min CPU): **S1 — H23-S persists but attenuates** (collapse gap disjoint-positive at all 8 cells, declining with scale); **S2 — the lift reverses at fixed `k=8`** (disjoint-negative at 100–200 hosts/`d128`), then **recovers** when negatives scale (LS-S2) (§4) |
+| **LS-S2** | The **S2-recovery diagnostic** ([`en9_negatives`](../../src/verisim/experiments/en9_negatives.py)): at the reversed regime (100 hosts/`d128`), sweep `k_negatives` and re-measure the lift with CIs. | the sweep regenerates from config + seeds; the S2 fixable-artifact claim is confirmed or refuted | ✅ shipped ([`test_en9_negatives.py`](../../tests/test_en9_negatives.py), [`en9_negatives.csv`](../../figures/en9_negatives.csv)): **S2 confirmed** — scaling `k_negatives` 8→32 flips `lift_top1` −0.075 → +0.032 [0.024, 0.044] (disjoint-positive); the reversal is a negative-count artifact, recovered (modestly) by scaling negatives with the world (§4) |
 | **LS-S3** | The **H24 capacity-binding frontier** ([`en8_capacity`](../../src/verisim/experiments/en8_capacity.py)): residual gap over `d_model` × observed-fraction at a fixed hard world, with CIs — the dedicated S3 test. | the frontier regenerates from config + seeds; S3 verdict populated | ✅ shipped ([`test_en8_capacity.py`](../../tests/test_en8_capacity.py), [`en8_capacity.csv`](../../figures/en8_capacity.csv)): **S3 refuted with a mechanism** — masking `D` removes beneficial training signal; the *training-objective* partition does not pay, the *inference-time* partition stands (§4) |
 | **LS3** | A **hero instance** at the §3 hero preset (`N` ~400–512), single large committed point, as the "largest oracle-grounded world proven on one machine" datum. | regenerates from config + seed; reported with its honest caveats (single point, capacity-limited) | ☐ planned |
 
@@ -236,7 +250,9 @@ it is the reason this regime is worth mapping regardless of which way the curves
 - **Sibling, not a world:** like SPEC-4 and SPEC-8, a cross-cutting regime every world inherits.
 - **Claims:** S1–S3 (§4) sharpen SPEC-8's H23-S/H24-S/H25-S along the model-size axis; they coin no new
   global `H` number.
-- **Status:** LS0–LS1 shipped (the envelope is measured, the enablers are in and green); LS2–LS3
-  (the scaling surface and the hero instance) are pre-registered here and run next. Nothing beyond the
-  committed figures is believed until it is run.
+- **Status:** LS0–LS2 + LS-S2 + LS-S3 shipped (the envelope is measured, the enablers are in and green,
+  the scaling surface and both S2/S3 diagnostics are run and committed); **LS3** (the `N`~400–512 hero
+  instance) is pre-registered here and runs next. The verdicts: S1 — H23 persists but attenuates; S2 —
+  the H25/H5 lift reverses at a fixed negative count and recovers when negatives scale; S3 — H24 is
+  regime-dependent (the inference-time partition stands). Nothing beyond the committed figures is believed.
 - **Author:** Clay Good. **License:** MIT. No telemetry, no commercial path — a research repo.

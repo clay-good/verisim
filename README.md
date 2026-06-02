@@ -13,13 +13,14 @@
 
 ## Results at a glance
 
-Five committed, oracle-grounded figures — the whole bet in one screen. Every number regenerates from
-config + seeds (`bash figures/reproduce.sh`); each is detailed below.
+Five committed, oracle-grounded figures — the smoke-scale bet in one screen — each detailed below, each
+with its honest negative. **What survives scaling is the real verdict: see [§8](#8-which-wins-survive-scaling--the-honest-mixed-verdict-spec-9).** Every number regenerates from
+config + seeds (`bash figures/reproduce.sh`).
 
 | | |
 |---|---|
 | [![EN4 graph-vs-flat](figures/en4_graph_vs_flat.png)](figures/en4_graph_vs_flat.png)<br>**Structure helps (EN4 / H11).** The message-passing graph+RSSM world model beats the flat serializer by **+16.5 pts** one-step token accuracy and **+30.6 pts** delta-exact rate — and the gap *widens* on the honest metric. | [![EN8 oracle-grounded SSL](figures/en8_grounding.png)](figures/en8_grounding.png)<br>**The oracle removes the collapse tax (EN8 / H23).** Ablate JEPA's EMA+VICReg crutches and a learned target collapses (eff-rank 41.8→13.4); an **oracle-anchored** target stays healthy (25.8) — the external referent the field lacks. *Scaled to 200 hosts (SPEC-9 S1): the gap stays disjoint-positive everywhere but **attenuates** — real at every scale, diminishing.* |
-| [![EN9 oracle hard-negatives](figures/en9_contrastive.png)](figures/en9_contrastive.png)<br>**Exact negatives beat statistical ones where it counts (EN9 / H25 / H5).** VICReg and the oracle both stop contrastive collapse — but only the oracle's *counterfactual* negatives teach which intervention leads where: branch-retrieval top-1 **0.519 vs VICReg's 0.282**. The statistical regularizer is full-rank but interventionally blind. *⚠ Scaled (SPEC-9 S2): this lift is **scale-fragile** — it shrinks with world size and **reverses** by 100–200 hosts at higher capacity (VICReg overtakes). The small-world win does not survive scaling as-built; likely a fixed-negative-count artifact, the next test.* | [![EN1 / K4 the floor](figures/en1_curve.png)](figures/en1_curve.png)<br>**A floor, not a knee (EN1 / K4 / H8).** Faithful horizon vs consultation budget `H_ε(ρ)` is flat-then-cliff on *both* worlds: consultation budget alone does not buy horizon. The honest negative that drove every later design choice. |
+| [![EN9 oracle hard-negatives](figures/en9_contrastive.png)](figures/en9_contrastive.png)<br>**Exact negatives beat statistical ones where it counts (EN9 / H25 / H5).** VICReg and the oracle both stop contrastive collapse — but only the oracle's *counterfactual* negatives teach which intervention leads where: branch-retrieval top-1 **0.519 vs VICReg's 0.282**. The statistical regularizer is full-rank but interventionally blind. *⚠ Scaled (SPEC-9 S2): this lift **reverses** by 100–200 hosts at higher capacity with a fixed `k=8` (VICReg overtakes) — but the reversal is a **negative-count artifact that recovers**: scaling `k_negatives` 8→32 flips it back to disjoint-positive. Real lift; feed it negatives that scale with the world.* | [![EN1 / K4 the floor](figures/en1_curve.png)](figures/en1_curve.png)<br>**A floor, not a knee (EN1 / K4 / H8).** Faithful horizon vs consultation budget `H_ε(ρ)` is flat-then-cliff on *both* worlds: consultation budget alone does not buy horizon. The honest negative that drove every later design choice. |
 | [![EN3 probe efficiency](figures/en3_operators.png)](figures/en3_operators.png)<br>**What you consult beats whether (EN3).** Under partial observation a cheap one-host **probe + belief filter** earns **~2.3×** more faithful horizon per oracle-bit than full consultation — active sensing is a real lever. | |
 
 ## What we've found so far
@@ -141,16 +142,59 @@ prevent collapse; it structurally cannot teach counterfactual structure it has n
 H5 / change-safety lift arriving through the *self-supervised* objective rather than the RL cherry — a third
 split verdict, every cell bankable under the oracle.
 
-> **⚠ Scaling caveat (SPEC-9 S2 — added after the surface run).** This lift is **scale-fragile**, and saying
-> so is the point of measuring it. On the 25–200-host surface (× `d64`/`d128` × 3 seeds) the oracle's top-1
-> advantage is disjoint-positive only at the smallest world + smaller capacity (25 hosts/`d64`: +0.106) and
-> **reverses** at scale — VICReg *overtakes* the oracle at 100 hosts/`d128` (−0.086 [−0.113, −0.060]) and
-> 200/`d128` (−0.094 [−0.111, −0.067]). The ~2× small-world win above does **not** survive to 100–200 hosts.
-> The most likely cause is a fixable design artifact — `k_negatives` is fixed at 8 while the counterfactual
-> branch space grows with hosts, so the oracle's negatives become an ever-sparser sample — and the
-> pre-registered next test is to scale the negative count with the branch space. But as-built, H5 is
-> **confirmed at small scale, refuted at large scale**, and the honest headline is that one: the oracle let us
-> *see* a smoke-scale win evaporate, which is exactly what it is for.
+> **⚠ Scaling result (SPEC-9 S2 — the surface run, then the fix).** This lift is **scale-sensitive**, and
+> measuring it is the point. On the 25–200-host surface (× `d64`/`d128` × 3 seeds) the oracle's top-1
+> advantage is disjoint-positive at the smallest world + smaller capacity (25 hosts/`d64`: +0.106) and
+> **reverses** at scale with the fixed `k_negatives=8` — VICReg *overtakes* the oracle at 100 hosts/`d128`
+> (−0.086 [−0.113, −0.060]) and 200/`d128` (−0.094 [−0.111, −0.067]). The pre-registered diagnosis — a
+> **negative-count artifact** — then proved correct: the LS-S2 sweep
+> ([`en9_negatives.png`](figures/en9_negatives.png)) shows that at 100/`d128`, scaling `k_negatives` 8→16→32
+> flips `lift_top1` −0.075 → +0.017 → **+0.032 [0.024, 0.044]** (disjoint-positive again). So H5 is
+> **confirmed at small scale, reverses at scale with a fixed negative count, and recovers when negatives
+> scale** — the magnitude is modest, so the rule is *feed negatives that scale with the world*. The oracle
+> let us see a smoke-scale win reverse **and** repair, which is exactly what it is for. (This also refuted my
+> own prior that more one-edit negatives wouldn't help — they did, by sharpening the contrastive geometry.)
+
+### 8. Which wins survive scaling — the honest mixed verdict (SPEC-9)
+
+Because the oracle labels for free, world size is a *learner-compute* choice, not a labeling-budget one
+([SPEC-9](docs/specs/SPEC-9.md)) — so the smoke-scale EN8/EN9 wins can be carried up an **8× world-size
+range on a single 32 GB machine** and stress-tested with bootstrap CIs. The surface (25→200 hosts ×
+`d_model` ∈ {64, 128} × seeds) is the most important thing we ran, because it shows the three results
+survive *unevenly*, and the unevenness is the finding:
+
+| ![EN8 scaling surface](figures/en8_surface.png) | ![EN9 scaling surface](figures/en9_surface.png) |
+|---|---|
+| **H23 collapse gap — persists but attenuates (S1).** Disjoint-positive at all 8 cells (the oracle's anti-collapse advantage is real across the whole range and both capacities) but **shrinks** with scale: eff-rank gap 13.4→4.1 over 25→200 hosts at `d128`. Real everywhere, diminishing. | **H25/H5 interventional lift — reverses at fixed `k`, then *recovers* when negatives scale (S2).** Disjoint-positive at 25 hosts/`d64` (+0.106); it **flips negative** at 100/`d128` (−0.086) and 200/`d128` (−0.094) with the fixed `k_negatives=8` — VICReg overtakes. But the reversal is a **negative-count artifact**: scaling `k_negatives` 8→32 at 100/`d128` flips `lift_top1` back to disjoint-positive (+0.032 [0.024, 0.044], [`en9_negatives.png`](figures/en9_negatives.png)). The H5 lift is real; it must be fed negatives that scale with the world. |
+
+The third axis, **H24 (residual objective)**, is **regime-dependent** ([`en8_capacity.png`](figures/en8_capacity.png)):
+masking the oracle-decidable bits `D` in the *loss* helps only in a narrow window (high capacity + moderate
+residual + small world) and **hurts where `R` is tiny**, because masking removes *beneficial multi-task
+training signal* rather than freeing capacity. What is bounded is the *training-objective* partition; the
+*inference-time* partition (the oracle simply supplies `D`, the model is never trusted on it) is untouched.
+
+This is the single most valuable thing the scaling bought, and the full arc is the lesson: a headline
+(EN9/H5) that looked clean at smoke scale **reversed** under an honest CI sweep at 100–200 hosts — and then,
+when the pre-registered lever was tried, **recovered** (scaling `k_negatives` 8→32 flips the lift back to
+disjoint-positive). The deterministic oracle is what let us *see* both the reversal and the fix. A win
+caught reversing and then honestly repaired is worth far more than one asserted and never stress-tested.
+Each verdict carries its next lever (S1: normalize + grow `d_model`; **S2: scale negatives with the world —
+now demonstrated**; S3: keep `D` in the loss, oracle-own it at inference).
+
+![EN9 S2-recovery: scaling k_negatives recovers the H5 lift at 100 hosts/d128](figures/en9_negatives.png)
+
+**The local envelope, measured (32 GB M4, CPU — the cost is the learner, not the labeler):**
+
+| hosts `N` | oracle data build | one training run | peak RAM | binding constraint |
+|---|---|---|---|---|
+| 50 | 0.06 s | ~25 s | 351 MB | — |
+| 100 | 0.13 s | ~50 s | 492 MB | — |
+| 200 | 0.46 s | ~140 s | 779 MB | wall-clock `O(N²)` message passing |
+| 400 | 1.76 s | ~8 min | 1.95 GB | wall-clock (memory has huge headroom) |
+
+The oracle (the labeler) is effectively free at every size; what binds is the learner's `O(N²)` message
+passing, not memory and not labels. MPS was *slower* than CPU at this model size (kernel-launch overhead),
+so CPU is the bit-deterministic default. Sweep preset `N ≤ 200`; hero preset `N ~400–512`.
 
 ## The problem, and what we're trying to accomplish
 
@@ -219,7 +263,56 @@ The next-state partitions into two regimes that want opposite treatment — the 
 
 Burning network capacity to memorize `D` is waste — the oracle computes it perfectly for free. "Even
 nature offloads": evolution does not store chemistry in the genome. SPEC-8 makes this a training
-objective (mask `D`, spend gradient on `R`) and ships the deterministic machinery for it (OG1/OG2).
+objective (mask `D`, spend gradient on `R`) and ships the deterministic machinery for it (OG1/OG2). *(The
+SPEC-9 scaling surface above qualifies this: masking `D` in the **loss** removes beneficial multi-task
+signal at small capacity; the partition's load-bearing form is the **inference-time** one — verify `D`,
+don't learn-then-mask it.)*
+
+## Architecture & system design
+
+The repo is two parallel **worlds** (filesystem v0, network SPEC-5) over one shared contract — the
+propose→verify→correct loop — plus cross-cutting training/packaging. Every box below is dependency-free and
+torch-free except `model/`, `netmodel/`, and `train/` (the optional `[model]` extra). The **`Model`
+protocol is the seam**: the loop, oracle, metrics, and benchmark never know which proposer they hold, which
+is what makes the contribution a *method* rather than a model (the H22 model-invariance claim).
+
+```
+                       ACTION a_t
+                          │
+                          ▼
+   ┌────────────────┐  predict_delta   ┌────────────┐   apply(s,Δ̂)   ┌────────────┐
+   │  Mθ  proposer  │ ───────────────▶ │  Δ̂  delta  │ ──────────────▶ │  ŝ_{t+1}   │
+   │ (Model proto)  │   grammar-       └────────────┘                 └─────┬──────┘
+   │ txf | graph+   │   constrained          ▲ same delta grammar           │
+   │ RSSM | LLM     │                        │                              │ divergence d(ŝ, s*)
+   └────────────────┘                        │                              ▼
+   ┌────────────────┐  O(s,a) = (state, Δ*)  │                       ┌──────────────────┐
+   │ Oracle (truth) │ ───────────────────────┘   consult on budget ρ │ H_ε(ρ) · bits-to- │
+   │ deterministic  │        full | probe ─────────────────────────▶ │ correct · δ-exact │
+   └────────────────┘                                                └──────────────────┘
+        apply(s, O(s,a).Δ) == O(s,a).state   ← the M1 / NW1 invariant, tested by construction
+```
+
+Package map (parallel structure; `net*` mirrors v0 for the graph world):
+
+```
+  v0 filesystem (SPEC-2)        network world (SPEC-5)            cross-cutting
+  ─────────────────────         ──────────────────────            ────────────────────────────
+  env/      state, actions      net/        typed-graph state     train/   supervised + RLVR
+  oracle/   O(s,a) truth        netoracle/  Tier-A oracle          eval/    faithfulness benchmark
+  delta/    Δ types, apply      netdelta/   graph Δ, apply         rl/      oracle-as-reward env
+  metrics/  d, H_ε, bits        netmetrics/ d, reachability,       auto/    autoresearch ratchet
+  loop/     runner, π_c, ops                delta-exact, bits      experiments/  E*, EN*, K*,
+  model/    Mθ transformer      netmodel/   flat Mθ + graph+RSSM                 en8/9_scale,
+  data/     drivers, traj                   + grounded_train (SSL)              en8_capacity,
+                                netdata/    drivers + OG1/OG2 factory           en9_negatives
+                                netloop/    partial-obs runner, probe, belief filter
+```
+
+The deterministic cores (oracle, delta/apply, divergence, the loop, the OG1/OG2 data factory) ship and are
+property-tested **before** any training claim — the figure is always gated, never assumed (the NW0–NW3 /
+OG1–OG2 discipline). See [SPEC-2 §10](docs/specs/SPEC-2.md) and [SPEC-5 §16](docs/specs/SPEC-5.md) for the
+full module-by-module layout.
 
 ## Specifications
 
@@ -257,7 +350,15 @@ write-up is [docs/report.md](docs/report.md).
 > that consume it — two more split verdicts: **H23 confirmed** (the oracle-anchored target removes the
 > collapse tax), **H24 a near-tie** (residual masking buys nothing at this scale), **H25 confirmed** (exact
 > negatives match VICReg at preventing collapse) with a decisive **H5 lift** (the oracle's counterfactual
-> negatives nearly double VICReg's interventional fidelity). Next: bootstrap CIs + scaled runs, then EN5–EN7.
+> negatives nearly double VICReg's interventional fidelity).
+>
+> **The [SPEC-9](docs/specs/SPEC-9.md) scaling surface (LS0–LS2) then carried those smoke verdicts up an 8×
+> world-size range (25→200 hosts × {d64,d128}) with bootstrap CIs — the honest mixed result of [§8](#8-which-wins-survive-scaling--the-honest-mixed-verdict-spec-9):
+> H23 *persists but attenuates*, H24 is *regime-dependent*, and H25/H5 *reverses* at 100–200 hosts with a
+> fixed negative count — then **recovers**: the EN9 `k_negatives` S2-recovery diagnostic confirms scaling
+> negatives 8→32 flips the lift back to disjoint-positive (the reversal is a negative-count artifact, fixed
+> modestly by scaling negatives with the world).** Next: EN5–EN7 (RLVR/TTT, counterfactual, the EN7/H22
+> model-invariance sweep), and the LS3 hero instance (N~400–512).
 
 **v0 — shell/filesystem world (`src/verisim/`, SPEC-2 §13): complete.**
 
@@ -281,6 +382,7 @@ write-up is [docs/report.md](docs/report.md).
 | **NW6** | **EN1 network `H_ε(ρ)` curve** ([`en1_curve.png`](figures/en1_curve.png)) — the prime directive. Honest H8 negative on the flat arm: near-flat interior | ✅ |
 | **NW7** | Equal-budget comparisons. **EN2** (policy `π_c`, H9) + **EN3** (operators, §8.3): EN3 breaks v0's operator-identity collapse — the probe earns **~2.3×** more faithful horizon per oracle-bit | ◐ EN2/EN3 |
 | **NW8** | **GNN + RSSM graph arm** ([`graph_model.py`](src/verisim/netmodel/graph_model.py)) + §6.3 **noise + self-forcing** levers + **EN4 graph-vs-flat (H11)** + **delta-exact metric** ([`exact.py`](src/verisim/netmetrics/exact.py)) + **SPEC-8 OG1/OG2 data factory** ([`grounding.py`](src/verisim/netdata/grounding.py), [`negatives.py`](src/verisim/netdata/negatives.py)) + **SPEC-8 EN8/OG3 ablation** ([`en8.py`](src/verisim/experiments/en8.py), [`grounded_train.py`](src/verisim/netmodel/grounded_train.py): H23 collapse-tax removed, H24 near-tie) + **SPEC-8 EN9/OG4 ablation** ([`en9.py`](src/verisim/experiments/en9.py): H25 confirmed, H5 fidelity ~2× over VICReg). Then RLVR/TTT (EN5), counterfactual (EN6), EN7/H22 | ◐ graph arm + EN4 + both levers + OG1/OG2 + EN8/OG3 + EN9/OG4 |
+| **SPEC-9 LS0–LS2** | **Free-oracle scaling** ([`en8_scale.py`](src/verisim/experiments/en8_scale.py), [`en9_scale.py`](src/verisim/experiments/en9_scale.py), [`en8_capacity.py`](src/verisim/experiments/en8_capacity.py), [`scale_common.py`](src/verisim/experiments/scale_common.py)): the measured local envelope + the 8× world-size surface with bootstrap CIs ([§8](#8-which-wins-survive-scaling--the-honest-mixed-verdict-spec-9)). **S1** H23 attenuates, **S2** H25/H5 reverses, **S3** H24 regime-dependent. The [`en9_negatives.py`](src/verisim/experiments/en9_negatives.py) S2-recovery diagnostic **confirms** the lift recovers when negatives scale with the world (k 8→32 flips it back to disjoint-positive) | ✅ LS0–LS2 + S2-recovery + S3 frontier |
 
 The deterministic cores (filesystem and network) have **no runtime dependencies** and need no GPU.
 PyTorch is an optional `[model]` extra (see [docs/model-representation.md](docs/model-representation.md)).
@@ -382,32 +484,25 @@ seeds — `figures/reproduce.sh` runs them all:
 
 ```bash
 bash figures/reproduce.sh
-# or the three NW8/SPEC-8 figures on their own (they write CSV + PNG directly):
+# or the NW8/SPEC-8 smoke figures on their own (each writes CSV + PNG directly):
 python -m verisim.experiments.en4_graph --graph-iters 1500 --out figures/en4_graph_vs_flat.csv
 python -m verisim.experiments.en8 --out figures/en8_grounding.csv
 python -m verisim.experiments.en9 --out figures/en9_contrastive.csv
+# the SPEC-9 scaling work (multi-seed, bootstrap CIs; the surface preset is slower):
+python -m verisim.experiments.en8_scale --world-sizes 5 10 15 --seeds 0 1 2 3 --out figures/en8_scale.csv
+python -m verisim.experiments.en9_scale --world-sizes 5 10 15 --seeds 0 1 2 3 --out figures/en9_scale.csv
+python -m verisim.experiments.en8_capacity --out figures/en8_capacity.csv   # the H24/S3 frontier
+python -m verisim.experiments.en8_scale --world-sizes 25 50 100 200 --d-models 64 128 --seeds 0 1 2 \
+    --out figures/en8_surface.csv   # the §8 surface (likewise en9_scale for en9_surface.png)
 ```
 
 ## Layout
 
-See [SPEC-2 §10](docs/specs/SPEC-2.md) (filesystem) and [SPEC-5 §16](docs/specs/SPEC-5.md) (network).
-Packages under [src/verisim/](src/verisim/):
-
-- **v0 filesystem world:** `env/`, `oracle/`, `delta/`, `data/`, `metrics/`, `loop/` (runner, policies,
-  operators, baselines), `model/` (`M_θ`: vocab, tokenizer, grammar, transformer, constrained decoder),
-  `train/` (supervised + minibatch + RLVR), `experiments/` (baselines, E1–E4, K0/K2/K4, diagnostics, the
-  autoresearch ratchet `auto/`), and packaging `eval/` + `rl/`.
-- **Network world (SPEC-5):** `net/` (typed-graph state, grammar, serialization), `netoracle/` (Tier-A
-  oracle), `netdelta/` (graph deltas + `apply`), `netdata/` (drivers + generation + the **SPEC-8
-  grounding/negatives factory**), `netmetrics/` (graph divergence, reachability-faithfulness,
-  bits-to-correct, **delta-exact**), `netmodel/` (the flat NW4 `M_θ` + the **NW8 GNN+RSSM graph arm** with
-  the noise/self-forcing levers + the **EN8/EN9 oracle-grounded-SSL trainer** `grounded_train.py`: the
-  residual/JEPA objectives *and* the oracle-contrastive `train_contrastive`), and `netloop/` (the NW5
-  partial-observation runner, two-mode oracle, probe policies, operators). Experiments: `experiments/en1.py`
-  … `en4_graph.py`, `en8.py`, `en9.py`.
-
-Experiment configs live in [configs/](configs/); plotting scripts + figures in [figures/](figures/); the
-run-records they read are git-ignored and regenerable from config + seeds.
+The package map and data flow are in [Architecture & system design](#architecture--system-design) above;
+the full module-by-module layout is [SPEC-2 §10](docs/specs/SPEC-2.md) (filesystem) and
+[SPEC-5 §16](docs/specs/SPEC-5.md) (network). Everything is under [src/verisim/](src/verisim/). Experiment
+configs live in [configs/](configs/); plotting scripts + committed figures (PNG + CSV) in
+[figures/](figures/); the run-records they read are git-ignored and regenerable from config + seeds.
 
 ## License & posture
 

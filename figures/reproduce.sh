@@ -85,8 +85,12 @@ echo "== EN8 capacity frontier: H24/S3 residual gap vs d_model x observed-fracti
 python -m verisim.experiments.en8_capacity --world-size 40 --d-models 16 32 64 \
     --observed-fractions 0.25 0.5 0.75 --seeds 0 1 2 3 --out figures/en8_capacity.csv
 
+echo "== EN9 S2-recovery: does scaling k_negatives restore the H5 lift? (SPEC-9 S2; slower) =="
+python -m verisim.experiments.en9_negatives --world-size 100 --d-model 128 \
+    --k-negatives 8 16 32 --seeds 0 1 2 --out figures/en9_negatives.csv
+
 # The larger world x model SCALING SURFACE (SPEC-9 LS2) and HERO instance (LS3) are opt-in (slower):
 #   python -m verisim.experiments.en8_scale --world-sizes 25 50 100 200 --d-models 64 128 --seeds 0 1 2 --out figures/en8_surface.csv
 #   python -m verisim.experiments.en9_scale --world-sizes 25 50 100 200 --d-models 64 128 --seeds 0 1 2 --out figures/en9_surface.csv
 
-echo "== done: figures/{e1_curve,e2_policies,e3_operators,calibration,e4_ablation,objective,representation,auto_search,en1_curve,en2_policies,en3_operators,en4_graph_vs_flat,en8_grounding,en9_contrastive,en8_scale,en9_scale,en8_capacity}.{png,csv} =="
+echo "== done: figures/{e1_curve,e2_policies,e3_operators,calibration,e4_ablation,objective,representation,auto_search,en1_curve,en2_policies,en3_operators,en4_graph_vs_flat,en8_grounding,en9_contrastive,en8_scale,en9_scale,en8_capacity,en9_negatives}.{png,csv} =="

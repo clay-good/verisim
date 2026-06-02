@@ -197,8 +197,10 @@ The next three concern *where the oracle's truth enters training* — the superv
 results survive scaling *unevenly*, and the honest mix is itself the finding: **H23-S confirmed but
 attenuating** (the collapse gap is disjoint-positive at every world×capacity cell, but shrinks with
 scale — the oracle's anti-collapse advantage is real everywhere and diminishing); **H25-S/H5 confirmed at
-small scale, then refuted and *reversed*** (the interventional lift is scale-fragile — VICReg overtakes the
-oracle at 100–200 hosts and higher capacity; likely a fixed-negative-count artifact, the next test);
+small scale, reverses at scale with a fixed negative count, then *recovers* when negatives scale** (VICReg
+overtakes the oracle at 100–200 hosts/`d128`, but scaling `k_negatives` 8→32 flips the lift back to
+disjoint-positive — a confirmed negative-count artifact, fixed modestly by feeding negatives that scale
+with the world);
 **H24 regime-dependent** (masking the decidable bits in the *loss* helps only narrowly — high capacity,
 moderate `R`, small world — and hurts where `R` is tiny, because it removes beneficial multi-task signal;
 the *inference-time* partition where the oracle supplies `D` is untouched). The lesson the scaling
