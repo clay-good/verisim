@@ -698,6 +698,33 @@ when the pre-registered lever was applied, **recovered**. The oracle is precisel
 reversal and the fix. A win caught reversing and then honestly repaired is worth far more than one asserted
 and never stress-tested.
 
+## EN7 — the no-knee shape is model-invariant (H22)
+
+The project's most general claim (SPEC.md §9, H22) is that the *loop*, not the proposer, governs the
+`H_ε(ρ)` curve. EN7 ([`en7.py`](../src/verisim/experiments/en7.py),
+[`en7_invariance.csv`](../figures/en7_invariance.csv)) drops four proposers into the **same** NW5 loop and
+re-plots the curve (5 hosts, ε=0.05, T=24, 3 seeds × 2 difficulties, bootstrap CIs):
+
+| proposer | ρ=0 | ρ=0.1 | ρ=0.2 | ρ=0.3 | ρ=0.5 | ρ=1.0 |
+|---|---|---|---|---|---|---|
+| null (empty delta) | 0.0 | 1.2 | 1.2 | 1.2 | 1.3 | 24.0 |
+| flat (NW4 transformer) | 0.0 | 1.0 | 1.0 | 1.0 | 1.0 | 24.0 |
+| graph (NW8 GNN+RSSM) | 0.0 | 3.2 | 3.2 | 4.3 | 4.7 | 24.0 |
+| oracle-backed (perfect) | 24.0 | 24.0 | 24.0 | 24.0 | 24.0 | 24.0 |
+
+![EN7 / H22: the floor+cliff H_ε(ρ) shape is invariant across proposers](../figures/en7_invariance.png)
+
+**H22 is supported in kind.** The three *imperfect* proposers — a null predictor, the flat transformer, and
+the graph+RSSM arm — share **one qualitative shape: floor + cliff, no favorable knee.** The interior is
+near-flat and the curve reaches the T=24 ceiling only at ρ=1, for every architecture. What the proposer
+changes is the **floor height** (graph's 3.2–4.7 > flat's 1.0 > null's ~1.2), i.e. how much unaided horizon
+its per-step competence buys — *not* the shape. So the EN1/K4 "no-knee" verdict is **not** an artifact of
+the flat transformer: it reproduces across materially different model classes, which is exactly H22's claim
+that deterministic verification's loop behavior is a *model-agnostic primitive*. The oracle-backed proposer
+(24 everywhere) is the degenerate ceiling. **Honest caveat:** this is not matched per-step competence (the
+graph arm is clearly stronger), so the load-bearing evidence is the *shared shape across differing
+competence*, not a magnitude comparison — what moves with the proposer is the floor, what stays is the shape.
+
 ## Threats to validity
 
 - **Scale.** The committed model is ~tiny and trains for a few hundred iterations on

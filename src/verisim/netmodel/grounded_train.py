@@ -562,6 +562,12 @@ def build_contrastive_dataset(
     interventional-fidelity probe). The trajectory advances on the **true** next state — the oracle
     is the label source, never the rollout. ``vocab`` is unused by the contrastive objective but
     kept in the signature to mirror :func:`build_grounded_dataset`.
+
+    Recommended policy (SPEC-9 §4 S2 / LS-S2): ``k_negatives`` should **scale with world size**, not
+    stay fixed. The default ``8`` is right for the small smoke worlds (and is what the committed EN9
+    smoke/surface figures use, so it is kept for reproducibility), but the LS-S2 diagnostic showed
+    the interventional lift *reverses* at large worlds with a fixed count and *recovers* when
+    negatives scale — so larger runs should pass a larger ``k_negatives`` (growing with host count).
     """
     from verisim.netdata.drivers import NetDriver
 
