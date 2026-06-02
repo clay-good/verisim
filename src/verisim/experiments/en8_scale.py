@@ -55,10 +55,13 @@ def _build(
 
 
 # Headline gap metrics (get a y=0 reference in the figure) and context metrics (absolute levels).
-GAP_METRICS = ("collapse_gap_rank", "collapse_gap_std", "residual_gap")
-CONTEXT_METRICS = (
-    "oracle_off_rank", "learned_off_rank", "residual_acc_residual", "residual_acc_likelihood",
-)
+# Split by axis so a hero/large run can skip the O(N^2) residual decoder (``collapse_only``, §7.3).
+COLLAPSE_GAP = ("collapse_gap_rank", "collapse_gap_std")
+RESIDUAL_GAP = ("residual_gap",)
+GAP_METRICS = (*COLLAPSE_GAP, *RESIDUAL_GAP)
+COLLAPSE_CONTEXT = ("oracle_off_rank", "learned_off_rank")
+RESIDUAL_CONTEXT = ("residual_acc_residual", "residual_acc_likelihood")
+CONTEXT_METRICS = (*COLLAPSE_CONTEXT, *RESIDUAL_CONTEXT)
 
 
 @dataclass(frozen=True)
@@ -77,6 +80,7 @@ class EN8ScaleConfig:
     decoder_iters: int = 600
     jepa_iters: int = 400
     device: str = "cpu"
+    collapse_only: bool = False  # skip the O(N^2) residual-decoder axis (hero/large runs, §7.3)
 
 
 def run_en8_scale(config: EN8ScaleConfig | None = None) -> list[GapStat]:
@@ -96,12 +100,18 @@ def run_en8_scale(config: EN8ScaleConfig | None = None) -> list[GapStat]:
             oracle, vocab, net, seeds=config.train_seeds,
             n_steps=config.train_steps_per_traj, observed_fraction=config.observed_fraction,
         )
-        held = build_grounded_dataset(
-            oracle, vocab, net, seeds=config.eval_seeds,
-            n_steps=config.eval_steps, observed_fraction=config.observed_fraction,
+        held = (
+            None if config.collapse_only
+            else build_grounded_dataset(
+                oracle, vocab, net, seeds=config.eval_seeds,
+                n_steps=config.eval_steps, observed_fraction=config.observed_fraction,
+            )
+        )
+        metrics = (*COLLAPSE_GAP, *COLLAPSE_CONTEXT) if config.collapse_only else (
+            *GAP_METRICS, *CONTEXT_METRICS
         )
         for ms in config.model_sizes:
-            per_seed: dict[str, list[float]] = {m: [] for m in (*GAP_METRICS, *CONTEXT_METRICS)}
+            per_seed: dict[str, list[float]] = {m: [] for m in metrics}
             for seed in config.seeds:
                 # --- H23-S collapse axis: both targets with the machinery ablated -------
                 m_oracle = _build(vocab, net, ms, seed, config.device)
@@ -114,25 +124,26 @@ def run_en8_scale(config: EN8ScaleConfig | None = None) -> list[GapStat]:
                     m_learned, train, target="learned", collapse_machinery=False,
                     steps=config.jepa_iters, seed=seed,
                 )
-                # --- H24-S objective axis: residual vs raw-likelihood, accuracy on R -----
-                m_res = _build(vocab, net, ms, seed, config.device)
-                train_grounded_decoder(
-                    m_res, train, objective="residual", steps=config.decoder_iters, seed=seed
-                )
-                _, acc_res = residual_token_accuracy(m_res, held)
-                m_lik = _build(vocab, net, ms, seed, config.device)
-                train_grounded_decoder(
-                    m_lik, train, objective="likelihood", steps=config.decoder_iters, seed=seed
-                )
-                _, acc_lik = residual_token_accuracy(m_lik, held)
-
                 per_seed["collapse_gap_rank"].append(r_oracle.eff_rank - r_learned.eff_rank)
                 per_seed["collapse_gap_std"].append(r_oracle.emb_std - r_learned.emb_std)
                 per_seed["oracle_off_rank"].append(r_oracle.eff_rank)
                 per_seed["learned_off_rank"].append(r_learned.eff_rank)
-                per_seed["residual_gap"].append(acc_res - acc_lik)
-                per_seed["residual_acc_residual"].append(acc_res)
-                per_seed["residual_acc_likelihood"].append(acc_lik)
+
+                if not config.collapse_only:
+                    # --- H24-S objective axis: residual vs raw-likelihood, accuracy on R --
+                    m_res = _build(vocab, net, ms, seed, config.device)
+                    train_grounded_decoder(
+                        m_res, train, objective="residual", steps=config.decoder_iters, seed=seed
+                    )
+                    _, acc_res = residual_token_accuracy(m_res, held)  # type: ignore[arg-type]
+                    m_lik = _build(vocab, net, ms, seed, config.device)
+                    train_grounded_decoder(
+                        m_lik, train, objective="likelihood", steps=config.decoder_iters, seed=seed
+                    )
+                    _, acc_lik = residual_token_accuracy(m_lik, held)  # type: ignore[arg-type]
+                    per_seed["residual_gap"].append(acc_res - acc_lik)
+                    per_seed["residual_acc_residual"].append(acc_res)
+                    per_seed["residual_acc_likelihood"].append(acc_lik)
 
             for metric, values in per_seed.items():
                 stats.append(summarize(n_hosts, ms.label, metric, values))
@@ -165,6 +176,8 @@ def main() -> None:  # pragma: no cover - CLI entry point
     parser.add_argument("--jepa-iters", type=int, default=400)
     parser.add_argument("--observed-fraction", type=float, default=0.5)
     parser.add_argument("--device", type=str, default="cpu", choices=["cpu", "mps", "cuda"])
+    parser.add_argument("--collapse-only", action="store_true",
+                        help="skip the O(N^2) residual decoder axis (hero/large-N runs)")
     parser.add_argument("--out", type=str, default="figures/en8_scale.csv")
     args = parser.parse_args()
 
@@ -179,17 +192,20 @@ def main() -> None:  # pragma: no cover - CLI entry point
         jepa_iters=args.jepa_iters,
         observed_fraction=args.observed_fraction,
         device=args.device,
+        collapse_only=args.collapse_only,
     )
     stats = run_en8_scale(cfg)
-    print("EN8 scale-up — collapse gap (H23-S) + residual gap (H24-S), bootstrap CIs over seeds:")
+    axes = "collapse gap (H23-S)" + ("" if cfg.collapse_only else " + residual gap (H24-S)")
+    print(f"EN8 scale-up — {axes}, bootstrap CIs over seeds:")
     _print_summary(stats)
     out = Path(args.out)
     write_csv(stats, out)
     print(f"wrote {out}")
+    gap = list(COLLAPSE_GAP) if cfg.collapse_only else list(GAP_METRICS)
     plot_scaling_curves(
-        stats, list(GAP_METRICS), out.with_suffix(".png"),
+        stats, gap, out.with_suffix(".png"),
         title="EN8 scale-up: the oracle's advantage vs world size (95% CI bands)",
-        gap_metrics=set(GAP_METRICS),
+        gap_metrics=set(gap),
     )
 
 

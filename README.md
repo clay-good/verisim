@@ -165,7 +165,7 @@ survive *unevenly*, and the unevenness is the finding:
 
 | ![EN8 scaling surface](figures/en8_surface.png) | ![EN9 scaling surface](figures/en9_surface.png) |
 |---|---|
-| **H23 collapse gap — persists but attenuates (S1).** Disjoint-positive at all 8 cells (the oracle's anti-collapse advantage is real across the whole range and both capacities) but **shrinks** with scale: eff-rank gap 13.4→4.1 over 25→200 hosts at `d128`. Real everywhere, diminishing. | **H25/H5 interventional lift — reverses at fixed `k`, then *recovers* when negatives scale (S2).** Disjoint-positive at 25 hosts/`d64` (+0.106); it **flips negative** at 100/`d128` (−0.086) and 200/`d128` (−0.094) with the fixed `k_negatives=8` — VICReg overtakes. But the reversal is a **negative-count artifact**: scaling `k_negatives` 8→32 at 100/`d128` flips `lift_top1` back to disjoint-positive (+0.032 [0.024, 0.044], [`en9_negatives.png`](figures/en9_negatives.png)). The H5 lift is real; it must be fed negatives that scale with the world. |
+| **H23 collapse gap — persists but attenuates (S1).** Disjoint-positive at all 8 cells (the oracle's anti-collapse advantage is real across the whole range and both capacities) but **shrinks** with scale: eff-rank gap 13.4→6.9→4.1→**2.2** over 25→100→200→**300** hosts at `d128` (the last is the **LS3 hero instance** — the largest oracle-grounded world proven on one machine; still disjoint-positive at 300 hosts, [`en8_ls3_hero.csv`](figures/en8_ls3_hero.csv)). Real everywhere, diminishing. | **H25/H5 interventional lift — reverses at fixed `k`, then *recovers* when negatives scale (S2).** Disjoint-positive at 25 hosts/`d64` (+0.106); it **flips negative** at 100/`d128` (−0.086) and 200/`d128` (−0.094) with the fixed `k_negatives=8` — VICReg overtakes. But the reversal is a **negative-count artifact**: scaling `k_negatives` 8→32 at 100/`d128` flips `lift_top1` back to disjoint-positive (+0.032 [0.024, 0.044], [`en9_negatives.png`](figures/en9_negatives.png)). The H5 lift is real; it must be fed negatives that scale with the world. |
 
 The third axis, **H24 (residual objective)**, is **regime-dependent** ([`en8_capacity.png`](figures/en8_capacity.png)):
 masking the oracle-decidable bits `D` in the *loss* helps only in a narrow window (high capacity + moderate
@@ -441,8 +441,11 @@ write-up is [docs/report.md](docs/report.md).
 > lifts the floor (a robust null, consistent with EN4/EN7) — so the floor's levers are scale (SPEC-9) and
 > objective grounding (SPEC-8), not adaptation. **EN6/H5 change-safety also ships** ([§11](#11-counterfactual-grounding-helps-the-contrastive-objective-not-supervision-network-en6--h5)):
 > counterfactual training is a null for the predictive model beyond a matched-volume control (H5 is
-> objective-dependent — it lifts the contrastive representation, not supervision). Next: the two-oracle
-> axis (H12, needs a control-plane oracle) and the SPEC-9 LS3 hero instance (N~400–512).
+> objective-dependent — it lifts the contrastive representation, not supervision). **The SPEC-9 LS3 hero
+> instance also ships** — at N=300 hosts (the largest oracle-grounded world proven on one machine) the H23
+> collapse gap is still disjoint-positive but nearly exhausted at fixed `d128` (rank 2.2, std 0.064),
+> confirming "persistent but attenuating" at the envelope's edge. Remaining: the two-oracle axis (H12,
+> needs a control-plane oracle).
 
 **v0 — shell/filesystem world (`src/verisim/`, SPEC-2 §13): complete.**
 

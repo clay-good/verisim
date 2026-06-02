@@ -142,6 +142,15 @@ honest negative.
   > gap at fixed world (`d128 > d64` everywhere) but does **not** flatten the decline. So S1's specific
   > "scale-stable once normalized" prediction is refuted: the honest claim is **persistent but
   > attenuating** — the oracle's anti-collapse advantage is real at every scale tested, and shrinking.
+  >
+  > **LS3 hero datum — confirmed at the local max ([`en8_ls3_hero.csv`](../../figures/en8_ls3_hero.csv);
+  > N=300 hosts / `d128` / 3 seeds, `--collapse-only`).** At the largest oracle-grounded world provable on
+  > one 32 GB machine, the collapse gap is **still disjoint-positive** — rank gap **2.22 [0.21, 5.12]**,
+  > `emb_std` gap **0.064 [0.059, 0.066]** — extending the `d128` rank-gap trend (13.4→6.9→4.1→**2.2** over
+  > 25/100/200/300 hosts). H23 survives to the local max but is **nearly exhausted at fixed `d_model=128`**
+  > (the rank-gap CI barely clears zero); the scale-free `emb_std` gap is the surviving signal (~0.06,
+  > tight). This is "persistent but attenuating" carried to the envelope's edge — and the operational
+  > lesson is S1's: to keep raw headroom at larger worlds, **scale `d_model` with the world**.
 - **S2 — the interventional lift's non-monotonicity is a capacity artifact (refines H25-S).** The
   oracle-over-VICReg lift was positive and disjoint at 5/10/15 hosts but *non-monotone* (peaked at 10).
   The claim: holding training adequate and scaling `d_model` with `N` restores monotone (or at least
@@ -221,7 +230,7 @@ Non-colliding with `M*/S*/AR*/NW*/HC*/DS*/OG*`. Gated as ever: measure the envel
 | **LS2** | The local-maximal **scaling surface**: EN8/EN9 over world size × model size × seeds up to the §3 sweep preset, committed CSV + scaling-curve figures with CIs, testing S1/S2. | the surface regenerates from config + seeds; S1/S2 verdicts populated with bootstrap CIs | ✅ shipped (25–200 hosts × {d64,d128} × 3 seeds, [`en8_surface.csv`](../../figures/en8_surface.csv) / [`en9_surface.csv`](../../figures/en9_surface.csv); ~69 min + ~104 min CPU): **S1 — H23-S persists but attenuates** (collapse gap disjoint-positive at all 8 cells, declining with scale); **S2 — the lift reverses at fixed `k=8`** (disjoint-negative at 100–200 hosts/`d128`), then **recovers** when negatives scale (LS-S2) (§4) |
 | **LS-S2** | The **S2-recovery diagnostic** ([`en9_negatives`](../../src/verisim/experiments/en9_negatives.py)): at the reversed regime (100 hosts/`d128`), sweep `k_negatives` and re-measure the lift with CIs. | the sweep regenerates from config + seeds; the S2 fixable-artifact claim is confirmed or refuted | ✅ shipped ([`test_en9_negatives.py`](../../tests/test_en9_negatives.py), [`en9_negatives.csv`](../../figures/en9_negatives.csv)): **S2 confirmed** — scaling `k_negatives` 8→32 flips `lift_top1` −0.075 → +0.032 [0.024, 0.044] (disjoint-positive); the reversal is a negative-count artifact, recovered (modestly) by scaling negatives with the world (§4) |
 | **LS-S3** | The **H24 capacity-binding frontier** ([`en8_capacity`](../../src/verisim/experiments/en8_capacity.py)): residual gap over `d_model` × observed-fraction at a fixed hard world, with CIs — the dedicated S3 test. | the frontier regenerates from config + seeds; S3 verdict populated | ✅ shipped ([`test_en8_capacity.py`](../../tests/test_en8_capacity.py), [`en8_capacity.csv`](../../figures/en8_capacity.csv)): **S3 refuted with a mechanism** — masking `D` removes beneficial training signal; the *training-objective* partition does not pay, the *inference-time* partition stands (§4) |
-| **LS3** | A **hero instance** at the §3 hero preset (`N` ~400–512), single large committed point, as the "largest oracle-grounded world proven on one machine" datum. | regenerates from config + seed; reported with its honest caveats (single point, capacity-limited) | ☐ planned |
+| **LS3** | A **hero instance** at the §3 hero preset, single large committed point, as the "largest oracle-grounded world proven on one machine" datum. Run **collapse-only** ([`en8_scale --collapse-only`](../../src/verisim/experiments/en8_scale.py)) since the residual decoder's `O(N^2)` cost dominates at hero scale. | regenerates from config + seed; reported with its honest caveats (single point, capacity-limited) | ✅ shipped (N=300/`d128`/3 seeds, [`en8_ls3_hero.csv`](../../figures/en8_ls3_hero.csv); ~21 min): **H23 collapse gap still disjoint-positive** (rank 2.22 [0.21, 5.12], `emb_std` 0.064 [0.059, 0.066]) but nearly exhausted at fixed `d128` — "persistent but attenuating" confirmed at the envelope's edge (§4 S1) |
 
 ---
 
@@ -250,9 +259,9 @@ it is the reason this regime is worth mapping regardless of which way the curves
 - **Sibling, not a world:** like SPEC-4 and SPEC-8, a cross-cutting regime every world inherits.
 - **Claims:** S1–S3 (§4) sharpen SPEC-8's H23-S/H24-S/H25-S along the model-size axis; they coin no new
   global `H` number.
-- **Status:** LS0–LS2 + LS-S2 + LS-S3 shipped (the envelope is measured, the enablers are in and green,
-  the scaling surface and both S2/S3 diagnostics are run and committed); **LS3** (the `N`~400–512 hero
-  instance) is pre-registered here and runs next. The verdicts: S1 — H23 persists but attenuates; S2 —
+- **Status:** LS0–LS3 + LS-S2 + LS-S3 shipped (the envelope is measured, the enablers are in and green,
+  the scaling surface, both S2/S3 diagnostics, and the **LS3 hero instance** (N=300/`d128`) are run and
+  committed). The verdicts: S1 — H23 persists but attenuates (confirmed to the N=300 local max); S2 —
   the H25/H5 lift reverses at a fixed negative count and recovers when negatives scale; S3 — H24 is
   regime-dependent (the inference-time partition stands). Nothing beyond the committed figures is believed.
 - **Author:** Clay Good. **License:** MIT. No telemetry, no commercial path — a research repo.

@@ -1,0 +1,5 @@
+world_size,model_label,metric,mean,ci_lo,ci_hi,n
+300,d128-mp3,collapse_gap_rank,2.221649,0.211636,5.119663,3
+300,d128-mp3,collapse_gap_std,0.063591,0.058639,0.066128,3
+300,d128-mp3,oracle_off_rank,17.873575,17.621902,18.114397,3
+300,d128-mp3,learned_off_rank,15.651925,12.502239,17.902761,3

@@ -676,9 +676,12 @@ range, and the smoke wins survive *unevenly*. That unevenness is the result.
 
 - **H23-S (collapse) — persists but attenuates (S1).** The collapse gap is disjoint-positive at **all 8
   cells**, so the oracle's anti-collapse advantage is real across the whole range and both capacities — the
-  most robust of the three. But it *shrinks* with world size even normalized (raw eff-rank gap 13.4 → 4.1
-  over 25 → 200 hosts at `d128`); a larger `d_model` lifts it at fixed world but does not flatten the
-  decline. "Real everywhere, diminishing" — not the scale-stable form S1 pre-registered.
+  most robust of the three. But it *shrinks* with world size even normalized (raw eff-rank gap
+  13.4 → 6.9 → 4.1 → **2.2** over 25 → 100 → 200 → **300** hosts at `d128` — the last is the **LS3 hero
+  instance** ([`en8_ls3_hero.csv`](../figures/en8_ls3_hero.csv)), the largest oracle-grounded world proven
+  on one machine, still disjoint-positive at N=300 but nearly exhausted; the scale-free `emb_std` gap holds
+  at ~0.06); a larger `d_model` lifts it at fixed world but does not flatten the decline. "Real everywhere,
+  diminishing" — not the scale-stable form S1 pre-registered.
 - **H25-S/H5 (interventional lift) — reverses at fixed `k`, then recovers when negatives scale (S2).** The
   oracle-over-VICReg branch-retrieval lift is disjoint-positive at the smallest world + smaller capacity
   (25 hosts/`d64`: +0.106 [0.067, 0.179]); it decays with scale and **reverses** with the fixed

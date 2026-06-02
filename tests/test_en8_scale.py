@@ -7,7 +7,15 @@ the (small-scale) numbers themselves.
 
 from __future__ import annotations
 
-from verisim.experiments.en8_scale import GAP_METRICS, EN8ScaleConfig, run_en8_scale
+import dataclasses
+
+from verisim.experiments.en8_scale import (
+    COLLAPSE_GAP,
+    GAP_METRICS,
+    RESIDUAL_GAP,
+    EN8ScaleConfig,
+    run_en8_scale,
+)
 from verisim.experiments.scale_common import ModelSize
 
 
@@ -39,3 +47,13 @@ def test_run_en8_scale_is_deterministic() -> None:
     a = {(s.world_size, s.model_label, s.metric): s.mean for s in run_en8_scale(_tiny())}
     b = {(s.world_size, s.model_label, s.metric): s.mean for s in run_en8_scale(_tiny())}
     assert a == b
+
+
+def test_collapse_only_skips_residual_axis() -> None:
+    """``collapse_only`` (the hero/large-N path) emits the collapse gap, skips the residual axis."""
+    stats = run_en8_scale(dataclasses.replace(_tiny(), collapse_only=True))
+    by_metric = {s.metric for s in stats}
+    for m in COLLAPSE_GAP:
+        assert m in by_metric
+    for m in RESIDUAL_GAP:
+        assert m not in by_metric
