@@ -725,6 +725,33 @@ that deterministic verification's loop behavior is a *model-agnostic primitive*.
 graph arm is clearly stronger), so the load-bearing evidence is the *shared shape across differing
 competence*, not a magnitude comparison — what moves with the proposer is the floor, what stays is the shape.
 
+## EN5 — online self-healing (TTT) does not lift the floor at this scale (H7, a null)
+
+EN1–EN7 freeze the model's weights during a rollout; the oracle corrects the *state* on each consult but
+the model never learns from it. EN5 ([`en5.py`](../src/verisim/experiments/en5.py),
+[`en5_selfheal.csv`](../figures/en5_selfheal.csv)) tests the H7 "correction teaches online" claim: add an
+in-rollout gradient step (the [`online_update`](../src/verisim/netmodel/graph_train.py) test-time-training
+primitive) on each oracle-revealed `(state, action) → true-delta`, so the model adapts to the current
+trajectory. Two arms through the same loop (5 hosts, ε=0.05, T=24, 3 seeds × 2 difficulties):
+
+| arm | ρ=0 | ρ=0.1 | ρ=0.2 | ρ=0.3 | ρ=0.5 | ρ=1.0 |
+|---|---|---|---|---|---|---|
+| supervised (frozen) | 0.0 | 3.2 | 3.2 | 4.3 | 4.7 | 24.0 |
+| +ttt (self-healing) | 0.0 | 3.2 | 3.2 | 3.5 | 4.7 | 24.0 |
+
+![EN5 / H7: online self-healing (TTT) does not lift H_ε(ρ) at this scale](../figures/en5_selfheal.png)
+
+**H7 is a null at this scale.** The self-healing arm does not lift `H_ε(ρ)` above the frozen baseline —
+identical in kind, marginally *lower* at ρ=0.3 (a few single-example gradient steps occasionally perturb
+the weights without generalizing to the next unaided step). This is the v0 H3/RLVR null surviving into the
+network world, and it is *consistent*, not surprising: EN7 showed the floor is model-invariant and EN4
+localized the wall to the **one-step→horizon conversion**, so a handful of in-rollout steps on single
+examples cannot move the binding per-step competence. The TTT-stability literature (SPEC-3 §6.3) predicted
+exactly this risk for minimal updates — so a null *confirms a known failure mode* rather than wasting the
+run. **Pre-registered next lever:** a real self-healing budget — a replay buffer of recent corrections,
+more steps, a trust-region revert — not the minimal single-example update; and RLVR stays deferred (its
+reward is sparse exactly at the floor). The `online_update` primitive ships for that follow-up either way.
+
 ## Threats to validity
 
 - **Scale.** The committed model is ~tiny and trains for a few hundred iterations on

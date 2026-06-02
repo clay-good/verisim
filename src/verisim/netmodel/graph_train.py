@@ -179,6 +179,32 @@ def train_graph_model(
     return losses
 
 
+def online_update(
+    model: GraphRSSMWorldModel,
+    optimizer: torch.optim.Optimizer,
+    examples: list[GraphExample],
+    *,
+    steps: int = 1,
+) -> float:
+    """Take ``steps`` teacher-forced gradient steps on ``examples`` -- the self-healing update (H7).
+
+    The test-time-training primitive EN5 consumes: when the loop consults the oracle mid-rollout,
+    the revealed ``(state, action)`` -> true-delta is a free, exactly-labeled example, so a small
+    in-rollout step lets the model *adapt to the current trajectory* rather than only having its
+    state corrected. The TTT discipline (SPEC-3 §6 / HW-2) is **few ``steps`` + small lr** on a
+    persistent optimizer, so it nudges without catastrophic forgetting. Returns the final loss.
+    """
+    model.net.train()
+    last = 0.0
+    for _ in range(steps):
+        optimizer.zero_grad()
+        loss = _batch_loss(model, examples, sample=True)
+        loss.backward()
+        optimizer.step()
+        last = float(loss.item())
+    return last
+
+
 # --- the self-forcing / scheduled-sampling lever (§6.3) ---------------------
 
 
