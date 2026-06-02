@@ -276,9 +276,22 @@ class GraphRSSMWorldModel:
 
 
 def build_graph_model(
-    vocab: NetVocab, config: NetConfig, *, d_model: int = 64, mp_rounds: int = 3, seed: int = 0
+    vocab: NetVocab,
+    config: NetConfig,
+    *,
+    d_model: int = 64,
+    mp_rounds: int = 3,
+    n_layer: int = 2,
+    n_head: int = 2,
+    seed: int = 0,
+    device: str | torch.device | None = None,
 ) -> GraphRSSMWorldModel:
-    """Construct an (untrained) graph arm sized to ``config`` and ``vocab``."""
+    """Construct an (untrained) graph arm sized to ``config`` and ``vocab``.
+
+    ``d_model``/``mp_rounds``/``n_layer``/``n_head`` are the model-size knobs the OG5/OG6 scale-up
+    sweeps (SPEC-8 §7.1); ``device`` (``'cpu'``/``'mps'``/``'cuda'``) moves the net so the *same*
+    code path runs locally and on a rented GPU (§7.3). Default is CPU (the deterministic gate).
+    """
     torch.manual_seed(seed)
     dims = feature_dims(config)
     cfg = GraphRSSMConfig(
@@ -287,5 +300,10 @@ def build_graph_model(
         vocab_size=len(vocab),
         d_model=d_model,
         mp_rounds=mp_rounds,
+        n_layer=n_layer,
+        n_head=n_head,
     )
-    return GraphRSSMWorldModel(GraphRSSMNet(cfg, config), vocab, config)
+    net = GraphRSSMNet(cfg, config)
+    if device is not None:
+        net = net.to(device)
+    return GraphRSSMWorldModel(net, vocab, config)

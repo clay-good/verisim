@@ -338,6 +338,96 @@ Both reuse the EN1 machinery (the `H_ε(ρ)` sweep, bootstrap-CI aggregation, th
 SPEC-4 §5.2) and the `figures/reproduce.sh` regenerate-from-seed rule. Negative results are first-class
 (the v0 norm).
 
+### 7.1 From smoke to a result that cannot be dismissed (the scale-up, OG5–OG6)
+
+The OG3/OG4 figures are *smoke* instances: one `model_seed`, a 5-host world, a `d_model=48`/3-round arm,
+~120 training examples. The verdicts (H23 confirmed, H24 near-tie, H25/H5 lift) are real but **dismissible
+on four specific grounds**, in descending severity:
+
+1. **No error bars** — every headline number is `n = 1` (`model_seed = 0`). A reader calls it noise, and at
+   one seed they are not wrong. *This is the cheapest and most important to fix.*
+2. **Toy world** — 5 hosts / 3 ports, the hardcoded `DEFAULT_NET_CONFIG`. "An artifact of a trivially small
+   world."
+3. **Tiny model** — `d_model = 48`, 3 message-passing rounds, 2 decoder layers. "The collapse and the lift
+   are because the model is undersized."
+4. **A single operating point** — no demonstration the effect *survives* scale.
+
+The pre-registered answer to all four is **not one larger run but a scaling curve with disjoint confidence
+intervals**: sweep world size and model size across many `model_seed`s, and show the oracle's advantage is
+*stable or growing* with **non-overlapping bootstrap CIs**. A point estimate is dismissible; a monotone
+trend with separated CIs across a ≥10× world-size sweep is not. The three headline gaps the curves track —
+each a *difference* the oracle buys, reported with a bootstrap CI over seeds (reusing
+[`metrics/aggregate.bootstrap_ci`](../../src/verisim/metrics/aggregate.py)):
+
+| Gap (the oracle's advantage) | Definition | The undismissable target |
+|---|---|---|
+| **collapse gap (H23-S)** | `eff_rank(oracle, machinery off) − eff_rank(learned, machinery off)` (and the `emb_std` analogue) | > 0 with disjoint CIs, *stable or growing* with world/model size |
+| **residual-objective gap (H24-S)** | `residual_acc(residual obj) − residual_acc(likelihood obj)` on the bits `R` | crosses **0 into positive** as the world grows at fixed capacity (the capacity story, §7.2) — or an honest, CI-bounded near-tie everywhere, banked |
+| **interventional lift (H25-S / H5)** | `top1(oracle) − top1(vicreg)` (and MRR) on held-out counterfactual branches | > 0 with disjoint CIs, and *widening* as more hosts create more distinct branches (chance `1/m` falls) |
+
+These are scale-sharpened forms of the existing H23/H24/H25 (SPEC.md §9) — no new global hypothesis number;
+the `-S` suffix marks "the smoke verdict, now with CIs across scale." Either branch is a result: a separated
+trend confirms; a CI-bounded null at scale is the bankable negative (§10).
+
+### 7.2 The capacity-binding subtlety (why H24's scale axis is *world size at fixed capacity*)
+
+A measurement made while building this plan: with `observed_fraction = 0.5`, the **residual fraction of the
+delta tokens is only ≈ 0.16, and it barely moves as hosts grow** (0.160 at 5 hosts → 0.187 at 20). The
+reason is structural — the decidable part `D` already *dominates* the delta (the always-decidable global
+clock/result edits plus the structural `<eos>` are ~84% of tokens), and each action is still ≈ one edit
+regardless of world size, so scaling hosts does **not** by itself enlarge `R`.
+
+The consequence for H24 is a sharpening, pre-registered here: **H24 is a *capacity-allocation* claim, not a
+world-size claim.** Masking `D` (the residual objective) can only beat raw likelihood when (a) the residual
+`R` is genuinely *hard* and (b) model capacity is *binding* against it — otherwise both arms fit `R`
+trivially and the gap is a tie forever (exactly the OG3 smoke result). So the H24-S sweep must be designed,
+not stumbled into:
+
+- **Scale world size to make `R` harder** — more candidate hosts/ports means a residual edit's exact
+  host/port identity is one of many, so bit-exact residual prediction stops being free.
+- **Hold (or under-provision) model capacity** while the world grows — the residual objective's edge appears
+  precisely where the all-token objective wastes a binding budget on the free `D`.
+- **Sweep `observed_fraction` down** (e.g. 0.5 → 0.25) to enlarge `R` directly, as a second axis.
+
+If, designed this way, the residual gap still does not open, that is the *strong* form of the H24 negative —
+"even with `R` made hard and capacity made binding, masking `D` buys nothing" — and it is bankable. What we
+will not do is scale model and world together so generously that both arms saturate and the tie is an
+artifact of over-provisioning; that would launder a non-result into a null.
+
+### 7.3 Local-first staging and the hardware envelope (the OG discipline, applied to scale)
+
+The repo's invariant — *the deterministic, no-GPU machinery ships and is property-tested before any training
+claim* (OG1/OG2 before OG3/OG4) — applies unchanged to scale. The scale-up is therefore two gated stages:
+
+- **OG5 (local, CPU, Mac):** build the scale *harness* — configurable world size, configurable model size,
+  multi-seed bootstrap CIs, and the `en8_scale`/`en9_scale` curve runners — and **prove the happy path
+  locally**: determinism from seeds, the three gaps computed correctly, the effect direction already visible
+  at small multi-seed scale. Gated like any OG milestone; nothing scales until this is green.
+- **OG6 (the scaled run):** run the *same* harness at the moderate target (≤ 50 hosts, `d_model ≤ 256`, many
+  seeds, longer training) and commit the scaling-curve figures with their CIs. No new code path — only larger
+  config values — so there is nothing new to debug under a meter.
+
+**The runtime reality sets the hardware envelope, and it is smaller than it looks.** These models are tiny:
+a full JEPA/contrastive training run is **sub-second to a few seconds on this Mac's CPU**, so the entire
+*moderate* sweep (≈ 5 world sizes × 3 model sizes × 8 seeds × 3 experiments, with longer training) is an hour
+or two **locally** — below ~50 hosts the round-trip to a rented box costs more than it saves. A GPU earns its
+keep only when world size gets large, because message passing is the dense `a_link[B, N, N] @ W` product —
+**O(N²·d) per round** — so at `N ≈ 100–500` hosts and `d_model ≥ 256` the CPU slows and the GPU wins. The
+workload is **many small runs (embarrassingly parallel), not one large model**, so the right rented box is a
+single **24 GB GPU (RTX 4090 / A10G) with many vCPUs** — *not* an A100/H100 (no single model uses that VRAM;
+you would pay 3–5× for idle silicon). At the chosen moderate scale the expected spend is a few dollars of
+GPU time, and possibly none — the Mac may carry it. The harness exposes a `--device {cpu,mps,cuda}` flag so
+the *identical* code runs locally and on the rented GPU (seed-level, not bit-level, reproducibility at that
+tier). Measured on a 32 GB M4, **CPU is the right local default**: at this model/batch size MPS ran 2–3×
+*slower* (Apple's per-kernel launch latency is not amortized by a ~1 M-param model), and CPU is also
+bit-deterministic ([SPEC-9 §3](./SPEC-9.md)).
+
+The *full* local envelope — how large the world can be made on one machine before the `O(N^2)` message
+passing (not memory, and not the free oracle) binds — and the **model-size axis** the H23-S/H24-S/H25-S
+sweeps extend along (the scaling surface, claims S1–S3) are specified in [SPEC-9](./SPEC-9.md), the
+free-oracle scaling-regime spec. The moderate-scale answer to "how big, locally" is itself a measured
+SPEC-9 result (sweep preset N ≤ 200 hosts, hero preset N ~400–512), not an assumption.
+
 ---
 
 ## 8. How it slots into the repo (no fork)
@@ -376,8 +466,10 @@ stage graduates without a committed figure or an honest negative.
 | **OG2** | Oracle hard-negative & counterfactual sampler: one-edit-wrong successors and action-branch counterfactuals, each labeled against the oracle. ([`netdata/negatives.py`](../../src/verisim/netdata/negatives.py)) | property test: every emitted negative is `≠ O(s,a)` and every counterfactual equals `O(s, a')`; coverage spans the action grammar | ✅ ([`test_negatives.py`](../../tests/test_negatives.py), 5 cases) |
 | **OG3** | **EN8** runs (objective × collapse-machinery ablation) on the NW8 arm; committed figure. ([`experiments/en8.py`](../../src/verisim/experiments/en8.py), [`netmodel/grounded_train.py`](../../src/verisim/netmodel/grounded_train.py)) | the `H23`/`H24` cells are populated; regenerates from config+seed with `maxΔ=0` | ◐ smoke shipped ([`test_en8.py`](../../tests/test_en8.py), [`test_grounded_train.py`](../../tests/test_grounded_train.py)): H23 positive, H24 near-tie; CIs/scale-up remain |
 | **OG4** | **EN9** runs (oracle-contrastive); committed figure incl. interventional fidelity. ([`experiments/en9.py`](../../src/verisim/experiments/en9.py), [`netmodel/grounded_train.py`](../../src/verisim/netmodel/grounded_train.py) `train_contrastive`) | the `H25`/`H5` cells populated; honest negative reported if the proxy is not beaten | ◐ smoke shipped ([`test_en9.py`](../../tests/test_en9.py)): H25 confirmed, H5 lift ~2× over VICReg; CIs/scale-up remain |
+| **OG5** | The **scale harness** (§7.1, §7.3): configurable world size (`scaled_net_config`) + model size (`n_layer`/`n_head` exposed through `build_graph_model`) threaded through EN8/EN9; multi-seed **bootstrap CIs** (reuse [`metrics/aggregate.bootstrap_ci`](../../src/verisim/metrics/aggregate.py)); the curve runners ([`experiments/en8_scale.py`](../../src/verisim/experiments/en8_scale.py), [`experiments/en9_scale.py`](../../src/verisim/experiments/en9_scale.py)) with a `--device {cpu,mps,cuda}` flag. Built and proven **locally on CPU** before any scaled claim. | property tests: the harness is deterministic from seeds; the three gaps (H23-S/H24-S/H25-S, §7.1) + CIs are emitted; the smoke effect direction reproduces at small multi-seed scale | ✅ shipped ([`test_scale_common.py`](../../tests/test_scale_common.py), [`test_en8_scale.py`](../../tests/test_en8_scale.py), [`test_en9_scale.py`](../../tests/test_en9_scale.py)); the local SVD-on-CPU + chunked-eval enablers ([SPEC-9 §3](./SPEC-9.md)) ship with it |
+| **OG6** | The **scaled runs**: the *same* harness at the moderate target (≤ 50 hosts, `d_model ≤ 256`, many seeds, longer training, §7.3) → the committed **scaling-curve figures with disjoint CIs** — the "cannot be dismissed" deliverable. | H23-S/H24-S/H25-S verdicts populated *with bootstrap CIs across world/model size*; regenerates from config + seed; CPU-or-GPU identical code path | ◐ first datum shipped (5/10/15 hosts × 4 seeds, [`en8_scale.csv`](../../figures/en8_scale.csv) / [`en9_scale.csv`](../../figures/en9_scale.csv)): **H23-S confirmed** (collapse gap disjoint at every world size), **H25-S/H5 confirmed** (interventional lift disjoint-positive everywhere), **H24-S a CI-bounded near-tie**; the larger world × model surface (SPEC-9 LS2) is the remainder |
 
-**OG0–OG4 have shipped.** OG0–OG2 are the framing + deterministic, property-tested, no-GPU data factory;
+**OG0–OG5 have shipped; OG6's first scaled datum is in (the larger surface remains).** OG0–OG2 are the framing + deterministic, property-tested, no-GPU data factory;
 **OG3 (EN8)** is the GPU consumer that ablates the *objective × collapse* axes on the NW8 graph+RSSM arm,
 and **OG4 (EN9)** the one that ablates the *contrastive* axis (consuming the OG2 hard-negative factory).
 Both land *split, honest* smoke verdicts ([report](../report.md)).
@@ -400,9 +492,27 @@ interventionally *blind*, while the oracle makes it faithful to the branches the
 predict. The honest nuance (VICReg wins on rank, loses on intervention) is the sharper finding: it localizes
 *what* the exact negatives buy that a statistical regularizer structurally cannot.
 
-What remains for full OG3/OG4 is bootstrap CIs and tuned, scaled runs. The delta-exact per-step
-metric the ablations report on ([`netmetrics/exact.py`](../../src/verisim/netmetrics/exact.py)) shipped as an
-EN4 column.
+**OG6 (the first scaled datum — the smoke verdicts, now with CIs across a 3× world sweep).** The OG5
+harness ran EN8/EN9 at 5/10/15 hosts × 4 seeds ([`en8_scale.csv`](../../figures/en8_scale.csv),
+[`en9_scale.csv`](../../figures/en9_scale.csv)):
+
+- **H23-S confirmed.** The collapse gap (oracle-anchored − learned, machinery ablated) is disjoint from
+  zero at every world size: +13.4 [12.7, 14.0], +8.4 [7.8, 9.0], +7.7 [6.7, 8.7] effective-rank points,
+  with the `emb_std` gap also disjoint everywhere. Honest nuance: the raw rank gap *declines* with world
+  size — expected, since effective rank is capped by `d_model=48`, which is exactly why SPEC-9's S1 tracks
+  the *normalized* gap and grows `d_model` with the world.
+- **H25-S / H5 confirmed.** The interventional lift (oracle − VICReg) is disjoint-positive at every world
+  size: top-1 +0.100 [0.059, 0.140], +0.354 [0.266, 0.448], +0.094 [0.055, 0.125]. Honest nuance: it is
+  *non-monotone* (peaks at 10 hosts), which SPEC-9's S2 pre-registers as a fixed-capacity undertraining
+  artifact to test against the model-size axis.
+- **H24-S a CI-bounded near-tie.** The residual-objective gap straddles zero at all three sizes
+  (+0.069 [−0.005, 0.130], 0.000 [−0.035, 0.035], +0.006 [−0.009, 0.028]) — the smoke near-tie, now with
+  error bars; the capacity-binding frontier (SPEC-9 S3) is where it is pre-registered to open.
+
+So the two representation-mechanism claims (H23, H25/H5) are now defensible against the "single-seed /
+toy-world" dismissal, and H24 remains an honestly-bounded negative. The larger world × model **scaling
+surface** (SPEC-9 LS2) extends this up the local envelope. The delta-exact per-step metric the ablations
+report on ([`netmetrics/exact.py`](../../src/verisim/netmetrics/exact.py)) shipped as an EN4 column.
 
 ---
 
@@ -432,6 +542,9 @@ every cell is a forward move, and because the verdict is oracle-grounded, every 
 | **H23** (oracle-anchored target removes the collapse tax) | a *constructive* result for SSL: where an external referent exists, EMA+VICReg are unnecessary → simpler, more stable world-model pretraining | the **more interesting** branch: the representation collapses *even with* the oracle-anchored target → collapse has a cause the referent does not reach → a non-obvious, *bankable* fact about *why* JEPA needs its crutches that the oracle-free field structurally cannot establish |
 | **H24** (bits-to-correct residual beats raw-likelihood) | the partition (§3) is load-bearing → "offload the decidable bits, learn only the residual" is a real training principle, and the objective now matches the inference-time metric | the decidable part `D` was already cheap for the model to learn → masking it buys nothing → a clean bound on *when* the partition matters (it will matter more as worlds grow, SPEC-6/7) |
 | **H25** (oracle hard-negatives are an exact anti-collapse referent) | exact near-miss/counterfactual negatives match or beat statistical regularizers *and* lift interventional fidelity (the H5 lift) → a second, independent route to grounded SSL | near-miss structure was not the collapse mechanism → narrows precisely *what* anti-collapse fixes → a map of the failure surface contrastive SSL has lacked |
+| **H23-S** (the collapse gap holds with CIs across scale) | the collapse gap stays > 0 with **disjoint** bootstrap CIs, stable or growing across world/model size → the smoke result was not an artifact of size; the SSL contribution is real and robust | the gap shrinks or its CIs overlap once seeds and scale are honest → the OG3 smoke "win" was a small-sample mirage → a *bankable* correction that the field needs and only the oracle can certify |
+| **H24-S** (residual supervision wins once `R` is hard and capacity binds, §7.2) | the residual gap crosses 0 into positive as the world grows at fixed capacity → the partition (§3) is load-bearing *exactly where the theory says* — when offloading `D` frees a binding budget for a hard `R` | even with `R` made hard and capacity made binding, masking `D` buys nothing (CI-bounded) → the **strong** form of the H24 negative: a sharp, scale-resolved bound on when the partition matters |
+| **H25-S** (the interventional lift widens with branch count) | `top1(oracle) − top1(vicreg)` stays > 0 with disjoint CIs and *widens* as more hosts create more distinct branches (chance `1/m` falls) → exact counterfactuals are the scalable route to interventional fidelity | the lift narrows at scale → VICReg's statistical blindness is a small-world artifact → narrows *where* exact negatives are worth their cost |
 
 The pattern across all three is the project's stance in one frame: **the refutation branch is never empty,
 and is frequently the branch worth more.** We can ask "what is the collapse-prevention machinery a

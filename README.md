@@ -214,7 +214,7 @@ objective (mask `D`, spend gradient on `R`) and ships the deterministic machiner
 
 All specs live under [`docs/specs/`](docs/specs/); the canonical, evidence-gated build order is
 [SPEC §12](docs/specs/SPEC.md#12-research-roadmap). The worlds form a ladder (filesystem → network →
-host → distributed); two specs are *cross-cutting methods* every world inherits.
+host → distributed); three specs are *cross-cutting methods* every world inherits.
 
 | Spec | Role | What it is |
 |---|---|---|
@@ -226,6 +226,7 @@ host → distributed); two specs are *cross-cutting methods* every world inherit
 | [SPEC-6](docs/specs/SPEC-6.md) | world: host | the running computer (process tree, memory, scheduler) — design |
 | [SPEC-7](docs/specs/SPEC-7.md) | world: distributed | replicated services, transactions, consensus — design |
 | [SPEC-8](docs/specs/SPEC-8.md) | **method: oracle-grounded SSL** | put the oracle's truth in the *bulk* of the cake (self-supervised pretraining), not just the cherry (RL) |
+| [SPEC-9](docs/specs/SPEC-9.md) | **method: free-oracle scaling** | because the oracle labels for free, world size is a *compute* choice, not a labeling-budget one — how large/deep the world goes on one machine, and what holds as it grows |
 
 Semantics docs ([filesystem](docs/semantics.md), [network](docs/network-semantics.md)) pin the normative
 command semantics, paired with the reference oracles, which are the executable truth. The full result

@@ -323,6 +323,20 @@ smallest world) and ratchets up. Topology generalization (train on some families
 on held-out families) is an explicit axis (EN4), because it is the field's known
 failure mode (§2.2).
 
+**The upper end of the dial — the free-oracle scaling regime ([SPEC-9](./SPEC-9.md)).** Because the
+oracle labels any world size for free and exactly (SPEC.md §2), the *top* of this curriculum is
+bounded only by the learner's compute, not by a labeling budget — so "how large can the world be" is a
+hardware question, answered concretely in [SPEC-9 §3](./SPEC-9.md): on a 32 GB Apple-silicon machine,
+the binding cost is the `O(N^2)` message passing (not memory, which stays under 2 GB at 400 hosts),
+giving a **scaling-sweep preset of N ≤ 200 hosts** (multi-seed surfaces in tens of minutes) and a
+**hero preset of N ~400–512** (single committed large points). The world factory
+[`scaled_net_config`](../../src/verisim/net/config.py) instantiates these. The dials split into the
+three SPEC-9 axes: **size** (hosts/ports/services), **scale** (trajectory length, seeds — nearly free
+in time since training runs a fixed step count), and **depth** (topology diameter ⇒ `mp_rounds`, plus
+the v1 graph-arm gaps of §6.1–6.2 — flow-port richness, belief carried across a partial rollout — which
+are the *depth frontier* where a deeper world is currently under-modeled). The SPEC-8 oracle-grounded-SSL
+gaps (H23-S/H24-S/H25-S) are measured *across* this dial as the SPEC-9 scaling surface (S1–S3).
+
 ---
 
 ## 4. The state delta `Δ`
@@ -743,7 +757,10 @@ the network world — they are gated on the NW8 latent arm.
   oracle-anchored target remove JEPA's collapse tax (H23)? Does residual supervision beat likelihood
   (H24)?* This is where the oracle moves from the cherry (EN5's RLVR) into the **self-supervised bulk** —
   SPEC-8's core claim. *Honest negative:* the oracle-grounded cells do not beat the proxy cells → pressing
-  truth into the bulk buys little here; report the bound.
+  truth into the bulk buys little here; report the bound. *Scale-up (OG5–OG6, [SPEC-8](./SPEC-8.md) §7.1–7.3):*
+  `en8_scale` sweeps world size × model size × seeds and reports the **collapse gap** (H23-S) and the
+  **residual-objective gap** (H24-S, designed per §7.2 — world size raised at *fixed* capacity so masking `D`
+  can pay) as scaling curves with **disjoint bootstrap CIs**; built and proven locally on CPU first.
 - **EN9 — oracle hard-negative / counterfactual contrastive** (**H25**, **H5**, [SPEC-8](./SPEC-8.md) §4.3):
   add an oracle-mined contrastive loss (one-edit-wrong successors + action-branch counterfactuals, each
   labeled against the Tier-A oracle) to SSL pretraining; ablate against VICReg-only and no-contrastive.
@@ -751,7 +768,9 @@ the network world — they are gated on the NW8 latent arm.
   exact near-miss negatives beat statistical regularizers, and do counterfactual negatives lift
   interventional fidelity?* The hard-negative generator generalizes K1's (SPEC-2.1 §5) to contrastive
   pairs. *Honest negative:* exact negatives add nothing over VICReg → near-miss structure was not the
-  collapse mechanism.
+  collapse mechanism. *Scale-up (OG5–OG6, [SPEC-8](./SPEC-8.md) §7.1–7.3):* `en9_scale` reports the
+  **interventional lift** `top1(oracle) − top1(vicreg)` (H25-S / H5) as a scaling curve with disjoint
+  bootstrap CIs, pre-registered to *widen* as more hosts create more distinct branches (chance `1/m` falls).
 
 **External harness (optional, for community legibility).** Where it is cheap to do so,
 EN1/EN3/EN5 are additionally reported against a **CAGE-4 / CybORG**-class scenario

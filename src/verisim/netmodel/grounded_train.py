@@ -428,6 +428,24 @@ def train_jepa(
 
 
 @torch.no_grad()
+def _embed_all(model: GraphRSSMWorldModel, graphs: list[NetGraph], *, chunk: int = 256) -> Tensor:
+    """Embed ``graphs`` in chunks and concatenate ``z[n, d]``.
+
+    The dense ``[B, N, N]`` adjacency the encoder builds is ``O(N^2)`` per graph, so a single
+    all-at-once forward over a large, deep dataset at a large host count can exhaust memory.
+    Chunking bounds the live adjacency to ``chunk`` graphs at a time -- the enabler for the SPEC-9
+    local-maximal runs (large hosts x deep trajectories), with no effect on the result (the
+    embeddings are independent).
+    """
+    device = model.net.device
+    parts: list[Tensor] = []
+    for i in range(0, len(graphs), chunk):
+        node, gfeat, a_link, a_flow = graphs_to_tensors(graphs[i : i + chunk], device)
+        parts.append(model.net.embed(node, gfeat, a_link, a_flow))
+    return torch.cat(parts, dim=0)
+
+
+@torch.no_grad()
 def representation_health(
     model: GraphRSSMWorldModel, examples: list[GroundedExample]
 ) -> tuple[float, float]:
@@ -438,12 +456,10 @@ def representation_health(
     (→ 1 under collapse, → d for full rank) — the standard JEPA collapse diagnostic.
     """
     model.net.eval()
-    device = model.net.device
-    node, gfeat, a_link, a_flow = graphs_to_tensors([ex.graph for ex in examples], device)
-    z = model.net.embed(node, gfeat, a_link, a_flow)
+    z = _embed_all(model, [ex.graph for ex in examples])
     emb_std = float(z.std(dim=0).mean().item())
     zc = z - z.mean(dim=0, keepdim=True)
-    sv = torch.linalg.svdvals(zc)
+    sv = torch.linalg.svdvals(zc.cpu())  # svdvals lacks an MPS kernel; [n,d] SVD is cheap on CPU
     p = sv / sv.sum().clamp_min(1e-12)
     entropy = -(p * (p.clamp_min(1e-12)).log()).sum()
     eff_rank = float(torch.exp(entropy).item())
@@ -678,12 +694,10 @@ def _contrastive_health(
 ) -> tuple[float, float]:
     """``(emb_std, eff_rank)`` of the anchor summaries — the collapse readout for the EN9 cells."""
     model.net.eval()
-    device = model.net.device
-    node, gfeat, a_link, a_flow = graphs_to_tensors([ex.graph for ex in examples], device)
-    z = model.net.embed(node, gfeat, a_link, a_flow)
+    z = _embed_all(model, [ex.graph for ex in examples])
     emb_std = float(z.std(dim=0).mean().item())
     zc = z - z.mean(dim=0, keepdim=True)
-    sv = torch.linalg.svdvals(zc)
+    sv = torch.linalg.svdvals(zc.cpu())  # svdvals lacks an MPS kernel; [n,d] SVD is cheap on CPU
     p = sv / sv.sum().clamp_min(1e-12)
     entropy = -(p * (p.clamp_min(1e-12)).log()).sum()
     return emb_std, float(torch.exp(entropy).item())

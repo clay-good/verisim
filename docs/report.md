@@ -611,6 +611,32 @@ tasks specifically. Carry the counterfactual-negative objective up the ladder (S
 fidelity is the headline; do not expect it to beat VICReg on plain collapse. CIs and a scaled run remain;
 every cell is bankable under the oracle.
 
+## EN8/EN9 scale-up — the smoke verdicts, now with CIs across a 3× world sweep (SPEC-8 §7.1, SPEC-9)
+
+The EN8/EN9 smoke figures above are single-seed (one `model_seed`, a 5-host world), so a reader can
+discount them as noise. The OG5 scale harness ([`en8_scale.py`](../src/verisim/experiments/en8_scale.py),
+[`en9_scale.py`](../src/verisim/experiments/en9_scale.py)) re-runs each ablation across **world size ×
+seeds**, reducing every cell to the *gap the oracle buys* with a percentile bootstrap CI (the EN1
+machinery). At 5/10/15 hosts × 4 seeds ([`en8_scale.csv`](../figures/en8_scale.csv),
+[`en9_scale.csv`](../figures/en9_scale.csv)):
+
+| world | H23-S collapse gap (eff-rank) | H25-S/H5 interventional lift (top-1) | H24-S residual-objective gap |
+|---|---|---|---|
+| 5 hosts | **+13.4** [12.7, 14.0] | **+0.100** [0.059, 0.140] | +0.069 [−0.005, 0.130] |
+| 10 hosts | **+8.4** [7.8, 9.0] | **+0.354** [0.266, 0.448] | 0.000 [−0.035, 0.035] |
+| 15 hosts | **+7.7** [6.7, 8.7] | **+0.094** [0.055, 0.125] | +0.006 [−0.009, 0.028] |
+
+**Two of the three claims are now defensible against "n=1 / toy world."** The H23-S collapse gap and the
+H25-S/H5 interventional lift are **disjoint from zero at every world size** with 4 seeds. H24-S stays a
+**CI-bounded near-tie** — the smoke negative, now with error bars. Two honest nuances are themselves the
+findings, and both are pre-registered into SPEC-9's scaling claims: the *raw* collapse gap declines with
+world size (effective rank is capped by `d_model=48`, so SPEC-9 S1 tracks the normalized gap and grows
+`d_model` with the world), and the interventional lift is *non-monotone* (peaks at 10 hosts — SPEC-9 S2
+reads this as fixed-capacity undertraining at the largest world, to be tested on the model-size axis).
+The full world × model **scaling surface** (SPEC-9 LS2) extends this up the local envelope; the envelope
+itself (how large the world can be made on one 32 GB machine before `O(N²)` message passing binds — not
+memory, and not the free oracle) is measured in [SPEC-9 §3](specs/SPEC-9.md).
+
 ## Threats to validity
 
 - **Scale.** The committed model is ~tiny and trains for a few hundred iterations on
