@@ -4,6 +4,7 @@ embedded v0 filesystem), the syscall grammar, and canonical serialization (HC0).
 from __future__ import annotations
 
 from .action import HostAction, HostParseError, parse_host_action
+from .config import DEFAULT_HOST_CONFIG, HostConfig
 from .delta import (
     CredChange,
     FdClose,
@@ -21,6 +22,7 @@ from .delta import (
 from .state import RUNNING, ZOMBIE, FdEntry, HostState, Process, to_canonical_host
 
 __all__ = [
+    "DEFAULT_HOST_CONFIG",
     "RUNNING",
     "ZOMBIE",
     "CredChange",
@@ -29,6 +31,7 @@ __all__ = [
     "FdOpen",
     "FsDelta",
     "HostAction",
+    "HostConfig",
     "HostDelta",
     "HostEdit",
     "HostParseError",
