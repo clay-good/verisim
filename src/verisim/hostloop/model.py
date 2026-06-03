@@ -34,12 +34,14 @@ class HostModel(Protocol):
 
 
 @runtime_checkable
-class HostUncertaintyModel(Protocol):
-    """A :class:`HostModel` that also reports its per-prediction uncertainty (§5.4, §8.1).
+class HostUncertaintyModel(HostModel, Protocol):
+    """A :class:`HostModel` that *also* reports its per-prediction uncertainty (§5.4, §8.1).
 
-    The signal drives the ``uncertainty``/``drift``-triggered consultation policies (SPEC-6 §8.1),
-    the host analogue of v0's M_θ uncertainty signal. Models without one (the baselines below) do
-    not implement this protocol, and the runner treats their signal as ``0``.
+    Extends :class:`HostModel` (an uncertainty model is still a model), so it carries
+    ``predict_delta`` too and is accepted anywhere a :class:`HostModel` is. The signal drives the
+    ``uncertainty``/``drift``-triggered consultation policies (SPEC-6 §8.1), the host analogue of
+    v0's M_θ uncertainty signal. Models without one (the baselines below) do not implement this
+    protocol, and the runner treats their signal as ``0``.
     """
 
     def predict_delta_with_uncertainty(

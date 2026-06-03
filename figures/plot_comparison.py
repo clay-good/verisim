@@ -76,7 +76,7 @@ def plot_comparison(
 def main() -> None:
     parser = argparse.ArgumentParser(description="Plot an equal-budget comparison (E2/E3).")
     parser.add_argument("--records", type=str, required=True)
-    parser.add_argument("--key", type=str, choices=["policy", "operator"], required=True)
+    parser.add_argument("--key", type=str, choices=["policy", "operator", "label"], required=True)
     parser.add_argument("--out", type=str, required=True)
     parser.add_argument("--csv", type=str, required=True)
     parser.add_argument("--resamples", type=int, default=2000)

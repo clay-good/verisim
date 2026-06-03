@@ -13,7 +13,7 @@
 
 ## Results at a glance
 
-Ten committed, oracle-grounded figures — the smoke-scale bet in one screen — each detailed below, each
+Eleven committed, oracle-grounded figures — the smoke-scale bet in one screen — each detailed below, each
 with its honest negative. **What survives scaling is the real verdict: see [§8](#8-which-wins-survive-scaling--the-honest-mixed-verdict-spec-9).** Every number regenerates from
 config + seeds (`bash figures/reproduce.sh`).
 
@@ -24,6 +24,7 @@ config + seeds (`bash figures/reproduce.sh`).
 | [![EN3 probe efficiency](figures/en3_operators.png)](figures/en3_operators.png)<br>**What you consult beats whether (EN3).** Under partial observation a cheap one-host **probe + belief filter** earns **~2.3×** more faithful horizon per oracle-bit than full consultation — active sensing is a real lever. | [![EN7 model-invariance](figures/en7_invariance.png)](figures/en7_invariance.png)<br>**The shape is the loop's, not the model's (EN7 / H22).** Run the *same* loop with four proposers (null, flat transformer, graph+RSSM, oracle-backed): the three imperfect ones share **one shape — floor + cliff, no knee.** The proposer sets the floor *height* (graph > flat > null); the loop sets the *shape*. The no-knee verdict is model-agnostic. |
 | [![EH1 composed-host curve](figures/eh1_curve.png)](figures/eh1_curve.png)<br>**The floor+cliff holds in the *composed* world (host EH1 / HC6).** First result in the host world (process table + fd tables + embedded fs): the composed `H_ε(ρ)` is the same flat-then-cliff shape as the filesystem and network worlds — `ρ=0` drifts in <1 step, the cliff only at `ρ=1`. The no-knee verdict generalizes across all three worlds. | [![EH1 composition law H13](figures/eh1_composition.png)](figures/eh1_composition.png)<br>**Whole-machine faithfulness is *coupled*, not independent (host EH1 / H13).** The headline-new measurement: composed per-step acceptance (orange) sits *below* the multiplicative/independence prediction `∏ aᵢ` (blue) — the flat baseline's subsystem failures are **anti-correlated**. Modeling subsystems independently is the wrong bet; coupling is load-bearing. The honest negative that licenses the factored interaction-graph arm. |
 | [![EH4 factored vs flat](figures/eh4_factored_vs_flat.png)](figures/eh4_factored_vs_flat.png)<br>**Structure helps in the bundle world too — but the coupling is real (host EH4 / H11 / H13).** The factored interaction-graph arm (GNN+RSSM over the process spine's lineage + shared-file edges) beats the flat serializer **~6.6× on delta-exact (0.058→0.388)** and **~5.3× on composed acceptance** — the host echo of EN4. But *both* stay **coupled** (composed still below the independence floor): modeling the references explicitly buys a lot of faithfulness, yet does **not** uncouple the composition — so H13's coupling is genuine, not a flat-arm artifact. | [![EH3 per-subsystem efficiency](figures/eh3_operators.png)](figures/eh3_operators.png)<br>**Which subsystem you verify is a lever — the cheapest beats the weakest (host EH3).** At equal budget the full-consult operators coincide on `H_ε`, but a per-subsystem probe earns **~3.7× more faithful horizon per oracle-bit**. The twist: the *cheapest* subsystem (`fd`) wins, not the H13-*weakest* (`proc`) — so efficient `π_w` is a cost-vs-consequence tradeoff, not "verify the worst." |
+| [![EH2 smart consultation policy](figures/eh2_policies.png)](figures/eh2_policies.png)<br>**A calibrated signal finally makes *smart* consultation pay (host EH2 / H9).** The program's first smart-`π_c` **positive**. At equal budget the **flat** arm reproduces the standing negative (uncertainty/drift *worse* than fixed — decode entropy mis-localizes error), but the **factored** arm's **RSSM belief variance** makes uncertainty-triggered consultation earn **~2.2× more faithful horizon than fixed** (5.8 vs 2.6 steps). *When* to consult finally beats spreading the budget evenly — because the calibrated signal knows where the model is wrong. | <br> |
 
 ## What we've found so far
 
@@ -395,6 +396,32 @@ host dynamics**, not an artifact of flattening — which sharpens H13 from "the 
 world couples, and even the structured model only attenuates it." That residual coupling is the standing
 target for the per-subsystem decode heads and the smart `π_w` still to come.
 
+### 16. A calibrated uncertainty signal finally makes *smart* consultation pay (host EH2 / H9)
+
+Across v0 and the network world, *when* to consult was a negative: uncertainty- and drift-triggered
+policies — spending the oracle budget on the steps the model flags as uncertain — did **not** beat a
+dumb fixed interval, because the only available signal was the flat model's **decode entropy**, which
+mis-localizes where the model is actually wrong (the standing "H2-negative"). SPEC-6 §8.1 conjectured
+the factored arm's **RSSM belief variance** — an uncertainty *calibrated by construction* (§6.2), not a
+decode-time artifact — would be the signal that finally makes smart `π_c` pay. EH2 tests it: both arms,
+all three policies, at equal budget.
+
+![EH2 consultation-policy comparison: flat decode-entropy vs factored belief-variance, three policies](figures/eh2_policies.png)
+
+| arm (uncertainty signal) | `fixed` | `uncertainty` | `drift` |
+|---|---|---|---|
+| flat (decode entropy) | 1.1 | 0.5 | 0.4 |
+| **factored (RSSM belief variance)** | 2.6 | **5.8** | 3.1 |
+
+**This is the program's first smart-`π_c` positive.** The flat arm reproduces the negative exactly —
+uncertainty (0.5) and drift (0.4) are *worse* than fixed (1.1), because high decode entropy does not
+mark the steps that actually drift. But on the factored arm, **uncertainty-triggered consultation earns
+~2.2× more faithful horizon than fixed** (5.8 vs 2.6 steps) at the same 7-consultation budget. The
+difference is entirely the signal: the belief variance knows where the model is wrong, so spending the
+budget there beats spreading it evenly. *When* to consult is a real lever — once you have an honest
+estimate of *when you are about to be wrong*. (The full-truth identity still holds per consult; this is
+about allocating a fixed budget across steps, the §8.1 H9 question.)
+
 ## The problem, and what we're trying to accomplish
 
 ### The wall every world model hits
@@ -566,7 +593,7 @@ host → distributed); three specs are *cross-cutting methods* every world inher
 | [SPEC-3](docs/specs/SPEC-3.md) | depth | how the toy grows into a real simulator (system oracle, partial obs, online self-healing, info-theoretic metric) |
 | [SPEC-4](docs/specs/SPEC-4.md) | **the engine** | the autonomous research engine — Verisim improving Verisim, human out of the loop |
 | [SPEC-5](docs/specs/SPEC-5.md) | **world: network** | the reachability/connectivity world — **the current build front** |
-| [SPEC-6](docs/specs/SPEC-6.md) | world: host | the running computer (process tree, fds, scheduler) — **HC0-HC6 started**: the host oracle *composes* the v0 FS sub-oracle; bundle delta + `apply == oracle` invariant; workload drivers + datasets; composed + **per-subsystem** metrics with the **composition-law diagnostic** (H13); the **flat learned `M_θ` baseline** (HC4 incr-1); the **composed loop** with the `π_w` oracle-selection axis (HC5 incr-1); **the prime-directive figure (HC6)** — the composed `H_ε(ρ)` floor+cliff + the **H13 composition law = `coupled`** ([eh1_curve](figures/eh1_curve.png), [eh1_composition](figures/eh1_composition.png)); **the EH3 equal-budget operator comparison (HC7)** — per-subsystem consultation earns **~3.7× more horizon per oracle-bit** ([eh3_operators](figures/eh3_operators.png)); and **the factored interaction-graph arm (HC4 incr-2) + EH4** — structure beats flat **~6.6× on delta-exact** yet the H13 coupling survives ([eh4_factored_vs_flat](figures/eh4_factored_vs_flat.png)) |
+| [SPEC-6](docs/specs/SPEC-6.md) | world: host | the running computer (process tree, fds, scheduler) — **HC0-HC6 started**: the host oracle *composes* the v0 FS sub-oracle; bundle delta + `apply == oracle` invariant; workload drivers + datasets; composed + **per-subsystem** metrics with the **composition-law diagnostic** (H13); the **flat learned `M_θ` baseline** (HC4 incr-1); the **composed loop** with the `π_w` oracle-selection axis (HC5 incr-1); **the prime-directive figure (HC6)** — the composed `H_ε(ρ)` floor+cliff + the **H13 composition law = `coupled`** ([eh1_curve](figures/eh1_curve.png), [eh1_composition](figures/eh1_composition.png)); **the EH3 equal-budget operator comparison (HC7)** — per-subsystem consultation earns **~3.7× more horizon per oracle-bit** ([eh3_operators](figures/eh3_operators.png)); **the factored interaction-graph arm (HC4 incr-2) + EH4** — structure beats flat **~6.6× on delta-exact** yet the H13 coupling survives ([eh4_factored_vs_flat](figures/eh4_factored_vs_flat.png)); and **EH2** — the factored arm's calibrated belief variance makes smart consultation beat fixed **~2.2×** (the first smart-`π_c` positive, [eh2_policies](figures/eh2_policies.png)) |
 | [SPEC-7](docs/specs/SPEC-7.md) | world: distributed | replicated services, transactions, consensus — design |
 | [SPEC-8](docs/specs/SPEC-8.md) | **method: oracle-grounded SSL** | put the oracle's truth in the *bulk* of the cake (self-supervised pretraining), not just the cherry (RL) |
 | [SPEC-9](docs/specs/SPEC-9.md) | **method: free-oracle scaling** | because the oracle labels for free, world size is a *compute* choice, not a labeling-budget one — how large/deep the world goes on one machine, and what holds as it grows |
@@ -654,8 +681,13 @@ write-up is [docs/report.md](docs/report.md).
 > **beats flat ~6.6× on delta-exact and ~5.3× on composed acceptance** (structure helps), **but both stay
 > `coupled`** — so the H13 coupling is a genuine property of the host dynamics, not a flat-arm artifact
 > (finding [§15](#15-modeling-the-composition-explicitly-helps-a-lot--but-the-coupling-is-real-not-an-artifact-host-eh4--h11--h13)).
-> Remaining: the scheduler + sockets/IPC + the interleaving-entropy dial, per-subsystem decode heads + the
-> §6.3 drift levers, smart `π_c`/`π_w`, the experience-stream, and packaging.
+> **EH2 also ships** ([`eh2.py`](src/verisim/experiments/eh2.py), figure [`eh2_policies.png`](figures/eh2_policies.png)):
+> the consultation-policy comparison is the program's **first smart-`π_c` positive** — the flat arm
+> reproduces the standing H2-negative, but the factored arm's RSSM belief variance makes
+> uncertainty-triggered consultation beat fixed **~2.2×** at equal budget (finding
+> [§16](#16-a-calibrated-uncertainty-signal-finally-makes-smart-consultation-pay-host-eh2--h9)).
+> Remaining: the scheduler + sockets/IPC + the interleaving-entropy dial, per-subsystem decode heads +
+> the §6.3 drift levers, the smart `π_w` axis, the experience-stream, and packaging.
 
 **v0 — shell/filesystem world (`src/verisim/`, SPEC-2 §13): complete.**
 

@@ -113,6 +113,11 @@ python figures/plot_eh1.py --records runs/eh1/host_records.jsonl \
     --out figures/eh1_curve.png --csv figures/eh1_curve.csv \
     --comp-out figures/eh1_composition.png --comp-csv figures/eh1_composition.csv
 
+echo "== EH2: host consultation-policy comparison — flat entropy vs factored belief-variance (HC7, H9) =="
+python -m verisim.experiments.eh2 --config configs/eh2.json --out runs/eh2/records.jsonl
+python figures/plot_comparison.py --records runs/eh2/records.jsonl --key label \
+    --out figures/eh2_policies.png --csv figures/eh2_policies.csv
+
 echo "== EH3: host correction-operator comparison at equal budget (SPEC-6 HC7, §8.3) =="
 python -m verisim.experiments.eh3 --config configs/eh3.json --out runs/eh3/records.jsonl
 python figures/plot_comparison.py --records runs/eh3/records.jsonl --key operator \
@@ -125,4 +130,4 @@ python -m verisim.experiments.eh4 --config configs/eh4.json --out figures/eh4_fa
 #   python -m verisim.experiments.en8_scale --world-sizes 25 50 100 200 --d-models 64 128 --seeds 0 1 2 --out figures/en8_surface.csv
 #   python -m verisim.experiments.en9_scale --world-sizes 25 50 100 200 --d-models 64 128 --seeds 0 1 2 --out figures/en9_surface.csv
 
-echo "== done: figures/{e1_curve,e2_policies,e3_operators,calibration,e4_ablation,objective,representation,auto_search,en1_curve,en2_policies,en3_operators,en4_graph_vs_flat,en8_grounding,en9_contrastive,en8_scale,en9_scale,en8_capacity,en9_negatives,en7_invariance,en5_selfheal,en6_counterfactual,en8_ls3_hero,en10_two_oracle,eh1_curve,eh1_composition,eh3_operators,eh4_factored_vs_flat}.{png,csv} =="
+echo "== done: figures/{e1_curve,e2_policies,e3_operators,calibration,e4_ablation,objective,representation,auto_search,en1_curve,en2_policies,en3_operators,en4_graph_vs_flat,en8_grounding,en9_contrastive,en8_scale,en9_scale,en8_capacity,en9_negatives,en7_invariance,en5_selfheal,en6_counterfactual,en8_ls3_hero,en10_two_oracle,eh1_curve,eh1_composition,eh2_policies,eh3_operators,eh4_factored_vs_flat}.{png,csv} =="
