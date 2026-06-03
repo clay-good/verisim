@@ -41,7 +41,7 @@ from verisim.hostmetrics.record import HostRunRecord
 from verisim.loop.policy import ConsultationPolicy, StepContext
 from verisim.loop.runner import budget_for_rho
 
-from .model import HostModel, HostUncertaintyModel
+from .model import HostModel, HostSubsystemUncertaintyModel, HostUncertaintyModel
 from .observe import PartialHostOracle, full_bits
 from .operator import FullCorrection, HardReset, SubsystemFilter
 from .subsystem import SubsystemPolicy
@@ -124,7 +124,14 @@ def run_host_rollout(
                 state = correct(predicted, truth)  # CORRECT
                 oracle_bits += full_bits(truth)
             else:  # cheap probe of one subsystem (§5.3, §8.2)
-                subsystem = subsystem_policy.select(state)  # WHICH to verify (§8.2)
+                # If the proposer localizes its uncertainty per subsystem, hand it to π_w so a smart
+                # policy can target the least-certain subsystem (§8.2); else select sees None.
+                unc = (
+                    model.predict_delta_with_subsystem_uncertainty(state, action)[1]
+                    if isinstance(model, HostSubsystemUncertaintyModel)
+                    else None
+                )
+                subsystem = subsystem_policy.select(state, unc)  # WHICH to verify (§8.2)
                 obs = oracle.probe(state, action, subsystem)  # VERIFY (partial)
                 state = sop.correct(predicted, obs)  # subsystem-filter the observed subsystem
                 oracle_bits += obs.bits

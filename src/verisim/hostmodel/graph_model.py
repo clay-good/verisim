@@ -39,9 +39,10 @@ from verisim.host.action import HostAction
 from verisim.host.config import HostConfig
 from verisim.host.delta import HostDelta
 from verisim.host.state import HostState
+from verisim.hostmetrics.divergence import SUBSYSTEMS
 from verisim.model.transformer import Block, GPTConfig
 
-from .grammar import HostDeltaGrammar
+from .grammar import OP_SUBSYSTEM, HostDeltaGrammar
 from .graph import HostGraph, build_host_graph, feature_dims
 from .tokenizer import parse_target
 from .vocab import HostVocab
@@ -220,7 +221,7 @@ class GraphHostWorldModel:
     @torch.no_grad()
     def _decode(
         self, state: HostState, action: HostAction, *, max_edits: int, max_new_tokens: int
-    ) -> tuple[HostDelta, float]:
+    ) -> tuple[HostDelta, float, dict[str, float]]:
         self.net.eval()
         device = self.net.device
         gph = build_host_graph(state, action, self.config, self.max_pid)
@@ -233,6 +234,10 @@ class GraphHostWorldModel:
         generated: list[int] = []
         stack = self.grammar.start()
         edits = 0
+        # Per-subsystem decode entropy (§5.4, §8.2): each token's masked-distribution entropy is
+        # bucketed into the subsystem of the op being decoded, giving the smart-π_w signal.
+        per_subsystem = {sub: 0.0 for sub in SUBSYSTEMS}
+        current_sub = "global"
         while not self.grammar.is_accept(stack):
             if len(generated) >= max_new_tokens:
                 raise RuntimeError("graph constrained_decode exceeded max_new_tokens")
@@ -247,25 +252,44 @@ class GraphHostWorldModel:
                 allowed = frozenset({self.vocab.eos})
             mask_v = torch.full((len(self.vocab),), float("-inf"), device=device)
             mask_v[list(allowed)] = 0.0
-            token = int(torch.argmax(logits + mask_v).item())
+            masked = logits + mask_v
+            token = int(torch.argmax(masked).item())
 
             if top == "DELTA" and token in self.vocab.op_ids:
                 edits += 1
+                current_sub = OP_SUBSYSTEM[self.vocab.token(token)]
+            probs = torch.softmax(masked, dim=-1)
+            per_subsystem[current_sub] += float(
+                -(probs * torch.log(probs.clamp_min(1e-12))).sum().item()
+            )
             stack = self.grammar.advance(stack, token)
             seq.append(token)
             generated.append(token)
 
-        return parse_target(generated, self.vocab), float(belief_var[0].item())
+        return parse_target(generated, self.vocab), float(belief_var[0].item()), per_subsystem
 
     def predict_delta(self, state: HostState, action: HostAction) -> HostDelta:
-        delta, _ = self._decode(state, action, max_edits=64, max_new_tokens=4096)
+        delta, _, _ = self._decode(state, action, max_edits=64, max_new_tokens=4096)
         return delta
 
     def predict_delta_with_uncertainty(
         self, state: HostState, action: HostAction
     ) -> tuple[HostDelta, float]:
         """Return ``(delta, belief_variance)`` -- the §6.2 calibrated uncertainty signal."""
-        return self._decode(state, action, max_edits=64, max_new_tokens=4096)
+        delta, belief_var, _ = self._decode(state, action, max_edits=64, max_new_tokens=4096)
+        return delta, belief_var
+
+    def predict_delta_with_subsystem_uncertainty(
+        self, state: HostState, action: HostAction
+    ) -> tuple[HostDelta, dict[str, float]]:
+        """Return ``(delta, per_subsystem_decode_entropy)`` -- the smart-``π_w`` signal (§8.2).
+
+        The per-subsystem entropy localizes *where* the predicted delta is least certain, so a
+        which-subsystem policy can spend the consult on the subsystem the model is least sure about
+        (the §8.2 information-gain choice), instead of a fixed or round-robin target.
+        """
+        delta, _, per_subsystem = self._decode(state, action, max_edits=64, max_new_tokens=4096)
+        return delta, per_subsystem
 
 
 def build_host_graph_model(

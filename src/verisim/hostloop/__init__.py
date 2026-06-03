@@ -13,7 +13,13 @@ protocol, so the loop never knows whether it holds a baseline or the neural mode
 
 from __future__ import annotations
 
-from .model import HostModel, HostNullModel, HostOracleBackedModel, HostUncertaintyModel
+from .model import (
+    HostModel,
+    HostNullModel,
+    HostOracleBackedModel,
+    HostSubsystemUncertaintyModel,
+    HostUncertaintyModel,
+)
 from .observe import PartialHostOracle, SubsystemObservation, full_bits, subsystem_bits
 from .operator import (
     FullCorrection,
@@ -24,7 +30,12 @@ from .operator import (
     subsystem_filter,
 )
 from .runner import budget_for_rho, ground_truth_rollout, run_host_rollout
-from .subsystem import FixedSubsystem, RoundRobinSubsystem, SubsystemPolicy
+from .subsystem import (
+    FixedSubsystem,
+    RoundRobinSubsystem,
+    SubsystemPolicy,
+    UncertaintySubsystem,
+)
 
 __all__ = [
     "FixedSubsystem",
@@ -33,6 +44,7 @@ __all__ = [
     "HostModel",
     "HostNullModel",
     "HostOracleBackedModel",
+    "HostSubsystemUncertaintyModel",
     "HostUncertaintyModel",
     "PartialHostOracle",
     "Projection",
@@ -41,6 +53,7 @@ __all__ = [
     "SubsystemFilter",
     "SubsystemObservation",
     "SubsystemPolicy",
+    "UncertaintySubsystem",
     "budget_for_rho",
     "full_bits",
     "ground_truth_rollout",

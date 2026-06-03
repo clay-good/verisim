@@ -28,6 +28,15 @@ _OP_BODY: dict[str, list[str]] = {
     "<set_exit>": ["EXIT"],
 }
 
+#: Which bundle subsystem each delta op edits (SPEC-6 §5.4, §8.2). The decoder buckets each op's
+#: decode entropy into its subsystem to give the per-subsystem uncertainty the smart ``π_w`` reads.
+OP_SUBSYSTEM: dict[str, str] = {
+    "<proc_spawn>": "proc", "<proc_exit>": "proc", "<cred_change>": "proc",
+    "<fd_open>": "fd", "<fd_close>": "fd",
+    "<fs_create>": "fs", "<fs_modify>": "fs",
+    "<set_exit>": "global",
+}
+
 
 class HostDeltaGrammar:
     """LL(1) recognizer/constrainer for the bundle-delta token grammar."""

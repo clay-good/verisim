@@ -422,6 +422,30 @@ budget there beats spreading it evenly. *When* to consult is a real lever — on
 estimate of *when you are about to be wrong*. (The full-truth identity still holds per consult; this is
 about allocating a fixed budget across steps, the §8.1 H9 question.)
 
+### 17. The other consultation axis: a smart *which-subsystem* policy gives a modest edge (host EH5 / H10)
+
+EH2 settled *when* to consult; EH5 takes the host's second, novel axis — *which subsystem's truth to
+buy* (`π_w`, §8.2). The factored arm now exposes **per-subsystem decode entropy** (each decoded token's
+uncertainty bucketed into the subsystem of the op it belongs to), and an `UncertaintySubsystem` policy
+spends each per-subsystem consult on the subsystem the model is **least certain** about. At equal budget,
+against the static baselines:
+
+| `π_w` policy | `H_ε` | oracle-bits | `H_ε` per bit |
+|---|---|---|---|
+| `fixed_fd` (cheapest subsystem) | 2.3 | 10.2 | **0.226** |
+| `fixed_proc` (the H13-weakest) | 2.6 | 21.5 | 0.121 |
+| `round_robin` (uniform) | 2.3 | 19.0 | 0.121 |
+| **`uncertainty` (smart, information-gain)** | 2.6 | 20.1 | 0.129 |
+
+**The honest read is a modest, mixed positive.** Targeting the uncertain subsystem ties the best raw
+horizon (`fixed_proc`) while beating `round_robin` on *both* horizon and per-bit — so adaptive `π_w` is
+a real, if small, lever (raw-horizon CIs overlap at this smoke scale). But the *cheapest* fixed
+subsystem (`fd`) still wins pure bit-efficiency, exactly the cost-vs-consequence tension EH3 flagged:
+the smart policy chases consequence (where the model is wrong) but ignores cost (how many bits the
+subsystem costs to verify). The ideal `π_w` weights both — the standing target. What ships here is the
+*apparatus* (per-subsystem uncertainty + the information-gain policy + the equal-budget harness); the
+smoke-scale edge is reported as-is, not oversold.
+
 ## The problem, and what we're trying to accomplish
 
 ### The wall every world model hits
@@ -542,7 +566,8 @@ Package map (parallel structure; `net*` mirrors v0 for the graph world):
   hostmetrics/  composed + per-subsystem d, bits, composition-law (H13), privilege-faithfulness, run-record
   hostmodel/   flat Mθ (HC4 incr-1) + factored interaction-graph Mθ (incr-2): GNN+RSSM over the
                process spine's lineage + shared-file edges, same grammar/decode (DD-H1: flat vs factored)
-  hostloop/    composed loop (HC5 incr-1): two-mode oracle, π_w which-subsystem policy, SubsystemFilter
+  hostloop/    composed loop (HC5): two-mode oracle, π_w which-subsystem policy (fixed/round-robin/
+               uncertainty — the smart information-gain choice), SubsystemFilter per-subsystem correct
 ```
 
 The host **bundle** is the structural novelty: state is a coupled set of subsystems (process table +
@@ -593,7 +618,7 @@ host → distributed); three specs are *cross-cutting methods* every world inher
 | [SPEC-3](docs/specs/SPEC-3.md) | depth | how the toy grows into a real simulator (system oracle, partial obs, online self-healing, info-theoretic metric) |
 | [SPEC-4](docs/specs/SPEC-4.md) | **the engine** | the autonomous research engine — Verisim improving Verisim, human out of the loop |
 | [SPEC-5](docs/specs/SPEC-5.md) | **world: network** | the reachability/connectivity world — **the current build front** |
-| [SPEC-6](docs/specs/SPEC-6.md) | world: host | the running computer (process tree, fds, scheduler) — **HC0-HC6 started**: the host oracle *composes* the v0 FS sub-oracle; bundle delta + `apply == oracle` invariant; workload drivers + datasets; composed + **per-subsystem** metrics with the **composition-law diagnostic** (H13); the **flat learned `M_θ` baseline** (HC4 incr-1); the **composed loop** with the `π_w` oracle-selection axis (HC5 incr-1); **the prime-directive figure (HC6)** — the composed `H_ε(ρ)` floor+cliff + the **H13 composition law = `coupled`** ([eh1_curve](figures/eh1_curve.png), [eh1_composition](figures/eh1_composition.png)); **the EH3 equal-budget operator comparison (HC7)** — per-subsystem consultation earns **~3.7× more horizon per oracle-bit** ([eh3_operators](figures/eh3_operators.png)); **the factored interaction-graph arm (HC4 incr-2) + EH4** — structure beats flat **~6.6× on delta-exact** yet the H13 coupling survives ([eh4_factored_vs_flat](figures/eh4_factored_vs_flat.png)); and **EH2** — the factored arm's calibrated belief variance makes smart consultation beat fixed **~2.2×** (the first smart-`π_c` positive, [eh2_policies](figures/eh2_policies.png)) |
+| [SPEC-6](docs/specs/SPEC-6.md) | world: host | the running computer (process tree, fds, scheduler) — **HC0-HC6 started**: the host oracle *composes* the v0 FS sub-oracle; bundle delta + `apply == oracle` invariant; workload drivers + datasets; composed + **per-subsystem** metrics with the **composition-law diagnostic** (H13); the **flat learned `M_θ` baseline** (HC4 incr-1); the **composed loop** with the `π_w` oracle-selection axis (HC5 incr-1); **the prime-directive figure (HC6)** — the composed `H_ε(ρ)` floor+cliff + the **H13 composition law = `coupled`** ([eh1_curve](figures/eh1_curve.png), [eh1_composition](figures/eh1_composition.png)); **the EH3 equal-budget operator comparison (HC7)** — per-subsystem consultation earns **~3.7× more horizon per oracle-bit** ([eh3_operators](figures/eh3_operators.png)); **the factored interaction-graph arm (HC4 incr-2) + EH4** — structure beats flat **~6.6× on delta-exact** yet the H13 coupling survives ([eh4_factored_vs_flat](figures/eh4_factored_vs_flat.png)); **EH2** — the factored arm's calibrated belief variance makes smart consultation beat fixed **~2.2×** (the first smart-`π_c` positive, [eh2_policies](figures/eh2_policies.png)); and **EH5** — a smart *which-subsystem* `π_w` (per-subsystem decode entropy) gives a modest edge over round-robin ([eh5_subsystem_policy](figures/eh5_subsystem_policy.png)). Both consultation axes (when × which) are now measured |
 | [SPEC-7](docs/specs/SPEC-7.md) | world: distributed | replicated services, transactions, consensus — design |
 | [SPEC-8](docs/specs/SPEC-8.md) | **method: oracle-grounded SSL** | put the oracle's truth in the *bulk* of the cake (self-supervised pretraining), not just the cherry (RL) |
 | [SPEC-9](docs/specs/SPEC-9.md) | **method: free-oracle scaling** | because the oracle labels for free, world size is a *compute* choice, not a labeling-budget one — how large/deep the world goes on one machine, and what holds as it grows |
@@ -686,8 +711,15 @@ write-up is [docs/report.md](docs/report.md).
 > reproduces the standing H2-negative, but the factored arm's RSSM belief variance makes
 > uncertainty-triggered consultation beat fixed **~2.2×** at equal budget (finding
 > [§16](#16-a-calibrated-uncertainty-signal-finally-makes-smart-consultation-pay-host-eh2--h9)).
-> Remaining: the scheduler + sockets/IPC + the interleaving-entropy dial, per-subsystem decode heads +
-> the §6.3 drift levers, the smart `π_w` axis, the experience-stream, and packaging.
+> **EH5 then ships the smart `π_w` axis** ([`eh5.py`](src/verisim/experiments/eh5.py), figure
+> [`eh5_subsystem_policy.png`](figures/eh5_subsystem_policy.png)): the factored arm's per-subsystem
+> decode entropy drives an information-gain `UncertaintySubsystem` policy that gives a **modest edge**
+> over round-robin (matches the best raw horizon at lower cost), though the cheapest-fixed still wins
+> pure bit-efficiency (finding
+> [§17](#17-the-other-consultation-axis-a-smart-which-subsystem-policy-gives-a-modest-edge-host-eh5--h10)).
+> Both consultation axes (when `π_c` × which `π_w`) are now measured. Remaining: the scheduler +
+> sockets/IPC + the interleaving-entropy dial, per-subsystem decode *heads* + the §6.3 drift levers,
+> the experience-stream, and packaging.
 
 **v0 — shell/filesystem world (`src/verisim/`, SPEC-2 §13): complete.**
 
@@ -730,7 +762,7 @@ PyTorch is an optional `[model]` extra (see [docs/model-representation.md](docs/
 | composition-law | host H13 diagnostic: is composed `H_ε` multiplicative (∏ aᵢ) ↔ weakest-link (min aᵢ) ↔ coupled? | `hostmetrics/composition.py` |
 | **delta-exact** | per-step: did free decode assemble the exact edit set? (`bits_to_correct = 0`) | `netmetrics/exact.py` |
 | full / probe | oracle consultation modes: whole next-state vs one host's local view (cheap) | `netloop/observe.py` |
-| `π_w` | **which-subsystem** policy (host): *which truth-source to buy* on a consult — proc/fd/fs/global; the `SubsystemFilter` corrects only that one | `hostloop/subsystem.py`, `hostloop/operator.py` |
+| `π_w` | **which-subsystem** policy (host): *which truth-source to buy* on a consult — proc/fd/fs/global; fixed / round-robin / **uncertainty** (the smart, information-gain choice from per-subsystem decode entropy); the `SubsystemFilter` corrects only that one | `hostloop/subsystem.py`, `hostloop/operator.py` |
 | `D` / `R` | next-state bits the oracle **decides** vs the genuine **residual** (SPEC-8 partition) | `netdata/grounding.py` |
 | oracle-anchored target | a JEPA target pinned to the *true next state* (external referent) instead of a learned EMA | `netmodel/grounded_train.py` |
 | collapse readout | embedding std + effective rank — JEPA's collapse diagnostic (→ 0 / → 1 under collapse) | `netmodel/grounded_train.py` |

@@ -49,6 +49,21 @@ class HostUncertaintyModel(HostModel, Protocol):
     ) -> tuple[HostDelta, float]: ...
 
 
+@runtime_checkable
+class HostSubsystemUncertaintyModel(HostModel, Protocol):
+    """A :class:`HostModel` that reports its **per-subsystem** predicted-delta uncertainty (§5.4).
+
+    The map (subsystem -> uncertainty for this step) is the signal the smart which-subsystem policy
+    ``π_w`` (SPEC-6 §8.2) reads to spend a consult on the subsystem the model is least sure about.
+    The factored interaction-graph arm supplies it (bucketed decode entropy); proposers without one
+    do not implement it, and the runner falls the policy back to its uncertainty-free path.
+    """
+
+    def predict_delta_with_subsystem_uncertainty(
+        self, state: HostState, action: HostAction
+    ) -> tuple[HostDelta, dict[str, float]]: ...
+
+
 class HostNullModel:
     """Trivial predictor: predicts no change (the empty delta). The drift floor."""
 

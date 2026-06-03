@@ -1,0 +1,28 @@
+{
+  "name": "eh5-small",
+  "rho": 0.3,
+  "policies": ["fixed_proc", "fixed_fd", "round_robin", "uncertainty"],
+  "max_pid": 64,
+  "graph_iters": 800,
+  "graph_d_model": 64,
+  "graph_mp_rounds": 3,
+  "graph_batch": 32,
+  "base": {
+    "name": "eh1-small",
+    "train_driver": "forky",
+    "train_seeds": [0, 1, 2, 3],
+    "train_steps_per_traj": 40,
+    "n_layer": 2,
+    "n_head": 2,
+    "n_embd": 64,
+    "block_size": 256,
+    "train_iters": 600,
+    "lr": 0.003,
+    "model_seed": 0,
+    "difficulties": { "low": "forky", "high": "adversarial" },
+    "eval_seeds": [100, 101, 102, 103, 104],
+    "eval_steps": 24,
+    "rhos": [0.0, 0.3, 1.0],
+    "epsilons": [0.0, 0.05, 0.1]
+  }
+}

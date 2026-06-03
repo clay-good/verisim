@@ -1,0 +1,13 @@
+label,epsilon,mean_h,ci_low,ci_high,mean_calls,n
+fixed_fd,0.0,2.3,1.5,3.2,7.0,10
+fixed_fd,0.05,2.3,1.5,3.2,7.0,10
+fixed_fd,0.1,2.6,1.5,3.9,7.0,10
+fixed_proc,0.0,2.6,1.6,3.6,7.0,10
+fixed_proc,0.05,2.6,1.6,3.6,7.0,10
+fixed_proc,0.1,2.8,1.6,4.0,7.0,10
+round_robin,0.0,2.3,1.5,3.2,7.0,10
+round_robin,0.05,2.3,1.5,3.2,7.0,10
+round_robin,0.1,2.6,1.5,3.9,7.0,10
+uncertainty,0.0,2.6,1.6,3.6,7.0,10
+uncertainty,0.05,2.6,1.6,3.6,7.0,10
+uncertainty,0.1,2.8,1.6,4.0,7.0,10
