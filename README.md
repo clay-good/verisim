@@ -410,12 +410,13 @@ Package map (parallel structure; `net*` mirrors v0 for the graph world):
                                 netdata/    drivers + OG1/OG2 factory           en9_negatives
                                 netloop/    partial-obs runner, probe, belief filter
 
-  host world (SPEC-6, HC0-HC4 — the next world; the host oracle *composes* the FS + net sub-oracles)
+  host world (SPEC-6, HC0-HC5 — the next world; the host oracle *composes* the FS + net sub-oracles)
   host/      bundle state (procs + per-process fds + embedded v0 fs), syscall grammar, bundle delta, config
   hostoracle/  Tier-A reference host oracle: process/fd/credential glue over the v0 FS sub-oracle
   hostdata/  workload drivers (uniform/forky/adversarial) + trajectory JSONL + manifests/splits
   hostmetrics/  composed + per-subsystem d, bits, composition-law (H13), privilege-faithfulness, run-record
   hostmodel/   flat Mθ (HC4 incr-1): closed vocab + bundle-Δ tokenizer/grammar/decode (DD-H1 baseline)
+  hostloop/    composed loop (HC5 incr-1): two-mode oracle, π_w which-subsystem policy, SubsystemFilter
 ```
 
 The host **bundle** is the structural novelty: state is a coupled set of subsystems (process table +
@@ -431,6 +432,21 @@ increment) keeps it. A `write` through fd 3 makes this concrete:
   flat Mθ : <fs_create> <path:/log> <c:alpha> <exit:0>   <set_exit> <exit:0>   <eos>
             └ the composition flattened to one closed-vocab stream; round-trips verbatim (§5.1) ┘
   invariant: apply(state, Δ) == oracle.step(state, action).state    # the M1/NW1-analogue, by construction
+```
+
+The composed loop (HC5) adds a second axis on top of v0's *when-to-consult* (`π_c`): **which subsystem's
+truth to buy** (`π_w`, §8.2). A full consult corrects the whole bundle; a per-subsystem probe corrects
+exactly one subsystem and keeps the model's belief for the rest — strictly less correction, so faithful
+horizon is no greater at equal budget (the EH3 lever, native here with no v0 identity collapse):
+
+```
+  PROPOSE  Δ̂ = Mθ(ŝ, a) ;  ŝ' = apply(ŝ, Δ̂)            # cheap, every step
+  CONSULT  if π_c fires (budget ρ):
+     full    →  ŝ' ← truth                              cost = |all facts|     (HardReset)
+     π_w=fd  →  ŝ'.fds ← truth.fds, rest kept           cost = |fd facts|      (SubsystemFilter)
+                └ proc / fs / global beliefs survive verbatim ┘
+  RECORD   composed d(ŝ', s*)  AND  per-subsystem d_proc/d_fd/d_fs/d_global   → HostRunRecord
+                                    └ the two views H13's composition law needs ┘
 ```
 
 The deterministic cores (oracle, delta/apply, divergence, the loop, the OG1/OG2 data factory) ship and are
@@ -451,7 +467,7 @@ host → distributed); three specs are *cross-cutting methods* every world inher
 | [SPEC-3](docs/specs/SPEC-3.md) | depth | how the toy grows into a real simulator (system oracle, partial obs, online self-healing, info-theoretic metric) |
 | [SPEC-4](docs/specs/SPEC-4.md) | **the engine** | the autonomous research engine — Verisim improving Verisim, human out of the loop |
 | [SPEC-5](docs/specs/SPEC-5.md) | **world: network** | the reachability/connectivity world — **the current build front** |
-| [SPEC-6](docs/specs/SPEC-6.md) | world: host | the running computer (process tree, fds, scheduler) — **HC0-HC4 started**: the host oracle *composes* the v0 FS sub-oracle; bundle delta + `apply == oracle` invariant; workload drivers + datasets; composed + **per-subsystem** metrics with the **composition-law diagnostic** (H13); and the **flat learned `M_θ` baseline arm** (HC4 incr-1, the DD-H1 floor) |
+| [SPEC-6](docs/specs/SPEC-6.md) | world: host | the running computer (process tree, fds, scheduler) — **HC0-HC5 started**: the host oracle *composes* the v0 FS sub-oracle; bundle delta + `apply == oracle` invariant; workload drivers + datasets; composed + **per-subsystem** metrics with the **composition-law diagnostic** (H13); the **flat learned `M_θ` baseline arm** (HC4 incr-1, the DD-H1 floor); and the **composed propose-verify-correct loop** with the per-subsystem `π_w` oracle-selection axis (HC5 incr-1) |
 | [SPEC-7](docs/specs/SPEC-7.md) | world: distributed | replicated services, transactions, consensus — design |
 | [SPEC-8](docs/specs/SPEC-8.md) | **method: oracle-grounded SSL** | put the oracle's truth in the *bulk* of the cake (self-supervised pretraining), not just the cherry (RL) |
 | [SPEC-9](docs/specs/SPEC-9.md) | **method: free-oracle scaling** | because the oracle labels for free, world size is a *compute* choice, not a labeling-budget one — how large/deep the world goes on one machine, and what holds as it grows |
@@ -511,9 +527,18 @@ write-up is [docs/report.md](docs/report.md).
 > embedded FS write delta **flattened and reconstructed verbatim** (§5.1), the LL(1) `HostDeltaGrammar` +
 > constrained decode reusing v0's `GPT` (grammar-validity is structural, not learned), the supervised
 > dataset adapter (v0's generic trainer reused), and `NeuralHostWorldModel` — the **DD-H1 flat-serializer
-> floor the factored arm must beat**, overfit/round-trip/grammar-tested. Remaining: the scheduler +
-> sockets/IPC + the interleaving-entropy dial, the **factored interaction-graph arm**, the composed loop +
-> composition-law experiment (H13), and packaging.
+> floor the factored arm must beat**, overfit/round-trip/grammar-tested. **HC5 increment 1 now ships the
+> composed propose-verify-correct loop** ([`hostloop/`](src/verisim/hostloop/), the rest of the
+> deterministic core): the model-agnostic runner, the **two-mode partial-observation oracle** (full vs a
+> cheap per-subsystem probe), the **`π_w` "which-subsystem" policy** (the host's new oracle-selection axis —
+> *which truth-source to buy*, §8.2) and the per-subsystem **`SubsystemFilter`** operator (correct only the
+> observed subsystem — the EH3 lever, native here with no v0 identity collapse), plus null/oracle-backed
+> baselines, all populating HC3's composed + per-subsystem `HostRunRecord`. Loop invariants tested: `ρ=1`
+> full-consult reproduces the oracle (`H_ε=T`), the perfect model never drifts at `ρ=0`, the budget is never
+> exceeded and the spend-down backstop spends it exactly, and a per-subsystem consult corrects strictly less
+> than a full one (horizon no greater at equal `ρ`). Remaining: the scheduler + sockets/IPC + the
+> interleaving-entropy dial, the **factored interaction-graph arm**, the experience-stream + composition-law
+> experiment (H13), and packaging.
 
 **v0 — shell/filesystem world (`src/verisim/`, SPEC-2 §13): complete.**
 
@@ -556,6 +581,7 @@ PyTorch is an optional `[model]` extra (see [docs/model-representation.md](docs/
 | composition-law | host H13 diagnostic: is composed `H_ε` multiplicative (∏ aᵢ) ↔ weakest-link (min aᵢ) ↔ coupled? | `hostmetrics/composition.py` |
 | **delta-exact** | per-step: did free decode assemble the exact edit set? (`bits_to_correct = 0`) | `netmetrics/exact.py` |
 | full / probe | oracle consultation modes: whole next-state vs one host's local view (cheap) | `netloop/observe.py` |
+| `π_w` | **which-subsystem** policy (host): *which truth-source to buy* on a consult — proc/fd/fs/global; the `SubsystemFilter` corrects only that one | `hostloop/subsystem.py`, `hostloop/operator.py` |
 | `D` / `R` | next-state bits the oracle **decides** vs the genuine **residual** (SPEC-8 partition) | `netdata/grounding.py` |
 | oracle-anchored target | a JEPA target pinned to the *true next state* (external referent) instead of a learned EMA | `netmodel/grounded_train.py` |
 | collapse readout | embedding std + effective rank — JEPA's collapse diagnostic (→ 0 / → 1 under collapse) | `netmodel/grounded_train.py` |
