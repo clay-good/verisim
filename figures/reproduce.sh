@@ -105,8 +105,16 @@ python -m verisim.experiments.en8_scale --collapse-only --world-sizes 300 --d-mo
 echo "== EN10: two-oracle grounding — control-plane vs data-plane (SPEC-5 H12; writes CSV+PNG) =="
 python -m verisim.experiments.en10 --out figures/en10_two_oracle.csv
 
+echo "== EH1: composed-host H_eps(rho) curve + composition law H13 (SPEC-6 HC6; the prime directive) =="
+python -m verisim.experiments.eh1 --config configs/eh1.json \
+    --out runs/eh1/host_records.jsonl --comp-out runs/eh1/composition.json
+python figures/plot_eh1.py --records runs/eh1/host_records.jsonl \
+    --composition runs/eh1/composition.json \
+    --out figures/eh1_curve.png --csv figures/eh1_curve.csv \
+    --comp-out figures/eh1_composition.png --comp-csv figures/eh1_composition.csv
+
 # The larger world x model SCALING SURFACE (SPEC-9 LS2) and HERO instance (LS3) are opt-in (slower):
 #   python -m verisim.experiments.en8_scale --world-sizes 25 50 100 200 --d-models 64 128 --seeds 0 1 2 --out figures/en8_surface.csv
 #   python -m verisim.experiments.en9_scale --world-sizes 25 50 100 200 --d-models 64 128 --seeds 0 1 2 --out figures/en9_surface.csv
 
-echo "== done: figures/{e1_curve,e2_policies,e3_operators,calibration,e4_ablation,objective,representation,auto_search,en1_curve,en2_policies,en3_operators,en4_graph_vs_flat,en8_grounding,en9_contrastive,en8_scale,en9_scale,en8_capacity,en9_negatives,en7_invariance,en5_selfheal,en6_counterfactual,en8_ls3_hero,en10_two_oracle}.{png,csv} =="
+echo "== done: figures/{e1_curve,e2_policies,e3_operators,calibration,e4_ablation,objective,representation,auto_search,en1_curve,en2_policies,en3_operators,en4_graph_vs_flat,en8_grounding,en9_contrastive,en8_scale,en9_scale,en8_capacity,en9_negatives,en7_invariance,en5_selfheal,en6_counterfactual,en8_ls3_hero,en10_two_oracle,eh1_curve,eh1_composition}.{png,csv} =="

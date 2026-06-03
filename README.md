@@ -13,7 +13,7 @@
 
 ## Results at a glance
 
-Six committed, oracle-grounded figures — the smoke-scale bet in one screen — each detailed below, each
+Eight committed, oracle-grounded figures — the smoke-scale bet in one screen — each detailed below, each
 with its honest negative. **What survives scaling is the real verdict: see [§8](#8-which-wins-survive-scaling--the-honest-mixed-verdict-spec-9).** Every number regenerates from
 config + seeds (`bash figures/reproduce.sh`).
 
@@ -22,6 +22,7 @@ config + seeds (`bash figures/reproduce.sh`).
 | [![EN4 graph-vs-flat](figures/en4_graph_vs_flat.png)](figures/en4_graph_vs_flat.png)<br>**Structure helps (EN4 / H11).** The message-passing graph+RSSM world model beats the flat serializer by **+16.5 pts** one-step token accuracy and **+30.6 pts** delta-exact rate — and the gap *widens* on the honest metric. | [![EN8 oracle-grounded SSL](figures/en8_grounding.png)](figures/en8_grounding.png)<br>**The oracle removes the collapse tax (EN8 / H23).** Ablate JEPA's EMA+VICReg crutches and a learned target collapses (eff-rank 41.8→13.4); an **oracle-anchored** target stays healthy (25.8) — the external referent the field lacks. *Scaled to 200 hosts (SPEC-9 S1): the gap stays disjoint-positive everywhere but **attenuates** — real at every scale, diminishing.* |
 | [![EN9 oracle hard-negatives](figures/en9_contrastive.png)](figures/en9_contrastive.png)<br>**Exact negatives beat statistical ones where it counts (EN9 / H25 / H5).** VICReg and the oracle both stop contrastive collapse — but only the oracle's *counterfactual* negatives teach which intervention leads where: branch-retrieval top-1 **0.519 vs VICReg's 0.282**. The statistical regularizer is full-rank but interventionally blind. *⚠ Scaled (SPEC-9 S2): this lift **reverses** by 100–200 hosts at higher capacity with a fixed `k=8` (VICReg overtakes) — but the reversal is a **negative-count artifact that recovers**: scaling `k_negatives` 8→32 flips it back to disjoint-positive. Real lift; feed it negatives that scale with the world.* | [![EN1 / K4 the floor](figures/en1_curve.png)](figures/en1_curve.png)<br>**A floor, not a knee (EN1 / K4 / H8).** Faithful horizon vs consultation budget `H_ε(ρ)` is flat-then-cliff on *both* worlds: consultation budget alone does not buy horizon. The honest negative that drove every later design choice. |
 | [![EN3 probe efficiency](figures/en3_operators.png)](figures/en3_operators.png)<br>**What you consult beats whether (EN3).** Under partial observation a cheap one-host **probe + belief filter** earns **~2.3×** more faithful horizon per oracle-bit than full consultation — active sensing is a real lever. | [![EN7 model-invariance](figures/en7_invariance.png)](figures/en7_invariance.png)<br>**The shape is the loop's, not the model's (EN7 / H22).** Run the *same* loop with four proposers (null, flat transformer, graph+RSSM, oracle-backed): the three imperfect ones share **one shape — floor + cliff, no knee.** The proposer sets the floor *height* (graph > flat > null); the loop sets the *shape*. The no-knee verdict is model-agnostic. |
+| [![EH1 composed-host curve](figures/eh1_curve.png)](figures/eh1_curve.png)<br>**The floor+cliff holds in the *composed* world (host EH1 / HC6).** First result in the host world (process table + fd tables + embedded fs): the composed `H_ε(ρ)` is the same flat-then-cliff shape as the filesystem and network worlds — `ρ=0` drifts in <1 step, the cliff only at `ρ=1`. The no-knee verdict generalizes across all three worlds. | [![EH1 composition law H13](figures/eh1_composition.png)](figures/eh1_composition.png)<br>**Whole-machine faithfulness is *coupled*, not independent (host EH1 / H13).** The headline-new measurement: composed per-step acceptance (orange) sits *below* the multiplicative/independence prediction `∏ aᵢ` (blue) — the flat baseline's subsystem failures are **anti-correlated**. Modeling subsystems independently is the wrong bet; coupling is load-bearing. The honest negative that licenses the factored interaction-graph arm. |
 
 ## What we've found so far
 
@@ -297,6 +298,48 @@ redundant as a *verification signal* but a **cheaper, decision-relevant consulta
 change-safety question — the tiered-oracle premise [SPEC-7](docs/specs/SPEC-7.md) builds on. The oracle
 ships as a property-tested deterministic component (the NW0/OG1 "core-first" discipline).
 
+### 13. The third world, and a new question: whole-machine faithfulness is *coupled* (host EH1 / H13, HC6)
+
+The **host world** (SPEC-6) is the first world whose state is not one tree (filesystem) or one graph
+(network) but a **bundle of coupled subsystems** — a process table, per-process fd tables, and the
+embedded v0 filesystem, sharing references. Its oracle *composes* the v0 FS sub-oracle verbatim, so a
+`write`'s bundle delta literally embeds the FS sub-oracle's own delta. With the deterministic core
+(HC0–HC3), the flat `M_θ` (HC4), and the composed loop (HC5) in place, the prime-directive experiment
+(HC6) runs and asks two questions.
+
+**The composed `H_ε(ρ)` curve is the same floor+cliff (the no-knee verdict generalizes).** Train the
+flat host `M_θ`, sweep the composed loop over `ρ × ε × difficulty × seed`: at `ρ=0` the model drifts in
+under one step (the honest floor), the interior is near-flat, and the cliff to `H_ε=T` appears only at
+`ρ=1`. The same shape as the filesystem (K4) and network (EN1) worlds — now in a coupled, composed
+world. Consultation budget alone does not buy horizon; this is **model- *and* world-invariant** (the
+host analogue of EN7/H22).
+
+![EH1 composed-host H_ε(ρ): the floor+cliff shape, reproduced in the bundle world](figures/eh1_curve.png)
+
+**The headline-new measurement — the composition law (H13) — reads `coupled`.** This is the question
+only the bundle world can ask: *is whole-machine faithfulness predictable from the faithfulness of its
+parts?* For each subsystem `i` measure the per-step (teacher-forced) acceptance `aᵢ` — the fraction of
+one-step predictions that keep subsystem `i` faithful — and compare the **composed** acceptance `a`
+(every subsystem faithful at once) against two candidate laws: multiplicative `a ≈ ∏ aᵢ` (failures
+independent) and weakest-link `a ≈ min aᵢ` (failures coincide).
+
+![EH1 composition law (H13): composed acceptance sits below the independence floor — coupled](figures/eh1_composition.png)
+
+| difficulty | composed `a` | `∏ aᵢ` (independent) | `min aᵢ` (weakest-link) | verdict |
+|---|---|---|---|---|
+| low (`forky`) | 0.083 | 0.248 | 0.483 | **coupled** |
+| high (`adversarial`) | 0.067 | 0.196 | 0.417 | **coupled** |
+
+Composed acceptance sits *below* the multiplicative floor — the flat baseline's subsystem failures are
+**anti-correlated** (it fails *different* subsystems on *different* steps, so the whole machine is
+faithful even less often than independence predicts). **Modeling the subsystems independently is the
+wrong bet; the coupling is load-bearing.** That is the honest negative HC6 was built to surface, and it
+is exactly what licenses the next step: the **factored interaction-graph arm** (HC4 incr-2, the DD-H1
+alternative the flat baseline is the floor for), which is built to model the cross-subsystem references
+the flat serializer flattens away. (The per-step acceptance is measured teacher-forced, not on the
+free-running rollout: a compounding subsystem that drifts once would otherwise read as permanently
+unfaithful, making `aᵢ` bimodal rather than a rate — SPEC-6 §9.2.)
+
 ## The problem, and what we're trying to accomplish
 
 ### The wall every world model hits
@@ -467,7 +510,7 @@ host → distributed); three specs are *cross-cutting methods* every world inher
 | [SPEC-3](docs/specs/SPEC-3.md) | depth | how the toy grows into a real simulator (system oracle, partial obs, online self-healing, info-theoretic metric) |
 | [SPEC-4](docs/specs/SPEC-4.md) | **the engine** | the autonomous research engine — Verisim improving Verisim, human out of the loop |
 | [SPEC-5](docs/specs/SPEC-5.md) | **world: network** | the reachability/connectivity world — **the current build front** |
-| [SPEC-6](docs/specs/SPEC-6.md) | world: host | the running computer (process tree, fds, scheduler) — **HC0-HC5 started**: the host oracle *composes* the v0 FS sub-oracle; bundle delta + `apply == oracle` invariant; workload drivers + datasets; composed + **per-subsystem** metrics with the **composition-law diagnostic** (H13); the **flat learned `M_θ` baseline arm** (HC4 incr-1, the DD-H1 floor); and the **composed propose-verify-correct loop** with the per-subsystem `π_w` oracle-selection axis (HC5 incr-1) |
+| [SPEC-6](docs/specs/SPEC-6.md) | world: host | the running computer (process tree, fds, scheduler) — **HC0-HC6 started**: the host oracle *composes* the v0 FS sub-oracle; bundle delta + `apply == oracle` invariant; workload drivers + datasets; composed + **per-subsystem** metrics with the **composition-law diagnostic** (H13); the **flat learned `M_θ` baseline** (HC4 incr-1); the **composed loop** with the `π_w` oracle-selection axis (HC5 incr-1); and **the prime-directive figure (HC6)** — the composed `H_ε(ρ)` floor+cliff + the **H13 composition law = `coupled`** ([eh1_curve](figures/eh1_curve.png), [eh1_composition](figures/eh1_composition.png)) |
 | [SPEC-7](docs/specs/SPEC-7.md) | world: distributed | replicated services, transactions, consensus — design |
 | [SPEC-8](docs/specs/SPEC-8.md) | **method: oracle-grounded SSL** | put the oracle's truth in the *bulk* of the cake (self-supervised pretraining), not just the cherry (RL) |
 | [SPEC-9](docs/specs/SPEC-9.md) | **method: free-oracle scaling** | because the oracle labels for free, world size is a *compute* choice, not a labeling-budget one — how large/deep the world goes on one machine, and what holds as it grows |
@@ -536,9 +579,15 @@ write-up is [docs/report.md](docs/report.md).
 > baselines, all populating HC3's composed + per-subsystem `HostRunRecord`. Loop invariants tested: `ρ=1`
 > full-consult reproduces the oracle (`H_ε=T`), the perfect model never drifts at `ρ=0`, the budget is never
 > exceeded and the spend-down backstop spends it exactly, and a per-subsystem consult corrects strictly less
-> than a full one (horizon no greater at equal `ρ`). Remaining: the scheduler + sockets/IPC + the
-> interleaving-entropy dial, the **factored interaction-graph arm**, the experience-stream + composition-law
-> experiment (H13), and packaging.
+> than a full one (horizon no greater at equal `ρ`). **HC6 now ships the prime directive**
+> ([`eh1.py`](src/verisim/experiments/eh1.py), figures [`eh1_curve.png`](figures/eh1_curve.png) +
+> [`eh1_composition.png`](figures/eh1_composition.png)): the composed `H_ε(ρ)` curve is the **floor+cliff**
+> shape (the no-knee verdict generalizes to the bundle world), and the **composition law (H13) reads
+> `coupled`** — composed per-step acceptance sits *below* the multiplicative/independence prediction, so
+> the flat baseline's subsystem failures are anti-correlated (coupling is load-bearing; see finding
+> [§13](#13-the-third-world-and-a-new-question-whole-machine-faithfulness-is-coupled-host-eh1--h13-hc6)).
+> Remaining: the scheduler + sockets/IPC + the interleaving-entropy dial, the **factored interaction-graph
+> arm** (which the H13 coupling result licenses), the experience-stream, and packaging.
 
 **v0 — shell/filesystem world (`src/verisim/`, SPEC-2 §13): complete.**
 
