@@ -113,8 +113,13 @@ python figures/plot_eh1.py --records runs/eh1/host_records.jsonl \
     --out figures/eh1_curve.png --csv figures/eh1_curve.csv \
     --comp-out figures/eh1_composition.png --comp-csv figures/eh1_composition.csv
 
+echo "== EH3: host correction-operator comparison at equal budget (SPEC-6 HC7, §8.3) =="
+python -m verisim.experiments.eh3 --config configs/eh3.json --out runs/eh3/records.jsonl
+python figures/plot_comparison.py --records runs/eh3/records.jsonl --key operator \
+    --out figures/eh3_operators.png --csv figures/eh3_operators.csv
+
 # The larger world x model SCALING SURFACE (SPEC-9 LS2) and HERO instance (LS3) are opt-in (slower):
 #   python -m verisim.experiments.en8_scale --world-sizes 25 50 100 200 --d-models 64 128 --seeds 0 1 2 --out figures/en8_surface.csv
 #   python -m verisim.experiments.en9_scale --world-sizes 25 50 100 200 --d-models 64 128 --seeds 0 1 2 --out figures/en9_surface.csv
 
-echo "== done: figures/{e1_curve,e2_policies,e3_operators,calibration,e4_ablation,objective,representation,auto_search,en1_curve,en2_policies,en3_operators,en4_graph_vs_flat,en8_grounding,en9_contrastive,en8_scale,en9_scale,en8_capacity,en9_negatives,en7_invariance,en5_selfheal,en6_counterfactual,en8_ls3_hero,en10_two_oracle,eh1_curve,eh1_composition}.{png,csv} =="
+echo "== done: figures/{e1_curve,e2_policies,e3_operators,calibration,e4_ablation,objective,representation,auto_search,en1_curve,en2_policies,en3_operators,en4_graph_vs_flat,en8_grounding,en9_contrastive,en8_scale,en9_scale,en8_capacity,en9_negatives,en7_invariance,en5_selfheal,en6_counterfactual,en8_ls3_hero,en10_two_oracle,eh1_curve,eh1_composition,eh3_operators}.{png,csv} =="

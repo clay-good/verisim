@@ -340,6 +340,32 @@ the flat serializer flattens away. (The per-step acceptance is measured teacher-
 free-running rollout: a compounding subsystem that drifts once would otherwise read as permanently
 unfaithful, making `aᵢ` bimodal rather than a rate — SPEC-6 §9.2.)
 
+### 14. *Which subsystem* you verify is a real efficiency lever — but the cheapest, not the weakest (host EH3 / HC7)
+
+The composition being coupled (§13) raises the operational question: given a consultation budget, *which
+subsystem's truth should you buy?* (the host's new `π_w` axis, §8.2). EH3 fixes the policy and budget `ρ`
+and compares correction operators at **equal `ρ`** (the host analogue of network EN3). The three
+full-consult operators (`hard_reset`/`residual`/`projection`) all snap the whole bundle to truth, so
+their `H_ε` is **identical** — the v0 full-truth identity. A per-subsystem `SubsystemFilter` corrects
+only one subsystem, so it corrects *strictly less* (lower `H_ε`) but spends *far fewer* oracle-bits — and
+the cost lens is the real verdict:
+
+![EH3 host operators at equal budget: full operators coincide; per-subsystem correct less](figures/eh3_operators.png)
+
+| operator | `H_ε` | oracle-bits / consult | **`H_ε` per oracle-bit** | vs full |
+|---|---|---|---|---|
+| `hard_reset` = `residual` = `projection` (full) | 1.10 | 75.3 | 0.0146 | 1.0× |
+| `subsystem_proc` (target the H13-weakest link) | 0.40 | 20.8 | 0.0192 | 1.3× |
+| `subsystem_rr` (round-robin) | 0.40 | 20.2 | 0.0198 | 1.4× |
+| **`subsystem_fd` (target the cheapest)** | 0.90 | 16.8 | **0.0536** | **~3.7×** |
+
+**Per-subsystem consultation earns up to ~3.7× more faithful horizon per oracle-bit than full** — *what*
+you verify is a real lever, the host echo of EN3's ~2.3×. But the honest twist is the punchline: the
+winner is the **cheapest** subsystem (`fd`, fewest facts), **not** the **weakest-link** subsystem (`proc`,
+the one H13 said dominates the coupling). Targeting the weakest by the static heuristic barely beats full.
+So efficient `π_w` is a genuine **cost-vs-consequence tradeoff** — exactly the optimization a *smart* `π_w`
+(the remaining HC7 work) exists to solve, and a clean negative for "just verify the worst subsystem."
+
 ## The problem, and what we're trying to accomplish
 
 ### The wall every world model hits
@@ -510,7 +536,7 @@ host → distributed); three specs are *cross-cutting methods* every world inher
 | [SPEC-3](docs/specs/SPEC-3.md) | depth | how the toy grows into a real simulator (system oracle, partial obs, online self-healing, info-theoretic metric) |
 | [SPEC-4](docs/specs/SPEC-4.md) | **the engine** | the autonomous research engine — Verisim improving Verisim, human out of the loop |
 | [SPEC-5](docs/specs/SPEC-5.md) | **world: network** | the reachability/connectivity world — **the current build front** |
-| [SPEC-6](docs/specs/SPEC-6.md) | world: host | the running computer (process tree, fds, scheduler) — **HC0-HC6 started**: the host oracle *composes* the v0 FS sub-oracle; bundle delta + `apply == oracle` invariant; workload drivers + datasets; composed + **per-subsystem** metrics with the **composition-law diagnostic** (H13); the **flat learned `M_θ` baseline** (HC4 incr-1); the **composed loop** with the `π_w` oracle-selection axis (HC5 incr-1); and **the prime-directive figure (HC6)** — the composed `H_ε(ρ)` floor+cliff + the **H13 composition law = `coupled`** ([eh1_curve](figures/eh1_curve.png), [eh1_composition](figures/eh1_composition.png)) |
+| [SPEC-6](docs/specs/SPEC-6.md) | world: host | the running computer (process tree, fds, scheduler) — **HC0-HC6 started**: the host oracle *composes* the v0 FS sub-oracle; bundle delta + `apply == oracle` invariant; workload drivers + datasets; composed + **per-subsystem** metrics with the **composition-law diagnostic** (H13); the **flat learned `M_θ` baseline** (HC4 incr-1); the **composed loop** with the `π_w` oracle-selection axis (HC5 incr-1); **the prime-directive figure (HC6)** — the composed `H_ε(ρ)` floor+cliff + the **H13 composition law = `coupled`** ([eh1_curve](figures/eh1_curve.png), [eh1_composition](figures/eh1_composition.png)); and **the EH3 equal-budget operator comparison (HC7)** — per-subsystem consultation earns **~3.7× more horizon per oracle-bit** ([eh3_operators](figures/eh3_operators.png)) |
 | [SPEC-7](docs/specs/SPEC-7.md) | world: distributed | replicated services, transactions, consensus — design |
 | [SPEC-8](docs/specs/SPEC-8.md) | **method: oracle-grounded SSL** | put the oracle's truth in the *bulk* of the cake (self-supervised pretraining), not just the cherry (RL) |
 | [SPEC-9](docs/specs/SPEC-9.md) | **method: free-oracle scaling** | because the oracle labels for free, world size is a *compute* choice, not a labeling-budget one — how large/deep the world goes on one machine, and what holds as it grows |
@@ -586,8 +612,14 @@ write-up is [docs/report.md](docs/report.md).
 > `coupled`** — composed per-step acceptance sits *below* the multiplicative/independence prediction, so
 > the flat baseline's subsystem failures are anti-correlated (coupling is load-bearing; see finding
 > [§13](#13-the-third-world-and-a-new-question-whole-machine-faithfulness-is-coupled-host-eh1--h13-hc6)).
+> **HC7's EH3 also ships** ([`eh3.py`](src/verisim/experiments/eh3.py), figure
+> [`eh3_operators.png`](figures/eh3_operators.png)): the equal-budget operator comparison shows the
+> full-consult operators coincide on `H_ε` while per-subsystem consultation earns **~3.7× more faithful
+> horizon per oracle-bit** — and that the *cheapest* subsystem wins, not the H13-*weakest*, so a *smart*
+> `π_w` must trade cost against consequence (finding
+> [§14](#14-which-subsystem-you-verify-is-a-real-efficiency-lever--but-the-cheapest-not-the-weakest-host-eh3--hc7)).
 > Remaining: the scheduler + sockets/IPC + the interleaving-entropy dial, the **factored interaction-graph
-> arm** (which the H13 coupling result licenses), the experience-stream, and packaging.
+> arm** (which the H13 coupling result licenses), smart `π_c`/`π_w`, the experience-stream, and packaging.
 
 **v0 — shell/filesystem world (`src/verisim/`, SPEC-2 §13): complete.**
 
