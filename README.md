@@ -501,6 +501,42 @@ that only the host world could run. The scheduler ships dependency-free (the det
 discipline) and emits concrete, replayable schedules, so every point regenerates from `(workload,
 interleave, chaos_seed)`.
 
+### 20. The payoff: a verified whole-machine simulator an LLM agent calls (host §7 / HC8)
+
+Every result above exists to build one thing: the cheap, faithful, verifiable machine an LLM agent
+*reasons over*. A computer-use or cyber-defense agent acts on a whole host — "kill this process,
+write this config, drop this privilege" — so the host world *is* the simulator it needs. `HostSimulator`
+([`hostsim/`](src/verisim/hostsim/)) packages the loop's `M_θ` + the oracle into the object the agent
+calls. It is not a competitor to the LLM; it is the layer the LLM is bad at (simulating host dynamics)
+made fast and honest, leaving the LLM only what it is good at (natural-language intent → a syscall plan):
+
+```
+  LLM agent ── "kill the rogue proc, scrub /tmp" ──▶ syscall PLAN  (NL intent → plan; the LLM's job)
+                                                         │
+                          ┌──────────────────────────────┴───────────────────────────┐
+            imagine(plan) │  Mθ rolls the plan in imagination — fast, NO oracle        │ the cheap draft
+                          ▼                                                            │
+                    predicted final state ── agent explores many plans cheaply ◀───────┘
+                          │
+            verify(plan)  │  Mθ imagination  ‖  oracle truth, step by step (on a budget ρ)
+                          ▼
+              PlanReport: plan-faithful-horizon H_ε  (how many steps to trust the draft, §17.8)
+                          + task-oracle: does the plan hit the GOAL?  predicted ?= true  (the 3rd oracle)
+```
+
+Two calls, the propose-verify-correct loop lifted from the *syscall* level to the *plan* level:
+`imagine(state, plan)` rolls `M_θ` forward with **no oracle** — Dreamer's "plan in imagination", the
+draft an agent explores by the hundred; `verify(state, plan)` runs that imagination against the oracle
+step by step and returns a `PlanReport` — the predicted-vs-true final state, the **plan-level faithful
+horizon** (the §17.8 `H_ε`-for-a-plan: how many leading steps the agent can trust the draft before
+re-grounding), the oracle cost paid, and — composing the **task oracle** (a `Goal` predicate, the §7
+"third oracle") — whether the plan *achieves the goal* and whether the model **agrees with the oracle**
+that it did. On a trained model this is exactly as honest as the rest of the program: for a plan the
+model drifts on, `verify` reports a short plan-faithful-horizon and flags that the model and oracle
+*disagree* on task success — so the agent knows precisely when to stop trusting the draft and spend an
+oracle consultation. This is the SLM/LLM-complementarity thesis made executable: ground truth at scale,
+on a budget, for the thing OSWorld-class agents actually do.
+
 ## The problem, and what we're trying to accomplish
 
 ### The wall every world model hits
@@ -624,6 +660,8 @@ Package map (parallel structure; `net*` mirrors v0 for the graph world):
                process spine's lineage + shared-file edges, same grammar/decode (DD-H1: flat vs factored)
   hostloop/    composed loop (HC5): two-mode oracle, π_w which-subsystem policy (fixed/round-robin/
                uncertainty — the smart information-gain choice), SubsystemFilter per-subsystem correct
+  hostsim/     the LLM-callable whole-machine simulator (HC8, §7): imagine a plan (oracle-free draft)
+               + verify it (plan-level H_ε + the task-oracle "third oracle") — what an agent calls
 ```
 
 The host **bundle** is the structural novelty: state is a coupled set of subsystems (process table +
@@ -674,7 +712,7 @@ host → distributed); three specs are *cross-cutting methods* every world inher
 | [SPEC-3](docs/specs/SPEC-3.md) | depth | how the toy grows into a real simulator (system oracle, partial obs, online self-healing, info-theoretic metric) |
 | [SPEC-4](docs/specs/SPEC-4.md) | **the engine** | the autonomous research engine — Verisim improving Verisim, human out of the loop |
 | [SPEC-5](docs/specs/SPEC-5.md) | **world: network** | the reachability/connectivity world — **the current build front** |
-| [SPEC-6](docs/specs/SPEC-6.md) | world: host | the running computer (process tree, fds, scheduler) — **HC0-HC6 started**: the host oracle *composes* the v0 FS sub-oracle; bundle delta + `apply == oracle` invariant; workload drivers + datasets; composed + **per-subsystem** metrics with the **composition-law diagnostic** (H13); the **flat learned `M_θ` baseline** (HC4 incr-1); the **composed loop** with the `π_w` oracle-selection axis (HC5 incr-1); **the prime-directive figure (HC6)** — the composed `H_ε(ρ)` floor+cliff + the **H13 composition law = `coupled`** ([eh1_curve](figures/eh1_curve.png), [eh1_composition](figures/eh1_composition.png)); **the EH3 equal-budget operator comparison (HC7)** — per-subsystem consultation earns **~3.7× more horizon per oracle-bit** ([eh3_operators](figures/eh3_operators.png)); **the factored interaction-graph arm (HC4 incr-2) + EH4** — structure beats flat **~6.6× on delta-exact** yet the H13 coupling survives ([eh4_factored_vs_flat](figures/eh4_factored_vs_flat.png)); **EH2** — the factored arm's calibrated belief variance makes smart consultation beat fixed **~2.2×** (the first smart-`π_c` positive, [eh2_policies](figures/eh2_policies.png)); **EH5** — a smart *which-subsystem* `π_w` (per-subsystem decode entropy) gives a modest edge over round-robin ([eh5_subsystem_policy](figures/eh5_subsystem_policy.png)); the **§6.3 drift levers** (noise / self-forcing) reproduce the network's banked negative ([eh4_drift](figures/eh4_drift.png)); and **H14 — the concurrency dial — is CONFIRMED**: free-running `H_ε` collapses ~8× as interleaving entropy rises (the host's defining result, [eh_h14_interleaving](figures/eh_h14_interleaving.png)) |
+| [SPEC-6](docs/specs/SPEC-6.md) | world: host | the running computer (process tree, fds, scheduler) — **HC0-HC6 started**: the host oracle *composes* the v0 FS sub-oracle; bundle delta + `apply == oracle` invariant; workload drivers + datasets; composed + **per-subsystem** metrics with the **composition-law diagnostic** (H13); the **flat learned `M_θ` baseline** (HC4 incr-1); the **composed loop** with the `π_w` oracle-selection axis (HC5 incr-1); **the prime-directive figure (HC6)** — the composed `H_ε(ρ)` floor+cliff + the **H13 composition law = `coupled`** ([eh1_curve](figures/eh1_curve.png), [eh1_composition](figures/eh1_composition.png)); **the EH3 equal-budget operator comparison (HC7)** — per-subsystem consultation earns **~3.7× more horizon per oracle-bit** ([eh3_operators](figures/eh3_operators.png)); **the factored interaction-graph arm (HC4 incr-2) + EH4** — structure beats flat **~6.6× on delta-exact** yet the H13 coupling survives ([eh4_factored_vs_flat](figures/eh4_factored_vs_flat.png)); **EH2** — the factored arm's calibrated belief variance makes smart consultation beat fixed **~2.2×** (the first smart-`π_c` positive, [eh2_policies](figures/eh2_policies.png)); **EH5** — a smart *which-subsystem* `π_w` (per-subsystem decode entropy) gives a modest edge over round-robin ([eh5_subsystem_policy](figures/eh5_subsystem_policy.png)); the **§6.3 drift levers** (noise / self-forcing) reproduce the network's banked negative ([eh4_drift](figures/eh4_drift.png)); **H14 — the concurrency dial — is CONFIRMED**: free-running `H_ε` collapses ~8× as interleaving entropy rises (the host's defining result, [eh_h14_interleaving](figures/eh_h14_interleaving.png)); and the **§7 LLM-callable whole-machine simulator** (HC8) — `imagine` a plan + `verify` it (plan-level `H_ε` + the task "third oracle") |
 | [SPEC-7](docs/specs/SPEC-7.md) | world: distributed | replicated services, transactions, consensus — design |
 | [SPEC-8](docs/specs/SPEC-8.md) | **method: oracle-grounded SSL** | put the oracle's truth in the *bulk* of the cake (self-supervised pretraining), not just the cherry (RL) |
 | [SPEC-9](docs/specs/SPEC-9.md) | **method: free-oracle scaling** | because the oracle labels for free, world size is a *compute* choice, not a labeling-budget one — how large/deep the world goes on one machine, and what holds as it grows |
@@ -784,7 +822,12 @@ write-up is [docs/report.md](docs/report.md).
 > **monotonically** with interleaving entropy (~8×, recorded→chaos), the first quantification of HW-1's
 > cost and the host world's defining result — the experiment only the host world can run (finding
 > [§19](#19-concurrency-is-a-measurable-dial-not-a-binary-wall--the-host-worlds-defining-result-host-eh-h14--h14)).
-> Remaining: per-subsystem decode *heads*, the experience-stream (HC8), and packaging (HC8).
+> **HC8 begins with the §7 LLM-callable simulator** ([`hostsim/`](src/verisim/hostsim/)): `HostSimulator`
+> both predicts the next state (the loop) and *simulates a plan* for an agent — `imagine` (oracle-free
+> draft) + `verify` (the plan-level faithful horizon + the task "third oracle"), the SLM/LLM-complementarity
+> payoff (finding [§20](#20-the-payoff-a-verified-whole-machine-simulator-an-llm-agent-calls-host-7--hc8)).
+> Remaining (HC8): per-subsystem decode *heads*, the experience-stream + plasticity probe, counterfactual
+> replay, the Tier-B system oracle, the Inspect benchmark + RL env, and the technical report.
 
 **v0 — shell/filesystem world (`src/verisim/`, SPEC-2 §13): complete.**
 
@@ -826,6 +869,7 @@ PyTorch is an optional `[model]` extra (see [docs/model-representation.md](docs/
 | bits-to-correct | MDL of the oracle's correction of `Δ̂`; `0` iff the prediction is exactly right (host: per-subsystem) | `metrics/bits.py`, `hostmetrics/bits.py` |
 | composition-law | host H13 diagnostic: is composed `H_ε` multiplicative (∏ aᵢ) ↔ weakest-link (min aᵢ) ↔ coupled? | `hostmetrics/composition.py` |
 | interleaving entropy | host H14 dial: thread context-switch rate of a chaos-scheduled workload; `H_ε(interleaving-entropy)` quantifies concurrency's cost | `hostdata/scheduler.py` |
+| plan `H_ε` / task oracle | §7 simulator: `imagine`/`verify` a syscall *plan*; plan-faithful-horizon = steps an agent can trust the draft; the task oracle (`Goal`) is the *third* oracle (did the plan succeed?) | `hostsim/` |
 | **delta-exact** | per-step: did free decode assemble the exact edit set? (`bits_to_correct = 0`) | `netmetrics/exact.py` |
 | full / probe | oracle consultation modes: whole next-state vs one host's local view (cheap) | `netloop/observe.py` |
 | `π_w` | **which-subsystem** policy (host): *which truth-source to buy* on a consult — proc/fd/fs/global; fixed / round-robin / **uncertainty** (the smart, information-gain choice from per-subsystem decode entropy); the `SubsystemFilter` corrects only that one | `hostloop/subsystem.py`, `hostloop/operator.py` |
