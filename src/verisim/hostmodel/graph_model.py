@@ -25,7 +25,9 @@ loop unchanged -- the loop never knows whether it holds the flat arm or this one
 The process table has a *variable* size, unlike the network world's fixed host count, so graphs are
 **process-indexed with a validity mask** (node ``i`` == pid ``i``): dense batching stays trivial and
 fast, and invalid pids are masked out of pooling and carry no edges. The §6.3 drift levers
-(noise/self-forcing) and per-subsystem decode heads are deferred to a later HC increment.
+(noise/self-forcing) ship in :mod:`.graph_train`; the **trained per-subsystem decode heads** (§8.2,
+HC7) are an opt-in upgrade over the bucketed decode-entropy π_w signal -- see
+``GraphHostConfig.per_subsystem_heads`` and :func:`.graph_train.subsystem_head_loss`.
 """
 
 from __future__ import annotations
@@ -62,6 +64,7 @@ class GraphHostConfig:
     block_size: int = 64  # bundle-delta token sequences are short
     stoch_dim: int = 16  # RSSM stochastic state width (§6.2)
     dropout: float = 0.0
+    per_subsystem_heads: bool = False  # opt-in: trained per-subsystem error heads (§8.2, HC7)
 
 
 def graphs_to_tensors(
@@ -137,6 +140,17 @@ class GraphHostNet(nn.Module):
         self.ln_f = nn.LayerNorm(d)
         self.head = nn.Linear(d, config.vocab_size, bias=False)
 
+        # --- per-subsystem decode heads (opt-in, §8.2, HC7) ---------------------
+        # A dedicated head reads the deterministic RSSM belief and predicts, per subsystem, the
+        # decoder's *own* per-subsystem token error (regressed against the realized teacher-forced
+        # CE, which the free oracle supplies, §9.4). This is the trained, calibrated alternative to
+        # bucketing one shared decoder's entropy post-hoc: instead of "where was the constrained
+        # decode locally ambiguous", the head answers "which subsystem will I get wrong", directly.
+        # Created only when enabled, so a default factored arm is byte-identical to before.
+        self.per_subsystem_heads = config.per_subsystem_heads
+        if config.per_subsystem_heads:
+            self.subsystem_unc_head = nn.Linear(d, len(SUBSYSTEMS))
+
     @property
     def device(self) -> torch.device:
         return next(self.parameters()).device
@@ -165,11 +179,13 @@ class GraphHostNet(nn.Module):
     def encode(
         self, node: Tensor, gfeat: Tensor, mask: Tensor, a_lin: Tensor, a_share: Tensor,
         acting: Tensor, *, sample: bool,
-    ) -> tuple[Tensor, Tensor]:
-        """Message-pass + RSSM. Returns ``(cond[B,d], belief_var[B])``.
+    ) -> tuple[Tensor, Tensor, Tensor | None]:
+        """Message-pass + RSSM. Returns ``(cond[B,d], belief_var[B], sub_unc[B,n_sub] | None)``.
 
         ``belief_var`` is the mean RSSM posterior variance -- the §6.2 calibrated uncertainty.
-        ``sample`` draws the stochastic state (training); else it uses the mean (decode).
+        ``sub_unc`` is the per-subsystem decode-head output (non-negative predicted per-subsystem
+        error, §8.2) when the heads are enabled, else ``None``. ``sample`` draws the stochastic
+        state (training); else it uses the mean (decode).
         """
         h, g = self._message_pass(node, gfeat, mask, a_lin, a_share)
         denom = mask.sum(dim=1, keepdim=True).clamp_min(1.0)
@@ -183,7 +199,12 @@ class GraphHostNet(nn.Module):
         z = mu + sigma * torch.randn_like(sigma) if sample else mu
         cond = self.cond(torch.cat([det, z, acting_emb], dim=-1))
         belief_var = sigma.pow(2).mean(dim=-1)  # [B]
-        return cond, belief_var
+        sub_unc = (
+            torch.nn.functional.softplus(self.subsystem_unc_head(det))  # [B,n_sub] >= 0
+            if self.per_subsystem_heads
+            else None
+        )
+        return cond, belief_var, sub_unc
 
     # -- decoder ----------------------------------------------------------------
 
@@ -221,12 +242,18 @@ class GraphHostWorldModel:
     @torch.no_grad()
     def _decode(
         self, state: HostState, action: HostAction, *, max_edits: int, max_new_tokens: int
-    ) -> tuple[HostDelta, float, dict[str, float]]:
+    ) -> tuple[HostDelta, float, dict[str, float], dict[str, float] | None]:
+        """Decode the bundle delta; also return ``(belief_var, entropy_map, head_map)``.
+
+        ``entropy_map`` is the bucketed decode entropy (always computed); ``head_map`` is the
+        trained per-subsystem head signal when the heads are enabled, else ``None``. Returning both
+        lets the same proposer expose either π_w signal, so EH5-heads compares them confound-free.
+        """
         self.net.eval()
         device = self.net.device
         gph = build_host_graph(state, action, self.config, self.max_pid)
         node, gfeat, mask, a_lin, a_share, acting = graphs_to_tensors([gph], device)
-        cond, belief_var = self.net.encode(
+        cond, belief_var, sub_unc = self.net.encode(
             node, gfeat, mask, a_lin, a_share, acting, sample=False
         )
 
@@ -266,30 +293,57 @@ class GraphHostWorldModel:
             seq.append(token)
             generated.append(token)
 
-        return parse_target(generated, self.vocab), float(belief_var[0].item()), per_subsystem
+        # When the trained per-subsystem heads are enabled (§8.2, HC7) the head signal -- a direct
+        # prediction of the model's own per-subsystem error -- is the calibrated alternative to the
+        # post-hoc, sparse decode entropy. The decode now exposes both.
+        head_map = (
+            {sub: float(sub_unc[0, i].item()) for i, sub in enumerate(SUBSYSTEMS)}
+            if sub_unc is not None
+            else None
+        )
+
+        delta = parse_target(generated, self.vocab)
+        return delta, float(belief_var[0].item()), per_subsystem, head_map
 
     def predict_delta(self, state: HostState, action: HostAction) -> HostDelta:
-        delta, _, _ = self._decode(state, action, max_edits=64, max_new_tokens=4096)
+        delta, _, _, _ = self._decode(state, action, max_edits=64, max_new_tokens=4096)
         return delta
 
     def predict_delta_with_uncertainty(
         self, state: HostState, action: HostAction
     ) -> tuple[HostDelta, float]:
         """Return ``(delta, belief_variance)`` -- the §6.2 calibrated uncertainty signal."""
-        delta, belief_var, _ = self._decode(state, action, max_edits=64, max_new_tokens=4096)
+        delta, belief_var, _, _ = self._decode(state, action, max_edits=64, max_new_tokens=4096)
         return delta, belief_var
 
     def predict_delta_with_subsystem_uncertainty(
         self, state: HostState, action: HostAction
     ) -> tuple[HostDelta, dict[str, float]]:
-        """Return ``(delta, per_subsystem_decode_entropy)`` -- the smart-``π_w`` signal (§8.2).
+        """Return ``(delta, per_subsystem_uncertainty)`` -- the smart-``π_w`` signal (§8.2).
 
-        The per-subsystem entropy localizes *where* the predicted delta is least certain, so a
+        The per-subsystem signal localizes *where* the predicted delta is least trustworthy, so a
         which-subsystem policy can spend the consult on the subsystem the model is least sure about
-        (the §8.2 information-gain choice), instead of a fixed or round-robin target.
+        (the §8.2 information-gain choice), instead of a fixed or round-robin target. The signal is
+        the **trained per-subsystem head** when the arm was built with ``per_subsystem_heads`` (the
+        calibrated HC7 form), else the **bucketed decode entropy** (the original post-hoc form).
         """
-        delta, _, per_subsystem = self._decode(state, action, max_edits=64, max_new_tokens=4096)
-        return delta, per_subsystem
+        delta, _, entropy_map, head_map = self._decode(
+            state, action, max_edits=64, max_new_tokens=4096
+        )
+        return delta, head_map if head_map is not None else entropy_map
+
+    def predict_delta_with_subsystem_entropy(
+        self, state: HostState, action: HostAction
+    ) -> tuple[HostDelta, dict[str, float]]:
+        """Return ``(delta, bucketed_decode_entropy)`` -- always the post-hoc entropy π_w signal.
+
+        Exposed so a heads-enabled arm can still surface the *entropy* signal on the identical
+        proposer (the EH5-heads confound-free comparison of trained-head vs bucketed-entropy π_w).
+        """
+        delta, _, entropy_map, _ = self._decode(
+            state, action, max_edits=64, max_new_tokens=4096
+        )
+        return delta, entropy_map
 
 
 def build_host_graph_model(
@@ -301,15 +355,22 @@ def build_host_graph_model(
     mp_rounds: int = 3,
     n_layer: int = 2,
     n_head: int = 2,
+    per_subsystem_heads: bool = False,
     seed: int = 0,
     device: str | torch.device | None = None,
 ) -> GraphHostWorldModel:
-    """Construct an (untrained) factored arm sized to ``config`` and ``vocab`` (default CPU)."""
+    """Construct an (untrained) factored arm sized to ``config`` and ``vocab`` (default CPU).
+
+    Set ``per_subsystem_heads`` to add the trained per-subsystem error heads (§8.2, HC7); the
+    resulting arm's ``predict_delta_with_subsystem_uncertainty`` reports the calibrated head signal
+    instead of the bucketed decode entropy. Off by default, so the arm is unchanged.
+    """
     torch.manual_seed(seed)
     dims = feature_dims(config, max_pid)
     cfg = GraphHostConfig(
         node_dim=dims.node, graph_dim=dims.graph, vocab_size=len(vocab),
         d_model=d_model, mp_rounds=mp_rounds, n_layer=n_layer, n_head=n_head,
+        per_subsystem_heads=per_subsystem_heads,
     )
     net = GraphHostNet(cfg)
     if device is not None:

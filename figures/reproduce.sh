@@ -163,6 +163,11 @@ python -m verisim.experiments.eh5 --config configs/eh5.json --out runs/eh5/recor
 python figures/plot_comparison.py --records runs/eh5/records.jsonl --key policy \
     --out figures/eh5_subsystem_policy.png --csv figures/eh5_subsystem_policy.csv
 
+echo "== EH5-heads: trained per-subsystem head vs bucketed-entropy π_w + §9.4 calibration (HC7) =="
+python -m verisim.experiments.eh5_heads --config configs/eh5_heads.json --out runs/eh5_heads/records.jsonl
+python figures/plot_comparison.py --records runs/eh5_heads/records.jsonl --key policy \
+    --out figures/eh5_heads.png --csv figures/eh5_heads.csv
+
 # The larger world x model SCALING SURFACE (SPEC-9 LS2) and HERO instance (LS3) are opt-in (slower):
 #   python -m verisim.experiments.en8_scale --world-sizes 25 50 100 200 --d-models 64 128 --seeds 0 1 2 --out figures/en8_surface.csv
 #   python -m verisim.experiments.en9_scale --world-sizes 25 50 100 200 --d-models 64 128 --seeds 0 1 2 --out figures/en9_surface.csv
@@ -170,4 +175,4 @@ python figures/plot_comparison.py --records runs/eh5/records.jsonl --key policy 
 echo "== SYNTHESIS: the floor+cliff H_eps(rho) overlaid across all three worlds (reads the curve CSVs) =="
 python -m verisim.experiments.synthesis --out figures/synthesis_floor_cliff.csv
 
-echo "== done: figures/{e1_curve,e2_policies,e3_operators,calibration,e4_ablation,objective,representation,auto_search,en1_curve,en2_policies,en3_operators,en4_graph_vs_flat,en8_grounding,en9_contrastive,en8_scale,en9_scale,en8_capacity,en9_negatives,en7_invariance,en5_selfheal,en6_counterfactual,en8_ls3_hero,en10_two_oracle,eh1_curve,eh1_composition,eh2_policies,eh3_operators,eh4_factored_vs_flat,eh4_drift,eh5_subsystem_policy,eh_h14_interleaving,eh_h14_scale,eh7_invariance,eh8_privilege,eh6_two_oracle,eh_h13_scale,eh9_denial_weighted,eh6_counterfactual,eh_stream,synthesis_floor_cliff}.{png,csv} =="
+echo "== done: figures/{e1_curve,e2_policies,e3_operators,calibration,e4_ablation,objective,representation,auto_search,en1_curve,en2_policies,en3_operators,en4_graph_vs_flat,en8_grounding,en9_contrastive,en8_scale,en9_scale,en8_capacity,en9_negatives,en7_invariance,en5_selfheal,en6_counterfactual,en8_ls3_hero,en10_two_oracle,eh1_curve,eh1_composition,eh2_policies,eh3_operators,eh4_factored_vs_flat,eh4_drift,eh5_subsystem_policy,eh5_heads,eh_h14_interleaving,eh_h14_scale,eh7_invariance,eh8_privilege,eh6_two_oracle,eh_h13_scale,eh9_denial_weighted,eh6_counterfactual,eh_stream,synthesis_floor_cliff}.{png,csv} =="

@@ -34,13 +34,17 @@ from verisim.host.config import HostConfig
 from verisim.host.delta import apply as apply_host_delta
 from verisim.host.state import RUNNING, ZOMBIE, FdEntry, HostState, Process
 from verisim.hostdata.drivers import HostDriver
+from verisim.hostmetrics.divergence import SUBSYSTEMS
 from verisim.hostoracle.base import HostOracle
 from verisim.train.dataset import IGNORE_INDEX
 
+from .grammar import OP_SUBSYSTEM
 from .graph import HostGraph, build_host_graph
 from .graph_model import GraphHostWorldModel, graphs_to_tensors
 from .tokenizer import encode_target
 from .vocab import HostVocab
+
+_SUB_INDEX = {sub: i for i, sub in enumerate(SUBSYSTEMS)}
 
 GraphExample = tuple[HostGraph, list[int]]  # (featurized state/action, target delta tokens)
 
@@ -176,15 +180,82 @@ def _collate(
     return graphs, inp, lab
 
 
-def _batch_loss(model: GraphHostWorldModel, batch: list[GraphExample], *, sample: bool) -> Tensor:
+def _target_subsystem_ids(model: GraphHostWorldModel, target_ids: list[int]) -> list[int]:
+    """Subsystem index per target token, by walking the grammar (mirrors the decode bucketing).
+
+    Reproduces the ``current_sub`` tracking of
+    :meth:`~verisim.hostmodel.graph_model.GraphHostWorldModel._decode`: a token inherits the
+    subsystem of the op currently being emitted (an op token updates the current subsystem before
+    it is itself attributed). The result aligns position-for-position with the teacher-forcing
+    labels, so per-token loss can be bucketed per subsystem.
+    """
+    vocab = model.vocab
+    stack = model.grammar.start()
+    current = "global"
+    ids: list[int] = []
+    for tok in target_ids:
+        top = stack[0]
+        if top == "DELTA" and tok in vocab.op_ids:
+            current = OP_SUBSYSTEM[vocab.token(tok)]
+        ids.append(_SUB_INDEX[current])
+        stack = model.grammar.advance(stack, tok)
+    return ids
+
+
+def subsystem_head_loss(
+    model: GraphHostWorldModel, batch: list[GraphExample], tok_ce: Tensor, sub_unc: Tensor
+) -> Tensor:
+    """Calibration loss for the per-subsystem decode heads (§8.2, §9.4, HC7).
+
+    The head predicts, per subsystem, the decoder's *own* per-subsystem token error. The target is
+    the realized teacher-forced per-token cross-entropy (``tok_ce[B,T]``) averaged within each
+    subsystem's token span (the span the free oracle's labels define) -- **detached**, so the head
+    learns to read the decoder's error without steering the decoder. Subsystems absent from an
+    example contribute no gradient. Returns the masked MSE over present (example, subsystem) cells.
+    """
+    targets = [t for _, t in batch]
+    b, t = tok_ce.shape
+    n_sub = len(SUBSYSTEMS)
+    device = tok_ce.device
+    sub_id = torch.full((b, t), -1, dtype=torch.long, device=device)
+    for k, target in enumerate(targets):
+        ids = _target_subsystem_ids(model, target)
+        sub_id[k, : len(ids)] = torch.tensor(ids, dtype=torch.long, device=device)
+
+    summed = torch.zeros(b, n_sub, device=device)
+    count = torch.zeros(b, n_sub, device=device)
+    for s in range(n_sub):
+        sel = (sub_id == s).float()
+        summed[:, s] = (tok_ce * sel).sum(dim=1)
+        count[:, s] = sel.sum(dim=1)
+    present = count > 0
+    realized = summed / count.clamp_min(1.0)
+    if not bool(present.any()):
+        return tok_ce.sum() * 0.0  # keep it differentiable but zero (degenerate batch)
+    err = (sub_unc - realized.detach()).pow(2) * present.float()
+    return err.sum() / present.float().sum().clamp_min(1.0)
+
+
+def _batch_loss(
+    model: GraphHostWorldModel, batch: list[GraphExample], *, sample: bool,
+    head_weight: float = 1.0,
+) -> Tensor:
     device = model.net.device
     graphs, inp, lab = _collate(batch, model.vocab, device)
     node, gfeat, mask, a_lin, a_share, acting = graphs_to_tensors(graphs, device)
-    cond, _belief = model.net.encode(node, gfeat, mask, a_lin, a_share, acting, sample=sample)
-    logits = model.net.decode_logits(cond, inp)
-    return nn.functional.cross_entropy(
-        logits.reshape(-1, logits.size(-1)), lab.reshape(-1), ignore_index=IGNORE_INDEX
+    cond, _belief, sub_unc = model.net.encode(
+        node, gfeat, mask, a_lin, a_share, acting, sample=sample
     )
+    logits = model.net.decode_logits(cond, inp)
+    flat_logits = logits.reshape(-1, logits.size(-1))
+    flat_lab = lab.reshape(-1)
+    ce = nn.functional.cross_entropy(flat_logits, flat_lab, ignore_index=IGNORE_INDEX)
+    if sub_unc is None or head_weight == 0.0:
+        return ce
+    tok_ce = nn.functional.cross_entropy(
+        flat_logits, flat_lab, ignore_index=IGNORE_INDEX, reduction="none"
+    ).reshape(lab.shape)
+    return ce + head_weight * subsystem_head_loss(model, batch, tok_ce, sub_unc)
 
 
 def train_host_graph_model(
@@ -298,7 +369,7 @@ def graph_teacher_forced_accuracy(
     device = model.net.device
     graphs, inp, lab = _collate(examples, model.vocab, device)
     node, gfeat, mask, a_lin, a_share, acting = graphs_to_tensors(graphs, device)
-    cond, _belief = model.net.encode(node, gfeat, mask, a_lin, a_share, acting, sample=False)
+    cond, _belief, _sub = model.net.encode(node, gfeat, mask, a_lin, a_share, acting, sample=False)
     preds = model.net.decode_logits(cond, inp).argmax(dim=-1)
     valid = lab != IGNORE_INDEX
     correct = ((preds == lab) & valid).sum().item()

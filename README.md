@@ -401,7 +401,7 @@ composed acceptance (0.396) is *still below* its own independence floor `∏ a�
 stays **coupled** for both arms. The composition being coupled is therefore a **genuine property of the
 host dynamics**, not an artifact of flattening — which sharpens H13 from "the flat model couples" to "the
 world couples, and even the structured model only attenuates it." That residual coupling is the standing
-target for the per-subsystem decode heads and the smart `π_w` still to come.
+target for the smart `π_w` (§17) and the per-subsystem decode heads (§17, EH5-heads — a negative).
 
 ### 16. A calibrated uncertainty signal finally makes *smart* consultation pay (host EH2 / H9)
 
@@ -452,6 +452,32 @@ the smart policy chases consequence (where the model is wrong) but ignores cost 
 subsystem costs to verify). The ideal `π_w` weights both — the standing target. What ships here is the
 *apparatus* (per-subsystem uncertainty + the information-gain policy + the equal-budget harness); the
 smoke-scale edge is reported as-is, not oversold.
+
+**EH5-heads — the trained per-subsystem decode heads lose to the entropy bucket (an honest negative).**
+The signal above is *post-hoc* (it reads the ambiguity of a constrained decode) and *sparse* (a
+subsystem whose ops do not appear this step gets entropy 0, invisible to `π_w` even if the model is
+quietly wrong about it). The named open HC7 lever was the calibrated alternative: a **trained
+per-subsystem head** (opt-in `per_subsystem_heads`) that predicts *which subsystem the decoder will get
+wrong* directly, regressed against the decoder's own per-subsystem error — the free oracle supplying the
+target. EH5-heads ([`eh5_heads.py`](src/verisim/experiments/eh5_heads.py)) trains a *single*
+heads-enabled arm exposing **both** signals on the **identical** proposer, so the comparison is
+confound-free, and asks the §9.4 question: does each signal predict held-out per-subsystem error?
+
+![EH5-heads: the trained per-subsystem head spends the most bits for the least horizon](figures/eh5_heads.png)
+
+| `π_w` signal | Spearman(signal, per-subsystem error) | verdict |
+|---|---|---|
+| bucketed decode entropy | **+0.57** | well-calibrated |
+| trained per-subsystem head | −0.02 | **uncalibrated** |
+
+The head is essentially uncorrelated with held-out error (robust across noise levels), so the
+head-driven `π_w` arm spends the **most** bits for the **least** horizon. The mechanism is clean: the
+head's training target — the decoder's per-subsystem cross-entropy — collapses to ~0 on the overfit
+training distribution, so it learns nothing about the deploy-time divergence that the entropy, measured
+*on the actual decode*, tracks directly. This is the **per-subsystem echo of v0's H2 negative** (a
+learned uncertainty proxy underperforms a decode-coupled one), and it **closes the open HC7 item with a
+reproducible negative** rather than vague future work — the next lever is a head trained on the
+deploy-time (drift) divergence, or scale, not this head.
 
 ### 18. The drift levers don't buy horizon here either — the same banked negative (host EH4-drift / §6.3)
 
@@ -1000,7 +1026,7 @@ host → distributed); three specs are *cross-cutting methods* every world inher
 | [SPEC-3](docs/specs/SPEC-3.md) | depth | how the toy grows into a real simulator (system oracle, partial obs, online self-healing, info-theoretic metric) |
 | [SPEC-4](docs/specs/SPEC-4.md) | **the engine** | the autonomous research engine — Verisim improving Verisim, human out of the loop |
 | [SPEC-5](docs/specs/SPEC-5.md) | **world: network** | the reachability/connectivity world — **the current build front** |
-| [SPEC-6](docs/specs/SPEC-6.md) | world: host | the running computer (process tree, fds, scheduler) — **HC0-HC6 started**: the host oracle *composes* the v0 FS sub-oracle; bundle delta + `apply == oracle` invariant; workload drivers + datasets; composed + **per-subsystem** metrics with the **composition-law diagnostic** (H13); the **flat learned `M_θ` baseline** (HC4 incr-1); the **composed loop** with the `π_w` oracle-selection axis (HC5 incr-1); **the prime-directive figure (HC6)** — the composed `H_ε(ρ)` floor+cliff + the **H13 composition law = `coupled`** ([eh1_curve](figures/eh1_curve.png), [eh1_composition](figures/eh1_composition.png)); **the EH3 equal-budget operator comparison (HC7)** — per-subsystem consultation earns **~3.7× more horizon per oracle-bit** ([eh3_operators](figures/eh3_operators.png)); **the factored interaction-graph arm (HC4 incr-2) + EH4** — structure beats flat **~6.6× on delta-exact** yet the H13 coupling survives ([eh4_factored_vs_flat](figures/eh4_factored_vs_flat.png)); **EH2** — the factored arm's calibrated belief variance makes smart consultation beat fixed **~2.2×** (the first smart-`π_c` positive, [eh2_policies](figures/eh2_policies.png)); **EH5** — a smart *which-subsystem* `π_w` (per-subsystem decode entropy) gives a modest edge over round-robin ([eh5_subsystem_policy](figures/eh5_subsystem_policy.png)); the **§6.3 drift levers** (noise / self-forcing) reproduce the network's banked negative ([eh4_drift](figures/eh4_drift.png)); **H14 — the concurrency dial — is CONFIRMED**: free-running `H_ε` collapses ~8× as interleaving entropy rises (the host's defining result, [eh_h14_interleaving](figures/eh_h14_interleaving.png)); the **§7 LLM-callable whole-machine simulator** (HC8) — `imagine` a plan + `verify` it (plan-level `H_ε` + the task "third oracle"); **EH7/H22** — the floor+cliff `H_ε(ρ)` shape is **model-agnostic in the composed world too** ([eh7_invariance](figures/eh7_invariance.png)); and the **HC8 security/scaling findings** — **EH8** (aggregate faithfulness hides a **denied-recall gap**, flat 0.000 / factored 0.286, [eh8_privilege](figures/eh8_privilege.png)), **EH6** (a symbolic privilege second-oracle is redundant but **decision-sufficient in 95%** of error steps at ~3× lower cost, the host H12, [eh6_two_oracle](figures/eh6_two_oracle.png)), **EH-H13-scale** (concurrency **manufactures** the H13 coupling, [eh_h13_scale](figures/eh_h13_scale.png)), **EH9** (the denied-recall gap is a **data-balance artifact the free oracle fixes** — exposure + oversampling lift recall at no specificity cost, [eh9_denial_weighted](figures/eh9_denial_weighted.png)), **EH-stream/H15** (the experience stream **loses to the batch** at equal compute, but **replay** rescues it from collapse and the **plasticity probe** localizes HW-4 — no-replay plasticity 0.77 vs 0.95, [eh_stream](figures/eh_stream.png)), and **EH6/H16** (counterfactual replay is a **null beyond volume** for plain supervision — world-agnostic with the network's EN6, [eh6_counterfactual](figures/eh6_counterfactual.png)); plus the **oracle-as-reward RL environment** ([`hostrl/`](src/verisim/hostrl/)) whose episode return *is* the composed `H_ε` |
+| [SPEC-6](docs/specs/SPEC-6.md) | world: host | the running computer (process tree, fds, scheduler) — **HC0-HC8 built**: the host oracle *composes* the v0 FS sub-oracle; bundle delta + `apply == oracle` invariant; workload drivers + datasets; composed + **per-subsystem** metrics with the **composition-law diagnostic** (H13); the **flat learned `M_θ` baseline** (HC4 incr-1); the **composed loop** with the `π_w` oracle-selection axis (HC5 incr-1); **the prime-directive figure (HC6)** — the composed `H_ε(ρ)` floor+cliff + the **H13 composition law = `coupled`** ([eh1_curve](figures/eh1_curve.png), [eh1_composition](figures/eh1_composition.png)); **the EH3 equal-budget operator comparison (HC7)** — per-subsystem consultation earns **~3.7× more horizon per oracle-bit** ([eh3_operators](figures/eh3_operators.png)); **the factored interaction-graph arm (HC4 incr-2) + EH4** — structure beats flat **~6.6× on delta-exact** yet the H13 coupling survives ([eh4_factored_vs_flat](figures/eh4_factored_vs_flat.png)); **EH2** — the factored arm's calibrated belief variance makes smart consultation beat fixed **~2.2×** (the first smart-`π_c` positive, [eh2_policies](figures/eh2_policies.png)); **EH5** — a smart *which-subsystem* `π_w` (per-subsystem decode entropy) gives a modest edge over round-robin ([eh5_subsystem_policy](figures/eh5_subsystem_policy.png)); **EH5-heads** — a trained per-subsystem decode *head* (opt-in) is **uncalibrated** (Spearman −0.02) where the bucketed entropy it would replace is **well-calibrated** (+0.57), closing the open HC7 lever with a negative ([eh5_heads](figures/eh5_heads.png)); the **§6.3 drift levers** (noise / self-forcing) reproduce the network's banked negative ([eh4_drift](figures/eh4_drift.png)); **H14 — the concurrency dial — is CONFIRMED**: free-running `H_ε` collapses ~8× as interleaving entropy rises (the host's defining result, [eh_h14_interleaving](figures/eh_h14_interleaving.png)); the **§7 LLM-callable whole-machine simulator** (HC8) — `imagine` a plan + `verify` it (plan-level `H_ε` + the task "third oracle"); **EH7/H22** — the floor+cliff `H_ε(ρ)` shape is **model-agnostic in the composed world too** ([eh7_invariance](figures/eh7_invariance.png)); and the **HC8 security/scaling findings** — **EH8** (aggregate faithfulness hides a **denied-recall gap**, flat 0.000 / factored 0.286, [eh8_privilege](figures/eh8_privilege.png)), **EH6** (a symbolic privilege second-oracle is redundant but **decision-sufficient in 95%** of error steps at ~3× lower cost, the host H12, [eh6_two_oracle](figures/eh6_two_oracle.png)), **EH-H13-scale** (concurrency **manufactures** the H13 coupling, [eh_h13_scale](figures/eh_h13_scale.png)), **EH9** (the denied-recall gap is a **data-balance artifact the free oracle fixes** — exposure + oversampling lift recall at no specificity cost, [eh9_denial_weighted](figures/eh9_denial_weighted.png)), **EH-stream/H15** (the experience stream **loses to the batch** at equal compute, but **replay** rescues it from collapse and the **plasticity probe** localizes HW-4 — no-replay plasticity 0.77 vs 0.95, [eh_stream](figures/eh_stream.png)), and **EH6/H16** (counterfactual replay is a **null beyond volume** for plain supervision — world-agnostic with the network's EN6, [eh6_counterfactual](figures/eh6_counterfactual.png)); plus the **oracle-as-reward RL environment** ([`hostrl/`](src/verisim/hostrl/)) whose episode return *is* the composed `H_ε` |
 | [SPEC-7](docs/specs/SPEC-7.md) | world: distributed | replicated services, transactions, consensus — design |
 | [SPEC-8](docs/specs/SPEC-8.md) | **method: oracle-grounded SSL** | put the oracle's truth in the *bulk* of the cake (self-supervised pretraining), not just the cherry (RL) |
 | [SPEC-9](docs/specs/SPEC-9.md) | **method: free-oracle scaling** | because the oracle labels for free, world size is a *compute* choice, not a labeling-budget one — how large/deep the world goes on one machine, and what holds as it grows |
@@ -1099,6 +1125,13 @@ write-up is [docs/report.md](docs/report.md).
 > over round-robin (matches the best raw horizon at lower cost), though the cheapest-fixed still wins
 > pure bit-efficiency (finding
 > [§17](#17-the-other-consultation-axis-a-smart-which-subsystem-policy-gives-a-modest-edge-host-eh5--h10)).
+> **EH5-heads then closes the open HC7 decode-*heads* lever with a negative**
+> ([`eh5_heads.py`](src/verisim/experiments/eh5_heads.py), figure [`eh5_heads.png`](figures/eh5_heads.png)):
+> an opt-in trained per-subsystem error head (the calibrated alternative to the post-hoc entropy bucket)
+> is **uncalibrated** to held-out per-subsystem error (Spearman −0.02) where the bucketed entropy it was
+> meant to replace is **well-calibrated** (+0.57) — its CE target collapses on the overfit train
+> distribution; the per-subsystem echo of v0's H2 negative (finding
+> [§17](#17-the-other-consultation-axis-a-smart-which-subsystem-policy-gives-a-modest-edge-host-eh5--h10)).
 > Both consultation axes (when `π_c` × which `π_w`) are now measured. **The §6.3 drift levers also ship**
 > ([`eh4_drift.py`](src/verisim/experiments/eh4_drift.py), figure [`eh4_drift.png`](figures/eh4_drift.png)):
 > oracle-relabeled noise injection + self-forcing reproduce the network's **banked negative** — neither
@@ -1161,8 +1194,10 @@ write-up is [docs/report.md](docs/report.md).
 > ([`hosteval/`](src/verisim/hosteval/)): `score_host_model` grades any `HostModel` through the composed
 > loop, with a single-step QA grader and an `inspect_ai` task behind the `[eval]` extra — the §1.4 missing
 > metrology for a *whole machine*, packaged where labs already look.
-> Remaining (HC8): per-subsystem decode *heads*, the **Tier-B system oracle** (rr/Hermit/gVisor), and the
-> **technical report**.
+> The host-world results are written up in the **[technical report](docs/report.md#the-host-world-spec-6-does-faithfulness-compose)**
+> (the SPEC-6 §18 honest write-up, per-hypothesis). Remaining: the **Tier-B system oracle**
+> (rr/Hermit/gVisor) — a real-OS dependency, deferred under the no-egress posture (SPEC-6 §15).
+> The per-subsystem decode *heads* shipped as EH5-heads (above), an honest negative.
 
 **v0 — shell/filesystem world (`src/verisim/`, SPEC-2 §13): complete.**
 

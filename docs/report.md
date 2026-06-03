@@ -821,6 +821,228 @@ on top of the data-plane oracle, but a **cheaper, decision-relevant** consultati
 question — which is precisely the tiered-oracle premise SPEC-7 builds on. The Batfish-style oracle ships
 as a property-tested deterministic component ([`test_control_plane.py`](../tests/test_control_plane.py)).
 
+# The host world (SPEC-6): does faithfulness compose?
+
+The filesystem (v0) modeled one tree; the network (SPEC-5) one graph. The host world (SPEC-6) is the
+first world whose state is a **bundle of coupled subsystems** — a process table, per-process fd
+tables, and the embedded v0 filesystem — under controllable concurrency. The prime directive is no
+longer "does the knee exist" (v0/EN1 answered that: no) but **does whole-machine faithfulness compose
+from its parts** (H13), and what concurrency costs (H14). Every result below regenerates from
+[`figures/reproduce.sh`](../figures/reproduce.sh); the deterministic core and the loop are
+dependency-free and GPU-free, the learned arms use the CPU `[model]` extra.
+
+**Bottom line (host).** The floor+cliff `H_ε(ρ)` shape is **world-agnostic** — it reappears in the
+composed host exactly as in v0 and the network (EH1, EH7, the cross-world synthesis). The new
+question, **H13 (lawful composition), is refuted**: composed faithfulness sits *below* the
+independence prediction — **coupling is load-bearing**, the limitation that *is* the contribution
+(it licensed the interaction-graph arm, which then helps ~6.6×). **H14 (concurrency is a measurable
+dial) is confirmed** — faithful horizon falls ~8× monotonically with interleaving entropy. **H15
+(stream beats batch) and H16 (counterfactual is unique) are refuted** with their mechanisms
+localized (replay and plasticity for H15; data-volume for H16, reproducing the network's EN6/H5
+null world-agnostically). And the open HC7 lever — **trained per-subsystem decode heads — is a
+clean negative**: the head it added is *uncalibrated* where the simple bucketed entropy it was meant
+to replace is *well*-calibrated.
+
+## EH1 — the composed-host `H_ε(ρ)` curve, and the composition law (H8 again, H13)
+
+EH1 ([`eh1.py`](../src/verisim/experiments/eh1.py)) trains the flat host `M_θ`, sweeps
+`ρ × ε × difficulty × seed` through the HC5 composed loop, and reads two results off the records.
+
+![EH1: the composed-host floor+cliff `H_ε(ρ)` curve](../figures/eh1_curve.png)
+
+**(1) The curve is the floor+cliff shape** ([`eh1_curve.csv`](../figures/eh1_curve.csv)): at `ρ=0`
+the model drifts in **0.4 steps** (high difficulty) — the honest floor — the interior is near-flat
+(`H_ε≈1.2` across `ρ=0.05…0.7`), and the cliff to `H_ε=T` lands only at `ρ=1`. The composed host
+**reproduces v0/EN1's no-favorable-knee result** (H8/H22): composing subsystems does not manufacture
+a knee.
+
+**(2) The composition law is `coupled`** ([`eh1_composition.csv`](../figures/eh1_composition.csv)),
+the headline-new measurement. The per-step composed acceptance (**0.067** high / **0.083** low) sits
+*well below* both the multiplicative/independence prediction (∏ of per-subsystem acceptances,
+**0.196 / 0.248**) and the weakest-link bound (**0.417 / 0.483**):
+
+| difficulty | composed | multiplicative (independence) | weakest-link | verdict |
+|---|---|---|---|---|
+| high | 0.067 | 0.196 | 0.417 | **coupled** |
+| low | 0.083 | 0.248 | 0.483 | **coupled** |
+
+![EH1: the composition law reads `coupled` — composed acceptance below independence](../figures/eh1_composition.png)
+
+The flat baseline's per-subsystem failures are **anti-correlated** — when it misses one subsystem it
+tends to miss another in the *same* step — so modeling subsystems independently is the wrong bet.
+**H13's honest negative is the discovery that coupling is the load-bearing structure**, and it is
+exactly what licenses the factored interaction-graph arm (EH4). The limitation is the contribution.
+
+## EH4 — factored interaction-graph vs flat serializer (H11's host analogue)
+
+EH4 ([`eh4.py`](../src/verisim/experiments/eh4.py),
+[`eh4_factored_vs_flat.csv`](../figures/eh4_factored_vs_flat.csv)) is the H13 follow-up: a masked
+message-passing GNN + RSSM over the process spine's **lineage** (fork-tree) and **shared-file**
+edges — folding the fd/fs subsystems onto the process spine so the coupling is *in the architecture*,
+not flattened away — decoded under the *same* grammar as the flat arm. **The factored arm beats flat
+~6.6× on delta-exact (0.058 → 0.388) and ~5.3× on composed acceptance (0.075 → 0.396)** — structure
+helps, the host echo of the network's EN4/H11 — **yet both stay `coupled`** (the factored composed
+acceptance is still below its own independence floor), so the H13 coupling is genuine, not a
+flat-arm artifact.
+
+![EH4: the factored interaction-graph arm beats the flat serializer, but both stay coupled](../figures/eh4_factored_vs_flat.png)
+
+## EH2 — *when* to consult (`π_c`): the program's first smart-consultation positive (H2/H9)
+
+EH2 ([`eh2.py`](../src/verisim/experiments/eh2.py)) crosses both arms with `{fixed, uncertainty,
+drift}` consultation at equal `ρ`. The **flat** arm reproduces the standing **H2-negative**
+(uncertainty/drift *worse* than fixed — its decode entropy mis-localizes error), but the
+**factored** arm's **RSSM belief variance fixes it**: uncertainty-triggered consultation earns
+**~2.2× more faithful horizon than fixed (5.8 vs 2.6)**. This is the **first smart-`π_c` positive in
+the program** — confirming the §8.1 conjecture that the calibrated-by-construction signal (the RSSM
+posterior variance, §6.2) is the better-localized one. *When* you spend the oracle starts to matter
+once the signal is calibrated.
+
+![EH2: the factored arm's RSSM belief variance makes triggered consultation beat fixed](../figures/eh2_policies.png)
+
+## EH3 — composed correction operators, and the per-subsystem cost lens (H3, §8.3)
+
+EH3 ([`eh3.py`](../src/verisim/experiments/eh3.py)) compares operators at fixed `ρ`. The three
+full-consult operators (`hard_reset` / `residual` / `projection`) **coincide on `H_ε`** — v0's
+full-truth identity survives composition. But the **per-subsystem `SubsystemFilter`** arms (correct
+*only* the observed subsystem, the partial-observation case the host world makes real) **break that
+collapse**, and the cost lens is the headline: **per-subsystem consultation earns up to ~3.7× more
+faithful horizon per oracle-bit** than full (`subsystem_fd` 0.054 vs full 0.015). The honest nuance:
+the *cheapest* subsystem (`fd`) wins on bits, **not** the H13-*weakest* (`proc`) — so the static
+"target the weakest" heuristic loses, which is exactly what a smart `π_w` must beat.
+
+![EH3: per-subsystem correction breaks the v0 operator-identity and is bit-cheaper than full consult](../figures/eh3_operators.png)
+
+## EH5 — *which* subsystem to verify (`π_w`), and the decode-heads negative (HC7, §8.2)
+
+EH5 ([`eh5.py`](../src/verisim/experiments/eh5.py)) exposes the factored arm's **per-subsystem decode
+entropy** (each token's entropy bucketed into the op's subsystem, §5.4) and feeds an
+`UncertaintySubsystem` policy that verifies the least-certain subsystem. At equal `ρ` it matches the
+best raw horizon and beats round-robin per-bit — a **modest but real edge for adaptive targeting** —
+though the cheapest-fixed (`fd`) still wins pure bit-efficiency (EH3's cost-vs-consequence tension
+persists; raw-horizon CIs overlap at smoke scale).
+
+![EH5: the entropy-driven which-subsystem policy edges out round-robin](../figures/eh5_subsystem_policy.png)
+
+**EH5-heads — the open HC7 lever, resolved with a negative.** The entropy bucket is *post-hoc* (it
+reads the ambiguity of a constrained decode) and *sparse* (a subsystem whose ops do not appear this
+step gets entropy 0, invisible to `π_w` even if the model is quietly wrong about it). The natural
+upgrade was a **trained per-subsystem head** that predicts which subsystem the decoder will get wrong
+*directly*, regressed against the decoder's own per-subsystem teacher-forced error (the free oracle
+supplies the target). EH5-heads ([`eh5_heads.py`](../src/verisim/experiments/eh5_heads.py)) trains a
+*single* heads-enabled arm that exposes **both** signals on the **identical** proposer, so the
+comparison is confound-free. On the §9.4 calibration diagnostic — does each signal predict held-out
+per-subsystem error? — the result is decisive and the *opposite* of the conjecture:
+
+| π_w signal | Pearson(signal, per-subsystem error) | Spearman | verdict |
+|---|---|---|---|
+| bucketed decode entropy | **+0.34** | **+0.57** | well-calibrated |
+| trained per-subsystem head | −0.09 | −0.02 | **uncalibrated** |
+
+![EH5-heads: the trained per-subsystem head spends the most bits for the least horizon](../figures/eh5_heads.png)
+
+The head is essentially uncorrelated with held-out error (robustly across noise levels
+`{0, 0.3, 0.6}`), so in the equal-`ρ` `π_w` comparison the entropy-driven `uncertainty` arm earns
+the most faithful horizon while the **head-driven arm spends the most bits for the least horizon**.
+**Mechanism:** the head's CE target collapses to ~0 on the (overfit) training distribution, so it
+learns nothing about the deploy-time divergence that the entropy — measured *on the actual
+constrained decode* — tracks directly. This is the **per-subsystem echo of v0's H2 negative** (a
+learned uncertainty proxy underperforms a decode-coupled one) and **closes the open HC7 item with a
+reproducible negative** rather than leaving it as vague future work. The next lever is a head trained
+on the deploy-time (drift / self-forced) divergence target, or scale — not this head.
+
+## H14 — concurrency is a measurable dial, not a binary wall (CONFIRMED)
+
+EH-H14 ([`eh_h14.py`](../src/verisim/experiments/eh_h14.py),
+[`hostdata/scheduler.py`](../src/verisim/hostdata/scheduler.py)) interleaves a multi-thread workload
+(shared files → fs order-sensitivity; interleaved forks → proc order-sensitivity) with a
+chaos-seeded scheduler, trains the factored arm on the recorded (sequential) regime, and sweeps
+free-running `H_ε` across the chaos dial. **Faithful horizon degrades monotonically with interleaving
+entropy — `H_ε` falls ~8× from the recorded regime (12.5 steps) to chaos (1.5), and the low-entropy
+end recovers it.** Concurrency (HW-1) is a **continuum the chaos seed sweeps**, not a binary
+"deterministic or not" — the first quantification of its cost.
+
+![EH-H14: free-running `H_ε` degrades monotonically with interleaving entropy](../figures/eh_h14_interleaving.png)
+
+Two scale follow-ups sharpen it. **EH-H14-scale** ([`eh_h14_scale.py`](../src/verisim/experiments/eh_h14_scale.py))
+shows the collapse **steepens with thread count** (~2.5× at 2 threads → ~12× at 8). **EH-H13-scale**
+([`eh_h13_scale.py`](../src/verisim/experiments/eh_h13_scale.py),
+[`eh_h13_scale.csv`](../figures/eh_h13_scale.csv)) shows **concurrency *manufactures* coupling**: the
+independence gap (composed below the multiplicative prediction) widens from 0.076 at 2 threads to
+0.167 at 8 — interleaving is itself a coupling source, tying H13 and H14 together.
+
+## EH7 — the floor+cliff shape is model-invariant in the hardest world (H22)
+
+EH7 ([`eh7.py`](../src/verisim/experiments/eh7.py)) drops four proposers (null / flat / factored /
+oracle-backed) into the **same** HC5 loop. They **share the floor+cliff `H_ε(ρ)` shape**: the
+proposer sets the floor *height* (factored 2.3 > flat 0.4 > null 0.0 at `ρ=0`, the EH4 ordering)
+while the loop sets the *shape* (flat interior, cliff to `H_ε=T` only at `ρ=1`). The program's
+deepest claim — **deterministic verification as a model-agnostic primitive** — holds in the hardest
+(coupled, concurrent) world too.
+
+![EH7: four proposers share the floor+cliff shape — the proposer sets the floor, the loop sets the shape](../figures/eh7_invariance.png)
+
+The **cross-world synthesis** ([`synthesis.py`](../src/verisim/experiments/synthesis.py)) overlays
+all three worlds' normalized `H_ε(ρ)` onto **one floor+cliff curve** — the thesis in a single figure:
+the shape is both model- and world-agnostic.
+
+![Synthesis: the floor+cliff `H_ε(ρ)` is world-agnostic across filesystem, network, and host](../figures/synthesis_floor_cliff.png)
+
+## EH-stream (H15) and EH6 (H16) — two refutations with their mechanisms localized
+
+**H15 (the experience stream beats the batch) is refuted at smoke scale, and the controlled arms make
+the negative the more valuable result.** EH-stream ([`eh_stream.py`](../src/verisim/experiments/eh_stream.py))
+runs stream-vs-batch at equal compute: the stream loses (one-step exact 0.47 vs 0.54, free-running
+`H_ε` 1.7 vs 4.0). But **experience replay is decisively load-bearing** — it rescues the stream from
+collapse (0.47 vs the no-replay 0.10) — and the **plasticity probe localizes HW-4**: the no-replay
+stream's ability to fit a fresh batch decays to **0.77 vs 0.95** for the batch/replay arms. The
+precise negative the continual-learning field needs: the Era-of-Experience promise does not survive
+contact with this oracle here, and we can point at *why*.
+
+![EH-stream: the stream loses to the batch, but replay is load-bearing and the plasticity probe localizes HW-4](../figures/eh_stream.png)
+
+**H16 (the host oracle uniquely trains counterfactual fidelity) is refuted beyond volume,
+world-agnostically.** EH6-counterfactual ([`eh6_counterfactual.py`](../src/verisim/experiments/eh6_counterfactual.py))
+trains on free oracle counterfactual branches (re-run a process tree with one syscall changed). It
+*does* beat the base trajectory on held-out intervention-exactness (0.46 vs 0.34) but **loses to a
+matched-volume control (0.59)** — so the lift is data *volume*, not counterfactual *structure*: for
+plain next-state supervision a counterfactual is just another labeled transition. This bounds how
+much counterfactual augmentation buys and **reproduces the network world's identical EN6/H5 null**,
+making the H16 null a property of the oracle-grounded method, not a host quirk.
+
+![EH6: counterfactual training beats the base trajectory but loses to a matched-volume control](../figures/eh6_counterfactual.png)
+
+## Privilege-faithfulness — getting *failures* right (the defender's need, §3.2/§9.4)
+
+A defender's trust in a simulator hinges on it predicting *permission-denied* outcomes, not just
+successes. EH8 ([`eh8_privilege.py`](../src/verisim/experiments/eh8_privilege.py),
+[`eh8_privilege.csv`](../figures/eh8_privilege.csv)) grades it first-class and finds a **denial gap**:
+overall privilege-faithfulness is high for both arms (flat 0.91, factored 0.94), but **denied-recall
+— catching the syscalls that *should* fail — is near-zero for the flat arm (0.000) and only 0.29 for
+the factored arm**, because denials are rare and the loss is dominated by the common allowed case.
+
+| arm | privilege-faithfulness | setuid-faithfulness | denied-recall |
+|---|---|---|---|
+| flat | 0.91 | 0.34 | **0.000** |
+| factored | 0.94 | 0.53 | **0.286** |
+
+EH9 ([`eh9_denial_weighted.py`](../src/verisim/experiments/eh9_denial_weighted.py),
+[`eh9_denial_weighted.csv`](../figures/eh9_denial_weighted.csv)) closes the gap by **oversampling the
+denial class**: at 4× the factored arm reaches **denied-recall 1.00** while *raising* overall
+privilege-faithfulness (0.996) and keeping allowed-specificity ≥0.995 — the rare-but-critical class
+is learnable when the data factory weights it. The fix is data, not architecture.
+
+![EH8/EH9: the privilege denial gap, and denial-oversampling closing it](../figures/eh9_denial_weighted.png)
+
+Finally, EH6-two-oracle ([`eh6_two_oracle.py`](../src/verisim/experiments/eh6_two_oracle.py),
+[`eh6_two_oracle.csv`](../figures/eh6_two_oracle.csv)) measures a cheap symbolic **privilege
+second-oracle** (the host analogue of the network's EN10/H12): it is **redundant for verification**
+(non-redundant rate 0.000 — it never catches an error the full-state consult misses) **but
+decision-sufficient and far cheaper** — it answers the privilege question correctly in **95%** of the
+steps where the full delta is wrong, at **~31%** of the consult bits. The same tiered-oracle premise
+the network found, now in the host: the cheap oracle's value is *cost and decision-relevance*, not
+non-redundancy.
+
 ## Threats to validity
 
 - **Scale.** The committed model is ~tiny and trains for a few hundred iterations on
@@ -879,6 +1101,14 @@ python -m verisim.experiments.en4_graph --graph-iters 1500 \
 python -m verisim.experiments.en8 --out figures/en8_grounding.csv
 # SPEC-8 EN9 — oracle hard-negative contrastive (H25/H5); writes the CSV + figure directly:
 python -m verisim.experiments.en9 --out figures/en9_contrastive.csv
+# SPEC-6 host world (EH1 composed curve + H13 composition law; needs the [model] extra):
+python -m verisim.experiments.eh1 --config configs/eh1.json --out runs/eh1/records.jsonl
+python figures/plot_eh1.py --records runs/eh1/records.jsonl
+# SPEC-6 EH5-heads — trained per-subsystem head vs bucketed-entropy π_w + §9.4 calibration:
+python -m verisim.experiments.eh5_heads --config configs/eh5_heads.json \
+    --out runs/eh5_heads/records.jsonl
+python figures/plot_comparison.py --records runs/eh5_heads/records.jsonl --key policy \
+    --out figures/eh5_heads.png --csv figures/eh5_heads.csv
 ```
 
 The run-records are git-ignored (regenerable); the figures and their CSVs are
