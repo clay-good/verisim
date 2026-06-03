@@ -1,0 +1,22 @@
+{
+  "stream_driver": "forky",
+  "stream_seeds": [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19],
+  "stream_steps_per_traj": 40,
+  "replay_batch": 16,
+  "max_pid": 64,
+  "graph_d_model": 64,
+  "graph_mp_rounds": 3,
+  "lr": 0.003,
+  "model_seed": 0,
+  "difficulties": {
+    "low": "forky",
+    "high": "adversarial"
+  },
+  "eval_seeds": [100, 101, 102, 103, 104],
+  "eval_steps": 24,
+  "epsilon": 0.05,
+  "probe_seed": 900,
+  "probe_size": 64,
+  "probe_steps": 20,
+  "probe_lr": 0.003
+}

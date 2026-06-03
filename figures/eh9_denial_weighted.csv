@@ -1,0 +1,7 @@
+arm,oversample,denied_recall,allowed_specificity,privilege_faithfulness
+flat,1,0.333333,0.981735,0.925000
+flat,4,0.761905,0.990868,0.970833
+flat,16,0.523810,0.990868,0.950000
+factored,1,0.952381,0.990868,0.987500
+factored,4,1.000000,0.995434,0.995833
+factored,16,1.000000,1.000000,1.000000

@@ -1,0 +1,17 @@
+{
+  "train_driver": "forky",
+  "intervention_driver": "adversarial",
+  "train_seeds": [0, 1, 2, 3],
+  "train_steps_per_traj": 40,
+  "k_counterfactual": 4,
+  "max_pid": 64,
+  "graph_d_model": 64,
+  "graph_mp_rounds": 3,
+  "graph_iters": 1200,
+  "graph_batch": 32,
+  "lr": 0.003,
+  "model_seed": 0,
+  "eval_seeds": [100, 101, 102, 103, 104],
+  "eval_steps": 24,
+  "m_interventions": 6
+}

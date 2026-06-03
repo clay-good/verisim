@@ -13,7 +13,7 @@
 
 ## Results at a glance
 
-Sixteen committed, oracle-grounded figures — the smoke-scale bet in one screen — each detailed below, each
+Nineteen committed, oracle-grounded figures — the smoke-scale bet in one screen — each detailed below, each
 with its honest negative. **The one-figure thesis is the cross-world synthesis ([§22](#22-the-thesis-in-one-figure-the-floorcliff-is-the-same-in-every-world-cross-world-synthesis)): the floor+cliff `H_ε(ρ)` is the *same shape in all three worlds*.** **What survives scaling is the real verdict: see [§8](#8-which-wins-survive-scaling--the-honest-mixed-verdict-spec-9).** Every number regenerates from
 config + seeds (`bash figures/reproduce.sh`).
 
@@ -21,6 +21,8 @@ config + seeds (`bash figures/reproduce.sh`).
 |---|---|
 | [![cross-world synthesis](figures/synthesis_floor_cliff.png)](figures/synthesis_floor_cliff.png)<br>**The thesis in one figure (cross-world synthesis).** Normalize each world's faithful horizon by its own ceiling and overlay: the filesystem (a tree), the network (a graph), and the host (a coupled bundle) trace **the same floor+cliff** — a near-zero floor across the `ρ` interior, then a cliff to full horizon only at `ρ=1`. Three different state types, oracles, and models; one curve. "A little consultation doesn't buy a lot of horizon; you pay near-linearly for faithfulness" is a property of the *oracle-loop method*, not any one world. | [![EH-H14-scale concurrency scaling](figures/eh_h14_scale.png)](figures/eh_h14_scale.png)<br>**Concurrency cost scales with concurrency *width* (host EH-H14-scale).** Rerun the H14 dial at 2→8 threads: the recorded→chaos `H_ε` collapse *steepens* from ~2.5× (2 threads) to ~12× (6–8 threads). The more concurrent the host, the more chaos scheduling destroys faithful horizon — concurrency width is a difficulty axis, and its cost grows with the amount of concurrency. |
 | [![EH8 privilege denial recall](figures/eh8_privilege.png)](figures/eh8_privilege.png)<br>**Aggregate faithfulness hides a security-critical denial gap (host EH8).** On a denial-heavy workload, overall privilege-faithfulness looks high (0.91 flat, 0.94 factored) — but that is the easy successes. The defensively-critical number is **denied recall** (does the model predict failures when truth fails?): the flat arm scores **0.000** (it *never* predicts an EPERM/EBADF — it would tell a defender every blocked action succeeded), the factored arm only 0.286. Structure helps, but predicting *denials* is the open security gap. | [![EH6 two-oracle H12](figures/eh6_two_oracle.png)](figures/eh6_two_oracle.png)<br>**A cheap security oracle is redundant but decision-sufficient (host EH6 / H12).** A symbolic privilege invariant ("no non-root process holds `/passwd`") vs the full state oracle: it catches **nothing** the full oracle misses (non-redundant rate **0**, by construction) — but in **95%** of the steps where the model's *full* prediction is wrong it still gets the **security verdict right**, at ~**3×** lower consult cost. Redundant for verification; cheaper and decision-sufficient for the question a defender asks. The host H12. |
+| [![EH9 denial-weighted objective](figures/eh9_denial_weighted.png)](figures/eh9_denial_weighted.png)<br>**The free oracle closes the EH8 denial gap — data balance, not architecture (host EH9).** EH8's blindness to failures is largely a *data-balance artifact the oracle can label away for free*. Just adding the denial-carrying driver to training lifts flat denied recall **0.000→0.333** and factored **0.286→0.952**; then **oversampling** denials lifts flat further to **0.762** at 4× — at **no specificity cost** (it never cries wolf, ~0.98–1.0 throughout). But too much backfires (flat falls to 0.524 at 16×): the flat arm needs a *tuned* factor, while the structured arm saturates to perfect recall and is robust. | [![EH7 host model-invariance](figures/eh7_invariance.png)](figures/eh7_invariance.png)<br>**The floor+cliff is the loop's, not the model's — even in the hardest world (host EH7 / H22).** Swap the proposer (untrained, biased, trained) under the composed host oracle and the `H_ε(ρ)` shape is invariant: a near-zero floor across the `ρ` interior, the cliff only at `ρ=1`. The curve is a property of the verify-correct method, not any one `M_θ`. |
+| [![EH-stream experience stream vs batch](figures/eh_stream.png)](figures/eh_stream.png)<br>**The stream doesn't beat the batch — but replay is what saves it, and the plasticity probe says why (host EH-stream / H15 / HW-4).** At *equal compute*, the Era-of-Experience stream loses to the offline batch (one-step exact 0.47 vs 0.54, free `H_ε` 1.7 vs 4.0) — the manifesto's promise does not survive contact with the oracle at this scale (H15 negative). But **experience replay is decisively load-bearing**: it rescues the stream from collapse (0.47 vs the no-replay 0.10), and the **plasticity probe localizes why** — the no-replay stream *loses plasticity* (0.77 vs 0.95), replay keeps it high. The §2.5 "replay fixes forgetting *and* plasticity loss" lesson, grounded. | [![EH6 counterfactual H16](figures/eh6_counterfactual.png)](figures/eh6_counterfactual.png)<br>**Counterfactual replay is just more data for plain supervision — the same null the network found (host EH6 / H16).** The total oracle re-runs any process tree with one syscall changed, for free. Training on those counterfactual branches *does* beat the base trajectory on held-out intervention-exactness (0.46 vs 0.34) — but it **loses to a matched-volume control** of plain trajectory data (0.59). So the lift is **data volume, not counterfactual structure**: for next-state supervision a counterfactual is just another labeled transition. H16 is a null beyond volume — now confirmed *world-agnostic* (it matched the network's EN6/H5). |
 
 | | |
 |---|---|
@@ -696,6 +698,126 @@ saturated rather than ever-deepening. This ties the host's two signature results
 coupling is not a fixed property of the bundle but one **concurrency (H14) drives** — and says a faithful
 host model must reason about the schedule, not just the per-subsystem dynamics.
 
+### 27. The free oracle closes the EH8 denial gap — it was data balance, not architecture (host EH9)
+
+EH8 banked the program's sharpest defensive negative: a host model looks ~94% privilege-faithful yet
+has **denied recall ≈ 0** — it almost never predicts the EPERM/EBADF *failures* a defender most needs,
+because denials are rare and the cross-entropy is dominated by the common success case. EH9 turns that
+negative into an *intervention* using the program's signature lever — **the oracle labels every outcome
+for free, so reweight the data**: oversample the training transitions whose oracle outcome is a denial by
+a factor `k` (the cheapest, trainer-agnostic fix — it touches the data, not the loss), and read whether
+recall lifts and at what specificity cost. EH9 differs from EH8 in one other deliberate way — it trains
+on **both** the `forky` *and* the denial-carrying `adversarial` driver (EH8 trained `forky`-only), so its
+`k=1` row already isolates a second, even cheaper intervention: *merely exposing the model to denials in
+training at all*.
+
+![EH9: denied recall and allowed specificity vs denial-oversample factor, flat vs factored](figures/eh9_denial_weighted.png)
+
+| arm | `k=1` (driver-only) | `k=4` | `k=16` | allowed specificity |
+|---|---|---|---|---|
+| flat | 0.333 | **0.762** | 0.524 | 0.98 → 0.99 → 0.99 |
+| factored | 0.952 | 1.000 | 1.000 | 0.99 → 1.00 → 1.00 |
+
+**The gap was a data-balance artifact the free oracle can fix — at no specificity cost.** Two stacked,
+nearly-free interventions close most of EH8's blindness. First, just *including the denial-carrying
+driver in training* (the `k=1` rows vs EH8's `forky`-only 0.000 / 0.286) lifts flat denied recall to
+**0.333** and factored to **0.952** — exposure alone nearly closes the structured arm's gap. Second,
+**oversampling** denials on top lifts the flat arm further to **0.762** at 4×, and the cost the
+worry-line predicted — crying wolf on successes — **never materializes**: allowed specificity holds at
+0.98–1.00 across every factor. The free oracle relabels the imbalance away without trading off the
+common case.
+
+But the lever is not monotone for the weaker arm: flat recall *falls* to **0.524** at 16× — too
+aggressive a reweight distorts the flat model — so the flat arm needs a **tuned** factor (4× is its
+sweet spot here), while the **factored arm saturates to perfect recall and is robust to the factor**.
+That is the honest shape of the result: the EH8 negative is *largely* an artifact of data balance that
+costs nothing to fix, structure both starts far ahead and stays well-behaved under the fix, and the
+unstructured arm can be lifted a long way but needs the dial set with care. (Honest scope: smoke-scale;
+the recall-lift trend, the zero specificity cost, the flat non-monotonicity, and the flat-vs-factored
+ordering are the robust signals — not the exact recall values.) This closes the EH8 loop the way the
+program is meant to: a banked negative becomes a measured intervention, and the intervention is the
+oracle doing the one thing only an oracle can — labeling the rare, security-critical event for free.
+
+### 28. The experience stream doesn't beat the batch — but replay saves it, and the plasticity probe says why (host EH-stream / H15 / HW-4)
+
+SPEC-6's §8.5 puts the host world's defining promise on the table: the propose-verify-correct loop need
+never stop. Because the oracle labels every transition for free, you can run a **continuous stream** of
+sandboxed host activity from which the model predicts, the oracle verifies, and the model heals from a
+replay buffer — forever (the "Era of Experience" loop). **H15** asks whether that stream *beats the
+batch* at **equal total compute**; **HW-4** (loss of plasticity) asks whether a model that learns
+forever keeps learning or **ossifies**. EH-stream makes both falsifiable on the factored arm: three
+arms see the **same** ordered, oracle-labeled stream and take the **same number of gradient steps**,
+differing only in *how* they consume it — `batch` (shuffle the whole stream, the offline baseline),
+`stream+replay` (walk it in order, train on a minibatch sampled from a growing replay buffer per
+arrival), and `stream-no-replay` (walk it in order but train only on the most recent window — the
+forgetting-prone control that isolates *replay* as the lever).
+
+![EH-stream: one-step exact, free-running H_ε, and the HW-4 plasticity probe, by arm](figures/eh_stream.png)
+
+| arm | one-step exact | free-running `H_ε` (T=24) | plasticity (HW-4) |
+|---|---|---|---|
+| batch | **0.542** | **4.0** | 0.950 |
+| stream+replay | 0.471 | 1.7 | **0.966** |
+| stream-no-replay | 0.096 | 0.5 | 0.766 |
+
+**H15 is a negative at this scale — and that is the honest, pre-registered result.** At equal compute the
+experience stream (`stream+replay`) does *not* beat the offline `batch`: it trails on both one-step
+exactness (0.47 vs 0.54) and free-running horizon (1.7 vs 4.0). The Era-of-Experience promise does not
+survive contact with the oracle here; the i.i.d. shuffle of the batch is simply a better diet than the
+correlated order of the stream when the compute is the same. The negative is the §10.3 H15-refuted
+branch, and the program banks it.
+
+**But the experiment's real payoff is the mechanism, which only the controlled arms reveal.** Replay is
+**decisively load-bearing**: without it the stream *collapses* (one-step 0.10, horizon 0.5) — correlated
+sequential updates catastrophically overwrite earlier learning — and replay rescues it back to 0.47, a
+~5× recovery. And the **plasticity probe localizes the failure precisely**: after training, we clone
+each arm and measure how much loss it can still shed on a frozen, never-seen probe batch. The no-replay
+stream's plasticity has **decayed to 0.77** while the batch and the replay stream sit at **0.95–0.97** —
+the forgetting-prone regime has measurably begun to **ossify**, exactly the HW-4 wall §2.5 warned of,
+and replay is its documented fix, now *grounded* rather than anecdotal. (Honest scope: smoke-scale; the
+robust signals are the orderings — batch > stream+replay ≫ stream-no-replay on competence, and
+no-replay's plasticity sitting well below the others — not the exact values.) The honest shape: the
+stream loses to the batch at this scale, but the oracle-grounded probe turns "continual learning is
+hard" into a number and names *which* lever (replay) holds the line on *which* wall (plasticity).
+
+### 29. Counterfactual replay is just more data for plain supervision — the same null in the host world (host EH6 / H16)
+
+The host oracle is **total**, so from any visited bundle state it returns the exact next state of an
+**alternative** syscall the trajectory never took — a free counterfactual branch, the capability
+physical-domain causal world models structurally lack (you can literally re-run the process tree from
+step `t` with one syscall changed and read back the *true* alternative state). **H16** asks whether
+*training* the host delta predictor on these free counterfactual branches lifts its prediction of
+**interventions** — the change-safety question a defender actually asks ("what if this process had
+called `setuid` instead?"). The counterfactual driver is `adversarial` on purpose: the near-miss
+**privilege mistakes** (§17.7) whose oracle outcome is an EPERM/EBADF denial. To separate the
+counterfactual *signal* from raw volume, three arms train the same factored arm for the same steps,
+differing only in the training set's composition (matched example count): `trajectory` (base),
+`trajectory-more` (extra trajectory seeds to the same count — the volume control), and
+`+counterfactual` (base plus oracle counterfactual branches).
+
+![EH6 / H16: counterfactual grounding vs a matched-volume control, held-out interventions](figures/eh6_counterfactual.png)
+
+| arm | intervention exact | intervention denied recall |
+|---|---|---|
+| trajectory | 0.338 | 0.62 |
+| trajectory-more | **0.588** | 0.60 |
+| +counterfactual | 0.457 | 0.60 |
+
+**H16 is a null beyond volume — and it matches the network's EN6/H5 exactly.** On the robust metric
+(held-out intervention exactness), `+counterfactual` (0.457) *does* beat the base `trajectory` (0.338) —
+but it **loses to the matched-volume control** `trajectory-more` (0.588). So the lift over the base is
+**data volume, not counterfactual structure**: for plain next-state supervision a counterfactual is just
+another labeled transition, and plain extra trajectory data of equal volume generalizes at least as
+well. The control arm is what makes this honest — without it the counterfactual arm's beat over the base
+would have looked like a win. (The denied-recall column is directionally flat across arms but too sparse
+at smoke scale — denials are rare in held-out — to separate them; the §17.7 near-miss regime needs a
+denser denial workload to read, a scope note that licenses future work.) The coherent payoff is the
+**cross-world echo**: the network world found the *identical* result (EN6/H5 — counterfactual *examples*
+don't lift plain *supervision*, though counterfactual *negatives* did lift the *contrastive*
+representation, EN9). The H16 null is therefore not a host quirk but a **world-agnostic property of the
+oracle-grounded method**, the same way the floor+cliff is — and it *bounds* how much counterfactual
+augmentation buys for supervised world models: nothing beyond the labeled transitions it adds.
+
 ## The problem, and what we're trying to accomplish
 
 ### The wall every world model hits
@@ -822,6 +944,8 @@ Package map (parallel structure; `net*` mirrors v0 for the graph world):
                uncertainty — the smart information-gain choice), SubsystemFilter per-subsystem correct
   hostsim/     the LLM-callable whole-machine simulator (HC8, §7): imagine a plan (oracle-free draft)
                + verify it (plan-level H_ε + the task-oracle "third oracle") — what an agent calls
+  hostrl/      oracle-as-reward RL env (HC8, §12; the v0 rl/ shape): reset/step, reward = faithful step,
+               return == composed H_ε — the verifiable-reward substrate, no learned reward model in loop
 ```
 
 The host **bundle** is the structural novelty: state is a coupled set of subsystems (process table +
@@ -872,7 +996,7 @@ host → distributed); three specs are *cross-cutting methods* every world inher
 | [SPEC-3](docs/specs/SPEC-3.md) | depth | how the toy grows into a real simulator (system oracle, partial obs, online self-healing, info-theoretic metric) |
 | [SPEC-4](docs/specs/SPEC-4.md) | **the engine** | the autonomous research engine — Verisim improving Verisim, human out of the loop |
 | [SPEC-5](docs/specs/SPEC-5.md) | **world: network** | the reachability/connectivity world — **the current build front** |
-| [SPEC-6](docs/specs/SPEC-6.md) | world: host | the running computer (process tree, fds, scheduler) — **HC0-HC6 started**: the host oracle *composes* the v0 FS sub-oracle; bundle delta + `apply == oracle` invariant; workload drivers + datasets; composed + **per-subsystem** metrics with the **composition-law diagnostic** (H13); the **flat learned `M_θ` baseline** (HC4 incr-1); the **composed loop** with the `π_w` oracle-selection axis (HC5 incr-1); **the prime-directive figure (HC6)** — the composed `H_ε(ρ)` floor+cliff + the **H13 composition law = `coupled`** ([eh1_curve](figures/eh1_curve.png), [eh1_composition](figures/eh1_composition.png)); **the EH3 equal-budget operator comparison (HC7)** — per-subsystem consultation earns **~3.7× more horizon per oracle-bit** ([eh3_operators](figures/eh3_operators.png)); **the factored interaction-graph arm (HC4 incr-2) + EH4** — structure beats flat **~6.6× on delta-exact** yet the H13 coupling survives ([eh4_factored_vs_flat](figures/eh4_factored_vs_flat.png)); **EH2** — the factored arm's calibrated belief variance makes smart consultation beat fixed **~2.2×** (the first smart-`π_c` positive, [eh2_policies](figures/eh2_policies.png)); **EH5** — a smart *which-subsystem* `π_w` (per-subsystem decode entropy) gives a modest edge over round-robin ([eh5_subsystem_policy](figures/eh5_subsystem_policy.png)); the **§6.3 drift levers** (noise / self-forcing) reproduce the network's banked negative ([eh4_drift](figures/eh4_drift.png)); **H14 — the concurrency dial — is CONFIRMED**: free-running `H_ε` collapses ~8× as interleaving entropy rises (the host's defining result, [eh_h14_interleaving](figures/eh_h14_interleaving.png)); the **§7 LLM-callable whole-machine simulator** (HC8) — `imagine` a plan + `verify` it (plan-level `H_ε` + the task "third oracle"); and **EH7/H22** — the floor+cliff `H_ε(ρ)` shape is **model-agnostic in the composed world too** ([eh7_invariance](figures/eh7_invariance.png)) |
+| [SPEC-6](docs/specs/SPEC-6.md) | world: host | the running computer (process tree, fds, scheduler) — **HC0-HC6 started**: the host oracle *composes* the v0 FS sub-oracle; bundle delta + `apply == oracle` invariant; workload drivers + datasets; composed + **per-subsystem** metrics with the **composition-law diagnostic** (H13); the **flat learned `M_θ` baseline** (HC4 incr-1); the **composed loop** with the `π_w` oracle-selection axis (HC5 incr-1); **the prime-directive figure (HC6)** — the composed `H_ε(ρ)` floor+cliff + the **H13 composition law = `coupled`** ([eh1_curve](figures/eh1_curve.png), [eh1_composition](figures/eh1_composition.png)); **the EH3 equal-budget operator comparison (HC7)** — per-subsystem consultation earns **~3.7× more horizon per oracle-bit** ([eh3_operators](figures/eh3_operators.png)); **the factored interaction-graph arm (HC4 incr-2) + EH4** — structure beats flat **~6.6× on delta-exact** yet the H13 coupling survives ([eh4_factored_vs_flat](figures/eh4_factored_vs_flat.png)); **EH2** — the factored arm's calibrated belief variance makes smart consultation beat fixed **~2.2×** (the first smart-`π_c` positive, [eh2_policies](figures/eh2_policies.png)); **EH5** — a smart *which-subsystem* `π_w` (per-subsystem decode entropy) gives a modest edge over round-robin ([eh5_subsystem_policy](figures/eh5_subsystem_policy.png)); the **§6.3 drift levers** (noise / self-forcing) reproduce the network's banked negative ([eh4_drift](figures/eh4_drift.png)); **H14 — the concurrency dial — is CONFIRMED**: free-running `H_ε` collapses ~8× as interleaving entropy rises (the host's defining result, [eh_h14_interleaving](figures/eh_h14_interleaving.png)); the **§7 LLM-callable whole-machine simulator** (HC8) — `imagine` a plan + `verify` it (plan-level `H_ε` + the task "third oracle"); **EH7/H22** — the floor+cliff `H_ε(ρ)` shape is **model-agnostic in the composed world too** ([eh7_invariance](figures/eh7_invariance.png)); and the **HC8 security/scaling findings** — **EH8** (aggregate faithfulness hides a **denied-recall gap**, flat 0.000 / factored 0.286, [eh8_privilege](figures/eh8_privilege.png)), **EH6** (a symbolic privilege second-oracle is redundant but **decision-sufficient in 95%** of error steps at ~3× lower cost, the host H12, [eh6_two_oracle](figures/eh6_two_oracle.png)), **EH-H13-scale** (concurrency **manufactures** the H13 coupling, [eh_h13_scale](figures/eh_h13_scale.png)), **EH9** (the denied-recall gap is a **data-balance artifact the free oracle fixes** — exposure + oversampling lift recall at no specificity cost, [eh9_denial_weighted](figures/eh9_denial_weighted.png)), **EH-stream/H15** (the experience stream **loses to the batch** at equal compute, but **replay** rescues it from collapse and the **plasticity probe** localizes HW-4 — no-replay plasticity 0.77 vs 0.95, [eh_stream](figures/eh_stream.png)), and **EH6/H16** (counterfactual replay is a **null beyond volume** for plain supervision — world-agnostic with the network's EN6, [eh6_counterfactual](figures/eh6_counterfactual.png)); plus the **oracle-as-reward RL environment** ([`hostrl/`](src/verisim/hostrl/)) whose episode return *is* the composed `H_ε` |
 | [SPEC-7](docs/specs/SPEC-7.md) | world: distributed | replicated services, transactions, consensus — design |
 | [SPEC-8](docs/specs/SPEC-8.md) | **method: oracle-grounded SSL** | put the oracle's truth in the *bulk* of the cake (self-supervised pretraining), not just the cherry (RL) |
 | [SPEC-9](docs/specs/SPEC-9.md) | **method: free-oracle scaling** | because the oracle labels for free, world size is a *compute* choice, not a labeling-budget one — how large/deep the world goes on one machine, and what holds as it grows |
@@ -998,17 +1122,34 @@ write-up is [docs/report.md](docs/report.md).
 > [`eh_h14_scale.png`](figures/eh_h14_scale.png)) shows the concurrency collapse **steepens with thread
 > count** (~2.5×→~12× from 2→8 threads) — concurrency's cost scales with its width (finding
 > [§23](#23-concurrencys-cost-scales-with-concurrencys-width-host-eh-h14-scale)).
-> **Three security/scaling findings round out the host:** **EH8** ([§24](#24-aggregate-faithfulness-hides-a-security-critical-denial-gap-host-eh8)) — aggregate
+> **Six security/scaling/continual-learning findings round out the host:** **EH8** ([§24](#24-aggregate-faithfulness-hides-a-security-critical-denial-gap-host-eh8)) — aggregate
 > privilege-faithfulness (0.91–0.94) *hides* a security-critical **denial-recall gap** (flat 0.000,
 > factored 0.286: the model rarely predicts the EPERM/EBADF *failures* a defender most needs); **EH6**
 > ([§25](#25-a-cheap-symbolic-second-oracle-is-redundant-but-decision-sufficient-host-eh6--h12)) — a
 > symbolic privilege second-oracle is redundant for verification (0%) but **decision-sufficient in 95%**
-> of error steps at ~3× lower cost (the host H12); and **EH-H13-scale**
+> of error steps at ~3× lower cost (the host H12); **EH-H13-scale**
 > ([§26](#26-concurrency-manufactures-the-composition-coupling-host-eh-h13-scale--h13--h14)) — the H13
 > coupling is in part **manufactured by concurrency** (the independence gap doubles from 2→4 threads,
-> then saturates), tying H13 × H14.
-> Remaining (HC8): per-subsystem decode *heads*, the experience-stream + plasticity probe, counterfactual
-> replay, the Tier-B system oracle, the Inspect benchmark + RL env, and the technical report.
+> then saturates), tying H13 × H14; and **EH9** ([§27](#27-the-free-oracle-closes-the-eh8-denial-gap--it-was-data-balance-not-architecture-host-eh9))
+> — the EH8 denial gap turns out to be a **data-balance artifact the free oracle can fix**: just adding
+> the denial-carrying driver to training lifts flat recall 0.000→0.333 and factored 0.286→0.952, and
+> **oversampling** denials lifts flat to 0.762 at **no specificity cost** (though too aggressive a factor
+> backfires for the flat arm; the structured arm saturates to perfect and is robust). The banked negative
+> becomes a measured intervention. **EH-stream/H15** ([§28](#28-the-experience-stream-doesnt-beat-the-batch--but-replay-saves-it-and-the-plasticity-probe-says-why-host-eh-stream--h15--hw-4))
+> — the §8.5 Era-of-Experience stream **does not beat the batch** at equal compute (a pre-registered
+> negative), but **experience replay** rescues it from collapse (one-step 0.47 vs the no-replay 0.10) and
+> the **HW-4 plasticity probe localizes why**: the no-replay stream's plasticity decays to 0.77 vs 0.95
+> for the batch/replay arms — "continual learning is hard" turned into a number with the lever (replay)
+> that holds the line. And **EH6/H16** ([§29](#29-counterfactual-replay-is-just-more-data-for-plain-supervision--the-same-null-in-the-host-world-host-eh6--h16))
+> — free oracle **counterfactual replay** is a **null beyond volume** for plain supervision (it beats the
+> base trajectory but loses to a matched-volume control), confirming the network's EN6/H5 result is
+> *world-agnostic*.
+> **HC8 packaging also ships the oracle-as-reward RL environment** ([`hostrl/`](src/verisim/hostrl/)): the
+> host analogue of v0's `rl/` — a `verifiers`-spec reset/step env whose reward *is* a faithful step and
+> whose episode **return equals the composed faithful horizon** `H_ε`, with no learned reward model in the
+> loop (the verifiable-reward substrate a future denial-aware objective plugs into).
+> Remaining (HC8): per-subsystem decode *heads*, the **counterfactual** *training* lift beyond volume,
+> the Tier-B system oracle, and the Inspect benchmark + technical report.
 
 **v0 — shell/filesystem world (`src/verisim/`, SPEC-2 §13): complete.**
 

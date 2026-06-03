@@ -1,0 +1,7 @@
+arm,metric,mean,ci_lo,ci_hi,n
+trajectory,intervention_exact,0.3375,0.2486,0.4264,5
+trajectory,intervention_denied_recall,0.6250,0.2250,1.0000,5
+trajectory-more,intervention_exact,0.5875,0.4736,0.6792,5
+trajectory-more,intervention_denied_recall,0.6000,0.2000,1.0000,5
++counterfactual,intervention_exact,0.4569,0.3486,0.5653,5
++counterfactual,intervention_denied_recall,0.6000,0.2000,1.0000,5

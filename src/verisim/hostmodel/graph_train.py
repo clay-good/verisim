@@ -262,6 +262,33 @@ def train_host_graph_model_self_forced(
     return losses
 
 
+def online_update(
+    model: GraphHostWorldModel,
+    optimizer: torch.optim.Optimizer,
+    examples: list[GraphExample],
+    *,
+    steps: int = 1,
+) -> float:
+    """Take ``steps`` teacher-forced gradient steps on ``examples`` -- the self-healing update (H7).
+
+    The test-time-training / experience-stream primitive (SPEC-6 §8.4/§8.5; the network's
+    :func:`verisim.netmodel.graph_train.online_update`): each consultation reveals a free, exactly
+    oracle-labeled ``(state, action) -> delta`` example, so a small step on a *persistent* optimizer
+    lets the model adapt to the live stream without re-seeding torch (which a fresh
+    :func:`train_host_graph_model` call would do). Few ``steps`` + small lr is the discipline (no
+    catastrophic forgetting). Returns the final loss.
+    """
+    model.net.train()
+    last = 0.0
+    for _ in range(steps):
+        optimizer.zero_grad()
+        loss = _batch_loss(model, examples, sample=True)
+        loss.backward()
+        optimizer.step()
+        last = float(loss.item())
+    return last
+
+
 @torch.no_grad()
 def graph_teacher_forced_accuracy(
     model: GraphHostWorldModel, examples: list[GraphExample]

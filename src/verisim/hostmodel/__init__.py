@@ -20,6 +20,7 @@ from .graph_model import GraphHostWorldModel, build_host_graph_model
 from .graph_train import (
     build_host_graph_dataset,
     graph_teacher_forced_accuracy,
+    online_update,
     train_host_graph_model,
 )
 from .tokenizer import (
@@ -53,6 +54,7 @@ __all__ = [
     "feature_dims",
     "graph_teacher_forced_accuracy",
     "host_examples_from_rollout",
+    "online_update",
     "parse_target",
     "train_host_graph_model",
 ]
