@@ -1,0 +1,12 @@
+{
+  "name": "eh-h14-small",
+  "n_layer": 2, "n_head": 2, "n_embd": 64, "mp_rounds": 3, "max_pid": 64,
+  "graph_iters": 800, "graph_batch": 32, "lr": 0.003, "model_seed": 0,
+  "n_threads": 5,
+  "train_workload_seeds": [0, 1, 2, 3, 4, 5],
+  "train_interleave": 0.0,
+  "eval_workload_seeds": [10, 11, 12],
+  "eval_interleaves": [0.0, 0.25, 0.5, 0.75, 1.0],
+  "eval_chaos_seeds": [0, 1, 2, 3],
+  "epsilons": [0.0, 0.05, 0.1]
+}

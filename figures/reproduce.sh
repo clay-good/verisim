@@ -129,6 +129,9 @@ python -m verisim.experiments.eh4 --config configs/eh4.json --out figures/eh4_fa
 echo "== EH4-drift: §6.3 drift-lever ablation on the factored arm — noise / self-forcing (HC7) =="
 python -m verisim.experiments.eh4_drift --config configs/eh4_drift.json --out figures/eh4_drift.csv
 
+echo "== EH-H14: the concurrency dial — H_eps vs interleaving entropy (SPEC-6 §3.4, H14; CSV+PNG) =="
+python -m verisim.experiments.eh_h14 --config configs/eh_h14.json --out figures/eh_h14_interleaving.csv
+
 echo "== EH5: smart which-subsystem policy π_w — uncertainty vs fixed/round-robin (HC7, §8.2) =="
 python -m verisim.experiments.eh5 --config configs/eh5.json --out runs/eh5/records.jsonl
 python figures/plot_comparison.py --records runs/eh5/records.jsonl --key policy \
@@ -138,4 +141,4 @@ python figures/plot_comparison.py --records runs/eh5/records.jsonl --key policy 
 #   python -m verisim.experiments.en8_scale --world-sizes 25 50 100 200 --d-models 64 128 --seeds 0 1 2 --out figures/en8_surface.csv
 #   python -m verisim.experiments.en9_scale --world-sizes 25 50 100 200 --d-models 64 128 --seeds 0 1 2 --out figures/en9_surface.csv
 
-echo "== done: figures/{e1_curve,e2_policies,e3_operators,calibration,e4_ablation,objective,representation,auto_search,en1_curve,en2_policies,en3_operators,en4_graph_vs_flat,en8_grounding,en9_contrastive,en8_scale,en9_scale,en8_capacity,en9_negatives,en7_invariance,en5_selfheal,en6_counterfactual,en8_ls3_hero,en10_two_oracle,eh1_curve,eh1_composition,eh2_policies,eh3_operators,eh4_factored_vs_flat,eh4_drift,eh5_subsystem_policy}.{png,csv} =="
+echo "== done: figures/{e1_curve,e2_policies,e3_operators,calibration,e4_ablation,objective,representation,auto_search,en1_curve,en2_policies,en3_operators,en4_graph_vs_flat,en8_grounding,en9_contrastive,en8_scale,en9_scale,en8_capacity,en9_negatives,en7_invariance,en5_selfheal,en6_counterfactual,en8_ls3_hero,en10_two_oracle,eh1_curve,eh1_composition,eh2_policies,eh3_operators,eh4_factored_vs_flat,eh4_drift,eh5_subsystem_policy,eh_h14_interleaving}.{png,csv} =="

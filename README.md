@@ -13,7 +13,7 @@
 
 ## Results at a glance
 
-Eleven committed, oracle-grounded figures — the smoke-scale bet in one screen — each detailed below, each
+Twelve committed, oracle-grounded figures — the smoke-scale bet in one screen — each detailed below, each
 with its honest negative. **What survives scaling is the real verdict: see [§8](#8-which-wins-survive-scaling--the-honest-mixed-verdict-spec-9).** Every number regenerates from
 config + seeds (`bash figures/reproduce.sh`).
 
@@ -24,7 +24,7 @@ config + seeds (`bash figures/reproduce.sh`).
 | [![EN3 probe efficiency](figures/en3_operators.png)](figures/en3_operators.png)<br>**What you consult beats whether (EN3).** Under partial observation a cheap one-host **probe + belief filter** earns **~2.3×** more faithful horizon per oracle-bit than full consultation — active sensing is a real lever. | [![EN7 model-invariance](figures/en7_invariance.png)](figures/en7_invariance.png)<br>**The shape is the loop's, not the model's (EN7 / H22).** Run the *same* loop with four proposers (null, flat transformer, graph+RSSM, oracle-backed): the three imperfect ones share **one shape — floor + cliff, no knee.** The proposer sets the floor *height* (graph > flat > null); the loop sets the *shape*. The no-knee verdict is model-agnostic. |
 | [![EH1 composed-host curve](figures/eh1_curve.png)](figures/eh1_curve.png)<br>**The floor+cliff holds in the *composed* world (host EH1 / HC6).** First result in the host world (process table + fd tables + embedded fs): the composed `H_ε(ρ)` is the same flat-then-cliff shape as the filesystem and network worlds — `ρ=0` drifts in <1 step, the cliff only at `ρ=1`. The no-knee verdict generalizes across all three worlds. | [![EH1 composition law H13](figures/eh1_composition.png)](figures/eh1_composition.png)<br>**Whole-machine faithfulness is *coupled*, not independent (host EH1 / H13).** The headline-new measurement: composed per-step acceptance (orange) sits *below* the multiplicative/independence prediction `∏ aᵢ` (blue) — the flat baseline's subsystem failures are **anti-correlated**. Modeling subsystems independently is the wrong bet; coupling is load-bearing. The honest negative that licenses the factored interaction-graph arm. |
 | [![EH4 factored vs flat](figures/eh4_factored_vs_flat.png)](figures/eh4_factored_vs_flat.png)<br>**Structure helps in the bundle world too — but the coupling is real (host EH4 / H11 / H13).** The factored interaction-graph arm (GNN+RSSM over the process spine's lineage + shared-file edges) beats the flat serializer **~6.6× on delta-exact (0.058→0.388)** and **~5.3× on composed acceptance** — the host echo of EN4. But *both* stay **coupled** (composed still below the independence floor): modeling the references explicitly buys a lot of faithfulness, yet does **not** uncouple the composition — so H13's coupling is genuine, not a flat-arm artifact. | [![EH3 per-subsystem efficiency](figures/eh3_operators.png)](figures/eh3_operators.png)<br>**Which subsystem you verify is a lever — the cheapest beats the weakest (host EH3).** At equal budget the full-consult operators coincide on `H_ε`, but a per-subsystem probe earns **~3.7× more faithful horizon per oracle-bit**. The twist: the *cheapest* subsystem (`fd`) wins, not the H13-*weakest* (`proc`) — so efficient `π_w` is a cost-vs-consequence tradeoff, not "verify the worst." |
-| [![EH2 smart consultation policy](figures/eh2_policies.png)](figures/eh2_policies.png)<br>**A calibrated signal finally makes *smart* consultation pay (host EH2 / H9).** The program's first smart-`π_c` **positive**. At equal budget the **flat** arm reproduces the standing negative (uncertainty/drift *worse* than fixed — decode entropy mis-localizes error), but the **factored** arm's **RSSM belief variance** makes uncertainty-triggered consultation earn **~2.2× more faithful horizon than fixed** (5.8 vs 2.6 steps). *When* to consult finally beats spreading the budget evenly — because the calibrated signal knows where the model is wrong. | <br> |
+| [![EH2 smart consultation policy](figures/eh2_policies.png)](figures/eh2_policies.png)<br>**A calibrated signal finally makes *smart* consultation pay (host EH2 / H9).** The program's first smart-`π_c` **positive**. At equal budget the **flat** arm reproduces the standing negative (uncertainty/drift *worse* than fixed — decode entropy mis-localizes error), but the **factored** arm's **RSSM belief variance** makes uncertainty-triggered consultation earn **~2.2× more faithful horizon than fixed** (5.8 vs 2.6 steps). *When* to consult finally beats spreading the budget evenly — because the calibrated signal knows where the model is wrong. | [![EH-H14 concurrency dial](figures/eh_h14_interleaving.png)](figures/eh_h14_interleaving.png)<br>**Concurrency is a measurable dial, not a binary wall (host EH-H14 / H14).** The host world's defining result — the thing the filesystem and network worlds *cannot* study. A chaos-seeded scheduler interleaves a multi-thread workload; free-running faithful horizon **degrades monotonically with interleaving entropy** (~8×, from `H_ε`≈12.5 at the recorded/sequential regime to ≈1.5 under chaos), and the recorded end recovers it. The **first quantification of HW-1's cost** — thread interleaving, the record/replay literature's named-unsolved nondeterminism source, made a continuous knob the chaos seed sweeps. |
 
 ## What we've found so far
 
@@ -468,6 +468,39 @@ one-step→horizon *conversion*, not the input distribution, so the remaining bu
 objective grounding rather than more input patches (exactly the network's EN4 conclusion, now
 replicated in the composed host world). A required ablation, run, and reported as the honest null it is.
 
+### 19. Concurrency is a measurable dial, not a binary wall — the host world's defining result (host EH-H14 / H14)
+
+The filesystem and network worlds run one action at a time; the host world's whole reason to exist is
+that it has **concurrency** — multiple processes interleave, and the scheduler is a genuine
+nondeterminism source. The record/replay literature (rr, Hermit) calls thread interleaving *the* one
+unsolved determinism source (HW-1). SPEC-6 doesn't claim to solve it; it claims to make it a **measured
+dial** (H14): a chaos-seeded scheduler interleaves a multi-thread workload (threads sharing files, so
+the final content is last-writer-wins and order-sensitive; forks interleaved, so the pid a thread is
+allocated depends on the global order), with an `interleave` knob from sequential (the *recorded*
+regime) to fully random (*chaos*). The factored arm is trained on the recorded regime, then evaluated
+free-running across the dial.
+
+![EH-H14: free-running faithful horizon collapses as interleaving entropy rises](figures/eh_h14_interleaving.png)
+
+| interleaving entropy (thread context-switch rate) | free-running `H_ε` (ρ=0, ε=0) |
+|---|---|
+| 0.17 — recorded / near-sequential | **12.5** |
+| 0.28 | 5.2 |
+| 0.42 | 2.0 |
+| 0.59 | 1.5 |
+| 0.71 — chaos | **1.5** |
+
+**H14 confirmed.** Faithful horizon degrades **monotonically** with interleaving entropy — an ~8×
+collapse from the recorded regime (≈12.5 steps) to chaos (≈1.5), and the low-entropy/recorded end
+**recovers** it. This is the first quantification of HW-1's cost: concurrency is not a binary
+"deterministic or not" but a continuum the chaos seed sweeps, and `H_ε(interleaving-entropy)` is its
+curve. The honest alternative (a flat line — the model learns schedule-invariant effects, concurrency a
+non-issue) would have been a *surprising* simplification of every downstream world; the monotone
+collapse is the expected-but-now-quantified result, and it is the one experiment in the whole program
+that only the host world could run. The scheduler ships dependency-free (the deterministic-core
+discipline) and emits concrete, replayable schedules, so every point regenerates from `(workload,
+interleave, chaos_seed)`.
+
 ## The problem, and what we're trying to accomplish
 
 ### The wall every world model hits
@@ -584,7 +617,8 @@ Package map (parallel structure; `net*` mirrors v0 for the graph world):
   host world (SPEC-6, HC0-HC5 — the next world; the host oracle *composes* the FS + net sub-oracles)
   host/      bundle state (procs + per-process fds + embedded v0 fs), syscall grammar, bundle delta, config
   hostoracle/  Tier-A reference host oracle: process/fd/credential glue over the v0 FS sub-oracle
-  hostdata/  workload drivers (uniform/forky/adversarial) + trajectory JSONL + manifests/splits
+  hostdata/  workload drivers + trajectory JSONL + manifests/splits + the concurrency scheduler
+             (interleaving-entropy chaos dial → H14: H_ε(interleaving-entropy))
   hostmetrics/  composed + per-subsystem d, bits, composition-law (H13), privilege-faithfulness, run-record
   hostmodel/   flat Mθ (HC4 incr-1) + factored interaction-graph Mθ (incr-2): GNN+RSSM over the
                process spine's lineage + shared-file edges, same grammar/decode (DD-H1: flat vs factored)
@@ -640,7 +674,7 @@ host → distributed); three specs are *cross-cutting methods* every world inher
 | [SPEC-3](docs/specs/SPEC-3.md) | depth | how the toy grows into a real simulator (system oracle, partial obs, online self-healing, info-theoretic metric) |
 | [SPEC-4](docs/specs/SPEC-4.md) | **the engine** | the autonomous research engine — Verisim improving Verisim, human out of the loop |
 | [SPEC-5](docs/specs/SPEC-5.md) | **world: network** | the reachability/connectivity world — **the current build front** |
-| [SPEC-6](docs/specs/SPEC-6.md) | world: host | the running computer (process tree, fds, scheduler) — **HC0-HC6 started**: the host oracle *composes* the v0 FS sub-oracle; bundle delta + `apply == oracle` invariant; workload drivers + datasets; composed + **per-subsystem** metrics with the **composition-law diagnostic** (H13); the **flat learned `M_θ` baseline** (HC4 incr-1); the **composed loop** with the `π_w` oracle-selection axis (HC5 incr-1); **the prime-directive figure (HC6)** — the composed `H_ε(ρ)` floor+cliff + the **H13 composition law = `coupled`** ([eh1_curve](figures/eh1_curve.png), [eh1_composition](figures/eh1_composition.png)); **the EH3 equal-budget operator comparison (HC7)** — per-subsystem consultation earns **~3.7× more horizon per oracle-bit** ([eh3_operators](figures/eh3_operators.png)); **the factored interaction-graph arm (HC4 incr-2) + EH4** — structure beats flat **~6.6× on delta-exact** yet the H13 coupling survives ([eh4_factored_vs_flat](figures/eh4_factored_vs_flat.png)); **EH2** — the factored arm's calibrated belief variance makes smart consultation beat fixed **~2.2×** (the first smart-`π_c` positive, [eh2_policies](figures/eh2_policies.png)); **EH5** — a smart *which-subsystem* `π_w` (per-subsystem decode entropy) gives a modest edge over round-robin ([eh5_subsystem_policy](figures/eh5_subsystem_policy.png)); and the **§6.3 drift levers** (noise / self-forcing) reproduce the network's banked negative — no free-running horizon gain ([eh4_drift](figures/eh4_drift.png)). Both consultation axes (when × which) are measured |
+| [SPEC-6](docs/specs/SPEC-6.md) | world: host | the running computer (process tree, fds, scheduler) — **HC0-HC6 started**: the host oracle *composes* the v0 FS sub-oracle; bundle delta + `apply == oracle` invariant; workload drivers + datasets; composed + **per-subsystem** metrics with the **composition-law diagnostic** (H13); the **flat learned `M_θ` baseline** (HC4 incr-1); the **composed loop** with the `π_w` oracle-selection axis (HC5 incr-1); **the prime-directive figure (HC6)** — the composed `H_ε(ρ)` floor+cliff + the **H13 composition law = `coupled`** ([eh1_curve](figures/eh1_curve.png), [eh1_composition](figures/eh1_composition.png)); **the EH3 equal-budget operator comparison (HC7)** — per-subsystem consultation earns **~3.7× more horizon per oracle-bit** ([eh3_operators](figures/eh3_operators.png)); **the factored interaction-graph arm (HC4 incr-2) + EH4** — structure beats flat **~6.6× on delta-exact** yet the H13 coupling survives ([eh4_factored_vs_flat](figures/eh4_factored_vs_flat.png)); **EH2** — the factored arm's calibrated belief variance makes smart consultation beat fixed **~2.2×** (the first smart-`π_c` positive, [eh2_policies](figures/eh2_policies.png)); **EH5** — a smart *which-subsystem* `π_w` (per-subsystem decode entropy) gives a modest edge over round-robin ([eh5_subsystem_policy](figures/eh5_subsystem_policy.png)); the **§6.3 drift levers** (noise / self-forcing) reproduce the network's banked negative ([eh4_drift](figures/eh4_drift.png)); and **H14 — the concurrency dial — is CONFIRMED**: free-running `H_ε` collapses ~8× as interleaving entropy rises (the host's defining result, [eh_h14_interleaving](figures/eh_h14_interleaving.png)) |
 | [SPEC-7](docs/specs/SPEC-7.md) | world: distributed | replicated services, transactions, consensus — design |
 | [SPEC-8](docs/specs/SPEC-8.md) | **method: oracle-grounded SSL** | put the oracle's truth in the *bulk* of the cake (self-supervised pretraining), not just the cherry (RL) |
 | [SPEC-9](docs/specs/SPEC-9.md) | **method: free-oracle scaling** | because the oracle labels for free, world size is a *compute* choice, not a labeling-budget one — how large/deep the world goes on one machine, and what holds as it grows |
@@ -744,8 +778,13 @@ write-up is [docs/report.md](docs/report.md).
 > oracle-relabeled noise injection + self-forcing reproduce the network's **banked negative** — neither
 > buys free-running horizon at this scale, so the one-step→horizon gap stays open (finding
 > [§18](#18-the-drift-levers-dont-buy-horizon-here-either--the-same-banked-negative-host-eh4-drift--63)).
-> Remaining: the **scheduler + interleaving-entropy dial + the H14 chaos experiment** (the host's
-> headline concurrency differentiator), per-subsystem decode *heads*, the experience-stream, and packaging.
+> **The concurrency scheduler + the H14 dial now ship and CONFIRM H14**
+> ([`scheduler.py`](src/verisim/hostdata/scheduler.py), [`eh_h14.py`](src/verisim/experiments/eh_h14.py),
+> figure [`eh_h14_interleaving.png`](figures/eh_h14_interleaving.png)): free-running `H_ε` degrades
+> **monotonically** with interleaving entropy (~8×, recorded→chaos), the first quantification of HW-1's
+> cost and the host world's defining result — the experiment only the host world can run (finding
+> [§19](#19-concurrency-is-a-measurable-dial-not-a-binary-wall--the-host-worlds-defining-result-host-eh-h14--h14)).
+> Remaining: per-subsystem decode *heads*, the experience-stream (HC8), and packaging (HC8).
 
 **v0 — shell/filesystem world (`src/verisim/`, SPEC-2 §13): complete.**
 
@@ -786,6 +825,7 @@ PyTorch is an optional `[model]` extra (see [docs/model-representation.md](docs/
 | `ρ` | **consultation budget** ∈ [0,1]: fraction of steps the oracle is consulted | `loop/policy.py` |
 | bits-to-correct | MDL of the oracle's correction of `Δ̂`; `0` iff the prediction is exactly right (host: per-subsystem) | `metrics/bits.py`, `hostmetrics/bits.py` |
 | composition-law | host H13 diagnostic: is composed `H_ε` multiplicative (∏ aᵢ) ↔ weakest-link (min aᵢ) ↔ coupled? | `hostmetrics/composition.py` |
+| interleaving entropy | host H14 dial: thread context-switch rate of a chaos-scheduled workload; `H_ε(interleaving-entropy)` quantifies concurrency's cost | `hostdata/scheduler.py` |
 | **delta-exact** | per-step: did free decode assemble the exact edit set? (`bits_to_correct = 0`) | `netmetrics/exact.py` |
 | full / probe | oracle consultation modes: whole next-state vs one host's local view (cheap) | `netloop/observe.py` |
 | `π_w` | **which-subsystem** policy (host): *which truth-source to buy* on a consult — proc/fd/fs/global; fixed / round-robin / **uncertainty** (the smart, information-gain choice from per-subsystem decode entropy); the `SubsystemFilter` corrects only that one | `hostloop/subsystem.py`, `hostloop/operator.py` |
