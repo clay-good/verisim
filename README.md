@@ -13,13 +13,14 @@
 
 ## Results at a glance
 
-Fourteen committed, oracle-grounded figures — the smoke-scale bet in one screen — each detailed below, each
+Sixteen committed, oracle-grounded figures — the smoke-scale bet in one screen — each detailed below, each
 with its honest negative. **The one-figure thesis is the cross-world synthesis ([§22](#22-the-thesis-in-one-figure-the-floorcliff-is-the-same-in-every-world-cross-world-synthesis)): the floor+cliff `H_ε(ρ)` is the *same shape in all three worlds*.** **What survives scaling is the real verdict: see [§8](#8-which-wins-survive-scaling--the-honest-mixed-verdict-spec-9).** Every number regenerates from
 config + seeds (`bash figures/reproduce.sh`).
 
 | | |
 |---|---|
 | [![cross-world synthesis](figures/synthesis_floor_cliff.png)](figures/synthesis_floor_cliff.png)<br>**The thesis in one figure (cross-world synthesis).** Normalize each world's faithful horizon by its own ceiling and overlay: the filesystem (a tree), the network (a graph), and the host (a coupled bundle) trace **the same floor+cliff** — a near-zero floor across the `ρ` interior, then a cliff to full horizon only at `ρ=1`. Three different state types, oracles, and models; one curve. "A little consultation doesn't buy a lot of horizon; you pay near-linearly for faithfulness" is a property of the *oracle-loop method*, not any one world. | [![EH-H14-scale concurrency scaling](figures/eh_h14_scale.png)](figures/eh_h14_scale.png)<br>**Concurrency cost scales with concurrency *width* (host EH-H14-scale).** Rerun the H14 dial at 2→8 threads: the recorded→chaos `H_ε` collapse *steepens* from ~2.5× (2 threads) to ~12× (6–8 threads). The more concurrent the host, the more chaos scheduling destroys faithful horizon — concurrency width is a difficulty axis, and its cost grows with the amount of concurrency. |
+| [![EH8 privilege denial recall](figures/eh8_privilege.png)](figures/eh8_privilege.png)<br>**Aggregate faithfulness hides a security-critical denial gap (host EH8).** On a denial-heavy workload, overall privilege-faithfulness looks high (0.91 flat, 0.94 factored) — but that is the easy successes. The defensively-critical number is **denied recall** (does the model predict failures when truth fails?): the flat arm scores **0.000** (it *never* predicts an EPERM/EBADF — it would tell a defender every blocked action succeeded), the factored arm only 0.286. Structure helps, but predicting *denials* is the open security gap. | [![EH6 two-oracle H12](figures/eh6_two_oracle.png)](figures/eh6_two_oracle.png)<br>**A cheap security oracle is redundant but decision-sufficient (host EH6 / H12).** A symbolic privilege invariant ("no non-root process holds `/passwd`") vs the full state oracle: it catches **nothing** the full oracle misses (non-redundant rate **0**, by construction) — but in **95%** of the steps where the model's *full* prediction is wrong it still gets the **security verdict right**, at ~**3×** lower consult cost. Redundant for verification; cheaper and decision-sufficient for the question a defender asks. The host H12. |
 
 | | |
 |---|---|
@@ -619,6 +620,82 @@ horizon rises with width to 6 threads then dips at 8 — the longer 40-syscall s
 the tiny model's capacity, a smoke-scale artifact, not a property of the dynamics; the collapse *ratio*
 is the robust signal.) This is the first quantification of *how* HW-1's cost grows with load.
 
+### 24. Aggregate faithfulness hides a security-critical denial gap (host EH8)
+
+The host world exists for cyber-defense, and a defender's trust hinges not on the model getting
+*successes* right but *failures*: does it predict that a `setuid` by a non-root process is **denied**
+(EPERM), that a write to a closed fd is **EBADF**? EH8 measures privilege-faithfulness (denied/allowed
+agreement) for the flat and factored arms on a denial-heavy workload, reading the exit code off each
+predicted bundle delta:
+
+![EH8: overall vs setuid vs denied-recall privilege-faithfulness, flat vs factored](figures/eh8_privilege.png)
+
+| arm | overall priv-faithfulness | setuid only | **denied recall** |
+|---|---|---|---|
+| flat | 0.912 | 0.344 | **0.000** |
+| factored | 0.938 | 0.531 | **0.286** |
+
+**Overall faithfulness is a comforting lie.** At 0.91–0.94 it looks like the model nails privilege —
+but that number is dominated by the common case (operations that *succeed*). The security-critical
+metric is **denied recall**: of the transitions truth says *failed*, what fraction does the model also
+predict failed? The flat arm scores **zero** — it never predicts a denial, so it would assure a
+defender that *every* blocked, unprivileged action succeeded. The factored arm is materially better
+(0.286 recall, 0.531 on `setuid`) — structure helps here too — but still misses most denials. This is
+the sharpest defensively-relevant negative in the program: **a host simulator can look 94% faithful
+and still be blind to the failures that matter most**, and it makes "denied recall," not aggregate
+faithfulness, the metric a security use-case must gate on. (Honest scope: smoke-scale; the *gap* and
+the flat-vs-factored ordering are the robust signal, not the exact recall.)
+
+### 25. A cheap symbolic second-oracle is redundant but decision-sufficient (host EH6 / H12)
+
+The full state oracle answers "is the predicted bundle faithful, bit for bit?"; a defender often needs
+only one cheap, formally-checkable property. EH6 adds a **symbolic privilege second-oracle** — *no
+non-root process holds an fd to a protected path (`/passwd`)* — and asks the network EN10/H12 questions
+of it against the factored arm, teacher-forced:
+
+![EH6: the privilege invariant — non-redundant rate, decision-sufficiency, consult cost](figures/eh6_two_oracle.png)
+
+| metric | value | reading |
+|---|---|---|
+| non-redundant rate | **0.000** | catches nothing the full oracle misses (it is a pure function of the state) — *redundant for verification* |
+| invariant-sufficient rate | **0.952** | of the steps where the *full* prediction is wrong, the model still gets the security verdict right |
+| consult-bits ratio | **0.31** | the security answer (procs × protected) costs ~⅓ of the full state |
+
+**Redundant, but cheaper and decision-sufficient — the host H12.** The privilege oracle never flags an
+error a bit-exact prediction would miss (non-redundant rate is exactly 0, by construction), so as a
+*verification* signal it adds nothing. But that is the wrong lens: in **95%** of the steps where the
+model's full bundle prediction is *wrong*, the model still gets the **privilege-safety verdict** right,
+and answering that verdict costs ~3× fewer bits than the full state. So an agent can ask the cheap
+security question and trust the answer far more often than it can trust the whole prediction — the
+tiered-oracle premise ([SPEC-7](docs/specs/SPEC-7.md)) the network's EN10 first showed, now replicated in the host with a
+formally-checkable security invariant.
+
+### 26. Concurrency manufactures the composition coupling (host EH-H13-scale / H13 × H14)
+
+Two host-unique findings meet here: the composition is **coupled** (H13 — composed acceptance below the
+independence floor `∏ aᵢ`), and concurrency is a **dial** (H14). EH-H13-scale asks whether the first is
+*caused* by the second: does running more concurrent threads (more shared-file contention, more
+interleaved forks coupling the subsystems through the schedule) deepen the coupling? It measures the
+composition law teacher-forced on chaos-scheduled workloads at 2→8 threads:
+
+![EH-H13-scale: composed vs independence floor, and the independence gap, vs thread count](figures/eh_h13_scale.png)
+
+| threads | composed `a` | `∏ aᵢ` | **independence gap** | verdict |
+|---|---|---|---|---|
+| 2 | 0.392 | 0.468 | 0.076 | coupled |
+| 4 | 0.175 | 0.364 | 0.189 | coupled |
+| 6 | 0.233 | 0.382 | 0.148 | coupled |
+| 8 | 0.165 | 0.332 | 0.167 | coupled |
+
+**Concurrency manufactures coupling — then saturates.** The composition is `coupled` at *every* width
+(composed always below the independence floor), but the gap is smallest at 2 threads (0.076 — failures
+nearly independent) and roughly **doubles–triples by 4 threads (~0.19)**, then plateaus at ~0.15–0.19
+through 8. So the anti-correlated subsystem failures H13 found are, in part, *made by the schedule*: a
+little concurrency couples the subsystems sharply, and beyond a handful of threads the coupling is
+saturated rather than ever-deepening. This ties the host's two signature results together — H13's
+coupling is not a fixed property of the bundle but one **concurrency (H14) drives** — and says a faithful
+host model must reason about the schedule, not just the per-subsystem dynamics.
+
 ## The problem, and what we're trying to accomplish
 
 ### The wall every world model hits
@@ -734,7 +811,8 @@ Package map (parallel structure; `net*` mirrors v0 for the graph world):
 
   host world (SPEC-6, HC0-HC5 — the next world; the host oracle *composes* the FS + net sub-oracles)
   host/      bundle state (procs + per-process fds + embedded v0 fs), syscall grammar, bundle delta, config
-  hostoracle/  Tier-A reference host oracle: process/fd/credential glue over the v0 FS sub-oracle
+  hostoracle/  Tier-A reference host oracle (process/fd/credential glue over the v0 FS sub-oracle)
+               + invariant.py: a symbolic privilege second-oracle (the cheap EH6/H12 security check)
   hostdata/  workload drivers + trajectory JSONL + manifests/splits + the concurrency scheduler
              (interleaving-entropy chaos dial → H14: H_ε(interleaving-entropy))
   hostmetrics/  composed + per-subsystem d, bits, composition-law (H13), privilege-faithfulness, run-record
@@ -920,6 +998,15 @@ write-up is [docs/report.md](docs/report.md).
 > [`eh_h14_scale.png`](figures/eh_h14_scale.png)) shows the concurrency collapse **steepens with thread
 > count** (~2.5×→~12× from 2→8 threads) — concurrency's cost scales with its width (finding
 > [§23](#23-concurrencys-cost-scales-with-concurrencys-width-host-eh-h14-scale)).
+> **Three security/scaling findings round out the host:** **EH8** ([§24](#24-aggregate-faithfulness-hides-a-security-critical-denial-gap-host-eh8)) — aggregate
+> privilege-faithfulness (0.91–0.94) *hides* a security-critical **denial-recall gap** (flat 0.000,
+> factored 0.286: the model rarely predicts the EPERM/EBADF *failures* a defender most needs); **EH6**
+> ([§25](#25-a-cheap-symbolic-second-oracle-is-redundant-but-decision-sufficient-host-eh6--h12)) — a
+> symbolic privilege second-oracle is redundant for verification (0%) but **decision-sufficient in 95%**
+> of error steps at ~3× lower cost (the host H12); and **EH-H13-scale**
+> ([§26](#26-concurrency-manufactures-the-composition-coupling-host-eh-h13-scale--h13--h14)) — the H13
+> coupling is in part **manufactured by concurrency** (the independence gap doubles from 2→4 threads,
+> then saturates), tying H13 × H14.
 > Remaining (HC8): per-subsystem decode *heads*, the experience-stream + plasticity probe, counterfactual
 > replay, the Tier-B system oracle, the Inspect benchmark + RL env, and the technical report.
 

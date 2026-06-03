@@ -138,6 +138,15 @@ python -m verisim.experiments.eh_h14_scale --config configs/eh_h14_scale.json --
 echo "== EH7: model-invariance of the composed-host H_eps(rho) across proposers (SPEC-6 H22; CSV+PNG) =="
 python -m verisim.experiments.eh7 --config configs/eh7.json --out figures/eh7_invariance.csv
 
+echo "== EH8: privilege-faithfulness — does the model get security-critical denials right? (§9.4) =="
+python -m verisim.experiments.eh8_privilege --config configs/eh8_privilege.json --out figures/eh8_privilege.csv
+
+echo "== EH6: two-oracle — the privilege invariant is redundant but cheaper + decision-sufficient (H12) =="
+python -m verisim.experiments.eh6_two_oracle --config configs/eh6_two_oracle.json --out figures/eh6_two_oracle.csv
+
+echo "== EH-H13-scale: does the composition coupling deepen with concurrency width? (H13 × H14) =="
+python -m verisim.experiments.eh_h13_scale --config configs/eh_h13_scale.json --out figures/eh_h13_scale.csv
+
 echo "== EH5: smart which-subsystem policy π_w — uncertainty vs fixed/round-robin (HC7, §8.2) =="
 python -m verisim.experiments.eh5 --config configs/eh5.json --out runs/eh5/records.jsonl
 python figures/plot_comparison.py --records runs/eh5/records.jsonl --key policy \
@@ -150,4 +159,4 @@ python figures/plot_comparison.py --records runs/eh5/records.jsonl --key policy 
 echo "== SYNTHESIS: the floor+cliff H_eps(rho) overlaid across all three worlds (reads the curve CSVs) =="
 python -m verisim.experiments.synthesis --out figures/synthesis_floor_cliff.csv
 
-echo "== done: figures/{e1_curve,e2_policies,e3_operators,calibration,e4_ablation,objective,representation,auto_search,en1_curve,en2_policies,en3_operators,en4_graph_vs_flat,en8_grounding,en9_contrastive,en8_scale,en9_scale,en8_capacity,en9_negatives,en7_invariance,en5_selfheal,en6_counterfactual,en8_ls3_hero,en10_two_oracle,eh1_curve,eh1_composition,eh2_policies,eh3_operators,eh4_factored_vs_flat,eh4_drift,eh5_subsystem_policy,eh_h14_interleaving,eh_h14_scale,eh7_invariance,synthesis_floor_cliff}.{png,csv} =="
+echo "== done: figures/{e1_curve,e2_policies,e3_operators,calibration,e4_ablation,objective,representation,auto_search,en1_curve,en2_policies,en3_operators,en4_graph_vs_flat,en8_grounding,en9_contrastive,en8_scale,en9_scale,en8_capacity,en9_negatives,en7_invariance,en5_selfheal,en6_counterfactual,en8_ls3_hero,en10_two_oracle,eh1_curve,eh1_composition,eh2_policies,eh3_operators,eh4_factored_vs_flat,eh4_drift,eh5_subsystem_policy,eh_h14_interleaving,eh_h14_scale,eh7_invariance,eh8_privilege,eh6_two_oracle,eh_h13_scale,synthesis_floor_cliff}.{png,csv} =="

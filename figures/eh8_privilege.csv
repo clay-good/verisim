@@ -1,0 +1,3 @@
+arm,privilege_faithfulness,setuid_faithfulness,denied_recall,n_denied
+flat,0.912500,0.343750,0.000000,21.000000
+factored,0.937500,0.531250,0.285714,21.000000

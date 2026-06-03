@@ -1,0 +1,5 @@
+n_threads,mean_entropy,composed,multiplicative,weakest_link,independence_gap,verdict
+2,0.4722,0.3917,0.4678,0.7250,0.0762,coupled
+4,0.7105,0.1750,0.3644,0.6625,0.1894,coupled
+6,0.7500,0.2333,0.3816,0.6611,0.1483,coupled
+8,0.8590,0.1646,0.3315,0.6104,0.1669,coupled
