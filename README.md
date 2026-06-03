@@ -537,6 +537,34 @@ model drifts on, `verify` reports a short plan-faithful-horizon and flags that t
 oracle consultation. This is the SLM/LLM-complementarity thesis made executable: ground truth at scale,
 on a budget, for the thing OSWorld-class agents actually do.
 
+### 21. The deepest claim holds in the hardest world: the shape is the loop's, not the model's (host EH7 / H22)
+
+The program's deepest claim is not about a model but a *method*: **deterministic verification is a
+model-agnostic primitive** — the qualitative shape of the faithful-horizon-vs-consultation curve is a
+property of the oracle-loop, not the proposer's architecture (the network EN7 established this; finding
+[§11](#9-the-no-knee-shape-is-the-loops-not-the-models-network-en7--h22)). EH7 asks the sterner
+question: does it survive the **hardest** world — the coupled, concurrent host bundle? It drops four
+materially different proposers into the *same* HC5 loop and sweeps `H_ε(ρ)` for each.
+
+![EH7: composed-host H_ε(ρ) is the same floor+cliff shape across all four proposers](figures/eh7_invariance.png)
+
+| proposer | `H_ε` at ρ=0 | ρ interior (0.1–0.5) | ρ=1 |
+|---|---|---|---|
+| null (empty delta) | 0.0 | ~1.0, flat | 24 (=T) |
+| flat transformer | 0.4 | ~1.1, flat | 24 |
+| **factored graph+RSSM** | **2.3** | 2.3 → 4.2, flat-ish | 24 |
+| oracle-backed (ceiling) | 24 | 24 | 24 |
+
+**H22 holds in the composed world.** The three imperfect proposers — despite *materially different*
+per-step competence (factored ≫ flat ≫ null, the EH4 ordering) — share **one shape**: a low floor
+across the ρ interior, then the cliff to `H_ε=T` only at ρ=1. The proposer sets the floor *height*
+(better models float higher); the loop sets the *shape* (flat-then-cliff, no favorable knee). That a
+shared shape survives across proposers of such different competence, in the world with the most
+coupling (H13) and the only one with concurrency (H14), is the strongest evidence the program has that
+the oracle-in-the-loop method is **model-agnostic** — exactly what makes the contribution a *method*,
+not a model. The same floor+cliff now appears in all three worlds (filesystem K4, network EN1, host
+EH1) and across every proposer in each — the claim's most general statement.
+
 ## The problem, and what we're trying to accomplish
 
 ### The wall every world model hits
@@ -712,7 +740,7 @@ host → distributed); three specs are *cross-cutting methods* every world inher
 | [SPEC-3](docs/specs/SPEC-3.md) | depth | how the toy grows into a real simulator (system oracle, partial obs, online self-healing, info-theoretic metric) |
 | [SPEC-4](docs/specs/SPEC-4.md) | **the engine** | the autonomous research engine — Verisim improving Verisim, human out of the loop |
 | [SPEC-5](docs/specs/SPEC-5.md) | **world: network** | the reachability/connectivity world — **the current build front** |
-| [SPEC-6](docs/specs/SPEC-6.md) | world: host | the running computer (process tree, fds, scheduler) — **HC0-HC6 started**: the host oracle *composes* the v0 FS sub-oracle; bundle delta + `apply == oracle` invariant; workload drivers + datasets; composed + **per-subsystem** metrics with the **composition-law diagnostic** (H13); the **flat learned `M_θ` baseline** (HC4 incr-1); the **composed loop** with the `π_w` oracle-selection axis (HC5 incr-1); **the prime-directive figure (HC6)** — the composed `H_ε(ρ)` floor+cliff + the **H13 composition law = `coupled`** ([eh1_curve](figures/eh1_curve.png), [eh1_composition](figures/eh1_composition.png)); **the EH3 equal-budget operator comparison (HC7)** — per-subsystem consultation earns **~3.7× more horizon per oracle-bit** ([eh3_operators](figures/eh3_operators.png)); **the factored interaction-graph arm (HC4 incr-2) + EH4** — structure beats flat **~6.6× on delta-exact** yet the H13 coupling survives ([eh4_factored_vs_flat](figures/eh4_factored_vs_flat.png)); **EH2** — the factored arm's calibrated belief variance makes smart consultation beat fixed **~2.2×** (the first smart-`π_c` positive, [eh2_policies](figures/eh2_policies.png)); **EH5** — a smart *which-subsystem* `π_w` (per-subsystem decode entropy) gives a modest edge over round-robin ([eh5_subsystem_policy](figures/eh5_subsystem_policy.png)); the **§6.3 drift levers** (noise / self-forcing) reproduce the network's banked negative ([eh4_drift](figures/eh4_drift.png)); **H14 — the concurrency dial — is CONFIRMED**: free-running `H_ε` collapses ~8× as interleaving entropy rises (the host's defining result, [eh_h14_interleaving](figures/eh_h14_interleaving.png)); and the **§7 LLM-callable whole-machine simulator** (HC8) — `imagine` a plan + `verify` it (plan-level `H_ε` + the task "third oracle") |
+| [SPEC-6](docs/specs/SPEC-6.md) | world: host | the running computer (process tree, fds, scheduler) — **HC0-HC6 started**: the host oracle *composes* the v0 FS sub-oracle; bundle delta + `apply == oracle` invariant; workload drivers + datasets; composed + **per-subsystem** metrics with the **composition-law diagnostic** (H13); the **flat learned `M_θ` baseline** (HC4 incr-1); the **composed loop** with the `π_w` oracle-selection axis (HC5 incr-1); **the prime-directive figure (HC6)** — the composed `H_ε(ρ)` floor+cliff + the **H13 composition law = `coupled`** ([eh1_curve](figures/eh1_curve.png), [eh1_composition](figures/eh1_composition.png)); **the EH3 equal-budget operator comparison (HC7)** — per-subsystem consultation earns **~3.7× more horizon per oracle-bit** ([eh3_operators](figures/eh3_operators.png)); **the factored interaction-graph arm (HC4 incr-2) + EH4** — structure beats flat **~6.6× on delta-exact** yet the H13 coupling survives ([eh4_factored_vs_flat](figures/eh4_factored_vs_flat.png)); **EH2** — the factored arm's calibrated belief variance makes smart consultation beat fixed **~2.2×** (the first smart-`π_c` positive, [eh2_policies](figures/eh2_policies.png)); **EH5** — a smart *which-subsystem* `π_w` (per-subsystem decode entropy) gives a modest edge over round-robin ([eh5_subsystem_policy](figures/eh5_subsystem_policy.png)); the **§6.3 drift levers** (noise / self-forcing) reproduce the network's banked negative ([eh4_drift](figures/eh4_drift.png)); **H14 — the concurrency dial — is CONFIRMED**: free-running `H_ε` collapses ~8× as interleaving entropy rises (the host's defining result, [eh_h14_interleaving](figures/eh_h14_interleaving.png)); the **§7 LLM-callable whole-machine simulator** (HC8) — `imagine` a plan + `verify` it (plan-level `H_ε` + the task "third oracle"); and **EH7/H22** — the floor+cliff `H_ε(ρ)` shape is **model-agnostic in the composed world too** ([eh7_invariance](figures/eh7_invariance.png)) |
 | [SPEC-7](docs/specs/SPEC-7.md) | world: distributed | replicated services, transactions, consensus — design |
 | [SPEC-8](docs/specs/SPEC-8.md) | **method: oracle-grounded SSL** | put the oracle's truth in the *bulk* of the cake (self-supervised pretraining), not just the cherry (RL) |
 | [SPEC-9](docs/specs/SPEC-9.md) | **method: free-oracle scaling** | because the oracle labels for free, world size is a *compute* choice, not a labeling-budget one — how large/deep the world goes on one machine, and what holds as it grows |
@@ -826,6 +854,10 @@ write-up is [docs/report.md](docs/report.md).
 > both predicts the next state (the loop) and *simulates a plan* for an agent — `imagine` (oracle-free
 > draft) + `verify` (the plan-level faithful horizon + the task "third oracle"), the SLM/LLM-complementarity
 > payoff (finding [§20](#20-the-payoff-a-verified-whole-machine-simulator-an-llm-agent-calls-host-7--hc8)).
+> And **EH7 confirms H22 in the composed world** ([`eh7.py`](src/verisim/experiments/eh7.py), figure
+> [`eh7_invariance.png`](figures/eh7_invariance.png)): four proposers in the same loop share the
+> floor+cliff `H_ε(ρ)` shape — the model-agnostic-primitive claim holds in the hardest (coupled,
+> concurrent) world (finding [§21](#21-the-deepest-claim-holds-in-the-hardest-world-the-shape-is-the-loops-not-the-models-host-eh7--h22)).
 > Remaining (HC8): per-subsystem decode *heads*, the experience-stream + plasticity probe, counterfactual
 > replay, the Tier-B system oracle, the Inspect benchmark + RL env, and the technical report.
 
