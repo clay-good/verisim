@@ -446,6 +446,28 @@ subsystem costs to verify). The ideal `π_w` weights both — the standing targe
 *apparatus* (per-subsystem uncertainty + the information-gain policy + the equal-budget harness); the
 smoke-scale edge is reported as-is, not oversold.
 
+### 18. The drift levers don't buy horizon here either — the same banked negative (host EH4-drift / §6.3)
+
+The factored arm is far more one-step-accurate than flat (EH4), yet it still drifts at `ρ=0` — good
+per-step prediction does not buy free-running horizon. That one-step→horizon gap is the program's
+standing wall, and the §6.3 drift levers are its standard attack: **noise injection** (oracle-relabeled
+state-noise augmentation) and **self-forcing** (re-roll on the model's own predictions, oracle-relabel),
+both exploiting the oracle being a total, free teacher. EH4-drift trains the factored arm three ways on
+identical seeds and asks whether either lever converts accuracy into horizon:
+
+| arm | delta-exact | free-running `H_ε` (ρ=0), ε∈{0, .05, .1} |
+|---|---|---|
+| clean | 0.388 | 2.3 / 2.3 / 2.6 |
+| +noise | 0.325 | 2.0 / 2.0 / 2.8 |
+| +self-forcing | 0.379 | 2.0 / 2.0 / 2.2 |
+
+**The same banked negative the network found.** Neither lever buys free-running horizon (all arms sit
+at ~2–3 faithful steps, within noise), and noise injection slightly *lowers* one-step exactness. The
+exposure-bias patches that should close the train/deploy gap don't, here — the wall is in the
+one-step→horizon *conversion*, not the input distribution, so the remaining budget routes to scale and
+objective grounding rather than more input patches (exactly the network's EN4 conclusion, now
+replicated in the composed host world). A required ablation, run, and reported as the honest null it is.
+
 ## The problem, and what we're trying to accomplish
 
 ### The wall every world model hits
@@ -618,7 +640,7 @@ host → distributed); three specs are *cross-cutting methods* every world inher
 | [SPEC-3](docs/specs/SPEC-3.md) | depth | how the toy grows into a real simulator (system oracle, partial obs, online self-healing, info-theoretic metric) |
 | [SPEC-4](docs/specs/SPEC-4.md) | **the engine** | the autonomous research engine — Verisim improving Verisim, human out of the loop |
 | [SPEC-5](docs/specs/SPEC-5.md) | **world: network** | the reachability/connectivity world — **the current build front** |
-| [SPEC-6](docs/specs/SPEC-6.md) | world: host | the running computer (process tree, fds, scheduler) — **HC0-HC6 started**: the host oracle *composes* the v0 FS sub-oracle; bundle delta + `apply == oracle` invariant; workload drivers + datasets; composed + **per-subsystem** metrics with the **composition-law diagnostic** (H13); the **flat learned `M_θ` baseline** (HC4 incr-1); the **composed loop** with the `π_w` oracle-selection axis (HC5 incr-1); **the prime-directive figure (HC6)** — the composed `H_ε(ρ)` floor+cliff + the **H13 composition law = `coupled`** ([eh1_curve](figures/eh1_curve.png), [eh1_composition](figures/eh1_composition.png)); **the EH3 equal-budget operator comparison (HC7)** — per-subsystem consultation earns **~3.7× more horizon per oracle-bit** ([eh3_operators](figures/eh3_operators.png)); **the factored interaction-graph arm (HC4 incr-2) + EH4** — structure beats flat **~6.6× on delta-exact** yet the H13 coupling survives ([eh4_factored_vs_flat](figures/eh4_factored_vs_flat.png)); **EH2** — the factored arm's calibrated belief variance makes smart consultation beat fixed **~2.2×** (the first smart-`π_c` positive, [eh2_policies](figures/eh2_policies.png)); and **EH5** — a smart *which-subsystem* `π_w` (per-subsystem decode entropy) gives a modest edge over round-robin ([eh5_subsystem_policy](figures/eh5_subsystem_policy.png)). Both consultation axes (when × which) are now measured |
+| [SPEC-6](docs/specs/SPEC-6.md) | world: host | the running computer (process tree, fds, scheduler) — **HC0-HC6 started**: the host oracle *composes* the v0 FS sub-oracle; bundle delta + `apply == oracle` invariant; workload drivers + datasets; composed + **per-subsystem** metrics with the **composition-law diagnostic** (H13); the **flat learned `M_θ` baseline** (HC4 incr-1); the **composed loop** with the `π_w` oracle-selection axis (HC5 incr-1); **the prime-directive figure (HC6)** — the composed `H_ε(ρ)` floor+cliff + the **H13 composition law = `coupled`** ([eh1_curve](figures/eh1_curve.png), [eh1_composition](figures/eh1_composition.png)); **the EH3 equal-budget operator comparison (HC7)** — per-subsystem consultation earns **~3.7× more horizon per oracle-bit** ([eh3_operators](figures/eh3_operators.png)); **the factored interaction-graph arm (HC4 incr-2) + EH4** — structure beats flat **~6.6× on delta-exact** yet the H13 coupling survives ([eh4_factored_vs_flat](figures/eh4_factored_vs_flat.png)); **EH2** — the factored arm's calibrated belief variance makes smart consultation beat fixed **~2.2×** (the first smart-`π_c` positive, [eh2_policies](figures/eh2_policies.png)); **EH5** — a smart *which-subsystem* `π_w` (per-subsystem decode entropy) gives a modest edge over round-robin ([eh5_subsystem_policy](figures/eh5_subsystem_policy.png)); and the **§6.3 drift levers** (noise / self-forcing) reproduce the network's banked negative — no free-running horizon gain ([eh4_drift](figures/eh4_drift.png)). Both consultation axes (when × which) are measured |
 | [SPEC-7](docs/specs/SPEC-7.md) | world: distributed | replicated services, transactions, consensus — design |
 | [SPEC-8](docs/specs/SPEC-8.md) | **method: oracle-grounded SSL** | put the oracle's truth in the *bulk* of the cake (self-supervised pretraining), not just the cherry (RL) |
 | [SPEC-9](docs/specs/SPEC-9.md) | **method: free-oracle scaling** | because the oracle labels for free, world size is a *compute* choice, not a labeling-budget one — how large/deep the world goes on one machine, and what holds as it grows |
@@ -717,9 +739,13 @@ write-up is [docs/report.md](docs/report.md).
 > over round-robin (matches the best raw horizon at lower cost), though the cheapest-fixed still wins
 > pure bit-efficiency (finding
 > [§17](#17-the-other-consultation-axis-a-smart-which-subsystem-policy-gives-a-modest-edge-host-eh5--h10)).
-> Both consultation axes (when `π_c` × which `π_w`) are now measured. Remaining: the scheduler +
-> sockets/IPC + the interleaving-entropy dial, per-subsystem decode *heads* + the §6.3 drift levers,
-> the experience-stream, and packaging.
+> Both consultation axes (when `π_c` × which `π_w`) are now measured. **The §6.3 drift levers also ship**
+> ([`eh4_drift.py`](src/verisim/experiments/eh4_drift.py), figure [`eh4_drift.png`](figures/eh4_drift.png)):
+> oracle-relabeled noise injection + self-forcing reproduce the network's **banked negative** — neither
+> buys free-running horizon at this scale, so the one-step→horizon gap stays open (finding
+> [§18](#18-the-drift-levers-dont-buy-horizon-here-either--the-same-banked-negative-host-eh4-drift--63)).
+> Remaining: the **scheduler + interleaving-entropy dial + the H14 chaos experiment** (the host's
+> headline concurrency differentiator), per-subsystem decode *heads*, the experience-stream, and packaging.
 
 **v0 — shell/filesystem world (`src/verisim/`, SPEC-2 §13): complete.**
 
