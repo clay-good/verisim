@@ -132,6 +132,9 @@ python -m verisim.experiments.eh4_drift --config configs/eh4_drift.json --out fi
 echo "== EH-H14: the concurrency dial — H_eps vs interleaving entropy (SPEC-6 §3.4, H14; CSV+PNG) =="
 python -m verisim.experiments.eh_h14 --config configs/eh_h14.json --out figures/eh_h14_interleaving.csv
 
+echo "== EH-H14-scale: does the concurrency collapse steepen with thread count? (SPEC-6 §3.4; CSV+PNG) =="
+python -m verisim.experiments.eh_h14_scale --config configs/eh_h14_scale.json --out figures/eh_h14_scale.csv
+
 echo "== EH7: model-invariance of the composed-host H_eps(rho) across proposers (SPEC-6 H22; CSV+PNG) =="
 python -m verisim.experiments.eh7 --config configs/eh7.json --out figures/eh7_invariance.csv
 
@@ -144,4 +147,7 @@ python figures/plot_comparison.py --records runs/eh5/records.jsonl --key policy 
 #   python -m verisim.experiments.en8_scale --world-sizes 25 50 100 200 --d-models 64 128 --seeds 0 1 2 --out figures/en8_surface.csv
 #   python -m verisim.experiments.en9_scale --world-sizes 25 50 100 200 --d-models 64 128 --seeds 0 1 2 --out figures/en9_surface.csv
 
-echo "== done: figures/{e1_curve,e2_policies,e3_operators,calibration,e4_ablation,objective,representation,auto_search,en1_curve,en2_policies,en3_operators,en4_graph_vs_flat,en8_grounding,en9_contrastive,en8_scale,en9_scale,en8_capacity,en9_negatives,en7_invariance,en5_selfheal,en6_counterfactual,en8_ls3_hero,en10_two_oracle,eh1_curve,eh1_composition,eh2_policies,eh3_operators,eh4_factored_vs_flat,eh4_drift,eh5_subsystem_policy,eh_h14_interleaving,eh7_invariance}.{png,csv} =="
+echo "== SYNTHESIS: the floor+cliff H_eps(rho) overlaid across all three worlds (reads the curve CSVs) =="
+python -m verisim.experiments.synthesis --out figures/synthesis_floor_cliff.csv
+
+echo "== done: figures/{e1_curve,e2_policies,e3_operators,calibration,e4_ablation,objective,representation,auto_search,en1_curve,en2_policies,en3_operators,en4_graph_vs_flat,en8_grounding,en9_contrastive,en8_scale,en9_scale,en8_capacity,en9_negatives,en7_invariance,en5_selfheal,en6_counterfactual,en8_ls3_hero,en10_two_oracle,eh1_curve,eh1_composition,eh2_policies,eh3_operators,eh4_factored_vs_flat,eh4_drift,eh5_subsystem_policy,eh_h14_interleaving,eh_h14_scale,eh7_invariance,synthesis_floor_cliff}.{png,csv} =="

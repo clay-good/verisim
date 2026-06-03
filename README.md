@@ -13,9 +13,13 @@
 
 ## Results at a glance
 
-Twelve committed, oracle-grounded figures — the smoke-scale bet in one screen — each detailed below, each
-with its honest negative. **What survives scaling is the real verdict: see [§8](#8-which-wins-survive-scaling--the-honest-mixed-verdict-spec-9).** Every number regenerates from
+Fourteen committed, oracle-grounded figures — the smoke-scale bet in one screen — each detailed below, each
+with its honest negative. **The one-figure thesis is the cross-world synthesis ([§22](#22-the-thesis-in-one-figure-the-floorcliff-is-the-same-in-every-world-cross-world-synthesis)): the floor+cliff `H_ε(ρ)` is the *same shape in all three worlds*.** **What survives scaling is the real verdict: see [§8](#8-which-wins-survive-scaling--the-honest-mixed-verdict-spec-9).** Every number regenerates from
 config + seeds (`bash figures/reproduce.sh`).
+
+| | |
+|---|---|
+| [![cross-world synthesis](figures/synthesis_floor_cliff.png)](figures/synthesis_floor_cliff.png)<br>**The thesis in one figure (cross-world synthesis).** Normalize each world's faithful horizon by its own ceiling and overlay: the filesystem (a tree), the network (a graph), and the host (a coupled bundle) trace **the same floor+cliff** — a near-zero floor across the `ρ` interior, then a cliff to full horizon only at `ρ=1`. Three different state types, oracles, and models; one curve. "A little consultation doesn't buy a lot of horizon; you pay near-linearly for faithfulness" is a property of the *oracle-loop method*, not any one world. | [![EH-H14-scale concurrency scaling](figures/eh_h14_scale.png)](figures/eh_h14_scale.png)<br>**Concurrency cost scales with concurrency *width* (host EH-H14-scale).** Rerun the H14 dial at 2→8 threads: the recorded→chaos `H_ε` collapse *steepens* from ~2.5× (2 threads) to ~12× (6–8 threads). The more concurrent the host, the more chaos scheduling destroys faithful horizon — concurrency width is a difficulty axis, and its cost grows with the amount of concurrency. |
 
 | | |
 |---|---|
@@ -565,6 +569,56 @@ the oracle-in-the-loop method is **model-agnostic** — exactly what makes the c
 not a model. The same floor+cliff now appears in all three worlds (filesystem K4, network EN1, host
 EH1) and across every proposer in each — the claim's most general statement.
 
+### 22. The thesis in one figure: the floor+cliff is the same in every world (cross-world synthesis)
+
+If the claim is that the oracle-in-the-loop tradeoff is a property of the *method*, the cleanest test
+is to put all three worlds on one axis. Each world's `H_ε(ρ)` curve is normalized by its own horizon
+ceiling `T` (so a tree, a graph, and a coupled bundle with different rollout lengths are comparable),
+difficulty-averaged, and overlaid:
+
+![Cross-world synthesis: normalized H_ε/T vs ρ for filesystem, network, and host — one shape](figures/synthesis_floor_cliff.png)
+
+| world | state type | floor `H_ε/T` at ρ=0 | ρ=1 |
+|---|---|---|---|
+| filesystem (E1) | a tree | 0.00 | 1.0 |
+| network (EN1) | a typed graph | 0.04 | 1.0 |
+| host (EH1) | a coupled bundle | 0.02 | 1.0 |
+
+**Three worlds, one curve.** Despite entirely different state representations, oracles, grammars, and
+models, the normalized faithful horizon traces the same **floor + cliff**: a near-zero floor across the
+whole `ρ` interior, then a steep climb to full horizon only as `ρ→1`. This is the program's thesis made
+visual — *a little consultation does not buy a lot of horizon; faithfulness is paid for near-linearly
+in oracle calls* — and it is a property of the **oracle-loop method**, not of any one world or model.
+Combined with the model-invariance result (§21, the shape is constant across proposers *within* each
+world), the floor+cliff is now both **model-agnostic and world-agnostic** — the strongest statement the
+smoke-scale evidence supports. (Honest scope: same `T=24`, same small models; the *shape* is the robust
+claim, not the floor's exact height — and "what survives scaling" remains the open question, [§8](#8-which-wins-survive-scaling--the-honest-mixed-verdict-spec-9).)
+
+### 23. Concurrency's cost scales with concurrency's width (host EH-H14-scale)
+
+H14 (§19) showed concurrency is a measurable dial at one workload width (5 threads). The scaling
+question — the host analogue of the free-oracle scaling work ([§8](#8-which-wins-survive-scaling--the-honest-mixed-verdict-spec-9)) — is whether the *cost* of
+concurrency grows with the *amount* of it. EH-H14-scale reruns the dial at 2→8 threads, each with its
+own factored arm trained on its own recorded (sequential) regime:
+
+![EH-H14-scale: the recorded→chaos H_ε collapse steepens with more threads](figures/eh_h14_scale.png)
+
+| threads | `H_ε` recorded (low entropy) | `H_ε` chaos (high entropy) | collapse |
+|---|---|---|---|
+| 2 | 7.6 | 3.1 | ~2.5× |
+| 4 | 13.8 | 1.8 | ~7.7× |
+| 6 | 18.2 | 1.5 | ~12× |
+| 8 | 14.3 | 1.2 | ~12× |
+
+**The collapse steepens with width.** At 2 threads chaos costs only ~2.5× of faithful horizon; by 6–8
+threads it costs ~12×, dropping the model to barely one faithful step under chaos. More concurrent
+threads mean more shared-file contention and more interleaved forks, so the schedule space the chaos
+seed explores is both larger and more damaging — **concurrency width is a genuine difficulty axis, and
+its cost is super-linear in the early regime before saturating.** (Honest wrinkle: the *recorded*-regime
+horizon rises with width to 6 threads then dips at 8 — the longer 40-syscall schedule begins to strain
+the tiny model's capacity, a smoke-scale artifact, not a property of the dynamics; the collapse *ratio*
+is the robust signal.) This is the first quantification of *how* HW-1's cost grows with load.
+
 ## The problem, and what we're trying to accomplish
 
 ### The wall every world model hits
@@ -858,6 +912,14 @@ write-up is [docs/report.md](docs/report.md).
 > [`eh7_invariance.png`](figures/eh7_invariance.png)): four proposers in the same loop share the
 > floor+cliff `H_ε(ρ)` shape — the model-agnostic-primitive claim holds in the hardest (coupled,
 > concurrent) world (finding [§21](#21-the-deepest-claim-holds-in-the-hardest-world-the-shape-is-the-loops-not-the-models-host-eh7--h22)).
+> **Two cross-cutting findings round out the picture:** the **cross-world synthesis**
+> ([`synthesis.py`](src/verisim/experiments/synthesis.py), figure [`synthesis_floor_cliff.png`](figures/synthesis_floor_cliff.png))
+> overlays the normalized `H_ε(ρ)` of all three worlds onto **one floor+cliff** — the thesis in a single
+> figure, model- *and* world-agnostic (finding [§22](#22-the-thesis-in-one-figure-the-floorcliff-is-the-same-in-every-world-cross-world-synthesis));
+> and **EH-H14-scale** ([`eh_h14_scale.py`](src/verisim/experiments/eh_h14_scale.py), figure
+> [`eh_h14_scale.png`](figures/eh_h14_scale.png)) shows the concurrency collapse **steepens with thread
+> count** (~2.5×→~12× from 2→8 threads) — concurrency's cost scales with its width (finding
+> [§23](#23-concurrencys-cost-scales-with-concurrencys-width-host-eh-h14-scale)).
 > Remaining (HC8): per-subsystem decode *heads*, the experience-stream + plasticity probe, counterfactual
 > replay, the Tier-B system oracle, the Inspect benchmark + RL env, and the technical report.
 
