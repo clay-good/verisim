@@ -13,7 +13,7 @@
 
 ## Results at a glance
 
-Eight committed, oracle-grounded figures — the smoke-scale bet in one screen — each detailed below, each
+Ten committed, oracle-grounded figures — the smoke-scale bet in one screen — each detailed below, each
 with its honest negative. **What survives scaling is the real verdict: see [§8](#8-which-wins-survive-scaling--the-honest-mixed-verdict-spec-9).** Every number regenerates from
 config + seeds (`bash figures/reproduce.sh`).
 
@@ -23,6 +23,7 @@ config + seeds (`bash figures/reproduce.sh`).
 | [![EN9 oracle hard-negatives](figures/en9_contrastive.png)](figures/en9_contrastive.png)<br>**Exact negatives beat statistical ones where it counts (EN9 / H25 / H5).** VICReg and the oracle both stop contrastive collapse — but only the oracle's *counterfactual* negatives teach which intervention leads where: branch-retrieval top-1 **0.519 vs VICReg's 0.282**. The statistical regularizer is full-rank but interventionally blind. *⚠ Scaled (SPEC-9 S2): this lift **reverses** by 100–200 hosts at higher capacity with a fixed `k=8` (VICReg overtakes) — but the reversal is a **negative-count artifact that recovers**: scaling `k_negatives` 8→32 flips it back to disjoint-positive. Real lift; feed it negatives that scale with the world.* | [![EN1 / K4 the floor](figures/en1_curve.png)](figures/en1_curve.png)<br>**A floor, not a knee (EN1 / K4 / H8).** Faithful horizon vs consultation budget `H_ε(ρ)` is flat-then-cliff on *both* worlds: consultation budget alone does not buy horizon. The honest negative that drove every later design choice. |
 | [![EN3 probe efficiency](figures/en3_operators.png)](figures/en3_operators.png)<br>**What you consult beats whether (EN3).** Under partial observation a cheap one-host **probe + belief filter** earns **~2.3×** more faithful horizon per oracle-bit than full consultation — active sensing is a real lever. | [![EN7 model-invariance](figures/en7_invariance.png)](figures/en7_invariance.png)<br>**The shape is the loop's, not the model's (EN7 / H22).** Run the *same* loop with four proposers (null, flat transformer, graph+RSSM, oracle-backed): the three imperfect ones share **one shape — floor + cliff, no knee.** The proposer sets the floor *height* (graph > flat > null); the loop sets the *shape*. The no-knee verdict is model-agnostic. |
 | [![EH1 composed-host curve](figures/eh1_curve.png)](figures/eh1_curve.png)<br>**The floor+cliff holds in the *composed* world (host EH1 / HC6).** First result in the host world (process table + fd tables + embedded fs): the composed `H_ε(ρ)` is the same flat-then-cliff shape as the filesystem and network worlds — `ρ=0` drifts in <1 step, the cliff only at `ρ=1`. The no-knee verdict generalizes across all three worlds. | [![EH1 composition law H13](figures/eh1_composition.png)](figures/eh1_composition.png)<br>**Whole-machine faithfulness is *coupled*, not independent (host EH1 / H13).** The headline-new measurement: composed per-step acceptance (orange) sits *below* the multiplicative/independence prediction `∏ aᵢ` (blue) — the flat baseline's subsystem failures are **anti-correlated**. Modeling subsystems independently is the wrong bet; coupling is load-bearing. The honest negative that licenses the factored interaction-graph arm. |
+| [![EH4 factored vs flat](figures/eh4_factored_vs_flat.png)](figures/eh4_factored_vs_flat.png)<br>**Structure helps in the bundle world too — but the coupling is real (host EH4 / H11 / H13).** The factored interaction-graph arm (GNN+RSSM over the process spine's lineage + shared-file edges) beats the flat serializer **~6.6× on delta-exact (0.058→0.388)** and **~5.3× on composed acceptance** — the host echo of EN4. But *both* stay **coupled** (composed still below the independence floor): modeling the references explicitly buys a lot of faithfulness, yet does **not** uncouple the composition — so H13's coupling is genuine, not a flat-arm artifact. | [![EH3 per-subsystem efficiency](figures/eh3_operators.png)](figures/eh3_operators.png)<br>**Which subsystem you verify is a lever — the cheapest beats the weakest (host EH3).** At equal budget the full-consult operators coincide on `H_ε`, but a per-subsystem probe earns **~3.7× more faithful horizon per oracle-bit**. The twist: the *cheapest* subsystem (`fd`) wins, not the H13-*weakest* (`proc`) — so efficient `π_w` is a cost-vs-consequence tradeoff, not "verify the worst." |
 
 ## What we've found so far
 
@@ -366,6 +367,34 @@ the one H13 said dominates the coupling). Targeting the weakest by the static he
 So efficient `π_w` is a genuine **cost-vs-consequence tradeoff** — exactly the optimization a *smart* `π_w`
 (the remaining HC7 work) exists to solve, and a clean negative for "just verify the worst subsystem."
 
+### 15. Modeling the composition explicitly helps a lot — but the coupling is real, not an artifact (host EH4 / H11 / H13)
+
+H13 said the flat baseline's whole-machine faithfulness is *coupled*. Two readings were possible: either
+the coupling is a real property of the host dynamics, or it is an artifact of the flat serializer
+flattening the cross-subsystem references away. EH4 settles it by building the **factored interaction-graph
+arm** (DD-H1) — the structured alternative the flat arm is the floor for — and comparing the two on
+*identical* data. The factored arm featurizes the bundle as a **process-interaction graph** (process-
+indexed nodes; two edge sets — the **lineage** fork-tree and the **shared-file** coupling, which fold the
+fd/fs subsystems onto the process spine), message-passes over it with an RSSM belief, and decodes the
+bundle delta under the *same* grammar as the flat arm — so the only thing that changes is whether the
+composition is modeled or flattened.
+
+![EH4 factored interaction-graph vs flat M_θ: delta-exact and the composition law](figures/eh4_factored_vs_flat.png)
+
+| arm | delta-exact (free decode) | composed `a` | `∏ aᵢ` | `min aᵢ` | verdict |
+|---|---|---|---|---|---|
+| flat serializer (HC4 incr-1) | 0.058 | 0.075 | 0.223 | 0.450 | coupled |
+| **factored graph (HC4 incr-2)** | **0.388** | **0.396** | 0.470 | 0.750 | coupled |
+
+**Structure helps, decisively — the host echo of EN4/H11:** the factored arm is **~6.6×** more
+delta-exact and **~5.3×** higher on composed acceptance. Modeling the references the flat arm flattens is
+a large lever, exactly as the network graph arm was. **But the coupling survives:** the factored arm's
+composed acceptance (0.396) is *still below* its own independence floor `∏ aᵢ` (0.470), so the verdict
+stays **coupled** for both arms. The composition being coupled is therefore a **genuine property of the
+host dynamics**, not an artifact of flattening — which sharpens H13 from "the flat model couples" to "the
+world couples, and even the structured model only attenuates it." That residual coupling is the standing
+target for the per-subsystem decode heads and the smart `π_w` still to come.
+
 ## The problem, and what we're trying to accomplish
 
 ### The wall every world model hits
@@ -484,7 +513,8 @@ Package map (parallel structure; `net*` mirrors v0 for the graph world):
   hostoracle/  Tier-A reference host oracle: process/fd/credential glue over the v0 FS sub-oracle
   hostdata/  workload drivers (uniform/forky/adversarial) + trajectory JSONL + manifests/splits
   hostmetrics/  composed + per-subsystem d, bits, composition-law (H13), privilege-faithfulness, run-record
-  hostmodel/   flat Mθ (HC4 incr-1): closed vocab + bundle-Δ tokenizer/grammar/decode (DD-H1 baseline)
+  hostmodel/   flat Mθ (HC4 incr-1) + factored interaction-graph Mθ (incr-2): GNN+RSSM over the
+               process spine's lineage + shared-file edges, same grammar/decode (DD-H1: flat vs factored)
   hostloop/    composed loop (HC5 incr-1): two-mode oracle, π_w which-subsystem policy, SubsystemFilter
 ```
 
@@ -536,7 +566,7 @@ host → distributed); three specs are *cross-cutting methods* every world inher
 | [SPEC-3](docs/specs/SPEC-3.md) | depth | how the toy grows into a real simulator (system oracle, partial obs, online self-healing, info-theoretic metric) |
 | [SPEC-4](docs/specs/SPEC-4.md) | **the engine** | the autonomous research engine — Verisim improving Verisim, human out of the loop |
 | [SPEC-5](docs/specs/SPEC-5.md) | **world: network** | the reachability/connectivity world — **the current build front** |
-| [SPEC-6](docs/specs/SPEC-6.md) | world: host | the running computer (process tree, fds, scheduler) — **HC0-HC6 started**: the host oracle *composes* the v0 FS sub-oracle; bundle delta + `apply == oracle` invariant; workload drivers + datasets; composed + **per-subsystem** metrics with the **composition-law diagnostic** (H13); the **flat learned `M_θ` baseline** (HC4 incr-1); the **composed loop** with the `π_w` oracle-selection axis (HC5 incr-1); **the prime-directive figure (HC6)** — the composed `H_ε(ρ)` floor+cliff + the **H13 composition law = `coupled`** ([eh1_curve](figures/eh1_curve.png), [eh1_composition](figures/eh1_composition.png)); and **the EH3 equal-budget operator comparison (HC7)** — per-subsystem consultation earns **~3.7× more horizon per oracle-bit** ([eh3_operators](figures/eh3_operators.png)) |
+| [SPEC-6](docs/specs/SPEC-6.md) | world: host | the running computer (process tree, fds, scheduler) — **HC0-HC6 started**: the host oracle *composes* the v0 FS sub-oracle; bundle delta + `apply == oracle` invariant; workload drivers + datasets; composed + **per-subsystem** metrics with the **composition-law diagnostic** (H13); the **flat learned `M_θ` baseline** (HC4 incr-1); the **composed loop** with the `π_w` oracle-selection axis (HC5 incr-1); **the prime-directive figure (HC6)** — the composed `H_ε(ρ)` floor+cliff + the **H13 composition law = `coupled`** ([eh1_curve](figures/eh1_curve.png), [eh1_composition](figures/eh1_composition.png)); **the EH3 equal-budget operator comparison (HC7)** — per-subsystem consultation earns **~3.7× more horizon per oracle-bit** ([eh3_operators](figures/eh3_operators.png)); and **the factored interaction-graph arm (HC4 incr-2) + EH4** — structure beats flat **~6.6× on delta-exact** yet the H13 coupling survives ([eh4_factored_vs_flat](figures/eh4_factored_vs_flat.png)) |
 | [SPEC-7](docs/specs/SPEC-7.md) | world: distributed | replicated services, transactions, consensus — design |
 | [SPEC-8](docs/specs/SPEC-8.md) | **method: oracle-grounded SSL** | put the oracle's truth in the *bulk* of the cake (self-supervised pretraining), not just the cherry (RL) |
 | [SPEC-9](docs/specs/SPEC-9.md) | **method: free-oracle scaling** | because the oracle labels for free, world size is a *compute* choice, not a labeling-budget one — how large/deep the world goes on one machine, and what holds as it grows |
@@ -618,8 +648,14 @@ write-up is [docs/report.md](docs/report.md).
 > horizon per oracle-bit** — and that the *cheapest* subsystem wins, not the H13-*weakest*, so a *smart*
 > `π_w` must trade cost against consequence (finding
 > [§14](#14-which-subsystem-you-verify-is-a-real-efficiency-lever--but-the-cheapest-not-the-weakest-host-eh3--hc7)).
-> Remaining: the scheduler + sockets/IPC + the interleaving-entropy dial, the **factored interaction-graph
-> arm** (which the H13 coupling result licenses), smart `π_c`/`π_w`, the experience-stream, and packaging.
+> **HC4 increment 2 + EH4 now ship the factored interaction-graph arm** ([`graph_model.py`](src/verisim/hostmodel/graph_model.py),
+> figure [`eh4_factored_vs_flat.png`](figures/eh4_factored_vs_flat.png)): a masked message-passing GNN+RSSM
+> over the process spine's lineage + shared-file edges, decoding under the same grammar as the flat arm. It
+> **beats flat ~6.6× on delta-exact and ~5.3× on composed acceptance** (structure helps), **but both stay
+> `coupled`** — so the H13 coupling is a genuine property of the host dynamics, not a flat-arm artifact
+> (finding [§15](#15-modeling-the-composition-explicitly-helps-a-lot--but-the-coupling-is-real-not-an-artifact-host-eh4--h11--h13)).
+> Remaining: the scheduler + sockets/IPC + the interleaving-entropy dial, per-subsystem decode heads + the
+> §6.3 drift levers, smart `π_c`/`π_w`, the experience-stream, and packaging.
 
 **v0 — shell/filesystem world (`src/verisim/`, SPEC-2 §13): complete.**
 
@@ -654,7 +690,7 @@ PyTorch is an optional `[model]` extra (see [docs/model-representation.md](docs/
 |---|---|---|
 | `O(s, a)` | the **oracle**: deterministic interpreter returning the exact next state + delta | `oracle/`, `netoracle/` |
 | `Δ` (delta) | the structured edit set a step makes; `apply(s, Δ)` reconstructs `s'` | `delta/`, `netdelta/` |
-| `Mθ` | the **learned proposer** (`predict_delta`); any model behind the `Model` protocol | `model/`, `netmodel/`, `hostmodel/` |
+| `Mθ` | the **learned proposer** (`predict_delta`); any model behind the `Model` protocol — flat serializer or factored interaction-graph (GNN+RSSM) | `model/`, `netmodel/`, `hostmodel/` |
 | `d(a, b)` | **divergence**: normalized symmetric set/graph/bundle difference, `0` iff identical (host: composed + per-subsystem) | `metrics/`, `netmetrics/`, `hostmetrics/` |
 | `H_ε(ρ)` | **faithful horizon**: first step where `d > ε`, as a function of consultation budget `ρ` | `metrics/horizon.py` |
 | `ρ` | **consultation budget** ∈ [0,1]: fraction of steps the oracle is consulted | `loop/policy.py` |
