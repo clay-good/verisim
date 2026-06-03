@@ -13,9 +13,18 @@ venv/
 .mypy_cache/
 .ruff_cache/
 
+# Claude
+.mcp.json
+.claude/settings.json
+.claude/skills/
+
 # Run-records: regenerable from configs + seeds (SPEC-2 §10, §12)
 /runs/*
 !/runs/.gitkeep
 
 # OS
 .DS_Store
+
+# openlore analysis artifacts (regenerable from `openlore analyze`)
+.openlore/
+ARCHITECTURE.md
