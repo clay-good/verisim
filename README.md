@@ -931,7 +931,7 @@ Package map (parallel structure; `net*` mirrors v0 for the graph world):
                                 netdata/    drivers + OG1/OG2 factory           en9_negatives
                                 netloop/    partial-obs runner, probe, belief filter
 
-  host world (SPEC-6, HC0-HC5 — the next world; the host oracle *composes* the FS + net sub-oracles)
+  host world (SPEC-6, HC0-HC8 — the composing world; the host oracle *composes* the FS + net sub-oracles)
   host/      bundle state (procs + per-process fds + embedded v0 fs), syscall grammar, bundle delta, config
   hostoracle/  Tier-A reference host oracle (process/fd/credential glue over the v0 FS sub-oracle)
                + invariant.py: a symbolic privilege second-oracle (the cheap EH6/H12 security check)
@@ -946,6 +946,10 @@ Package map (parallel structure; `net*` mirrors v0 for the graph world):
                + verify it (plan-level H_ε + the task-oracle "third oracle") — what an agent calls
   hostrl/      oracle-as-reward RL env (HC8, §12; the v0 rl/ shape): reset/step, reward = faithful step,
                return == composed H_ε — the verifiable-reward substrate, no learned reward model in loop
+  hosteval/    composed-host faithfulness benchmark (HC8, §1.4; the v0 eval/ shape): score_host_model +
+               single-step QA grader + the inspect_ai task adapter (behind the [eval] extra)
+  contrib/     §16 decentralized verified-contribution protocol: accept a contributed transition/
+               trajectory iff the oracle reproduces it bit-for-bit — trustless by re-execution
 ```
 
 The host **bundle** is the structural novelty: state is a coupled set of subsystems (process table +
@@ -1148,8 +1152,17 @@ write-up is [docs/report.md](docs/report.md).
 > host analogue of v0's `rl/` — a `verifiers`-spec reset/step env whose reward *is* a faithful step and
 > whose episode **return equals the composed faithful horizon** `H_ε`, with no learned reward model in the
 > loop (the verifiable-reward substrate a future denial-aware objective plugs into).
-> Remaining (HC8): per-subsystem decode *heads*, the **counterfactual** *training* lift beyond volume,
-> the Tier-B system oracle, and the Inspect benchmark + technical report.
+> **And HC8 closes its dependency-free packaging:** the **§16 decentralized verified-contribution protocol**
+> ([`contrib/`](src/verisim/contrib/)) — a contributed host transition or trajectory is accepted *iff
+> re-running the deterministic oracle reproduces it bit-for-bit* (`verify_transition`/`verify_trajectory`),
+> with chaining checks against spliced transitions and a `content_address` integrity hash; what TOPLOC
+> verifies *heuristically*, the oracle verifies *exactly*, so contributed data is **trustless by
+> construction** — and the **composed-host faithfulness benchmark + Inspect adapter**
+> ([`hosteval/`](src/verisim/hosteval/)): `score_host_model` grades any `HostModel` through the composed
+> loop, with a single-step QA grader and an `inspect_ai` task behind the `[eval]` extra — the §1.4 missing
+> metrology for a *whole machine*, packaged where labs already look.
+> Remaining (HC8): per-subsystem decode *heads*, the **Tier-B system oracle** (rr/Hermit/gVisor), and the
+> **technical report**.
 
 **v0 — shell/filesystem world (`src/verisim/`, SPEC-2 §13): complete.**
 
@@ -1192,6 +1205,7 @@ PyTorch is an optional `[model]` extra (see [docs/model-representation.md](docs/
 | composition-law | host H13 diagnostic: is composed `H_ε` multiplicative (∏ aᵢ) ↔ weakest-link (min aᵢ) ↔ coupled? | `hostmetrics/composition.py` |
 | interleaving entropy | host H14 dial: thread context-switch rate of a chaos-scheduled workload; `H_ε(interleaving-entropy)` quantifies concurrency's cost | `hostdata/scheduler.py` |
 | plan `H_ε` / task oracle | §7 simulator: `imagine`/`verify` a syscall *plan*; plan-faithful-horizon = steps an agent can trust the draft; the task oracle (`Goal`) is the *third* oracle (did the plan succeed?) | `hostsim/` |
+| verified contribution | §16: accept a contributed `(state, action, next_state[, delta])` iff the oracle reproduces it bit-for-bit; trajectories must *chain*; `content_address` is the integrity hash — trustless by construction | `contrib/protocol.py` |
 | **delta-exact** | per-step: did free decode assemble the exact edit set? (`bits_to_correct = 0`) | `netmetrics/exact.py` |
 | full / probe | oracle consultation modes: whole next-state vs one host's local view (cheap) | `netloop/observe.py` |
 | `π_w` | **which-subsystem** policy (host): *which truth-source to buy* on a consult — proc/fd/fs/global; fixed / round-robin / **uncertainty** (the smart, information-gain choice from per-subsystem decode entropy); the `SubsystemFilter` corrects only that one | `hostloop/subsystem.py`, `hostloop/operator.py` |
@@ -1212,6 +1226,7 @@ PyTorch is an optional `[model]` extra (see [docs/model-representation.md](docs/
 | **never latent-ify the checkable part** | latents only ever cover the genuinely-unobserved residual `R` | surrendering verifiability of `D` would give away the whole asset |
 | **deterministic core first** | the no-GPU data/metric/loop machinery ships and is property-tested before any training claim | NW0–NW3 / OG1–OG2 discipline; the figure is gated, never assumed |
 | **honest negatives are first-class** | every hypothesis pre-registers its refutation branch as a banked result | the oracle makes negatives *trustworthy*; a refutation is often the deeper contribution |
+| **trustless by re-execution** | contributed data is accepted iff the deterministic oracle reproduces it bit-for-bit (`contrib/`, §16) | no trust to establish, no tampering to detect probabilistically — what TOPLOC checks heuristically, the oracle settles *exactly* and for free |
 
 ## Verification
 
@@ -1239,6 +1254,25 @@ The env + metric are packaged where researchers already look (SPEC-2 §15):
   `WorldModelEnv` (with the `load_environment` entrypoint) whose reward is the oracle's faithfulness
   verdict, so the episode return *is* the faithful horizon.
 
+The host world (SPEC-6) ships the same surfaces for a **whole machine** — the metrology the
+computer-use field lacks (OSWorld/TheAgentCompany grade the agent, never a simulator of the host's
+predicted next state):
+
+- **Composed-host faithfulness benchmark** ([`verisim.hosteval`](src/verisim/hosteval/)) — the host
+  analogue of `verisim.eval`: `score_host_model` grades any `HostModel` through the composed loop
+  (composed `H_ε`, oracle calls); `host_step_labels` / `grade_host_prediction` are the single-step QA
+  form; `host_faithfulness_task` is the `inspect_ai` adapter (behind `[eval]`).
+- **Oracle-as-reward host RL env** ([`verisim.hostrl`](src/verisim/hostrl/)) — episode return = the
+  *composed* `H_ε`. **LLM-callable whole-machine simulator** ([`verisim.hostsim`](src/verisim/hostsim/))
+  — `imagine` (oracle-free plan rollout) + `verify` (plan-level faithful horizon + task-oracle `Goal`
+  agreement); propose-verify-correct lifted to the *plan* level (§7).
+- **Decentralized verified-contribution protocol** ([`verisim.contrib`](src/verisim/contrib/)) — the
+  concrete form of the open/decentralized intent (§16). A contributed transition or trajectory is
+  accepted **iff re-running the deterministic oracle reproduces it bit-for-bit**, with chaining checks
+  against spliced transitions and a `content_address` integrity hash. What TOPLOC verifies
+  *heuristically* (INTELLECT-2), the oracle verifies *exactly* — so contributed data is **trustless by
+  construction**, with no trust to establish and no tampering to detect probabilistically.
+
 ```python
 from verisim.eval import score_model, FaithfulnessSample
 from verisim.loop import OracleBackedModel
@@ -1247,6 +1281,18 @@ from verisim.oracle import ReferenceOracle
 oracle = ReferenceOracle()
 score = score_model(OracleBackedModel(oracle), FaithfulnessSample("adversarial", 200, 24), oracle=oracle)
 assert score.normalized_horizon == 1.0   # a perfect model is fully faithful, unaided
+```
+
+```python
+# Trustless contribution: the oracle re-executes and settles it — free and certain (§16).
+from verisim.contrib import verify_trajectory
+from verisim.hostdata import generate_host_trajectory
+from verisim.host import DEFAULT_HOST_CONFIG
+from verisim.hostoracle import ReferenceHostOracle
+
+traj = generate_host_trajectory(ReferenceHostOracle(), DEFAULT_HOST_CONFIG, "forky", seed=7, n_steps=24)
+report = verify_trajectory(traj.to_dict())
+assert report.accepted                    # reproduces bit-for-bit; a forged step would be rejected
 ```
 
 ## Quickstart

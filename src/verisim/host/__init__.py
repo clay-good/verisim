@@ -19,7 +19,15 @@ from .delta import (
     delta_from_list,
     delta_to_list,
 )
-from .state import RUNNING, ZOMBIE, FdEntry, HostState, Process, to_canonical_host
+from .state import (
+    RUNNING,
+    ZOMBIE,
+    FdEntry,
+    HostState,
+    Process,
+    from_canonical_host,
+    to_canonical_host,
+)
 
 __all__ = [
     "DEFAULT_HOST_CONFIG",
@@ -43,6 +51,7 @@ __all__ = [
     "apply",
     "delta_from_list",
     "delta_to_list",
+    "from_canonical_host",
     "parse_host_action",
     "to_canonical_host",
 ]

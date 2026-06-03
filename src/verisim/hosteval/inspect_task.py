@@ -1,0 +1,82 @@
+"""Inspect adapter: the composed-host faithfulness benchmark as an ``inspect_ai`` task (SPEC-6 §12).
+
+The host analogue of :mod:`verisim.eval.inspect_task`. Packages the single-step ground-truth labels
+(:func:`verisim.hosteval.host_step_labels`) as an `inspect_evals`-compatible task so the
+*whole-machine* faithfulness benchmark slots into the framework labs already use. The model under
+test is presented a serialized ``(bundle_state, syscall)`` and asked for the canonical next bundle
+state; the scorer grades it with the §9.1 composed divergence
+(:func:`verisim.hosteval.grade_host_prediction`).
+
+This module imports ``inspect_ai`` lazily and is the only part of the host benchmark that needs the
+optional ``[eval]`` extra; the core in :mod:`verisim.hosteval.faithfulness` has no such dependency.
+The ``inspect_ai`` types are unresolved without the extra, so this module is relaxed from strict
+typing in ``pyproject.toml`` and its public functions return ``Any``.
+"""
+
+from __future__ import annotations
+
+from collections.abc import Sequence
+from typing import Any
+
+from .faithfulness import (
+    DEFAULT_HOST_SUITE,
+    HostFaithfulnessSample,
+    grade_host_prediction,
+    host_step_labels,
+)
+
+_INSTRUCTION = (
+    "You are a faithful model of a POSIX host: a process table, per-process file-descriptor "
+    "tables, and an embedded filesystem. Given the current STATE (canonical JSON bundle) and an "
+    "ACTION (a syscall), output ONLY the canonical JSON of the next bundle state."
+)
+
+
+def host_faithfulness_dataset(
+    suite: Sequence[HostFaithfulnessSample] = DEFAULT_HOST_SUITE,
+) -> list[Any]:
+    """Build the Inspect ``Sample`` list from the single-step labels of ``suite``."""
+    from inspect_ai.dataset import Sample
+
+    samples: list[Any] = []
+    for spec in suite:
+        for i, label in enumerate(host_step_labels(spec)):
+            samples.append(
+                Sample(
+                    input=f"{_INSTRUCTION}\n\nSTATE:\n{label.state}\n\nACTION: {label.action}",
+                    target=label.next_state,
+                    id=f"{spec.driver}-{spec.seed}-{i}",
+                    metadata={"difficulty": spec.difficulty, "action": label.action},
+                )
+            )
+    return samples
+
+
+def host_faithfulness_task(
+    suite: Sequence[HostFaithfulnessSample] = DEFAULT_HOST_SUITE,
+) -> Any:
+    """The Verisim composed-host faithfulness benchmark as an ``inspect_ai`` Task.
+
+    Usage (with the ``[eval]`` extra installed)::
+
+        inspect eval verisim.hosteval.inspect_task:host_faithfulness_task --model <model>
+    """
+    from inspect_ai import Task
+    from inspect_ai.scorer import Score, Target, accuracy, scorer, stderr
+    from inspect_ai.solver import TaskState, generate
+
+    @scorer(metrics=[accuracy(), stderr()])
+    def composed_divergence_scorer() -> Any:
+        async def score(state: TaskState, target: Target) -> Any:
+            completion = state.output.completion.strip()
+            return Score(
+                value=grade_host_prediction(completion, target.text), answer=completion
+            )
+
+        return score
+
+    return Task(
+        dataset=host_faithfulness_dataset(suite),
+        solver=generate(),
+        scorer=composed_divergence_scorer(),
+    )

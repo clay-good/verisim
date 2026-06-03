@@ -899,3 +899,28 @@ Per SPEC-2 §15, the env + metric are packaged for reuse:
   the oracle's faithfulness verdict, so the episode return equals the faithful
   horizon. This is the public expression of "train a world model against a verifiable
   oracle reward" (SPEC.md §6.3).
+
+The host world (SPEC-6) extends the same packaging to a *whole machine* — the missing
+metrology SPEC-6 §1.4 argues the computer-use field lacks (OSWorld/TheAgentCompany grade
+the agent, never a simulator of the host's predicted next state):
+
+- **Composed-host faithfulness benchmark** ([`verisim.hosteval`](../src/verisim/hosteval/))
+  — the host analogue of `verisim.eval`: `score_host_model` grades any `HostModel`
+  through the HC5 composed loop (composed `H_ε`, oracle calls); `host_step_labels` /
+  `grade_host_prediction` are the single-step QA form with a composed-divergence grader;
+  and `host_faithfulness_task` packages it as an `inspect_ai` task behind the `[eval]`
+  extra. Dependency-free core.
+- **Oracle-as-reward host RL environment** ([`verisim.hostrl`](../src/verisim/hostrl/))
+  — the `verifiers`-spec env whose episode return equals the *composed* `H_ε`, no learned
+  reward model in the loop.
+- **LLM-callable whole-machine simulator** ([`verisim.hostsim`](../src/verisim/hostsim/))
+  — `HostSimulator.imagine` (oracle-free plan rollout) + `verify` (a `PlanReport` with the
+  plan-level faithful horizon and task-oracle `Goal` agreement); propose-verify-correct
+  lifted from the syscall level to the plan level (SPEC-6 §7).
+- **Decentralized verified-contribution protocol** ([`verisim.contrib`](../src/verisim/contrib/))
+  — the concrete form of the open/decentralized intent (SPEC-6 §16): a contributed host
+  transition or trajectory is accepted iff re-running the deterministic oracle reproduces
+  it bit-for-bit (`verify_transition` / `verify_trajectory`), with chaining checks against
+  spliced transitions and a `content_address` integrity hash. What TOPLOC verifies
+  *heuristically* (INTELLECT-2, §2.9), the oracle verifies *exactly* — verification is free
+  and certain, so contributed data is trustless by construction.

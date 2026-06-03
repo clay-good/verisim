@@ -20,7 +20,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field, replace
 from typing import Any
 
-from verisim.env.serialize import to_canonical
+from verisim.env.serialize import from_canonical, to_canonical
 from verisim.env.state import State
 
 RUNNING = "RUNNING"
@@ -104,3 +104,29 @@ def to_canonical_host(state: HostState) -> dict[str, Any]:
         "next_pid": state.next_pid,
         "last_exit": state.last_exit,
     }
+
+
+def from_canonical_host(d: dict[str, Any]) -> HostState:
+    """Reconstruct a :class:`HostState` from its canonical dict — the inverse of
+    :func:`to_canonical_host` (round-trippable, SPEC-6 §3.1).
+
+    Needed by the verified-contribution protocol (SPEC-6 §16): to re-execute the oracle on a
+    contributed ``(state, action)`` and check the claimed result bit-for-bit, the verifier must
+    first rebuild the contributed state. The embedded filesystem reuses v0's
+    :func:`~verisim.env.serialize.from_canonical` verbatim — the composition is invertible too.
+    """
+    procs = {
+        p["pid"]: Process(
+            pid=p["pid"], ppid=p["ppid"], state=p["state"], uid=p["uid"],
+            exit_code=p["exit_code"],
+        )
+        for p in d["procs"]
+    }
+    fds = {(e["pid"], e["fd"]): FdEntry(path=e["path"]) for e in d["fds"]}
+    return HostState(
+        procs=procs,
+        fds=fds,
+        fs=from_canonical(d["fs"]),
+        next_pid=d["next_pid"],
+        last_exit=d["last_exit"],
+    )
