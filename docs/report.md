@@ -1220,6 +1220,44 @@ and the lower host floor means there is more of it to lift. Net: **capacity-buys
 kind**, and **world difficulty — not a fixed compounding wall — sets the floor height**, the SPEC-10
 throughline carried off its origin world.
 
+## The structured arm (HS3): the capacity lift is *proposer-dependent* — it does not reproduce
+
+HS1–HS2 swept the **flat** transformer. Is "capacity buys horizon" a property of the oracle loop, or of
+that one proposer? HS3 ([`horizon_graph_scaling.py`](../src/verisim/experiments/horizon_graph_scaling.py))
+re-runs the **identical** axis with the **GNN+RSSM graph arm** — the NW8 proposer that *beats* the flat
+arm ~6.6× on one-step delta-exact (EN4/H11) — as the proposer.
+
+![HS3: for the structured graph arm, capacity buys neither per-step accuracy nor free-running horizon — both are flat, the floor+cliff in its purest form](../figures/horizon_graph_scaling.png)
+
+| scale | params | `p` (id / ood) | **`H_free`** id | `H_free` ood | `H_indep` id | η (id) |
+|---|---|---|---|---|---|---|
+| xs | 1,024 | 0.64 / 0.64 | **0.00** | 0.00 | 1.75 | 0.00 |
+| s | 8,192 | 0.66 / 0.67 | 0.67 [0, 2] | 0.89 | 1.93 | 0.35 |
+| m | 32,768 | 0.67 / 0.67 | **0.00** | 0.00 | 2.01 | 0.00 |
+| l | 110,592 | 0.66 / 0.64 | **0.00** | 0.00 | 1.92 | 0.00 |
+
+**The lift does not reproduce for the structured arm.** (1) For the graph arm, capacity buys **neither**
+per-step accuracy **nor** horizon: `p` is **flat** (0.64 → 0.66, vs the flat arm's 0.47 → 0.82 climb;
+the lone `s` `H_free`=0.67 is a single-seed blip, CI [0, 2]) and `H_free` is **≈ 0 at every capacity**
+(η ≈ 0) — the floor+cliff in its purest, capacity-invariant form. **So HS1's lift was the *flat arm's
+specific p-vs-capacity climb* crossing the self-stabilization threshold, not a universal loop property.**
+(2) The graph arm makes **near-but-not-exact** predictions: an ε-sweep on the trained `m` arm gives
+`H_free` = 0 up to ε=0.1 and only **4–6 steps at the loose ε=0.2** — its errors are small-magnitude but
+*ubiquitous*, so a single step exceeds ε≤0.1 immediately, where the flat arm's rollout self-stabilized
+*exactly*. The oracle exposes this same-loop, opposite-behavior split that one-step delta-exact (where the
+graph arm wins) cannot see.
+
+Honest caveats — this is a confounded negative, stated plainly: the committed graph trainer plateaus at
+`p` ≈ 0.66 (below the flat arm's 0.82 under `train_batched`; more iters 1.5k → 5k barely move it), so part
+of the `H_free`=0 gap is the graph arm not reaching the flat arm's per-step operating point — an
+architecture×optimizer interaction, not a proven architectural ceiling. And the graph arm's **flat** `p`
+(it ceilings already at `xs`, above the flat `xs`'s 0.47) says it is **data-limited, not capacity-limited**
+— the inductive bias is data-efficient but early-saturating, so its lever is *data* (the HS1.2 reading), the
+graph data cross-axis being the HS3-increment-2 follow-up. The load-bearing fact: across 108× capacity the
+structured arm's exact free-running horizon **never leaves the floor**, so capacity-buys-horizon is **not**
+automatic across model classes — sharpening HS1 and consistent with EN7/H22 (the loop governs the shape; the
+proposer's competence sets whether it escapes the floor).
+
 ## Threats to validity
 
 - **Scale.** The committed model is ~tiny and trains for a few hundred iterations on
@@ -1301,6 +1339,9 @@ python -m verisim.experiments.horizon_joint_scaling --config configs/horizon_joi
 # SPEC-10 HS2 — the scaling law re-run on the HOST world (universality; ~1 h CPU):
 python -m verisim.experiments.horizon_host_scaling --config configs/horizon_host_scaling.json \
     --out figures/horizon_host_scaling.csv --plot figures/horizon_host_scaling.png
+# SPEC-10 HS3 — the scaling law with the STRUCTURED graph arm (proposer-dependence; ~10 min CPU):
+python -m verisim.experiments.horizon_graph_scaling --config configs/horizon_graph_scaling.json \
+    --out figures/horizon_graph_scaling.csv --plot figures/horizon_graph_scaling.png
 ```
 
 The run-records are git-ignored (regenerable); the figures and their CSVs are

@@ -13,7 +13,7 @@
 
 ## Results at a glance
 
-Twenty committed, oracle-grounded figures — the smoke-scale bet in one screen — each detailed below, each
+Twenty-one committed, oracle-grounded figures — the smoke-scale bet in one screen — each detailed below, each
 with its honest negative. **The one-figure thesis is the cross-world synthesis ([§22](#22-the-thesis-in-one-figure-the-floorcliff-is-the-same-in-every-world-cross-world-synthesis)): the floor+cliff `H_ε(ρ)` is the *same shape in all three worlds*.** **What survives scaling is the real verdict: see [§8](#8-which-wins-survive-scaling--the-honest-mixed-verdict-spec-9).** Every number regenerates from
 config + seeds (`bash figures/reproduce.sh`).
 
@@ -21,6 +21,7 @@ config + seeds (`bash figures/reproduce.sh`).
 |---|---|
 | [![HS1.1 the faithful-horizon scaling law — non-monotone, and the proxy goes blind](figures/horizon_scaling_xl.png)](figures/horizon_scaling_xl.png)<br>**Faithful horizon is *non-monotone* in capacity — and the one-step metric can't see it (SPEC-10 / HS1.1 / H26).** Hold the world fixed, sweep model capacity ~400× with an adequate coverage set, and measure free-running faithful horizon `H_ε(ρ=0)` *exactly* against the oracle. It **rises to a compute-optimal peak at `l` (17 id / 28 ood steps)** then **declines** (xxl 9.6) — a Chinchilla-style frontier, but for long-horizon *faithfulness*, not test loss. The headline: across the whole top end the per-step accuracy `p` any normal world-model paper reports stays **flat and high** (0.81–0.90), while the *exact* horizon **falls ~45%** and ood efficiency `η` **crosses below 1** — **a bigger, per-step-more-accurate model that is *less faithful over the horizon*, a divergence only the free exact oracle reveals.** (And the floor itself lifts ~4× from *resourcing alone*: `xs` 1.75 → 6.83.) The data cross-axis (HS1.2) then shows that decline is **data starvation, not a wall** — at fixed `xl`, feeding 2× the data recovers `H_free` 13.9 → 16.2 and ood η from 0.97 back to 1.90, the Chinchilla prescription made exact: once capacity is adequate, the lever is data, and only the oracle could diagnose it (`p` stays flat while the horizon recovers). The joint push (HS1.3) then scales **both** levers together: it lifts the peak to a **program-best `l@9.6k` = 19.2 id / 28.75 ood** (tight, disjoint CIs) but returns vanish past `l` — so the floor+cliff resolves into a **resourcing story with a measurable compute-optimal frontier**, not a fundamental compounding wall, all measured exactly against the oracle. | [![EN1 / K4 the floor](figures/en1_curve.png)](figures/en1_curve.png)<br>**The floor HS1 revises (EN1 / K4 / H8).** Faithful horizon vs consultation budget `H_ε(ρ)` was flat-then-cliff on every world at the committed (tiny) scale: the honest negative that drove every later design choice. HS1/HS1.1 show the *height* of that `ρ=0` floor is not fixed — it scales with capacity+data, then *declines* once capacity outruns the data — which sharpens what this curve does and does not show: a property of the *consultation* axis at fixed model, not a ceiling on what a larger model can free-run. |
 | [![HS2 the scaling law re-run on the host world — the lift is universal, the floor re-lowered](figures/horizon_host_scaling.png)](figures/horizon_host_scaling.png)<br>**The capacity lift is *universal* — and a harder world re-lowers the floor (SPEC-10 / HS2 / H26).** Re-run the *identical* HS1 capacity axis on the harder **host** world (SPEC-6: the composed process/fd/filesystem/exit bundle) and the verdict survives the world swap: free-running `H_free` scales **monotonically** with capacity (id **1.00 → 5.08** over 108× params, **disjoint CIs** xs vs l). So "capacity buys horizon" is a property of the oracle *loop*, not the easy network world. But the richer host dynamics do exactly what HS1 predicted: they **re-lower the floor ~3–5×** (host `l` 5.08 vs network `l` 15.7) and the curve **has not saturated by `l`** (the network saturated by `m`) — a harder world both lowers the floor and re-opens the headroom. The host one-step `p` is far lower (0.11 → 0.49 vs network's 0.47 → 0.79) — a genuinely harder per-step target — and `η`, though > 1 throughout, **declines toward 1 with capacity** here (the mirror of the network's rising `η`). **World difficulty sets the floor height and the peak location; the capacity-buys-horizon verdict is cross-world.** | [![EH1 composed-host floor](figures/eh1_curve.png)](figures/eh1_curve.png)<br>**The host floor HS2 scales (EH1 / HC6).** The composed-host `H_ε(ρ)` is the same flat-then-cliff as the filesystem and network worlds — `ρ=0` drifts in <1 step at the committed tiny scale. HS2 shows the *height* of that host `ρ=0` floor lifts with capacity (xs 1.0 → l 5.1 free-running steps), just as HS1 showed for the network — but stays well below the network's, because the composed bundle is the harder world. |
+| [![HS3 the scaling law with the structured graph arm — the lift is proposer-dependent](figures/horizon_graph_scaling.png)](figures/horizon_graph_scaling.png)<br>**The capacity lift is *proposer-dependent* — it does NOT reproduce for the structured arm (SPEC-10 / HS3 / H26).** Re-run the *identical* HS1 axis with the **GNN+RSSM graph arm** — the proposer that *beats* the flat arm ~6.6× on one-step delta-exact (EN4/H11) — and the verdict flips: for the graph arm capacity buys **neither** per-step accuracy **nor** horizon. `p` is **flat** (0.64 → 0.66, vs the flat arm's 0.47 → 0.82 climb) and `H_free` is **≈ 0 at every capacity** (η ≈ 0) — the floor+cliff in its purest, capacity-invariant form. So **HS1's lift was the flat arm's specific p-vs-capacity climb crossing the self-stabilization threshold, not a universal loop property.** The graph arm makes *near-but-not-exact* predictions (an ε-sweep gives `H_free`=0 up to ε=0.1, only 4–6 steps at ε=0.2) — small but ubiquitous errors the flat arm's self-stabilizing rollout avoided. Honest caveat: the graph trainer plateaus at p≈0.66 < the flat arm's 0.82, and the arm's *flat* p says it is **data-limited, not capacity-limited** (its lever is data, the HS1.2 reading). Consistent with EN7/H22: the loop governs the shape, the proposer's competence sets whether it escapes the floor. | [![EN4 graph beats flat per-step](figures/en4_graph_vs_flat.png)](figures/en4_graph_vs_flat.png)<br>**Why HS3 is the sharp foil (EN4 / H11).** The graph arm *wins* on the one-step metric a normal paper reports — +16.5 pts token accuracy, +30.6 pts delta-exact over the flat arm. HS3 is the catch the oracle exposes: that per-step win **does not** convert to free-running horizon (`H_free`≈0), and capacity doesn't fix it. The metric that wins (delta-exact) and the metric that matters (exact free-running horizon) come apart — exactly the proxy/truth divergence the whole program is built to measure. |
 
 | | |
 |---|---|
@@ -903,6 +904,43 @@ floor height.** That is exactly the measurement the oracle-free world-model fiel
 make: long-horizon fidelity, scored against exact ground truth, across a 100× capacity range and two
 worlds.
 
+### 31. …but the capacity lift is *proposer-dependent* — it does not reproduce for the structured arm (SPEC-10 / HS3 / H26)
+
+HS1–HS2 swept the **flat** transformer. Is "capacity buys horizon" a property of the oracle loop, or of
+that one proposer? HS3 ([`horizon_graph_scaling.py`](src/verisim/experiments/horizon_graph_scaling.py))
+re-runs the **identical** axis with the **GNN+RSSM graph arm** — the NW8 proposer that *beats* the flat
+arm ~6.6× on one-step delta-exact (EN4/H11) — as the proposer.
+
+![HS3: for the structured graph arm, capacity buys neither per-step accuracy nor free-running horizon — both flat, the floor+cliff in its purest form](figures/horizon_graph_scaling.png)
+
+| scale | params | `p` (id / ood) | **`H_free`** id | `H_free` ood | `H_indep` id | η (id) |
+|---|---|---|---|---|---|---|
+| xs | 1,024 | 0.64 / 0.64 | **0.00** | 0.00 | 1.75 | 0.00 |
+| s | 8,192 | 0.66 / 0.67 | 0.67 [0, 2] | 0.89 | 1.93 | 0.35 |
+| m | 32,768 | 0.67 / 0.67 | **0.00** | 0.00 | 2.01 | 0.00 |
+| l | 110,592 | 0.66 / 0.64 | **0.00** | 0.00 | 1.92 | 0.00 |
+
+**The lift does not reproduce for the structured arm.** (1) For the graph arm, capacity buys **neither**
+per-step accuracy **nor** horizon: `p` is **flat** (0.64 → 0.66, vs the flat arm's 0.47 → 0.82 climb;
+the `s` `H_free`=0.67 is a single-seed blip, CI [0, 2]) and `H_free` is **≈ 0 at every capacity** (η ≈ 0)
+— the floor+cliff in its purest, capacity-invariant form. **So HS1's lift was the *flat arm's specific
+p-vs-capacity climb* crossing the self-stabilization threshold, not a universal loop property.** (2) The
+graph arm makes **near-but-not-exact** predictions — an ε-sweep on the trained `m` arm gives `H_free`=0
+up to ε=0.1 and only **4–6 steps at ε=0.2**: small-magnitude but *ubiquitous* errors that exceed ε≤0.1
+within one step, where the flat arm's rollout self-stabilized *exactly*. The oracle exposes this
+same-loop, opposite-behavior split that one-step delta-exact (where the graph arm wins) cannot see.
+
+Honest caveats — a confounded negative, stated plainly: the committed graph trainer plateaus at `p` ≈ 0.66
+(below the flat arm's 0.82 under `train_batched`; more iters 1.5k → 5k barely move it), so part of the
+`H_free`=0 gap is the graph arm not reaching the flat arm's per-step operating point — an
+architecture×optimizer interaction, not a proven architectural ceiling. And the graph arm's **flat** `p`
+(it ceilings already at `xs`, *above* the flat `xs`'s 0.47) says it is **data-limited, not
+capacity-limited**: the inductive bias is data-efficient but early-saturating, so its lever is *data* (the
+HS1.2 reading), the graph data cross-axis being the HS3-increment-2 follow-up. The load-bearing fact:
+across 108× capacity the structured arm's exact free-running horizon **never leaves the floor** — so
+capacity-buys-horizon is **not** automatic across model classes, which sharpens HS1 and is consistent with
+EN7/H22 (the loop governs the shape; the proposer's competence sets whether it escapes the floor).
+
 ## The problem, and what we're trying to accomplish
 
 ### The wall every world model hits
@@ -1292,7 +1330,8 @@ write-up is [docs/report.md](docs/report.md).
 | **HS1.2** | The **data cross-axis** ([`horizon_data_scaling.py`](src/verisim/experiments/horizon_data_scaling.py), [horizon_data_scaling.png](figures/horizon_data_scaling.png)): the decline is **data starvation, not a wall** — at fixed `xl`, data recovers `H_free` and ood η from 0.97 back to 1.90 (Chinchilla) | ✅ |
 | **HS1.3** | The **joint capacity×data push** ([`horizon_joint_scaling.py`](src/verisim/experiments/horizon_joint_scaling.py), [horizon_joint_scaling.png](figures/horizon_joint_scaling.png)): a compute-optimal ladder lifts the peak to a **program-best `l@9.6k` = 19.2 id / 28.75 ood**, but returns vanish past `l` | ✅ |
 | **HS2** | **Universality across worlds** ([`horizon_host_scaling.py`](src/verisim/experiments/horizon_host_scaling.py), [horizon_host_scaling.png](figures/horizon_host_scaling.png)): the *identical* axis on the harder **host** world — the lift is **cross-world** (`H_free` 1.00→5.08, disjoint CIs) but the world **re-lowers the floor ~3–5×** and re-opens the headroom ([§30](#30-capacity-buys-free-running-horizon--and-the-verdict-is-cross-world-spec-10--hs1hs2--h26)) | ✅ |
-| **HS3** | The **graph arm + world-size cross-axis** — does a *structured* model change the η verdict, and how does it interact with SPEC-9's world-size axis? | ☐ future |
+| **HS3 (incr 1)** | The **structured (graph) arm** ([`horizon_graph_scaling.py`](src/verisim/experiments/horizon_graph_scaling.py), [horizon_graph_scaling.png](figures/horizon_graph_scaling.png)): the *identical* axis with the GNN+RSSM proposer — the lift is **proposer-dependent**, it does **not** reproduce (`p` flat ~0.66, `H_free`≈0, η≈0); HS1's lift was the flat arm's p-climb, not a loop property ([§31](#31-but-the-capacity-lift-is-proposer-dependent--it-does-not-reproduce-for-the-structured-arm-spec-10--hs3--h26)) | ✅ |
+| **HS3 (incr 2)** | The **world-size cross-axis** + the graph **data** cross-axis (the graph arm is data-limited, HS1.2 reading) — how does the structured-arm verdict interact with SPEC-9's `O(N²)` host-count axis? | ☐ future |
 
 The deterministic cores (filesystem and network) have **no runtime dependencies** and need no GPU.
 PyTorch is an optional `[model]` extra (see [docs/model-representation.md](docs/model-representation.md)).

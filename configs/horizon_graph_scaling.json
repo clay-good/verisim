@@ -1,0 +1,28 @@
+{
+  "name": "hs3-graph",
+  "lr": 0.003,
+  "batch_size": 32,
+  "noise_prob": 0.0,
+  "eval_driver": "weighted",
+  "eval_driver_hard": "adversarial",
+  "eval_seeds": [100, 101, 102],
+  "eval_steps": 32,
+  "one_step_seeds": [200, 201],
+  "one_step_steps": 32,
+  "epsilon": 0.0,
+  "seeds": [0, 1, 2],
+  "scales": [
+    { "label": "xs", "d_model": 32, "n_layer": 1, "mp_rounds": 2, "n_head": 2, "train_steps": 2000 },
+    { "label": "s", "d_model": 64, "n_layer": 2, "mp_rounds": 2, "n_head": 2, "train_steps": 2500 },
+    { "label": "m", "d_model": 128, "n_layer": 2, "mp_rounds": 3, "n_head": 2, "train_steps": 3000 },
+    { "label": "l", "d_model": 192, "n_layer": 3, "mp_rounds": 3, "n_head": 4, "train_steps": 3500 }
+  ],
+  "base": {
+    "name": "en1-small",
+    "train_driver": "weighted",
+    "train_seeds": [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15],
+    "train_steps_per_traj": 60,
+    "block_size": 256,
+    "lr": 0.003
+  }
+}
