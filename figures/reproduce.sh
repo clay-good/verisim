@@ -195,4 +195,9 @@ echo "   (local sweep, ~3 h on CPU; 4-cell compute-optimal ladder × 3 seeds; wr
 python -m verisim.experiments.horizon_joint_scaling --config configs/horizon_joint_scaling.json \
     --out figures/horizon_joint_scaling.csv --plot figures/horizon_joint_scaling.png
 
-echo "== done: figures/{e1_curve,e2_policies,e3_operators,calibration,e4_ablation,objective,representation,auto_search,en1_curve,en2_policies,en3_operators,en4_graph_vs_flat,en8_grounding,en9_contrastive,en8_scale,en9_scale,en8_capacity,en9_negatives,en7_invariance,en5_selfheal,en6_counterfactual,en8_ls3_hero,en10_two_oracle,eh1_curve,eh1_composition,eh2_policies,eh3_operators,eh4_factored_vs_flat,eh4_drift,eh5_subsystem_policy,eh5_heads,eh_h14_interleaving,eh_h14_scale,eh7_invariance,eh8_privilege,eh6_two_oracle,eh_h13_scale,eh9_denial_weighted,eh6_counterfactual,eh_stream,synthesis_floor_cliff,horizon_scaling,horizon_scaling_xl,horizon_data_scaling,horizon_joint_scaling}.{png,csv} =="
+echo "== HS2: the SCALING LAW re-run on the HOST world — universality across worlds (SPEC-10, §4.5) =="
+echo "   (local sweep, ~1 h on CPU; same capacity axis as HS1, 3 seeds; writes the CSV + the figure)"
+python -m verisim.experiments.horizon_host_scaling --config configs/horizon_host_scaling.json \
+    --out figures/horizon_host_scaling.csv --plot figures/horizon_host_scaling.png
+
+echo "== done: figures/{e1_curve,e2_policies,e3_operators,calibration,e4_ablation,objective,representation,auto_search,en1_curve,en2_policies,en3_operators,en4_graph_vs_flat,en8_grounding,en9_contrastive,en8_scale,en9_scale,en8_capacity,en9_negatives,en7_invariance,en5_selfheal,en6_counterfactual,en8_ls3_hero,en10_two_oracle,eh1_curve,eh1_composition,eh2_policies,eh3_operators,eh4_factored_vs_flat,eh4_drift,eh5_subsystem_policy,eh5_heads,eh_h14_interleaving,eh_h14_scale,eh7_invariance,eh8_privilege,eh6_two_oracle,eh_h13_scale,eh9_denial_weighted,eh6_counterfactual,eh_stream,synthesis_floor_cliff,horizon_scaling,horizon_scaling_xl,horizon_data_scaling,horizon_joint_scaling,horizon_host_scaling}.{png,csv} =="

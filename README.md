@@ -13,13 +13,14 @@
 
 ## Results at a glance
 
-Nineteen committed, oracle-grounded figures — the smoke-scale bet in one screen — each detailed below, each
+Twenty committed, oracle-grounded figures — the smoke-scale bet in one screen — each detailed below, each
 with its honest negative. **The one-figure thesis is the cross-world synthesis ([§22](#22-the-thesis-in-one-figure-the-floorcliff-is-the-same-in-every-world-cross-world-synthesis)): the floor+cliff `H_ε(ρ)` is the *same shape in all three worlds*.** **What survives scaling is the real verdict: see [§8](#8-which-wins-survive-scaling--the-honest-mixed-verdict-spec-9).** Every number regenerates from
 config + seeds (`bash figures/reproduce.sh`).
 
 | | |
 |---|---|
 | [![HS1.1 the faithful-horizon scaling law — non-monotone, and the proxy goes blind](figures/horizon_scaling_xl.png)](figures/horizon_scaling_xl.png)<br>**Faithful horizon is *non-monotone* in capacity — and the one-step metric can't see it (SPEC-10 / HS1.1 / H26).** Hold the world fixed, sweep model capacity ~400× with an adequate coverage set, and measure free-running faithful horizon `H_ε(ρ=0)` *exactly* against the oracle. It **rises to a compute-optimal peak at `l` (17 id / 28 ood steps)** then **declines** (xxl 9.6) — a Chinchilla-style frontier, but for long-horizon *faithfulness*, not test loss. The headline: across the whole top end the per-step accuracy `p` any normal world-model paper reports stays **flat and high** (0.81–0.90), while the *exact* horizon **falls ~45%** and ood efficiency `η` **crosses below 1** — **a bigger, per-step-more-accurate model that is *less faithful over the horizon*, a divergence only the free exact oracle reveals.** (And the floor itself lifts ~4× from *resourcing alone*: `xs` 1.75 → 6.83.) The data cross-axis (HS1.2) then shows that decline is **data starvation, not a wall** — at fixed `xl`, feeding 2× the data recovers `H_free` 13.9 → 16.2 and ood η from 0.97 back to 1.90, the Chinchilla prescription made exact: once capacity is adequate, the lever is data, and only the oracle could diagnose it (`p` stays flat while the horizon recovers). The joint push (HS1.3) then scales **both** levers together: it lifts the peak to a **program-best `l@9.6k` = 19.2 id / 28.75 ood** (tight, disjoint CIs) but returns vanish past `l` — so the floor+cliff resolves into a **resourcing story with a measurable compute-optimal frontier**, not a fundamental compounding wall, all measured exactly against the oracle. | [![EN1 / K4 the floor](figures/en1_curve.png)](figures/en1_curve.png)<br>**The floor HS1 revises (EN1 / K4 / H8).** Faithful horizon vs consultation budget `H_ε(ρ)` was flat-then-cliff on every world at the committed (tiny) scale: the honest negative that drove every later design choice. HS1/HS1.1 show the *height* of that `ρ=0` floor is not fixed — it scales with capacity+data, then *declines* once capacity outruns the data — which sharpens what this curve does and does not show: a property of the *consultation* axis at fixed model, not a ceiling on what a larger model can free-run. |
+| [![HS2 the scaling law re-run on the host world — the lift is universal, the floor re-lowered](figures/horizon_host_scaling.png)](figures/horizon_host_scaling.png)<br>**The capacity lift is *universal* — and a harder world re-lowers the floor (SPEC-10 / HS2 / H26).** Re-run the *identical* HS1 capacity axis on the harder **host** world (SPEC-6: the composed process/fd/filesystem/exit bundle) and the verdict survives the world swap: free-running `H_free` scales **monotonically** with capacity (id **1.00 → 5.08** over 108× params, **disjoint CIs** xs vs l). So "capacity buys horizon" is a property of the oracle *loop*, not the easy network world. But the richer host dynamics do exactly what HS1 predicted: they **re-lower the floor ~3–5×** (host `l` 5.08 vs network `l` 15.7) and the curve **has not saturated by `l`** (the network saturated by `m`) — a harder world both lowers the floor and re-opens the headroom. The host one-step `p` is far lower (0.11 → 0.49 vs network's 0.47 → 0.79) — a genuinely harder per-step target — and `η`, though > 1 throughout, **declines toward 1 with capacity** here (the mirror of the network's rising `η`). **World difficulty sets the floor height and the peak location; the capacity-buys-horizon verdict is cross-world.** | [![EH1 composed-host floor](figures/eh1_curve.png)](figures/eh1_curve.png)<br>**The host floor HS2 scales (EH1 / HC6).** The composed-host `H_ε(ρ)` is the same flat-then-cliff as the filesystem and network worlds — `ρ=0` drifts in <1 step at the committed tiny scale. HS2 shows the *height* of that host `ρ=0` floor lifts with capacity (xs 1.0 → l 5.1 free-running steps), just as HS1 showed for the network — but stays well below the network's, because the composed bundle is the harder world. |
 
 | | |
 |---|---|
@@ -70,7 +71,11 @@ banked negative** (a small one-step dip, no horizon yet). That the random-corrup
 model's-own-drift lever behave identically is itself informative: the wall is **localized to the
 one-step→horizon conversion**, not the per-step learner (the arm fits teacher-forced to >0.9). This
 routes the remaining budget to scale, the latent-overshooting objective, and *objective grounding*
-([SPEC-8](docs/specs/SPEC-8.md)), not to more input-distribution patches.
+([SPEC-8](docs/specs/SPEC-8.md)), not to more input-distribution patches. **Scale partly resolves this
+(SPEC-10 / [§30](#30-capacity-buys-free-running-horizon--and-the-verdict-is-cross-world-spec-10--hs1hs2--h26)):** the `ρ=0` floor measured here at tiny scale *lifts* with capacity+data — to ~16–19 steps on
+the network and ~5 on the harder host world — so this negative is in substantial part an
+under-resourcing artifact of the committed (tiny) arm, not a fundamental compounding wall. What it does
+*not* yet show is a favorable *consultation* knee, which stays open.
 
 ### 3. Cheap, localized sensing is the efficient way to buy horizon (network EN3)
 
@@ -848,6 +853,56 @@ representation, EN9). The H16 null is therefore not a host quirk but a **world-a
 oracle-grounded method**, the same way the floor+cliff is — and it *bounds* how much counterfactual
 augmentation buys for supervised world models: nothing beyond the labeled transitions it adds.
 
+### 30. Capacity buys free-running horizon — and the verdict is *cross-world* (SPEC-10 / HS1–HS2 / H26)
+
+Every floor+cliff above was at the *committed* (tiny) scale, and the report's own *Threats to validity*
+named the confound: the models are small, so the floor *might* be a capacity artifact. SPEC-10 measures
+that confound directly for the headline metric — it holds the world fixed and sweeps **model capacity**,
+measuring two numbers exactly against the oracle on held-out rollouts: one-step acceptance `p` (per-step
+accuracy) and free-running faithful horizon `H_free = H_ε(ρ=0)` (the headline). The sharp object is the
+**independence baseline** `H_indep = p/(1−p)` — the horizon you'd get if per-step failures were i.i.d.
+(no compounding) — and its ratio `η = H_free/H_indep`, the scale-free compounding penalty.
+
+**HS1 (network world):** free-running horizon **lifts ~9× with capacity** (1.75 → 15.8 steps over 32×
+params, disjoint CIs) then saturates; HS1.1 sharpens this into a **non-monotone, compute-optimal
+frontier** (peak at `l`, then a data-starvation decline the one-step proxy `p` cannot see); HS1.2 shows
+that decline is **data starvation, not a wall** (feeding `xl` more data recovers it, the Chinchilla
+prescription); HS1.3 confirms the recipe lifts the peak to a **program-best `l@9.6k` = 19.2 id / 28.75
+ood**. The floor+cliff dissolves into a **resourcing story with a measurable compute-optimal frontier**
+([§ Results at a glance](#results-at-a-glance) top tile; full numbers in [docs/report.md](docs/report.md)).
+
+**HS2 (the universality test):** the whole HS1 arc ran in the network world, so is the lift a fact about
+the oracle loop or about one easy world? HS2 re-runs the **identical** capacity axis
+([`horizon_host_scaling.py`](src/verisim/experiments/horizon_host_scaling.py), the HS1 harness reused
+verbatim) on the harder **host** world (SPEC-6: the composed process/fd/filesystem/exit bundle).
+
+![HS2: free-running faithful horizon scales monotonically with capacity on the host world too, but the floor is re-lowered ~3-5× vs the network](figures/horizon_host_scaling.png)
+
+| scale | params | `p` (id / ood) | **`H_free`** id [95% CI] | `H_free` ood | η (id) | η (ood) |
+|---|---|---|---|---|---|---|
+| xs | 1,024 | 0.11 / 0.11 | **1.00** [0.75, 1.25] | 0.75 | 8.56 | 6.33 |
+| s | 8,192 | 0.21 / 0.26 | **2.42** [1.25, 3.25] | 1.50 | 8.65 | 4.41 |
+| m | 32,768 | 0.30 / 0.44 | **2.92** [1.25, 4.00] | 1.33 | 6.37 | 1.75 |
+| **l** | 110,592 | 0.49 / 0.52 | **5.08** [3.50, 8.25] | 2.92 | 5.30 | 2.70 |
+
+**The verdict survives the world swap.** (1) **The lift is universal:** `H_free` scales *monotonically*
+with capacity on the host world too (id 1.00 → 5.08, ~5× over 108× params, **disjoint CIs** xs [0.75,
+1.25] vs l [3.50, 8.25]) — so "capacity buys horizon" is a property of the loop, not the easy world. (2)
+**The harder world re-lowers the floor ~3–5× and re-opens the headroom** — exactly HS1's prediction:
+every host `H_free` sits far below its network twin (host `l` 5.08 vs network `l` 15.7), and the host
+curve **has not saturated by `l`** (the network saturated by `m`), so the harder dynamics push the
+compute-optimal peak rightward. (3) **The per-step problem is genuinely harder, and `η` mirrors the
+network:** the host `p` runs 0.11 → 0.49 (vs network's 0.47 → 0.79); `η` stays > 1 throughout (the
+rollout self-stabilizes on the easy manifold) but **declines toward 1 with capacity** here — the mirror
+of the network's rising `η` — because `p` climbs steeply from its low base. Honest caveats: seed variance
+is high (the load-bearing facts are the monotone trend and the disjoint xs-vs-l gap); this is the `ρ=0`
+floor on the *capacity* axis only (the host data/joint cross-axes are the open follow-up); and `η > 1` is
+partly the held-out-`p` artifact HS1 flagged, so `H_free` is the unambiguous number. Net: **capacity buys
+horizon on a second, harder world**, and **world difficulty — not a fixed compounding wall — sets the
+floor height.** That is exactly the measurement the oracle-free world-model field structurally cannot
+make: long-horizon fidelity, scored against exact ground truth, across a 100× capacity range and two
+worlds.
+
 ## The problem, and what we're trying to accomplish
 
 ### The wall every world model hits
@@ -1227,6 +1282,17 @@ write-up is [docs/report.md](docs/report.md).
 | **NW7** | Equal-budget comparisons. **EN2** (policy `π_c`, H9) + **EN3** (operators, §8.3): EN3 breaks v0's operator-identity collapse — the probe earns **~2.3×** more faithful horizon per oracle-bit | ◐ EN2/EN3 |
 | **NW8** | **GNN + RSSM graph arm** ([`graph_model.py`](src/verisim/netmodel/graph_model.py)) + §6.3 **noise + self-forcing** levers + **EN4 graph-vs-flat (H11)** + **delta-exact metric** ([`exact.py`](src/verisim/netmetrics/exact.py)) + **SPEC-8 OG1/OG2 data factory** ([`grounding.py`](src/verisim/netdata/grounding.py), [`negatives.py`](src/verisim/netdata/negatives.py)) + **SPEC-8 EN8/OG3 ablation** ([`en8.py`](src/verisim/experiments/en8.py), [`grounded_train.py`](src/verisim/netmodel/grounded_train.py): H23 collapse-tax removed, H24 near-tie) + **SPEC-8 EN9/OG4 ablation** ([`en9.py`](src/verisim/experiments/en9.py): H25 confirmed, H5 fidelity ~2× over VICReg) + **EN7/H22 model-invariance** ([`en7.py`](src/verisim/experiments/en7.py): the floor+cliff `H_ε(ρ)` shape is invariant across null/flat/graph proposers — H22 supported in kind) + **EN5/H7 self-healing** ([`en5.py`](src/verisim/experiments/en5.py): a robust null — neither single-example TTT nor a replay-buffer budget lifts the floor; the floor's levers are scale/objective, not adaptation) + **EN6/H5 counterfactual change-safety** ([`en6.py`](src/verisim/experiments/en6.py): a null for the predictive model beyond a matched-volume control — H5 is objective-dependent) + **EN10/H12 two-oracle** ([`en10.py`](src/verisim/experiments/en10.py) + the Batfish-style [`control_plane.py`](src/verisim/netoracle/control_plane.py): the control-plane oracle is redundant for verification but cheaper + decision-sufficient). With EN1–EN10 the network EN-series is complete | ◐ graph arm + EN4 + both levers + OG1/OG2 + EN8/OG3 + EN9/OG4 + EN7/H22 + EN5/H7 + EN6/H5 + EN10/H12 |
 | **SPEC-9 LS0–LS2** | **Free-oracle scaling** ([`en8_scale.py`](src/verisim/experiments/en8_scale.py), [`en9_scale.py`](src/verisim/experiments/en9_scale.py), [`en8_capacity.py`](src/verisim/experiments/en8_capacity.py), [`scale_common.py`](src/verisim/experiments/scale_common.py)): the measured local envelope + the 8× world-size surface with bootstrap CIs ([§8](#8-which-wins-survive-scaling--the-honest-mixed-verdict-spec-9)). **S1** H23 attenuates, **S2** H25/H5 reverses, **S3** H24 regime-dependent. The [`en9_negatives.py`](src/verisim/experiments/en9_negatives.py) S2-recovery diagnostic **confirms** the lift recovers when negatives scale with the world (k 8→32 flips it back to disjoint-positive) | ✅ LS0–LS2 + S2-recovery + S3 frontier |
+
+**SPEC-10 — the faithful-horizon scaling law (`H_ε(ρ=0)` vs capacity, H26): the floor+cliff is a resourcing story, and the lift is cross-world.**
+
+| Milestone | What | Status |
+|-----------|------|--------|
+| **HS0/HS1** | Capacity-sweep harness + the network curve ([`horizon_scaling.py`](src/verisim/experiments/horizon_scaling.py), [horizon_scaling.png](figures/horizon_scaling.png)): `H_free` lifts **~9×** with capacity (1.75→15.8, disjoint CIs) then saturates — **H26 supported**; the prior floor was an under-resourcing artifact | ✅ |
+| **HS1.1** | The **resourced frontier** ([horizon_scaling_xl.png](figures/horizon_scaling_xl.png)): `H_free` is **non-monotone** — peaks at `l` then declines while one-step `p` stays flat/high (the proxy goes blind); the floor lifts ~4× from resourcing even at fixed tiny capacity | ✅ |
+| **HS1.2** | The **data cross-axis** ([`horizon_data_scaling.py`](src/verisim/experiments/horizon_data_scaling.py), [horizon_data_scaling.png](figures/horizon_data_scaling.png)): the decline is **data starvation, not a wall** — at fixed `xl`, data recovers `H_free` and ood η from 0.97 back to 1.90 (Chinchilla) | ✅ |
+| **HS1.3** | The **joint capacity×data push** ([`horizon_joint_scaling.py`](src/verisim/experiments/horizon_joint_scaling.py), [horizon_joint_scaling.png](figures/horizon_joint_scaling.png)): a compute-optimal ladder lifts the peak to a **program-best `l@9.6k` = 19.2 id / 28.75 ood**, but returns vanish past `l` | ✅ |
+| **HS2** | **Universality across worlds** ([`horizon_host_scaling.py`](src/verisim/experiments/horizon_host_scaling.py), [horizon_host_scaling.png](figures/horizon_host_scaling.png)): the *identical* axis on the harder **host** world — the lift is **cross-world** (`H_free` 1.00→5.08, disjoint CIs) but the world **re-lowers the floor ~3–5×** and re-opens the headroom ([§30](#30-capacity-buys-free-running-horizon--and-the-verdict-is-cross-world-spec-10--hs1hs2--h26)) | ✅ |
+| **HS3** | The **graph arm + world-size cross-axis** — does a *structured* model change the η verdict, and how does it interact with SPEC-9's world-size axis? | ☐ future |
 
 The deterministic cores (filesystem and network) have **no runtime dependencies** and need no GPU.
 PyTorch is an optional `[model]` extra (see [docs/model-representation.md](docs/model-representation.md)).

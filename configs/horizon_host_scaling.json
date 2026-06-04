@@ -1,0 +1,24 @@
+{
+  "name": "hs2-host",
+  "block_size": 256,
+  "batch_size": 64,
+  "lr": 0.003,
+  "num_threads": 0,
+  "train_driver": "forky",
+  "train_seeds": [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15],
+  "train_steps_per_traj": 60,
+  "eval_driver": "forky",
+  "eval_driver_hard": "adversarial",
+  "eval_seeds": [100, 101, 102, 103],
+  "eval_steps": 32,
+  "one_step_seeds": [200, 201, 202],
+  "one_step_steps": 40,
+  "epsilon": 0.0,
+  "seeds": [0, 1, 2],
+  "scales": [
+    { "label": "xs", "n_embd": 32, "n_layer": 1, "n_head": 2, "train_steps": 2000 },
+    { "label": "s", "n_embd": 64, "n_layer": 2, "n_head": 2, "train_steps": 2500 },
+    { "label": "m", "n_embd": 128, "n_layer": 2, "n_head": 2, "train_steps": 3000 },
+    { "label": "l", "n_embd": 192, "n_layer": 3, "n_head": 4, "train_steps": 3500 }
+  ]
+}
