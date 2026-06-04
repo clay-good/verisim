@@ -1,0 +1,26 @@
+{
+  "name": "hs1.2-data-xl",
+  "block_size": 128,
+  "batch_size": 64,
+  "lr": 0.003,
+  "num_threads": 0,
+  "verbose": true,
+  "eval_driver": "weighted",
+  "eval_seeds": [100, 101, 102, 103],
+  "eval_steps": 64,
+  "one_step_seeds": [200, 201, 202],
+  "one_step_steps": 40,
+  "epsilon": 0.0,
+  "seeds": [0, 1, 2],
+  "scales": [
+    { "label": "xl", "n_embd": 256, "n_layer": 4, "n_head": 4, "train_steps": 5000 }
+  ],
+  "base": {
+    "name": "en1-data-xaxis",
+    "train_driver": "weighted",
+    "train_steps_per_traj": 100,
+    "block_size": 256,
+    "lr": 0.003
+  },
+  "data_seeds": [12, 24, 48, 96]
+}
