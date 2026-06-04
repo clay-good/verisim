@@ -1043,6 +1043,44 @@ steps where the full delta is wrong, at **~31%** of the consult bits. The same t
 the network found, now in the host: the cheap oracle's value is *cost and decision-relevance*, not
 non-redundancy.
 
+# Scale (SPEC-10): the floor+cliff was largely an under-resourcing artifact (H26)
+
+Every curve above has the floor+cliff shape, and the report's own *Threats to validity* names the
+confound: the committed models are tiny and undertrained, so the floor *might* be a capacity artifact.
+HS1 ([`horizon_scaling.py`](../src/verisim/experiments/horizon_scaling.py)) measures that confound
+directly for the headline metric. Holding the network world fixed, it sweeps **model capacity** across
+108× of parameters (a flat `M_θ`, `train_batched` on a 960-transition coverage set the free oracle
+makes cheap, 3 seeds), and at each size records one-step acceptance `p` and free-running faithful
+horizon `H_free = H_ε(ρ=0)` — on the in-distribution driver and on the harder adversarial one.
+
+![HS1: free-running faithful horizon scales ~9× with capacity, then saturates, on both regimes](../figures/horizon_scaling.png)
+
+| scale | params | `p` (id / ood) | **`H_free`** id [95% CI] | `H_free` ood | η (id) |
+|---|---|---|---|---|---|
+| xs | 1,024 | 0.47 / 0.53 | **1.75** [0.75, 2.50] | 1.92 | 1.86 |
+| s | 8,192 | 0.74 / 0.80 | **10.50** [7.50, 13.75] | 9.00 | 3.60 |
+| m | 32,768 | 0.82 / 0.86 | **15.83** [14.25, 16.75] | 17.42 | 3.45 |
+| l | 110,592 | 0.79 / 0.87 | **15.67** [14.50, 16.50] | 16.33 | 4.22 |
+
+**H26 is supported, with a sharp nuance.** Free-running horizon **scales ~9× with capacity** —
+`H_free` 1.75 → 15.83 steps — with **disjoint CIs** between the small and mid models (xs [0.75, 2.50]
+vs m [14.25, 16.75]), so the lift is real. It then **saturates** (l does not beat m), and the lift
+**transfers to the harder adversarial regime** (ood `H_free` 16–17, even slightly above id). And **η =
+`H_free`/`H_indep` stays above 1 throughout**: the model free-runs *longer* than the i.i.d.
+independence prediction `p/(1-p)`, because per-step success during an in-distribution rollout exceeds
+the conservative held-out `p` — so no compounding penalty appears at this scale; the binding fact is
+simply that horizon scales. **The floor+cliff that defined v0/EN1/EH1 was, in substantial part, an
+under-resourced-model artifact** — the prior curves used tiny arms on ~120-transition data; modest
+capacity on the oracle's free coverage set lifts the `ρ=0` floor by nearly an order of magnitude.
+
+Honest caveats: this measures the **`ρ=0` floor height**, not a favorable *consultation* knee (still
+open — the interior and the `ρ=1` cliff are not re-measured); the scaling **saturates early** (a
+one-time ~9× lift on this world, not an open-ended power law); single-machine CPU caps the range at
+~10⁵ params; and η > 1 is partly an artifact of measuring `p` on a harder set than the rollout visits,
+so `H_free` itself — unambiguous — is the load-bearing number. The result relocates the program's open
+question from "can the model free-run at all" (yes, ~16 steps) to "does a favorable consultation knee
+exist once the floor is high," and it is exactly the kind of scale measurement the oracle makes exact.
+
 ## Threats to validity
 
 - **Scale.** The committed model is ~tiny and trains for a few hundred iterations on
@@ -1109,6 +1147,9 @@ python -m verisim.experiments.eh5_heads --config configs/eh5_heads.json \
     --out runs/eh5_heads/records.jsonl
 python figures/plot_comparison.py --records runs/eh5_heads/records.jsonl --key policy \
     --out figures/eh5_heads.png --csv figures/eh5_heads.csv
+# SPEC-10 HS1 — the faithful-horizon scaling law (H26; local CPU sweep, ~20 min, writes CSV + figure):
+python -m verisim.experiments.horizon_scaling --config configs/horizon_scaling.json \
+    --out figures/horizon_scaling.csv --plot figures/horizon_scaling.png
 ```
 
 The run-records are git-ignored (regenerable); the figures and their CSVs are
