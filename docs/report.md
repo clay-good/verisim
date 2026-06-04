@@ -1081,6 +1081,48 @@ so `H_free` itself — unambiguous — is the load-bearing number. The result re
 question from "can the model free-run at all" (yes, ~16 steps) to "does a favorable consultation knee
 exist once the floor is high," and it is exactly the kind of scale measurement the oracle makes exact.
 
+## The resourced frontier (HS1.1): horizon is non-monotone, and the one-step proxy goes blind
+
+HS1 left two confounds — `l` was undertrained (its `p` dipped below `m`'s), and the 960-transition
+data was a fixed ceiling a bigger model overfits regardless of capacity (the Chinchilla confound). So
+"saturates at `m`" was not clean. HS1.1 ([`horizon_scaling_xl.json`](../configs/horizon_scaling_xl.json))
+removes both and pushes ~4× further: a **4,800-transition** shared coverage set, **train steps scaled
+with capacity** so every cell converges, and two new points — `xl` (262k) and `xxl` (410k), ~400× the
+smallest model.
+
+![HS1.1: free-running faithful horizon is non-monotone in capacity — it peaks at l then declines, while one-step p stays flat and high](../figures/horizon_scaling_xl.png)
+
+| scale | params | `p` (id / ood) | **`H_free`** id [95% CI] | `H_free` ood | η (ood) |
+|---|---|---|---|---|---|
+| xs | 1,024 | 0.73 / 0.82 | 6.83 [1.00, 12.25] | 7.08 | 1.07 |
+| s | 8,192 | 0.85 / 0.92 | 14.25 [11.75, 16.50] | 18.42 | 1.52 |
+| m | 32,768 | 0.82 / 0.90 | 17.00 [13.25, 19.25] | 20.50 | 2.24 |
+| **l** | 110,592 | 0.81 / 0.89 | **17.17** [15.00, 19.75] | **28.42** | 3.51 |
+| xl | 262,144 | 0.86 / 0.90 | 13.92 [7.50, 19.50] | 12.17 | **0.97** |
+| xxl | 409,600 | 0.83 / 0.88 | 9.58 [1.75, 14.00] | 10.42 | 1.26 |
+
+Three sharper results. **(1) The floor is under-resourcing in *data and compute*, not just capacity.**
+At fixed *tiny* capacity, `xs` lifts from the original `H_free` **1.75 → 6.83** (`p` 0.47 → 0.73) on an
+adequate coverage set alone — the floor the whole program was built on is not even a property of the
+smallest model. **(2) Faithful horizon is *non-monotone* in capacity.** It rises to a compute-optimal
+**peak at `l` (17 id / 28 ood)** then *declines* through `xl` to `xxl` (9.6 id) — the exact,
+oracle-measured analogue of the Chinchilla compute-optimal frontier, but for long-horizon
+*faithfulness*, not test loss. **(3) The one-step proxy goes blind exactly where it matters.** Across
+the top of the axis `p` — the metric a standard world-model paper reports — stays **flat and high** (id
+0.81–0.86, near-max at `xl`), while the *exact* horizon **falls ~45%** and ood η **crosses below 1**
+(`l` 3.51 → `xl` 0.97): the free-running model becomes worse than its own i.i.d. prediction. **A
+bigger, per-step-more-accurate model is *less faithful over the horizon*, and the one-step metric
+cannot see it** — the quantitative case for the oracle, and for "verification is a primitive, not a
+patch."
+
+Honest caveats: the `xl`/`xxl` decline is confounded between genuine capacity-induced compounding and
+**fixed-data overfitting** (high id `p` with collapsing ood/horizon is the overfit signature; the seed
+variance explodes at the top). Separating "capacity saturates" from "data-starved" is the next
+experiment — a **data cross-axis at fixed large capacity** (HS1.2): if feeding the model recovers the
+horizon, the decline is starvation, not a wall. The load-bearing facts — the floor lifts ~4× from
+resourcing alone, the horizon is non-monotone, and `p` and `H_free` diverge at the top — hold either
+way.
+
 ## Threats to validity
 
 - **Scale.** The committed model is ~tiny and trains for a few hundred iterations on
@@ -1150,6 +1192,9 @@ python figures/plot_comparison.py --records runs/eh5_heads/records.jsonl --key p
 # SPEC-10 HS1 — the faithful-horizon scaling law (H26; local CPU sweep, ~20 min, writes CSV + figure):
 python -m verisim.experiments.horizon_scaling --config configs/horizon_scaling.json \
     --out figures/horizon_scaling.csv --plot figures/horizon_scaling.png
+# SPEC-10 HS1.1 — the resourced frontier (xl/xxl, non-monotone horizon; ~2.5 h CPU):
+python -m verisim.experiments.horizon_scaling --config configs/horizon_scaling_xl.json \
+    --out figures/horizon_scaling_xl.csv --plot figures/horizon_scaling_xl.png
 ```
 
 The run-records are git-ignored (regenerable); the figures and their CSVs are

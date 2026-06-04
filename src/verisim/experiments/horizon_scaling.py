@@ -97,6 +97,7 @@ class HorizonScalingConfig:
     one_step_seeds: tuple[int, ...] = (200, 201)  # held-out (state, action) for the p measurement
     one_step_steps: int = 40
     epsilon: float = 0.0  # exact-match acceptance / horizon (the strictest, cleanest reading)
+    verbose: bool = False  # print per-cell progress (the long local sweep; off in CI/tests)
 
     @staticmethod
     def from_dict(d: dict[str, Any]) -> HorizonScalingConfig:
@@ -128,6 +129,7 @@ class HorizonScalingConfig:
             one_step_seeds=tuple(d.get("one_step_seeds", b.one_step_seeds)),
             one_step_steps=d.get("one_step_steps", b.one_step_steps),
             epsilon=d.get("epsilon", b.epsilon),
+            verbose=d.get("verbose", b.verbose),
         )
 
     @staticmethod
@@ -280,9 +282,17 @@ def run_horizon_scaling(
 
     stats: list[ScaleStat] = []
     for scale in config.scales:
-        per_seed = [
-            _cell(config, scale, seed, oracle, net, vocab, examples) for seed in config.seeds
-        ]
+        per_seed = []
+        for seed in config.seeds:
+            cell = _cell(config, scale, seed, oracle, net, vocab, examples)
+            per_seed.append(cell)
+            if config.verbose:  # pragma: no cover - progress for the long local sweep
+                print(
+                    f"  [{scale.label} N={scale.params} seed={seed}] "
+                    f"p={cell['one_step_acc_id']:.3f} H_free={cell['h_free_id']:.2f} "
+                    f"(ood H_free={cell['h_free_ood']:.2f})",
+                    flush=True,
+                )
         for metric in METRICS:
             values = [c[metric] for c in per_seed]
             lo, hi = bootstrap_ci(values, seed=0)

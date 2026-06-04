@@ -44,9 +44,16 @@ measuring it against ground truth across the whole capacity range.
 > **Result (HS1, §4.1):** the second branch. Free-running horizon **scales ~9× with capacity** (1.75
 > → 15.8 steps over 32× params, disjoint CIs) and **transfers to the harder adversarial regime**,
 > then **saturates** by mid-capacity — so the prior floor+cliff was, in substantial part, an
-> under-resourced-model artifact, not a fundamental compounding wall at this world's scale. The open
-> question moves from "can it free-run" (yes) to "is there a *favorable consultation knee* once the
-> floor is high" (still open).
+> under-resourced-model artifact, not a fundamental compounding wall at this world's scale.
+>
+> **Resourced frontier (HS1.1, §4.2):** removing the under-training and fixed-data confounds and
+> pushing ~4× further (4,800-transition coverage set, capacity-scaled steps, `xl`/`xxl` to 410k
+> params) sharpens this into the real shape: **`H_free` is *non-monotone* in capacity** — it rises to
+> a compute-optimal **peak at `l` (17 id / 28 ood)** then *declines* (xxl 9.6 id), the floor lifts ~4×
+> from *resourcing alone even at fixed tiny capacity* (xs 1.75 → 6.83), and — the headline — the
+> one-step proxy `p` stays **flat and high while the exact horizon falls**, with ood η crossing below
+> 1: a bigger, per-step-more-accurate model that is *less faithful over the horizon*, a divergence
+> only the free exact oracle can see.
 
 ---
 
@@ -193,6 +200,65 @@ sharpens what the earlier negatives do and don't show, and relocates the open qu
 model free-run at all" (yes, ~16 steps) to "does a *favorable consultation knee* exist once the floor
 is high" (HS-future, §5).
 
+### 4.2 The resourced frontier (HS1.1): horizon is *non-monotone* in capacity, and the proxy goes blind
+
+§4.1 left two confounds standing, both of which are the program's own "is it scale or is it the
+method?" question turned on the new result: (a) the `l` cell was *undertrained* (its `p` dipped below
+`m`'s — the signature of a too-big model with too few steps), so the "saturates at `m`" reading was
+not clean; and (b) the coverage set was a fixed 960 transitions, so a bigger model on fixed data
+saturates regardless of capacity (the Chinchilla confound). HS1.1 removes both and pushes the axis
+~4× further: a **larger shared coverage set (4,800 transitions)**, **train steps scaled with capacity
+so each cell converges**, and **two new capacity points beyond the old maximum** — `xl` (262k) and
+`xxl` (410k), ~400× the smallest model. Config
+[`horizon_scaling_xl.json`](../../configs/horizon_scaling_xl.json); curve
+[`horizon_scaling_xl.csv`](../../figures/horizon_scaling_xl.csv), figure
+[`horizon_scaling_xl.png`](../../figures/horizon_scaling_xl.png); 6 capacities × 3 seeds, ~2.5 h CPU.
+
+| scale | params | `p` (id / ood) | **`H_free`** (id) [95% CI] | `H_free` (ood) | η (ood) |
+|---|---|---|---|---|---|
+| xs | 1,024 | 0.73 / 0.82 | 6.83 [1.00, 12.25] | 7.08 | 1.07 |
+| s | 8,192 | 0.85 / 0.92 | 14.25 [11.75, 16.50] | 18.42 | 1.52 |
+| m | 32,768 | 0.82 / 0.90 | 17.00 [13.25, 19.25] | 20.50 | 2.24 |
+| **l** | 110,592 | 0.81 / 0.89 | **17.17** [15.00, 19.75] | **28.42** | 3.51 |
+| xl | 262,144 | 0.86 / 0.90 | 13.92 [7.50, 19.50] | 12.17 | **0.97** |
+| xxl | 409,600 | 0.83 / 0.88 | 9.58 [1.75, 14.00] | 10.42 | 1.26 |
+
+Three results, sharper than HS1's and each first-class:
+
+1. **The floor is under-resourcing in *data and compute*, not just capacity.** At fixed *tiny*
+   capacity, `xs` (1,024 params) lifts from the original `H_free` **1.75 → 6.83** and `p` **0.47 →
+   0.73** — same model, same world, only an adequate coverage set and enough training. The "floor"
+   the whole program was built around is not even a capacity property of the smallest model; feeding
+   it lifts it ~4×. This generalizes §4.1's verdict: the floor+cliff was an under-resourcing artifact
+   along *every* resource axis, not only parameters.
+2. **Faithful horizon is *non-monotone* in capacity — it has a compute-optimal peak.** `H_free` rises
+   to a peak at `l` (**17.2 id, 28.4 ood**) and then *declines* through `xl` (13.9 id) to `xxl` (9.6
+   id) — not a saturating plateau but a genuine hump. The peak is the compute-optimal model *for the
+   fixed data budget*; past it, capacity outruns the data and the free-running rollout degrades. This
+   is the exact, oracle-measured analogue of the Chinchilla compute-optimal frontier, but for
+   *long-horizon faithfulness* rather than test loss — a quantity the oracle-free field cannot measure.
+3. **The one-step proxy goes blind exactly where it matters — the headline for the whole program.**
+   Across the entire top of the axis the per-step accuracy `p` that any standard world-model paper
+   would report stays **flat and healthy** (id 0.81–0.86, ood 0.88–0.90); at `xl` it is in fact at
+   its **near-maximum** (id 0.864). Yet over the same range the *exact* faithful horizon **falls by
+   ~45%** (id 17.2 → 9.6) and the ood horizon efficiency **crosses below 1** (`l` 3.51 → `xl` 0.97) —
+   the free-running model becomes *worse than its own i.i.d. independence prediction*, i.e. the
+   compounding penalty H26's honest-negative branch predicted finally appears, at *large* scale on
+   fixed data. **A bigger model that is more accurate per step is less faithful over the horizon, and
+   the one-step metric cannot see it.** That divergence — invisible without exact long-horizon ground
+   truth — is the quantitative case for the oracle, and for "verification is a primitive, not a patch."
+
+**Honest caveats.** (i) The `xl`/`xxl` decline is *confounded between* genuine capacity-induced
+compounding and **fixed-data overfitting** (high id `p`, collapsing ood/horizon is the overfit
+signature) and possibly residual undertraining of the giant cells — the seed variance explodes at
+the top (`xxl` `H_free` spans [1.75, 14.0]). Separating "capacity saturates" from "data-starved" is
+exactly the next experiment: a **data cross-axis at fixed large capacity** (HS1.2, §5) — if feeding
+the model recovers the horizon, the decline is starvation, not a capacity wall. (ii) The peak's
+*location* is budget-specific; a larger coverage set should move it right. (iii) This still measures
+only the `ρ=0` floor, not the full `H_ε(ρ)` shape. The load-bearing facts — the floor lifts ~4× from
+resourcing alone, the horizon is non-monotone, and `p` and `H_free` diverge at the top — are robust
+to all three.
+
 ---
 
 ## 5. Milestones (HS0–HS3)
@@ -203,6 +269,8 @@ Non-colliding with `M*/S*/AR*/NW*/HC*/DS*/OG*/LS*`. Gated as ever: measure befor
 |---|---|---|---|
 | **HS0** | The harness: capacity-axis sweep + one-step `p` + free-running `H_free` + the `H_indep` baseline + `η`, reducing over seeds with bootstrap CIs ([`horizon_scaling.py`](../../src/verisim/experiments/horizon_scaling.py)); the smoke test + plotter. | ruff/mypy clean; smoke test green + deterministic on CPU | ✅ shipped ([`test_horizon_scaling.py`](../../tests/test_horizon_scaling.py)): minibatched (`train_batched`) capacity training, in-distribution + adversarial eval, the `H_indep`/η baseline; single-thread deterministic |
 | **HS1** | The committed **capacity scaling curve**: the flat network arm over `xs…l` × 3 seeds, committed CSV + two-panel figure with CIs; H26 verdict populated. | the curve regenerates from config + seeds; H26 populated with CIs | ✅ shipped ([`horizon_scaling.csv`](../../figures/horizon_scaling.csv), [`horizon_scaling.png`](../../figures/horizon_scaling.png); 108× params, 3 seeds, ~20 min CPU): **H26 supported — `H_free` lifts ~9× (1.75→15.8, disjoint CIs) then saturates, transferring to ood; the prior floor was an under-resourcing artifact** (§4.1) |
+| **HS1.1** | The **resourced frontier**: re-run with a larger shared coverage set (4,800) + capacity-scaled train steps + two new points (`xl`, `xxl`, ~400× range), removing the `l`-undertraining and fixed-data confounds. | regenerates from config + seeds; the frontier verdict populated with CIs | ✅ shipped ([`horizon_scaling_xl.csv`](../../figures/horizon_scaling_xl.csv), [`horizon_scaling_xl.png`](../../figures/horizon_scaling_xl.png); 6 capacities × 3 seeds, ~2.5 h CPU): **`H_free` is non-monotone — peaks at `l` (17 id / 28 ood) then declines; the floor lifts ~4× from resourcing even at fixed tiny capacity; `p` stays flat/high while `H_free` falls — the one-step proxy goes blind** (§4.2) |
+| **HS1.2** | **The data cross-axis at fixed large capacity**: hold capacity at the peak/`xl` and sweep coverage-set size — does feeding the big model recover the horizon (decline = data starvation) or not (decline = capacity wall)? | regenerates; the starvation-vs-wall verdict recorded | ☐ next |
 | **HS2** | **Universality across worlds** (follow-up): re-run HS1 on v0 (filesystem) and/or the host world; does the `η`-vs-capacity verdict hold where the dynamics are simpler/harder? | regenerates; the cross-world verdict is recorded | ☐ future |
 | **HS3** | **The graph arm + world-size cross-axis** (follow-up): does a *structured* model (the factored/graph arm) change the `η` verdict, and how does it interact with SPEC-9's world-size axis? | regenerates; recorded with honest caveats | ☐ future |
 
