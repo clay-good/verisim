@@ -19,7 +19,13 @@ from pathlib import Path
 from verisim.experiments.horizon_scaling import ScaleStat
 
 
-def plot_horizon_scaling(stats: list[ScaleStat], path: str | Path) -> Path:  # pragma: no cover
+def plot_horizon_scaling(  # pragma: no cover
+    stats: list[ScaleStat],
+    path: str | Path,
+    *,
+    suptitle: str = "HS1 — the faithful-horizon scaling law (SPEC-10, H26)",
+    left_title: str = "Does capacity lift the free-running horizon?",
+) -> Path:
     import matplotlib
 
     matplotlib.use("Agg")
@@ -50,7 +56,7 @@ def plot_horizon_scaling(stats: list[ScaleStat], path: str | Path) -> Path:  # p
     ax_l.set_xscale("log")
     ax_l.set_xlabel("model params (≈ n_layer · n_embd²)")
     ax_l.set_ylabel("free-running faithful horizon (steps)")
-    ax_l.set_title("Does capacity lift the free-running horizon?")
+    ax_l.set_title(left_title)
     ax_l.legend(loc="upper left", fontsize=8)
 
     for metric, label, color in (
@@ -69,7 +75,7 @@ def plot_horizon_scaling(stats: list[ScaleStat], path: str | Path) -> Path:  # p
     ax_r.set_title("Per-step accuracy vs capacity")
     ax_r.legend(loc="lower right", fontsize=8)
 
-    fig.suptitle("HS1 — the faithful-horizon scaling law (SPEC-10, H26)")
+    fig.suptitle(suptitle)
     fig.tight_layout()
     out = Path(path)
     out.parent.mkdir(parents=True, exist_ok=True)

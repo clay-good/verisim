@@ -1,0 +1,28 @@
+{
+  "name": "hs1.3-joint",
+  "block_size": 128,
+  "batch_size": 64,
+  "lr": 0.003,
+  "num_threads": 0,
+  "verbose": true,
+  "eval_driver": "weighted",
+  "eval_seeds": [100, 101, 102, 103],
+  "eval_steps": 96,
+  "one_step_seeds": [200, 201, 202],
+  "one_step_steps": 40,
+  "epsilon": 0.0,
+  "seeds": [0, 1, 2],
+  "base": {
+    "name": "en1-joint",
+    "train_driver": "weighted",
+    "train_steps_per_traj": 100,
+    "block_size": 256,
+    "lr": 0.003
+  },
+  "points": [
+    { "label": "m",   "n_embd": 128, "n_layer": 2, "n_head": 2, "train_steps": 4000, "data_seeds": 48 },
+    { "label": "l",   "n_embd": 192, "n_layer": 3, "n_head": 4, "train_steps": 5000, "data_seeds": 96 },
+    { "label": "xl",  "n_embd": 256, "n_layer": 4, "n_head": 4, "train_steps": 6000, "data_seeds": 160 },
+    { "label": "xxl", "n_embd": 320, "n_layer": 4, "n_head": 4, "train_steps": 6500, "data_seeds": 240 }
+  ]
+}
