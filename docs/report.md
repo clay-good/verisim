@@ -1258,6 +1258,39 @@ structured arm's exact free-running horizon **never leaves the floor**, so capac
 automatic across model classes — sharpening HS1 and consistent with EN7/H22 (the loop governs the shape; the
 proposer's competence sets whether it escapes the floor).
 
+## The graph data cross-axis (HS3 incr 2): the structured floor is *not* data starvation — a genuine ceiling
+
+HS3 left its own confound: the graph arm's **flat `p`** is the signature of a *data*-limited model, so —
+exactly as HS1.2 was for the flat arm — the clean test holds graph capacity fixed and sweeps the coverage
+set. HS3 incr 2 ([`horizon_graph_data_scaling.py`](../src/verisim/experiments/horizon_graph_data_scaling.py))
+does that at fixed `m`, 960 → 9,600 transitions.
+
+![HS3 incr 2: feeding the structured graph arm 10× more data does not lift its free-running horizon off the floor — not data starvation but a genuine ceiling](../figures/horizon_graph_data_scaling.png)
+
+| n_train | `p` (id / ood) | **`H_free`** id [95% CI] | `H_free` ood | `H_indep` id | η (id) |
+|---|---|---|---|---|---|
+| 960 | 0.65 / 0.64 | **0.00** [0, 0] | 0.00 | 1.87 | 0.00 |
+| 2,400 | 0.65 / 0.72 | 1.00 [0, 3] | 1.11 | 1.87 | 0.52 |
+| 4,800 | 0.59 / 0.69 | **0.00** [0, 0] | 0.00 | 1.46 | 0.00 |
+| 9,600 | 0.60 / 0.70 | 0.11 [0, 0.33] | 0.22 | 1.49 | 0.07 |
+
+**The structured floor is not data starvation.** (1) A **10× data increase does not lift `H_free`** (≈0
+throughout; the 2,400 cell's 1.00 is a single-seed blip, CI [0, 3]) — the *opposite* of the flat arm, whose
+HS1.2 floor recovered with data (7.7 → 16.2). (2) **`p` does not rise with data either** (flat ~0.60–0.72,
+even dipping id) — so the bottleneck is not the coverage set; the §4.6 capacity-flatness and this
+data-flatness are the same phenomenon on two axes. (3) **η < 1 throughout (0.00–0.52)** — the tell that
+splits the two proposers: the flat arm's η stayed **> 1** (its rollout self-stabilizes, free-running *longer*
+than its i.i.d. prediction), but the graph arm free-runs **shorter** than `p/(1-p)` — its near-but-not-exact
+errors **compound**, the genuine compounding wall H26's honest-negative branch predicted, which the flat arm
+escaped on this same world.
+
+**Net across HS3:** the structured arm's exact free-running floor moves with **neither capacity nor data**,
+while the flat arm's moved with both — so "the floor+cliff is a resourcing story" is itself
+**proposer-dependent**: under-resourcing for the flat arm, a genuine compounding ceiling for the structured
+one. Honest caveat: the committed graph trainer plateaus at `p` ≈ 0.6 and `p` does not climb with data, so
+the binding constraint is plausibly the trainer/representation on this world, not data per se — "neither lever
+lifts it" is shown for this committed graph recipe, not proven for every possible graph optimizer.
+
 ## Threats to validity
 
 - **Scale.** The committed model is ~tiny and trains for a few hundred iterations on
@@ -1342,6 +1375,9 @@ python -m verisim.experiments.horizon_host_scaling --config configs/horizon_host
 # SPEC-10 HS3 — the scaling law with the STRUCTURED graph arm (proposer-dependence; ~10 min CPU):
 python -m verisim.experiments.horizon_graph_scaling --config configs/horizon_graph_scaling.json \
     --out figures/horizon_graph_scaling.csv --plot figures/horizon_graph_scaling.png
+# SPEC-10 HS3 incr 2 — the data cross-axis for the graph arm (starvation vs ceiling; ~5 min CPU):
+python -m verisim.experiments.horizon_graph_data_scaling --config configs/horizon_graph_data_scaling.json \
+    --out figures/horizon_graph_data_scaling.csv --plot figures/horizon_graph_data_scaling.png
 ```
 
 The run-records are git-ignored (regenerable); the figures and their CSVs are

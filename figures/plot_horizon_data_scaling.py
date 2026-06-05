@@ -14,7 +14,11 @@ from verisim.experiments.horizon_scaling import ModelScale, ScaleStat
 
 
 def plot_horizon_data_scaling(  # pragma: no cover - local plotting
-    stats: list[ScaleStat], scale: ModelScale, path: str | Path
+    stats: list[ScaleStat],
+    scale: ModelScale,
+    path: str | Path,
+    *,
+    suptitle: str = "HS1.2 — the data cross-axis: capacity wall or data starvation? (SPEC-10)",
 ) -> Path:
     import matplotlib
 
@@ -66,7 +70,7 @@ def plot_horizon_data_scaling(  # pragma: no cover - local plotting
     ax_r.set_title("Per-step accuracy vs data")
     ax_r.legend(loc="lower right", fontsize=8)
 
-    fig.suptitle("HS1.2 — the data cross-axis: capacity wall or data starvation? (SPEC-10)")
+    fig.suptitle(suptitle)
     fig.tight_layout()
     out = Path(path)
     out.parent.mkdir(parents=True, exist_ok=True)

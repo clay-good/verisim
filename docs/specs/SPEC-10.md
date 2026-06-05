@@ -479,6 +479,58 @@ used **never leaves the floor**, so the capacity-buys-horizon verdict is **not**
 classes — which sharpens HS1 and is consistent with EN7/H22 (the loop governs the shape; the proposer's
 competence sets whether it ever escapes the floor).
 
+### 4.7 The graph data cross-axis (HS3 incr 2): the structured floor is *not* data starvation — a genuine ceiling
+
+§4.6 left the program's own "method-fails vs. too-small" question open on the *data* axis: the graph
+arm's **flat `p`** (it ceilings at `xs`) is the signature of a **data**-limited model, so — exactly as
+HS1.2 was the clean test for the flat arm — the honest next experiment holds graph capacity fixed and
+sweeps the coverage set. HS3 incr 2
+([`horizon_graph_data_scaling.py`](../../src/verisim/experiments/horizon_graph_data_scaling.py), config
+[`horizon_graph_data_scaling.json`](../../configs/horizon_graph_data_scaling.json)) does that at the
+fixed `m` capacity, sweeping 960 → 9,600 transitions (3 seeds each). Figure
+[`horizon_graph_data_scaling.png`](../../figures/horizon_graph_data_scaling.png),
+[`horizon_graph_data_scaling.csv`](../../figures/horizon_graph_data_scaling.csv).
+
+| n_train | `p` (id / ood) | **`H_free`** (id) [95% CI] | `H_free` (ood) | `H_indep` (id) | η (id) | η (ood) |
+|---|---|---|---|---|---|---|
+| 960 | 0.65 / 0.64 | **0.00** [0, 0] | 0.00 | 1.87 | 0.00 | 0.00 |
+| 2,400 | 0.65 / 0.72 | 1.00 [0, 3] | 1.11 | 1.87 | 0.52 | 0.37 |
+| 4,800 | 0.59 / 0.69 | **0.00** [0, 0] | 0.00 | 1.46 | 0.00 | 0.00 |
+| 9,600 | 0.60 / 0.70 | 0.11 [0, 0.33] | 0.22 | 1.49 | 0.07 | 0.10 |
+
+**Verdict: the structured arm's floor is *not* data starvation — it is a genuine ceiling, the first in
+the program that does not dissolve into resourcing.** Three facts:
+
+1. **A 10× data increase does not lift the structured floor.** `H_free` stays at **≈ 0** across the
+   whole sweep (the 2,400 cell's 1.00 is a single-seed blip, CI [0, 3]; 9,600's 0.11 is noise) — the
+   exact opposite of the flat arm, whose HS1.2 floor **recovered with data** (id 7.7 → 16.2). Feeding
+   the graph arm more data does not move its exact free-running horizon.
+2. **`p` does not rise with data either** — it is **flat ~0.60–0.72** (even dipping id at the larger
+   budgets). So the graph arm's bottleneck on this world is *not* the coverage set; both its per-step
+   accuracy and its free-running horizon are pinned regardless of data, which is why the §4.6 capacity
+   flatness and this §4.7 data flatness are the same phenomenon seen on two axes.
+3. **η < 1 throughout (0.00–0.52) — the genuine compounding wall the flat arm never hit.** This is the
+   tell that distinguishes the two proposers: the flat arm's η stayed **> 1** (its rollout
+   *self-stabilized*, free-running *longer* than its i.i.d. prediction), whereas the graph arm's η is
+   **below 1** at every data budget — it free-runs *shorter* than even the no-compounding prediction
+   `p/(1-p)`. The graph arm's near-but-not-exact errors **compound** (its own drift carries it
+   off-distribution), exactly the honest-negative branch H26 pre-registered — now localized to the
+   structured proposer, on a world where the flat arm escaped it.
+
+**Net across HS3 (incr 1 + 2): the structured arm's exact-free-running floor moves with *neither*
+capacity *nor* data**, while the flat arm's floor moved with both — so the floor+cliff being a
+"resourcing story" is itself **proposer-dependent**. For the flat arm it was under-resourcing; for the
+structured arm it is a genuine compounding ceiling at this world's exact tolerance.
+
+**Honest caveats.** (i) `p` plateaus at ~0.6 for the committed graph trainer (`train_graph_model`),
+below the flat arm's 0.82 under `train_batched`, and does *not* climb with data — so the binding
+constraint is plausibly the trainer/representation on this world, and "neither capacity nor data lifts
+it" is a statement about this committed graph recipe, not a proof that *no* graph optimizer could cross
+the self-stabilization threshold. (ii) "Pinned at 0" is at the strict tolerance ε ≤ 0.1; at ε = 0.2 the
+graph arm sustains 4–6 steps (§4.6). (iii) Seed variance is high at the small horizons (the 2,400 blip).
+The load-bearing, twice-measured fact: across a 108× capacity range *and* a 10× data range the
+structured arm's exact `H_free` never leaves the floor and its η stays below 1.
+
 ---
 
 ## 5. Milestones (HS0–HS3)
@@ -494,7 +546,8 @@ Non-colliding with `M*/S*/AR*/NW*/HC*/DS*/OG*/LS*`. Gated as ever: measure befor
 | **HS1.3** | **The joint capacity×data push**: a compute-optimal ladder (data scaled *with* capacity, m@4.8k → xxl@24k), each cell adequately trained — does `H_free` keep climbing past the `l` peak, or do returns vanish? | regenerates; the joint-scaling verdict recorded with CIs | ✅ shipped ([`horizon_joint_scaling.csv`](../../figures/horizon_joint_scaling.csv), [`horizon_joint_scaling.png`](../../figures/horizon_joint_scaling.png); 4-cell ladder × 3 seeds, ~3 h CPU): **joint scaling lifts the peak to a program-best `l@9.6k` = 19.2 id / 28.75 ood (tight, disjoint CIs), confirming the Chinchilla prescription — but returns vanish past `l` (xl matches, xxl collapses & is undertrained); a compute-optimal sweet spot, not an open power law** (§4.4) |
 | **HS2** | **Universality across worlds**: re-run the *identical* HS1 capacity axis on the harder **host** world (SPEC-6); does the capacity-vs-horizon verdict hold where the dynamics are harder? | regenerates; the cross-world verdict is recorded | ✅ shipped ([`horizon_host_scaling.csv`](../../figures/horizon_host_scaling.csv), [`horizon_host_scaling.png`](../../figures/horizon_host_scaling.png); same axis as HS1, 4 capacities × 3 seeds, ~1 h CPU): **the capacity lift is *universal* — `H_free` scales monotonically (id 1.00 → 5.08, disjoint CIs xs vs l) — but the harder world *re-lowers the floor ~3–5×* (host `l` 5.08 vs network `l` 15.7) and has not saturated by `l`; world difficulty sets the floor height and the peak location, the lift survives the world swap** (§4.5) |
 | **HS3 (incr 1)** | **The structured (graph) arm**: re-run the *identical* axis with the GNN+RSSM graph proposer — does a structured model change the capacity verdict? | regenerates; recorded with honest caveats | ✅ shipped ([`horizon_graph_scaling.csv`](../../figures/horizon_graph_scaling.csv), [`horizon_graph_scaling.png`](../../figures/horizon_graph_scaling.png); 4 capacities × 3 seeds): **the lift is *proposer-dependent* — it does NOT reproduce. For the graph arm capacity buys *neither* `p` (flat ~0.66) *nor* `H_free` (≈0 at ε≤0.1, η≈0); HS1's lift was the flat arm's specific p-climb, not a loop property. Honest caveat: the graph trainer plateaus at p≈0.66 < the flat arm's 0.82, and the arm is *data*-limited (HS3 incr-2 = the graph data cross-axis)** (§4.6) |
-| **HS3 (incr 2)** | **The world-size cross-axis** (follow-up): how does the structured-arm verdict interact with SPEC-9's `O(N²)` host-count axis, and is the graph arm's flat-`p` a *data* limit (the HS1.2 reading)? | regenerates; recorded with honest caveats | ☐ future |
+| **HS3 (incr 2)** | **The graph data cross-axis**: hold graph capacity fixed and sweep the coverage set — is the structured floor *data* starvation (the HS1.2 reading) or a genuine ceiling? | regenerates; recorded with honest caveats | ✅ shipped ([`horizon_graph_data_scaling.csv`](../../figures/horizon_graph_data_scaling.csv), [`horizon_graph_data_scaling.png`](../../figures/horizon_graph_data_scaling.png); fixed `m` × 4 data budgets 960–9.6k × 3 seeds): **NOT data starvation — a 10× data increase does *not* lift `H_free` (≈0 throughout) or `p` (flat ~0.6), and η stays *below 1* (the graph arm free-runs *shorter* than its i.i.d. prediction — the genuine compounding wall the flat arm never hit). The structured floor moves with *neither* capacity nor data — the first floor in the program that does not dissolve into resourcing** (§4.7) |
+| **HS3 (incr 3)** | **The world-size cross-axis** (follow-up): how does the structured-arm verdict interact with SPEC-9's `O(N²)` host-count axis? | regenerates; recorded with honest caveats | ☐ future |
 
 ---
 
