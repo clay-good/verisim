@@ -1223,7 +1223,12 @@ Package map (parallel structure; `net*` mirrors v0 for the graph world):
   distmetrics/ live-cluster divergence d(s,ŝ) (feeds the generic faithful_horizon, so distributed
                H_ε(ρ) is defined as in every world), the headline-new consistency-faithfulness
                (§9.1: did the model predict each object's converged/split state?), bits-to-correct
-               / delta-exact over the DistDelta (DS3 metric core; the tiered oracle is later)
+               / delta-exact over the DistDelta (DS3 metric core)
+  distloop/    the tiered propose-verify-correct runner (DS5): model-agnostic over any DistModel
+               (null/oracle-backed baselines), the π_w which-TIER policy (fixed | cheapest-refutation
+               escalate), and the oracle-DOLLAR accounting — a consult spends its tier's cost, a
+               refutation adds the bit-exact correction, an unrefuted prediction is trusted; the
+               record carries divergences (→ H_ε) AND cumulative oracle-dollars (→ H17)
 ```
 
 The host **bundle** is the structural novelty: state is a coupled set of subsystems (process table +
@@ -1495,8 +1500,9 @@ write-up is [docs/report.md](docs/report.md).
 | **DS2** | The **data factory** ([`distdata/`](src/verisim/distdata/)): seeded workload+fault `DistDriver`s (`uniform`/`contention`/`adversarial`) interleaving client ops + `advance` + faults, with the **explicit `fault_prob` (fault-intensity) + `partition_bias` (partition-entropy) dials** the H20/H21 sweeps need; trajectory JSONL + regenerable dataset manifests with disjoint trajectory-level splits — tested for valid-action/`apply==oracle`, determinism, and dial monotonicity | ✅ for the incr-1 world |
 | **DS3 (metric core)** | The **metric core** ([`distmetrics/`](src/verisim/distmetrics/)): live-cluster **divergence** `d(s,ŝ)` (feeds the generic `faithful_horizon`, so distributed `H_ε(ρ)` is defined as in every world), the **headline-new consistency-faithfulness** (§9.1 — did the model predict each object's converged/split state? it catches a partition-split mispredicted as converged), and **bits-to-correct / delta-exact** over the `DistDelta` | ✅ |
 | **DS3 (tiered oracle)** | **SPEC-7's payload** ([`distoracle/tiers.py`](src/verisim/distoracle/tiers.py)): the four-tier menu **metamorphic** ¢1 → **cycle** ¢2 → **symbolic** ¢4 → **bit-exact** ¢16, where `cheapest_refutation` spends the cheapest tier that can refute a prediction (DD-D1) and records the cumulative oracle-dollar — every error class caught at its right tier, and a subtle invariant-respecting error caught only by bit-exact (the non-redundancy **H17** measures) | ✅ |
+| **DS5 (the loop)** | The **tiered propose-verify-correct loop** ([`distloop/`](src/verisim/distloop/)): the model-agnostic runner with the **`π_w` which-tier axis** (fixed | cheapest-refutation escalate) and the **oracle-dollar accounting** (each consult spends its tier's cost; a refutation adds the bit-exact correction; an unrefuted prediction is trusted) — loop invariants tested with the null/oracle-backed baselines (ρ=1 reproduces truth, perfect never drifts at $0, null drifts at step 0, budget exact). The record carries divergences (→`H_ε`) **and** oracle-dollars (→H17) | ✅ baselines |
 | **DS0 (incr 2+)** | The Raft-subset consensus group, the transaction/lock table, and the embedded SPEC-6 host / SPEC-5 net inside each node | ☐ next |
-| **DS4–DS8** | `M_θ` (DS4), the **tiered propose-verify-correct loop** with `π_c`×`π_w` (DS5), and the **ED1 distributed `H_ε(ρ)` curve + the tiered-oracle measurement (H17)** (DS6) — the prime directive | ☐ future |
+| **DS4 / DS6** | the learned `M_θ` (DS4; the `[model]` extra), then **ED1: the distributed `H_ε(ρ)` curve + the tiered-oracle measurement (H17)** (DS6) — the prime directive that earns the world | ☐ future |
 
 The deterministic cores (filesystem, network, and the distributed DS0 core) have **no runtime
 dependencies** and need no GPU.
@@ -1535,6 +1541,7 @@ PyTorch is an optional `[model]` extra (see [docs/model-representation.md](docs/
 | partition / `connected` | nodes can exchange messages iff they share a partition group; the fault medium that makes the dynamics exist | `dist/state.py` |
 | **tiered oracle** | SPEC-7's payload: the bit-exact global oracle is *intractable*, so the policy chooses the cheapest tier (metamorphic ↔ cycle ↔ symbolic ↔ bit-exact) that can refute the current prediction (H17, later DS) | `distoracle/` |
 | consistency-faithfulness | SPEC-7's headline-new metric (§9.1): the fraction of objects whose **consistency view** — the converged/split `(version,value)` set across replicas — the model predicts right (the distributed analogue of reachability-faithfulness) | `distmetrics/divergence.py` |
+| oracle-dollar / `π_w` | the distributed loop's new axis (§8.2): not just *when* to consult (`π_c`) but *which tier* (`π_w`); each consult spends its tier's **oracle-dollar** cost, recorded so `H_ε` can be plotted against dollars, not just consults (the H17 quantity) | `distloop/` |
 
 ### SPEC-10 scaling cheat-sheet (the whole arc, one table)
 
