@@ -1235,6 +1235,13 @@ Package map (parallel structure; `net*` mirrors v0 for the graph world):
                escalate), and the oracle-DOLLAR accounting — a consult spends its tier's cost, a
                refutation adds the bit-exact correction, an unrefuted prediction is trusted; the
                record carries divergences (→ H_ε) AND cumulative oracle-dollars (→ H17)
+  distmodel/   the learned M_θ foundation (DS4 incr 1, torch-FREE so far): the closed DistVocab
+               (ops + commands + statuses + node/object/value leaves + one bounded <int:..> pool that
+               closes the monotone bookkeeping counters) and the bidirectional tokenizer
+               (state,action → Δ encode + exact parse). The causal-log EventAppend is a bare marker
+               reconstructed from (state,action) on parse — keeping its variable-length happens_before
+               out of the grammar. Round-trip parse(encode(Δ))==Δ tested exhaustively. (grammar +
+               constrained decode + NeuralDistWorldModel + training = incr 2, the [model] extra)
 ```
 
 The host **bundle** is the structural novelty: state is a coupled set of subsystems (process table +
@@ -1509,7 +1516,8 @@ write-up is [docs/report.md](docs/report.md).
 | **DS5 (the loop)** | The **tiered propose-verify-correct loop** ([`distloop/`](src/verisim/distloop/)): the model-agnostic runner with the **`π_w` which-tier axis** (fixed | cheapest-refutation escalate) and the **oracle-dollar accounting** (each consult spends its tier's cost; a refutation adds the bit-exact correction; an unrefuted prediction is trusted) — loop invariants tested with the null/oracle-backed baselines (ρ=1 reproduces truth, perfect never drifts at $0, null drifts at step 0, budget exact). The record carries divergences (→`H_ε`) **and** oracle-dollars (→H17) | ✅ baselines |
 | **DS6 (ED1, the prime directive)** | The **distributed `H_ε(ρ)` curve + the tiered-oracle (H17) measurement** ([`experiments/ed1.py`](src/verisim/experiments/ed1.py), [ed1_dist.png](figures/ed1_dist.png)): the curve is the *same floor→cliff* (0.2→40); and **H17's first verdict** — *cheap tiers win per oracle-dollar conditionally*, for **gross** errors ($9.4 vs $16/faithful-step) but not **subtle** ones ($848). On a controlled-noise proposer (the apparatus before the learned `M_θ` supplies a real error distribution) | ✅ apparatus |
 | **DS0 (incr 2+)** | The Raft-subset consensus group, the transaction/lock table, and the embedded SPEC-6 host / SPEC-5 net inside each node | ☐ next |
-| **DS4** | the learned `M_θ` (the `[model]` extra: service-graph message-passing + RSSM belief, mirroring NW4/HC4) — supplies the *real* error distribution the ED1/H17 apparatus awaits | ☐ future |
+| **DS4 (incr 1)** | The learned `M_θ` **serialization foundation** ([`distmodel/`](src/verisim/distmodel/), torch-free): the closed `DistVocab` (a single bounded `<int:..>` pool closes the monotone bookkeeping counters — the host's `max_pid` trick) and the bidirectional tokenizer with an **exact `parse_target`**. The key move: the causal-log `EventAppend` (its `happens_before` is the one variable-length field) is a bare marker **reconstructed from `(state, action)`** on parse, keeping the unbounded list out of the grammar. Round-trip `parse(encode(Δ))==Δ` tested exhaustively (every preset × seeds × 40 steps, a 5-node cluster, a multi-group partition), the decoded delta still satisfying `apply==oracle` | ✅ incr 1 |
+| **DS4 (incr 2)** | The `[model]` torch layer: the LL(1) constrained-decode grammar, `NeuralDistWorldModel` over v0's `GPT`, supervised training — supplies the *real* error distribution the ED1/H17 apparatus awaits (mirroring NW4/HC4) | ☐ next |
 
 The deterministic cores (filesystem, network, and the distributed DS0 core) have **no runtime
 dependencies** and need no GPU.

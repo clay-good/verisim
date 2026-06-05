@@ -19,6 +19,7 @@ venv/
 .mcp.json
 .claude/settings.json
 .claude/skills/
+.claude/scheduled_tasks.lock
 
 # Run-records: regenerable from configs + seeds (SPEC-2 §10, §12)
 /runs/*
