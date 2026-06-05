@@ -1216,6 +1216,9 @@ Package map (parallel structure; `net*` mirrors v0 for the graph world):
                fault/time medium — eventual-consistency last-writer-wins, the apply==oracle invariant.
                (The cheap consistency-cycle/metamorphic tiers + Tier-B real-DST runtime are later DS
                increments — the *tiered* oracle is SPEC-7's payload, §5)
+  distdata/    seeded workload+fault drivers (uniform/contention/adversarial = BUGGIFY) with the
+               explicit fault-intensity (fault_prob) + partition-entropy (partition_bias) dials the
+               H20/H21 sweeps need; trajectory JSONL + regenerable dataset manifests (DS2)
 ```
 
 The host **bundle** is the structural novelty: state is a coupled set of subsystems (process table +
@@ -1484,8 +1487,9 @@ write-up is [docs/report.md](docs/report.md).
 | Milestone | What | Status |
 |-----------|------|--------|
 | **DS0 (incr 1)** | The **replicated-KV-under-partition** core ([`dist/`](src/verisim/dist/), [`distoracle/`](src/verisim/distoracle/)): `DistributedState` (per-(object,node) MVCC replicas + causal event log + in-flight messages + partition/crash/clock), the client (`put`/`get`/`cas`) + fault/time (`advance`/`partition`/`heal`/`crash`/`restart`) grammar, the Tier-A async-replication DES (eventual-consistency LWW), canonical serialization, [distributed-semantics](docs/distributed-semantics.md), and golden trajectories pinning **stale-read-under-partition + convergence** — dependency-free, GPU-free, `apply==oracle` invariant tested every step | ✅ incr 1 |
+| **DS2** | The **data factory** ([`distdata/`](src/verisim/distdata/)): seeded workload+fault `DistDriver`s (`uniform`/`contention`/`adversarial`) interleaving client ops + `advance` + faults, with the **explicit `fault_prob` (fault-intensity) + `partition_bias` (partition-entropy) dials** the H20/H21 sweeps need; trajectory JSONL + regenerable dataset manifests with disjoint trajectory-level splits — tested for valid-action/`apply==oracle`, determinism, and dial monotonicity | ✅ for the incr-1 world |
 | **DS0 (incr 2+)** | The Raft-subset consensus group, the transaction/lock table, and the embedded SPEC-6 host / SPEC-5 net inside each node | ☐ next |
-| **DS1–DS8** | the `DistDelta`+`apply`+invariant (✅ for the incr-1 slice), drivers + fault dials (DS2), the **tiered oracle** (cycle/metamorphic/symbolic/bit-exact, DS3), `M_θ` (DS4), the tiered loop (DS5), and the **ED1 distributed `H_ε(ρ)` curve + H17** (DS6) — the prime directive | ☐ future |
+| **DS3–DS8** | the **tiered oracle** (cycle/metamorphic/symbolic/bit-exact, DS3) + consistency-faithfulness metrics, `M_θ` (DS4), the tiered loop (DS5), and the **ED1 distributed `H_ε(ρ)` curve + H17** (DS6) — the prime directive | ☐ future |
 
 The deterministic cores (filesystem, network, and the distributed DS0 core) have **no runtime
 dependencies** and need no GPU.
