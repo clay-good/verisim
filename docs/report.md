@@ -1320,6 +1320,18 @@ Honest caveat: the committed graph trainer plateaus at `p` ≈ 0.6 and `p` falls
 binding constraint is plausibly the trainer/representation — "world size doesn't lift it" is for this
 committed graph recipe, at the strict tolerance ε ≤ 0.1 (the arm sustains 4–6 steps at ε = 0.2).
 
+**The capstone, in one figure** ([`horizon_synthesis.py`](../src/verisim/experiments/horizon_synthesis.py)
+— a figures-from-records overlay of the two committed capacity sweeps; re-runs nothing):
+
+![SPEC-10 synthesis: the flat arm's free-running horizon lifts ~9× with capacity while the structured graph arm stays pinned at the floor — the floor is proposer-dependent](../figures/horizon_synthesis.png)
+
+Sweeping the *same* capacity axis, the flat transformer's `H_free` lifts ~9× (1.75 → 15.8) while the
+structured graph arm — which *beats* it on one-step delta-exact (EN4) — stays pinned at ≈ 0. **"Is the
+floor+cliff a resourcing artifact?" has no single answer: it depends on the proposer** (under-resourcing
+for the flat arm, a genuine compounding ceiling for the structured one). A per-step *winner* that is the
+long-horizon *loser*, and vice versa — exactly the proxy/truth divergence the exact free oracle exists to
+expose.
+
 ## Threats to validity
 
 - **Scale.** The committed model is ~tiny and trains for a few hundred iterations on
@@ -1410,6 +1422,9 @@ python -m verisim.experiments.horizon_graph_data_scaling --config configs/horizo
 # SPEC-10 HS3 incr 3 — the world-size cross-axis for the graph arm (ceiling vs world size; ~10 min CPU):
 python -m verisim.experiments.horizon_graph_world_scaling --config configs/horizon_graph_world_scaling.json \
     --out figures/horizon_graph_world_scaling.csv --plot figures/horizon_graph_world_scaling.png
+# SPEC-10 HS-synth — the proposer-dependence capstone (figures-from-records; instant, re-runs nothing):
+python -m verisim.experiments.horizon_synthesis \
+    --out figures/horizon_synthesis.csv --plot figures/horizon_synthesis.png
 ```
 
 The run-records are git-ignored (regenerable); the figures and their CSVs are

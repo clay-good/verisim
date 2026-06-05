@@ -574,6 +574,29 @@ free-runs in a *bigger* world) is the natural further follow-up. The load-bearin
 fact: across capacity × data × world size the structured arm's exact `H_free` never leaves 0 and its η
 never reaches 1.
 
+### 4.9 The proposer-dependence synthesis (the SPEC-10 capstone)
+
+The whole arc reduces to one contrast the free oracle made measurable, and
+[`horizon_synthesis.py`](../../src/verisim/experiments/horizon_synthesis.py) draws it in one figure
+([`horizon_synthesis.png`](../../figures/horizon_synthesis.png),
+[`horizon_synthesis.csv`](../../figures/horizon_synthesis.csv)) -- a *figures-from-records* overlay
+(SPEC-2 §7.3) that re-reads the two committed capacity-sweep CSVs (the flat `horizon_scaling`, the
+structured `horizon_graph_scaling`) on the shared `params` axis and **re-runs nothing**:
+
+> Sweeping the *same* capacity axis, the **flat** transformer's free-running horizon **lifts ~9× with
+> capacity** (1.75 → 15.8 steps) and its floor dissolves into a resourcing story across capacity, data,
+> and world size (HS1/HS1.2/HS2). The **structured** GNN+RSSM graph arm -- the proposer that *beats* the
+> flat arm on one-step delta-exact (EN4) -- shows the **opposite**: its `H_free` is **pinned at the floor
+> (≈ 0, η < 1)** and moves with *neither* capacity (§4.6) *nor* data (§4.7) *nor* world size (§4.8).
+
+So the program's standing question -- *"is the floor+cliff a resourcing artifact?"* -- has **no single
+answer: it depends on the proposer.** For the flat arm it is under-resourcing; for the structured arm it
+is a genuine compounding ceiling at this world's exact tolerance. That dichotomy -- a per-step *winner*
+(the graph arm, on delta-exact) that is the long-horizon *loser* (η < 1) while a per-step *loser-that-
+catches-up* (the flat arm) is the long-horizon winner -- is exactly the proxy/truth divergence the whole
+program exists to expose, and it is invisible without the exact, free oracle. The single remaining
+SPEC-10 follow-up is the joint world-size × capacity structured frontier (HS3 incr 4, §5).
+
 ---
 
 ## 5. Milestones (HS0–HS3)
@@ -591,6 +614,7 @@ Non-colliding with `M*/S*/AR*/NW*/HC*/DS*/OG*/LS*`. Gated as ever: measure befor
 | **HS3 (incr 1)** | **The structured (graph) arm**: re-run the *identical* axis with the GNN+RSSM graph proposer — does a structured model change the capacity verdict? | regenerates; recorded with honest caveats | ✅ shipped ([`horizon_graph_scaling.csv`](../../figures/horizon_graph_scaling.csv), [`horizon_graph_scaling.png`](../../figures/horizon_graph_scaling.png); 4 capacities × 3 seeds): **the lift is *proposer-dependent* — it does NOT reproduce. For the graph arm capacity buys *neither* `p` (flat ~0.66) *nor* `H_free` (≈0 at ε≤0.1, η≈0); HS1's lift was the flat arm's specific p-climb, not a loop property. Honest caveat: the graph trainer plateaus at p≈0.66 < the flat arm's 0.82, and the arm is *data*-limited (HS3 incr-2 = the graph data cross-axis)** (§4.6) |
 | **HS3 (incr 2)** | **The graph data cross-axis**: hold graph capacity fixed and sweep the coverage set — is the structured floor *data* starvation (the HS1.2 reading) or a genuine ceiling? | regenerates; recorded with honest caveats | ✅ shipped ([`horizon_graph_data_scaling.csv`](../../figures/horizon_graph_data_scaling.csv), [`horizon_graph_data_scaling.png`](../../figures/horizon_graph_data_scaling.png); fixed `m` × 4 data budgets 960–9.6k × 3 seeds): **NOT data starvation — a 10× data increase does *not* lift `H_free` (≈0 throughout) or `p` (flat ~0.6), and η stays *below 1* (the graph arm free-runs *shorter* than its i.i.d. prediction — the genuine compounding wall the flat arm never hit). The structured floor moves with *neither* capacity nor data — the first floor in the program that does not dissolve into resourcing** (§4.7) |
 | **HS3 (incr 3)** | **The world-size cross-axis**: hold graph capacity fixed and sweep `n_hosts` (SPEC-9's `O(N²)` axis) — is the structured ceiling world-size-invariant, or does the graph arm's structural bias pay off in a bigger world? | regenerates; recorded with honest caveats | ✅ shipped ([`horizon_graph_world_scaling.csv`](../../figures/horizon_graph_world_scaling.csv), [`horizon_graph_world_scaling.png`](../../figures/horizon_graph_world_scaling.png); fixed `m` × 4 world sizes 5–40 hosts × 3 seeds): **the ceiling is *world-size-invariant* — `H_free`=0 at every world size (8× range, zero CIs), η=0, and `p` *degrades* with world size (0.66→0.59). The structural bias does not rescue the floor at scale. Completes the HS3 arc: the structured floor is pinned at 0 across *all three* axes — capacity, data, AND world size** (§4.8) |
+| **HS-synth** | **The proposer-dependence synthesis** (the capstone): a figures-from-records overlay of the flat vs structured capacity sweeps -- the floor is proposer-dependent in one figure. | regenerates from committed CSVs; re-runs nothing | ✅ shipped ([`horizon_synthesis.csv`](../../figures/horizon_synthesis.csv), [`horizon_synthesis.png`](../../figures/horizon_synthesis.png)): **flat `H_free` 1.75 → 15.8 with capacity vs graph pinned at ≈ 0 — "is the floor a resourcing artifact?" depends on the proposer** (§4.9) |
 | **HS3 (incr 4)** | **The world-size × capacity grid** (follow-up): does a *bigger* graph arm free-run in a *bigger* world (the joint structured frontier)? | regenerates; recorded with honest caveats | ☐ future |
 
 ---
