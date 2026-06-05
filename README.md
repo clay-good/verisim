@@ -1211,11 +1211,12 @@ Package map (parallel structure; `net*` mirrors v0 for the graph world):
                messages + partition/crash/clock), the client (put/get/cas) + fault/time
                (advance/partition/heal/crash/restart) action grammar, the DistDelta + compositional
                apply, canonical serialization
-  distoracle/  Tier-A reference DES (verisim.distoracle.reference): a from-scratch deterministic
-               discrete-event simulator of a fully-replicated KV under async replication + the
-               fault/time medium — eventual-consistency last-writer-wins, the apply==oracle invariant.
-               (The cheap consistency-cycle/metamorphic tiers + Tier-B real-DST runtime are later DS
-               increments — the *tiered* oracle is SPEC-7's payload, §5)
+  distoracle/  Tier-A reference DES (reference.py): a from-scratch deterministic discrete-event
+               simulator of a fully-replicated KV under async replication + the fault/time medium
+               (eventual-consistency last-writer-wins, the apply==oracle invariant); AND the
+               **tiered oracle** (tiers.py) — SPEC-7's payload: the metamorphic ↔ cycle ↔ symbolic ↔
+               bit-exact menu where cheapest_refutation spends the cheapest tier that can refute a
+               prediction, recording the oracle-dollar cost (the H17 premise). (Tier-B real-DST later)
   distdata/    seeded workload+fault drivers (uniform/contention/adversarial = BUGGIFY) with the
                explicit fault-intensity (fault_prob) + partition-entropy (partition_bias) dials the
                H20/H21 sweeps need; trajectory JSONL + regenerable dataset manifests (DS2)
@@ -1492,9 +1493,10 @@ write-up is [docs/report.md](docs/report.md).
 |-----------|------|--------|
 | **DS0 (incr 1)** | The **replicated-KV-under-partition** core ([`dist/`](src/verisim/dist/), [`distoracle/`](src/verisim/distoracle/)): `DistributedState` (per-(object,node) MVCC replicas + causal event log + in-flight messages + partition/crash/clock), the client (`put`/`get`/`cas`) + fault/time (`advance`/`partition`/`heal`/`crash`/`restart`) grammar, the Tier-A async-replication DES (eventual-consistency LWW), canonical serialization, [distributed-semantics](docs/distributed-semantics.md), and golden trajectories pinning **stale-read-under-partition + convergence** — dependency-free, GPU-free, `apply==oracle` invariant tested every step | ✅ incr 1 |
 | **DS2** | The **data factory** ([`distdata/`](src/verisim/distdata/)): seeded workload+fault `DistDriver`s (`uniform`/`contention`/`adversarial`) interleaving client ops + `advance` + faults, with the **explicit `fault_prob` (fault-intensity) + `partition_bias` (partition-entropy) dials** the H20/H21 sweeps need; trajectory JSONL + regenerable dataset manifests with disjoint trajectory-level splits — tested for valid-action/`apply==oracle`, determinism, and dial monotonicity | ✅ for the incr-1 world |
-| **DS3 (metric core)** | The **metric core** ([`distmetrics/`](src/verisim/distmetrics/)): live-cluster **divergence** `d(s,ŝ)` (feeds the generic `faithful_horizon`, so distributed `H_ε(ρ)` is defined as in every world), the **headline-new consistency-faithfulness** (§9.1 — did the model predict each object's converged/split state? it catches a partition-split mispredicted as converged), and **bits-to-correct / delta-exact** over the `DistDelta` | ✅ metric core |
+| **DS3 (metric core)** | The **metric core** ([`distmetrics/`](src/verisim/distmetrics/)): live-cluster **divergence** `d(s,ŝ)` (feeds the generic `faithful_horizon`, so distributed `H_ε(ρ)` is defined as in every world), the **headline-new consistency-faithfulness** (§9.1 — did the model predict each object's converged/split state? it catches a partition-split mispredicted as converged), and **bits-to-correct / delta-exact** over the `DistDelta` | ✅ |
+| **DS3 (tiered oracle)** | **SPEC-7's payload** ([`distoracle/tiers.py`](src/verisim/distoracle/tiers.py)): the four-tier menu **metamorphic** ¢1 → **cycle** ¢2 → **symbolic** ¢4 → **bit-exact** ¢16, where `cheapest_refutation` spends the cheapest tier that can refute a prediction (DD-D1) and records the cumulative oracle-dollar — every error class caught at its right tier, and a subtle invariant-respecting error caught only by bit-exact (the non-redundancy **H17** measures) | ✅ |
 | **DS0 (incr 2+)** | The Raft-subset consensus group, the transaction/lock table, and the embedded SPEC-6 host / SPEC-5 net inside each node | ☐ next |
-| **DS3 (tiers) – DS8** | the **tiered-oracle interface** itself (cheap cycle/metamorphic/symbolic + bit-exact, SPEC-7's payload), `M_θ` (DS4), the tiered loop (DS5), and the **ED1 distributed `H_ε(ρ)` curve + H17** (DS6) — the prime directive | ☐ future |
+| **DS4–DS8** | `M_θ` (DS4), the **tiered propose-verify-correct loop** with `π_c`×`π_w` (DS5), and the **ED1 distributed `H_ε(ρ)` curve + the tiered-oracle measurement (H17)** (DS6) — the prime directive | ☐ future |
 
 The deterministic cores (filesystem, network, and the distributed DS0 core) have **no runtime
 dependencies** and need no GPU.
