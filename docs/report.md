@@ -1320,6 +1320,22 @@ Honest caveat: the committed graph trainer plateaus at `p` ≈ 0.6 and `p` falls
 binding constraint is plausibly the trainer/representation — "world size doesn't lift it" is for this
 committed graph recipe, at the strict tolerance ε ≤ 0.1 (the arm sustains 4–6 steps at ε = 0.2).
 
+**The joint push, for completeness (HS3 incr 4).** The flat arm's HS1.3 taught that scaling two levers
+*together* (a compute-optimal ladder) can lift the horizon *above* either marginal — so the structured
+joint ladder (a bigger graph arm in a bigger world, capacity *and* world size scaled together) is the
+pre-registered final test, not redundant.
+[`horizon_graph_joint_scaling.py`](../src/verisim/experiments/horizon_graph_joint_scaling.py) runs it
+(s@5h → m@10h → l@20h → xl@40h, 24× params while the world grows 8×):
+
+![HS3 incr 4: scaling graph capacity and world size together still does not lift the structured floor — H_free pinned at 0 along the whole ladder](../figures/horizon_graph_joint_scaling.png)
+
+`H_free` is **0 at every rung** (η = 0; `p` flat ~0.6). The contrast is the point: HS1.3's *flat* joint
+ladder climbed to the **program-best** 19.2 / 28.75 steps, while the *structured* joint ladder never
+leaves 0. So the structured ceiling survives even the joint scaling that lifted the flat arm to its peak
+— **across capacity, data, world size, *and* their product, the structured floor is pinned at 0.** A
+genuine wall, the strongest form of the HS3 verdict (same honest caveat: the graph trainer plateaus at
+`p` ≈ 0.6; strict ε ≤ 0.1).
+
 **The capstone, in one figure** ([`horizon_synthesis.py`](../src/verisim/experiments/horizon_synthesis.py)
 — a figures-from-records overlay of the two committed capacity sweeps; re-runs nothing):
 
@@ -1422,6 +1438,9 @@ python -m verisim.experiments.horizon_graph_data_scaling --config configs/horizo
 # SPEC-10 HS3 incr 3 — the world-size cross-axis for the graph arm (ceiling vs world size; ~10 min CPU):
 python -m verisim.experiments.horizon_graph_world_scaling --config configs/horizon_graph_world_scaling.json \
     --out figures/horizon_graph_world_scaling.csv --plot figures/horizon_graph_world_scaling.png
+# SPEC-10 HS3 incr 4 — the joint capacity×world-size push, structured arm (~10 min CPU):
+python -m verisim.experiments.horizon_graph_joint_scaling --config configs/horizon_graph_joint_scaling.json \
+    --out figures/horizon_graph_joint_scaling.csv --plot figures/horizon_graph_joint_scaling.png
 # SPEC-10 HS-synth — the proposer-dependence capstone (figures-from-records; instant, re-runs nothing):
 python -m verisim.experiments.horizon_synthesis \
     --out figures/horizon_synthesis.csv --plot figures/horizon_synthesis.png

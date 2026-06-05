@@ -1007,6 +1007,17 @@ of them: **"is the floor+cliff a resourcing artifact?" is decisively proposer-de
 the committed graph trainer plateaus at `p` ≈ 0.6 and `p` falls with world size, so the binding constraint is
 plausibly the trainer/representation — shown for this committed graph recipe, at the strict tolerance ε ≤ 0.1.
 
+**The joint push closes it (HS3 incr 4).** One marginal at a time isn't the whole story: HS1.3 showed
+the *flat* arm's horizon lifts *above* either marginal when capacity and data scale **together** (a
+compute-optimal ladder). So the structured joint ladder — a bigger graph arm in a bigger world, capacity
+*and* world size scaled together
+([`horizon_graph_joint_scaling.py`](src/verisim/experiments/horizon_graph_joint_scaling.py), s@5h → xl@40h)
+— is the pre-registered final test. `H_free` is **0 at every rung** (η = 0; `p` flat ~0.6), while HS1.3's
+flat joint ladder reached the **program-best** 19.2/28.75 steps. So the structured ceiling survives even
+the joint scaling that lifted the flat arm to its peak: **across capacity, data, world size, *and* their
+product, the structured floor is pinned at 0** — a genuine wall, the strongest form of the verdict, which
+closes the SPEC-10 milestone table.
+
 ### 34. The SPEC-10 capstone: the floor is proposer-dependent (cross-proposer synthesis)
 
 The whole SPEC-10 arc reduces to one contrast, and
@@ -1429,7 +1440,7 @@ write-up is [docs/report.md](docs/report.md).
 | **HS3 (incr 1)** | The **structured (graph) arm** ([`horizon_graph_scaling.py`](src/verisim/experiments/horizon_graph_scaling.py), [horizon_graph_scaling.png](figures/horizon_graph_scaling.png)): the *identical* axis with the GNN+RSSM proposer — the lift is **proposer-dependent**, it does **not** reproduce (`p` flat ~0.66, `H_free`≈0, η≈0); HS1's lift was the flat arm's p-climb, not a loop property ([§31](#31-but-the-capacity-lift-is-proposer-dependent--it-does-not-reproduce-for-the-structured-arm-spec-10--hs3--h26)) | ✅ |
 | **HS3 (incr 2)** | The **graph data cross-axis** ([`horizon_graph_data_scaling.py`](src/verisim/experiments/horizon_graph_data_scaling.py), [horizon_graph_data_scaling.png](figures/horizon_graph_data_scaling.png)): fixed graph capacity, sweep the coverage set — the structured floor is **NOT data starvation** (10× data lifts neither `H_free`≈0 nor `p`, η<1 — it free-runs *shorter* than i.i.d.). The structured floor moves with **neither capacity nor data** — the first floor that doesn't dissolve into resourcing ([§32](#32-and-the-structured-floor-is-not-data-starvation-either--a-genuine-ceiling-spec-10--hs3-incr-2--h26)) | ✅ |
 | **HS3 (incr 3)** | The **world-size cross-axis** ([`horizon_graph_world_scaling.py`](src/verisim/experiments/horizon_graph_world_scaling.py), [horizon_graph_world_scaling.png](figures/horizon_graph_world_scaling.png)): fixed graph capacity, sweep `n_hosts` over SPEC-9's `O(N²)` axis — the ceiling is **world-size-invariant** (`H_free`=0 at every world size 5–40, η=0, `p` *degrades*). Completes the HS3 arc: the structured floor is pinned at 0 across **capacity, data, AND world size** ([§33](#33-and-it-survives-the-world-size-axis-too--the-structured-ceiling-is-world-size-invariant-spec-10--hs3-incr-3--h26)) | ✅ |
-| **HS3 (incr 4)** | The **world-size × capacity grid** — does a *bigger* graph arm free-run in a *bigger* world (the joint structured frontier)? | ☐ future |
+| **HS3 (incr 4)** | The **joint capacity×world-size push** ([`horizon_graph_joint_scaling.py`](src/verisim/experiments/horizon_graph_joint_scaling.py), [horizon_graph_joint_scaling.png](figures/horizon_graph_joint_scaling.png)): a structured ladder (bigger graph arm in a bigger world). The ceiling **survives the joint push too** — `H_free`=0 at every rung (s@5h→xl@40h), vs HS1.3's *flat* joint ladder reaching the program-best 19.2/28.75. Across capacity, data, world size, **and** their product the structured floor is pinned at 0 (§33) | ✅ |
 
 The deterministic cores (filesystem and network) have **no runtime dependencies** and need no GPU.
 PyTorch is an optional `[model]` extra (see [docs/model-representation.md](docs/model-representation.md)).
