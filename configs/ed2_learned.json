@@ -1,0 +1,21 @@
+{
+  "name": "ed2-learned",
+  "train_driver": "uniform",
+  "train_seeds": [0, 1, 2, 3],
+  "train_steps_per_traj": 40,
+  "n_layer": 2,
+  "n_head": 2,
+  "n_embd": 64,
+  "block_size": 512,
+  "train_iters": 700,
+  "lr": 0.003,
+  "model_seed": 0,
+  "max_int": 256,
+  "eval_driver": "uniform",
+  "eval_seeds": [100, 101, 102, 103],
+  "n_steps": 32,
+  "rhos": [0.0, 0.25, 0.5, 0.75, 1.0],
+  "policies": ["metamorphic", "symbolic", "bit_exact", "escalate"],
+  "epsilon": 0.0,
+  "quarter_fraction": 0.25
+}
