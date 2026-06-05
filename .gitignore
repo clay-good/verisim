@@ -3,8 +3,10 @@ __pycache__/
 *.py[cod]
 *.egg-info/
 .eggs/
-build/
-dist/
+# Root-anchored so they only ignore the build *output* dirs, not the src/verisim/dist package
+# (SPEC-7's distributed world). An un-anchored `dist/` would hide that package from git + the wheel.
+/build/
+/dist/
 .venv/
 venv/
 

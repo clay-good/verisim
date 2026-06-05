@@ -29,9 +29,16 @@ is measurable. This document is *how* — for a distributed system.
 > [SPEC-4.md](./SPEC-4.md) (the autonomous research engine that builds this with the
 > human at the boundary).
 
-> **⏸ PAUSED — design only (2026-05).** The furthest-out world; gated behind the **host** knee. Do not build until **[SPEC-6](./SPEC-6.md)** earns its host knee + composition law (**H13**); SPEC-7 then earns the distributed knee + the tiered oracle (**H17**). The active spec is **[SPEC-2.1](./SPEC-2.1.md)** (the v0 knee). Canonical build order: [SPEC §12](./SPEC.md#12-research-roadmap).
+> **▶ ACTIVE — DS0 increment 1 shipped (2026-06).** The deterministic core has begun: the
+> **replicated KV under partition** slice ([`dist/`](../../src/verisim/dist/),
+> [`distoracle/`](../../src/verisim/distoracle/), [`docs/distributed-semantics.md`](../distributed-semantics.md))
+> ships dependency-free and GPU-free, with the `apply == oracle` invariant, golden trajectories, and
+> the stale-read-under-partition dynamic that is the distributed world's whole point — exactly as
+> M0–M3 / NW0–NW3 / HC0–HC3 began the prior worlds (§13). The host knee that gated SPEC-7 was earned
+> (SPEC-6 H13); the distributed knee + tiered oracle (**H17**) is the gate ahead. Canonical build
+> order: [SPEC §12](./SPEC.md#12-research-roadmap).
 
-**License:** MIT. **Status:** design spec, pre-implementation. **Audience:** the author,
+**License:** MIT. **Status:** DS0 increment 1 shipped; deterministic core in progress. **Audience:** the author,
 collaborators, reviewers, and the autonomous research engine (SPEC-4), which reads this
 file as part of its operating context.
 
@@ -838,8 +845,8 @@ filesystem, `NW0–NW8` to the network, and `HC0–HC8` to the host: determinist
 
 | Milestone | What | Gate |
 |---|---|---|
-| **DS0** | Distributed env: event-sourced/replicated `State` (worldify-style log + happens-before), action grammar (client/protocol/fault), canonical serialization + **Tier-A reference DES** (replicated KV + Raft-subset + txn/lock table, embedding SPEC-6 hosts / SPEC-5 net) + `docs/distributed-semantics.md` + golden trajectories | property tests + goldens |
-| **DS1** | Log/replica `Delta` types, compositional `apply` (reusing SPEC-2/5/6 `apply` for embedded subsystems), delta↔serialization; the `apply == oracle` invariant | invariant tests |
+| **DS0** | Distributed env: event-sourced/replicated `State` (worldify-style log + happens-before), action grammar (client/protocol/fault), canonical serialization + **Tier-A reference DES** (replicated KV + Raft-subset + txn/lock table, embedding SPEC-6 hosts / SPEC-5 net) + `docs/distributed-semantics.md` + golden trajectories | property tests + goldens — **◐ increment 1 shipped**: the **replicated KV under partition** core ([`dist/`](../../src/verisim/dist/), [`distoracle/`](../../src/verisim/distoracle/)) — `DistributedState` (replicas + causal log + in-flight messages + partition/crash/clock), the client (`put`/`get`/`cas`) + fault/time (`advance`/`partition`/`heal`/`crash`/`restart`) grammar, the Tier-A async-replication DES with eventual-consistency LWW, canonical serialization, [`docs/distributed-semantics.md`](../distributed-semantics.md), and golden trajectories pinning stale-read-under-partition + convergence ([`test_dist_core`](../../tests/test_dist_core.py), [`test_dist_goldens`](../../tests/test_dist_goldens.py); dependency-free, GPU-free). *Deferred to later DS0 increments: the Raft-subset consensus group, the transaction/lock table, and the embedded SPEC-6 host / SPEC-5 net inside each node.* |
+| **DS1** | Log/replica `Delta` types, compositional `apply` (reusing SPEC-2/5/6 `apply` for embedded subsystems), delta↔serialization; the `apply == oracle` invariant | invariant tests — **◐ shipped for the DS0-increment-1 slice**: the `DistDelta` edit vocabulary (`ReplicaWrite`/`MsgSend`/`MsgDeliver`/`EventAppend`/`PartitionSet`/`NodeDown`/…), `apply` as a pure function, delta↔serialization round-trips, and the `apply(state, oracle.delta) == oracle.next_state` invariant tested on every transition ([`dist/delta.py`](../../src/verisim/dist/delta.py)). The embedded host/net delta composition arrives with their embedding (later DS0 increment). |
 | **DS2** | Drivers (workload + seeded fault injection = `BUGGIFY`; topology/replication/consistency generators), trajectory JSONL, manifests/splits, the **fault-intensity / partition-entropy dials** | data tests |
 | **DS3** | Consistency-faithfulness (Elle-style cycle detection), consistency/composed divergence `d`, `H_ε`, per-tier bits-to-correct, run-record schema; the **tiered-oracle interface** (`O[tier]`) with metamorphic + cycle + symbolic + bit-exact tiers | metric + oracle-tier tests |
 | **DS4** | `M_θ`: service-graph message-passing + RSSM belief (+ optional SSM carry), constrained delta decode, supervised training (SLM-sized) | model tests (torch extra) |

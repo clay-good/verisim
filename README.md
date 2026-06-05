@@ -1135,14 +1135,18 @@ don't learn-then-mask it.)*
 
 ## Architecture & system design
 
-The repo is three parallel **worlds** (filesystem v0, network SPEC-5, host SPEC-6) over one shared
-contract — the propose→verify→correct loop — plus cross-cutting training/packaging and a **scaling layer**
-(SPEC-10) that sweeps the prime-directive metric itself along capacity/data/world-size. Every box below is
-dependency-free and torch-free except `model/`, `netmodel/`, `hostmodel/`, and `train/` (the optional
-`[model]` extra). The **`Model` protocol is the seam**: the loop, oracle, metrics, and benchmark never know
-which proposer they hold, which is what makes the contribution a *method* rather than a model (the H22
-model-invariance claim) — and is exactly what lets the SPEC-10 scaling layer swap the flat transformer for
-the graph arm under the *same* harness (the proposer-dependence result, §34).
+The repo is a stack of **worlds** (filesystem v0, network SPEC-5, host SPEC-6, and now the distributed
+world SPEC-7) over one shared contract — the propose→verify→correct loop — plus cross-cutting
+training/packaging and a **scaling layer** (SPEC-10) that sweeps the prime-directive metric itself along
+capacity/data/world-size. Every box below is dependency-free and torch-free except `model/`, `netmodel/`,
+`hostmodel/`, and `train/` (the optional `[model]` extra). The **`Model` protocol is the seam**: the loop,
+oracle, metrics, and benchmark never know which proposer they hold, which is what makes the contribution a
+*method* rather than a model (the H22 model-invariance claim) — and is exactly what lets the SPEC-10 scaling
+layer swap the flat transformer for the graph arm under the *same* harness (the proposer-dependence result,
+§34). Each world **composes** the ones below it: a host runs on the network; the distributed world replicates
+services *across* hosts — and it is the first world where the bit-exact global oracle becomes
+**intractable**, so SPEC-7's payload is the *tiered* oracle (cheap consistency checks + rare bit-exact
+replay).
 
 ```
                        ACTION a_t
@@ -1200,6 +1204,18 @@ Package map (parallel structure; `net*` mirrors v0 for the graph world):
                single-step QA grader + the inspect_ai task adapter (behind the [eval] extra)
   contrib/     §16 decentralized verified-contribution protocol: accept a contributed transition/
                trajectory iff the oracle reproduces it bit-for-bit — trustless by re-execution
+
+  distributed world (SPEC-7, DS0 increment 1 — the layer *above* the host: replicated services
+                     across machines, where the bit-exact global oracle becomes *intractable*)
+  dist/        DistributedState (per-(object,node) MVCC replicas + causal event log + in-flight
+               messages + partition/crash/clock), the client (put/get/cas) + fault/time
+               (advance/partition/heal/crash/restart) action grammar, the DistDelta + compositional
+               apply, canonical serialization
+  distoracle/  Tier-A reference DES (verisim.distoracle.reference): a from-scratch deterministic
+               discrete-event simulator of a fully-replicated KV under async replication + the
+               fault/time medium — eventual-consistency last-writer-wins, the apply==oracle invariant.
+               (The cheap consistency-cycle/metamorphic tiers + Tier-B real-DST runtime are later DS
+               increments — the *tiered* oracle is SPEC-7's payload, §5)
 ```
 
 The host **bundle** is the structural novelty: state is a coupled set of subsystems (process table +
@@ -1251,7 +1267,7 @@ host → distributed); three specs are *cross-cutting methods* every world inher
 | [SPEC-4](docs/specs/SPEC-4.md) | **the engine** | the autonomous research engine — Verisim improving Verisim, human out of the loop |
 | [SPEC-5](docs/specs/SPEC-5.md) | **world: network** | the reachability/connectivity world — **the current build front** |
 | [SPEC-6](docs/specs/SPEC-6.md) | world: host | the running computer (process tree, fds, scheduler) — **HC0-HC8 built**: the host oracle *composes* the v0 FS sub-oracle; bundle delta + `apply == oracle` invariant; workload drivers + datasets; composed + **per-subsystem** metrics with the **composition-law diagnostic** (H13); the **flat learned `M_θ` baseline** (HC4 incr-1); the **composed loop** with the `π_w` oracle-selection axis (HC5 incr-1); **the prime-directive figure (HC6)** — the composed `H_ε(ρ)` floor+cliff + the **H13 composition law = `coupled`** ([eh1_curve](figures/eh1_curve.png), [eh1_composition](figures/eh1_composition.png)); **the EH3 equal-budget operator comparison (HC7)** — per-subsystem consultation earns **~3.7× more horizon per oracle-bit** ([eh3_operators](figures/eh3_operators.png)); **the factored interaction-graph arm (HC4 incr-2) + EH4** — structure beats flat **~6.6× on delta-exact** yet the H13 coupling survives ([eh4_factored_vs_flat](figures/eh4_factored_vs_flat.png)); **EH2** — the factored arm's calibrated belief variance makes smart consultation beat fixed **~2.2×** (the first smart-`π_c` positive, [eh2_policies](figures/eh2_policies.png)); **EH5** — a smart *which-subsystem* `π_w` (per-subsystem decode entropy) gives a modest edge over round-robin ([eh5_subsystem_policy](figures/eh5_subsystem_policy.png)); **EH5-heads** — a trained per-subsystem decode *head* (opt-in) is **uncalibrated** (Spearman −0.02) where the bucketed entropy it would replace is **well-calibrated** (+0.57), closing the open HC7 lever with a negative ([eh5_heads](figures/eh5_heads.png)); the **§6.3 drift levers** (noise / self-forcing) reproduce the network's banked negative ([eh4_drift](figures/eh4_drift.png)); **H14 — the concurrency dial — is CONFIRMED**: free-running `H_ε` collapses ~8× as interleaving entropy rises (the host's defining result, [eh_h14_interleaving](figures/eh_h14_interleaving.png)); the **§7 LLM-callable whole-machine simulator** (HC8) — `imagine` a plan + `verify` it (plan-level `H_ε` + the task "third oracle"); **EH7/H22** — the floor+cliff `H_ε(ρ)` shape is **model-agnostic in the composed world too** ([eh7_invariance](figures/eh7_invariance.png)); and the **HC8 security/scaling findings** — **EH8** (aggregate faithfulness hides a **denied-recall gap**, flat 0.000 / factored 0.286, [eh8_privilege](figures/eh8_privilege.png)), **EH6** (a symbolic privilege second-oracle is redundant but **decision-sufficient in 95%** of error steps at ~3× lower cost, the host H12, [eh6_two_oracle](figures/eh6_two_oracle.png)), **EH-H13-scale** (concurrency **manufactures** the H13 coupling, [eh_h13_scale](figures/eh_h13_scale.png)), **EH9** (the denied-recall gap is a **data-balance artifact the free oracle fixes** — exposure + oversampling lift recall at no specificity cost, [eh9_denial_weighted](figures/eh9_denial_weighted.png)), **EH-stream/H15** (the experience stream **loses to the batch** at equal compute, but **replay** rescues it from collapse and the **plasticity probe** localizes HW-4 — no-replay plasticity 0.77 vs 0.95, [eh_stream](figures/eh_stream.png)), and **EH6/H16** (counterfactual replay is a **null beyond volume** for plain supervision — world-agnostic with the network's EN6, [eh6_counterfactual](figures/eh6_counterfactual.png)); plus the **oracle-as-reward RL environment** ([`hostrl/`](src/verisim/hostrl/)) whose episode return *is* the composed `H_ε` |
-| [SPEC-7](docs/specs/SPEC-7.md) | world: distributed | replicated services, transactions, consensus — design |
+| [SPEC-7](docs/specs/SPEC-7.md) | world: distributed | replicated services, transactions, consensus — **DS0 increment 1 shipped**: the replicated-KV-under-partition deterministic core ([`dist/`](src/verisim/dist/), [`distoracle/`](src/verisim/distoracle/), [distributed-semantics](docs/distributed-semantics.md)) — async replication + eventual-consistency LWW, stale-read-under-partition, the `apply==oracle` invariant + goldens. The first world where the bit-exact global oracle is *intractable*, so the payload is the **tiered oracle** (H17, later DS) |
 | [SPEC-8](docs/specs/SPEC-8.md) | **method: oracle-grounded SSL** | put the oracle's truth in the *bulk* of the cake (self-supervised pretraining), not just the cherry (RL) |
 | [SPEC-9](docs/specs/SPEC-9.md) | **method: free-oracle scaling** | because the oracle labels for free, world size is a *compute* choice, not a labeling-budget one — how large/deep the world goes on one machine, and what holds as it grows |
 | [SPEC-10](docs/specs/SPEC-10.md) | **method: the faithful-horizon scaling law** | scales the *prime directive itself* (`H_ε(ρ)`) along model capacity: does free-running faithful horizon grow with scale, or is the one-step→horizon compounding gap fundamental (H26)? |
@@ -1463,7 +1479,16 @@ write-up is [docs/report.md](docs/report.md).
 | **HS3 (incr 4)** | The **joint capacity×world-size push** ([`horizon_graph_joint_scaling.py`](src/verisim/experiments/horizon_graph_joint_scaling.py), [horizon_graph_joint_scaling.png](figures/horizon_graph_joint_scaling.png)): a structured ladder (bigger graph arm in a bigger world). The ceiling **survives the joint push too** — `H_free`=0 at every rung (s@5h→xl@40h), vs HS1.3's *flat* joint ladder reaching the program-best 19.2/28.75. Across capacity, data, world size, **and** their product the structured floor is pinned at 0 (§33) | ✅ |
 | **HS3-T** | The **trainer diagnostic** ([`horizon_graph_schedule.py`](src/verisim/experiments/horizon_graph_schedule.py), [horizon_graph_schedule.png](figures/horizon_graph_schedule.png)): is the graph `p` plateau a *flat-LR* artifact? Give it the flat arm's warmup+cosine schedule (opt-in `warmup_frac`, default-off, regression-pinned). **No** — the schedule lifts `p` only 0.66→0.68 (vs the flat arm's 0.82) and `H_free` stays 0. The plateau is the **representation, not the trainer**; the under-training caveat is refuted (§33) | ✅ |
 
-The deterministic cores (filesystem and network) have **no runtime dependencies** and need no GPU.
+**Distributed world (`src/verisim/dist*`, SPEC-7 §13): DS0 increment 1 — the deterministic core has begun.**
+
+| Milestone | What | Status |
+|-----------|------|--------|
+| **DS0 (incr 1)** | The **replicated-KV-under-partition** core ([`dist/`](src/verisim/dist/), [`distoracle/`](src/verisim/distoracle/)): `DistributedState` (per-(object,node) MVCC replicas + causal event log + in-flight messages + partition/crash/clock), the client (`put`/`get`/`cas`) + fault/time (`advance`/`partition`/`heal`/`crash`/`restart`) grammar, the Tier-A async-replication DES (eventual-consistency LWW), canonical serialization, [distributed-semantics](docs/distributed-semantics.md), and golden trajectories pinning **stale-read-under-partition + convergence** — dependency-free, GPU-free, `apply==oracle` invariant tested every step | ✅ incr 1 |
+| **DS0 (incr 2+)** | The Raft-subset consensus group, the transaction/lock table, and the embedded SPEC-6 host / SPEC-5 net inside each node | ☐ next |
+| **DS1–DS8** | the `DistDelta`+`apply`+invariant (✅ for the incr-1 slice), drivers + fault dials (DS2), the **tiered oracle** (cycle/metamorphic/symbolic/bit-exact, DS3), `M_θ` (DS4), the tiered loop (DS5), and the **ED1 distributed `H_ε(ρ)` curve + H17** (DS6) — the prime directive | ☐ future |
+
+The deterministic cores (filesystem, network, and the distributed DS0 core) have **no runtime
+dependencies** and need no GPU.
 PyTorch is an optional `[model]` extra (see [docs/model-representation.md](docs/model-representation.md)).
 
 ## Concepts cheat-sheet
@@ -1493,6 +1518,11 @@ PyTorch is an optional `[model]` extra (see [docs/model-representation.md](docs/
 | collapse readout | embedding std + effective rank — JEPA's collapse diagnostic (→ 0 / → 1 under collapse) | `netmodel/grounded_train.py` |
 | noise / self-forcing | §6.3 drift levers: random input corruption vs model's-own-drift rollout, both oracle-relabeled | `netmodel/graph_train.py` |
 | reachability-faithfulness | fraction of can-A-reach-service(B) entries that agree | `netmetrics/divergence.py` |
+| MVCC replica | a node's `(version, value)` copy of an object; convergence is **last-writer-wins by `(version, value)`** | `dist/state.py` |
+| no global state | SPEC-7's W7: there is *no* stored global snapshot — under partition replicas legitimately disagree; a consistent read is a coordinated (expensive) oracle call | `dist/state.py` |
+| async replication / `advance` | a `put` writes locally + enqueues messages; they deliver only on `advance`, if due *and* reachable — the source of stale reads | `distoracle/reference.py` |
+| partition / `connected` | nodes can exchange messages iff they share a partition group; the fault medium that makes the dynamics exist | `dist/state.py` |
+| **tiered oracle** | SPEC-7's payload: the bit-exact global oracle is *intractable*, so the policy chooses the cheapest tier (metamorphic ↔ cycle ↔ symbolic ↔ bit-exact) that can refute the current prediction (H17, later DS) | `distoracle/` |
 
 ### SPEC-10 scaling cheat-sheet (the whole arc, one table)
 
