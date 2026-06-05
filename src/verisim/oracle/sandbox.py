@@ -67,7 +67,7 @@ from verisim.env.state import (
     resolve,
 )
 
-from .base import EXIT_OK, DeterminismReport, StepResult
+from .base import EXIT_ERR, EXIT_OK, DeterminismReport, StepResult
 from .sandbox_seal import DEFAULT_SEAL, DeterminismSeal, make_preexec
 
 
@@ -307,7 +307,14 @@ class SandboxOracle:
             _materialize(state, root)
             argv = _render(action, state, root)
             assert argv is not None
-            exit_code, stdout = self._exec(argv, root, cwd_fallback=tmp)
+            raw_exit, stdout = self._exec(argv, root, cwd_fallback=tmp)
+            # v0 models exit as a *coarse* OK/ERR split (oracle/base.py): EXIT_OK=0, EXIT_ERR=1.
+            # The system oracle reports the kernel's effect in that same vocabulary, so a failure
+            # is a failure regardless of the shell's exact code -- which is shell-dependent, not a
+            # kernel fact (Linux /bin/sh=dash returns 2 for a redirect-to-directory, macOS=bash
+            # returns 1). Comparing at the granularity v0 models is the faithful, platform-
+            # independent comparison; the raw code is a shell-implementation detail, not truth.
+            exit_code = EXIT_OK if raw_exit == 0 else EXIT_ERR
             fs = _snapshot_fs(root)
             cwd = self._next_cwd(state, action, exit_code)
             after = State(fs=fs, cwd=cwd, env=dict(state.env), last=state.last)

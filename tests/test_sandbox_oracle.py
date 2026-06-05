@@ -82,6 +82,28 @@ def test_basic_commands_match_a_real_shell():
 
 
 @requires_shell
+def test_exit_code_is_coarse_ok_err():
+    """The system oracle reports exit in v0's coarse OK/ERR vocabulary, not the shell's exact code.
+
+    A failure is a failure regardless of whether the shell returns 1 (bash, macOS) or 2 (dash,
+    Linux) -- the exact code is a shell-implementation detail, not a kernel fact. Pinning this is
+    the regression guard for the dash-vs-bash exit-code divergence (a write to a directory fails
+    on every shell; only the numeric code differs).
+    """
+    from verisim.oracle.base import EXIT_ERR, EXIT_OK
+
+    sysorc = SandboxOracle()
+    s = State(fs={"/": Dir(), "/d": Dir()})
+    # write/append to a directory fails on every shell (only the code differs: bash 1, dash 2)
+    assert sysorc.step(s, parse_action("write /d alpha")).exit_code == EXIT_ERR
+    assert sysorc.step(s, parse_action("append /d alpha")).exit_code == EXIT_ERR
+    assert sysorc.step(State.empty(), parse_action("mkdir /a")).exit_code == EXIT_OK
+    # every reported exit is exactly EXIT_OK or EXIT_ERR (never a raw shell code like 2)
+    for raw in ("rmdir /missing", "cat /missing", "cp /missing /x", "mkdir /a"):
+        assert sysorc.step(State.empty(), parse_action(raw)).exit_code in (EXIT_OK, EXIT_ERR)
+
+
+@requires_shell
 def test_cat_stdout_matches():
     ref = ReferenceOracle()
     sysorc = SandboxOracle()
