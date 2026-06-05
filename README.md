@@ -1135,11 +1135,14 @@ don't learn-then-mask it.)*
 
 ## Architecture & system design
 
-The repo is two parallel **worlds** (filesystem v0, network SPEC-5) over one shared contract — the
-propose→verify→correct loop — plus cross-cutting training/packaging. Every box below is dependency-free and
-torch-free except `model/`, `netmodel/`, and `train/` (the optional `[model]` extra). The **`Model`
-protocol is the seam**: the loop, oracle, metrics, and benchmark never know which proposer they hold, which
-is what makes the contribution a *method* rather than a model (the H22 model-invariance claim).
+The repo is three parallel **worlds** (filesystem v0, network SPEC-5, host SPEC-6) over one shared
+contract — the propose→verify→correct loop — plus cross-cutting training/packaging and a **scaling layer**
+(SPEC-10) that sweeps the prime-directive metric itself along capacity/data/world-size. Every box below is
+dependency-free and torch-free except `model/`, `netmodel/`, `hostmodel/`, and `train/` (the optional
+`[model]` extra). The **`Model` protocol is the seam**: the loop, oracle, metrics, and benchmark never know
+which proposer they hold, which is what makes the contribution a *method* rather than a model (the H22
+model-invariance claim) — and is exactly what lets the SPEC-10 scaling layer swap the flat transformer for
+the graph arm under the *same* harness (the proposer-dependence result, §34).
 
 ```
                        ACTION a_t
@@ -1168,11 +1171,15 @@ Package map (parallel structure; `net*` mirrors v0 for the graph world):
                                             + control-plane oracle
   delta/    Δ types, apply      netdelta/   graph Δ, apply         rl/      oracle-as-reward env
   metrics/  d, H_ε, bits        netmetrics/ d, reachability,       auto/    autoresearch ratchet
-  loop/     runner, π_c, ops                delta-exact, bits      experiments/  E*, EN*, K*,
-  model/    Mθ transformer      netmodel/   flat Mθ + graph+RSSM                 en8/9_scale,
-  data/     drivers, traj                   + grounded_train (SSL)              en8_capacity,
-                                netdata/    drivers + OG1/OG2 factory           en9_negatives
-                                netloop/    partial-obs runner, probe, belief filter
+  loop/     runner, π_c, ops                delta-exact, bits      experiments/  E*, EN*, K*, EH*,
+  model/    Mθ transformer      netmodel/   flat Mθ + graph+RSSM                 en8/9_scale, en8_capacity,
+  data/     drivers, traj                   + grounded_train (SSL)              en9_negatives, + the
+                                netdata/    drivers + OG1/OG2 factory           SPEC-10 scaling layer
+                                netloop/    partial-obs runner, probe,         (horizon_*: HS1 capacity,
+                                            belief filter                       HS1.2/1.3 data/joint, HS2
+                                                                                host, HS3 graph + its data/
+                                                                                world/joint/schedule cross-
+                                                                                axes, HS-synth synthesis)
 
   host world (SPEC-6, HC0-HC8 — the composing world; the host oracle *composes* the FS + net sub-oracles)
   host/      bundle state (procs + per-process fds + embedded v0 fs), syscall grammar, bundle delta, config
@@ -1469,6 +1476,10 @@ PyTorch is an optional `[model]` extra (see [docs/model-representation.md](docs/
 | `d(a, b)` | **divergence**: normalized symmetric set/graph/bundle difference, `0` iff identical (host: composed + per-subsystem) | `metrics/`, `netmetrics/`, `hostmetrics/` |
 | `H_ε(ρ)` | **faithful horizon**: first step where `d > ε`, as a function of consultation budget `ρ` | `metrics/horizon.py` |
 | `ρ` | **consultation budget** ∈ [0,1]: fraction of steps the oracle is consulted | `loop/policy.py` |
+| `p` | **one-step acceptance** (SPEC-10): teacher-forced fraction of steps whose predicted delta is *exactly* the oracle's — the per-step accuracy capacity is known to lift | `netmetrics/exact.py` (`delta_exact_rate`) |
+| `H_free` | **free-running faithful horizon** `H_ε(ρ=0)`: steps the unaided model self-rolls before diverging — the SPEC-10 headline | `experiments/horizon_scaling.py` |
+| `H_indep` | the **i.i.d. (geometric) baseline** `p/(1−p)`: the horizon if per-step failures were independent (no compounding), clamped at the eval cap | `experiments/horizon_scaling.py` (`independence_horizon`) |
+| `η` | **horizon efficiency** `H_free / H_indep`: the scale-free compounding penalty — `η>1` = the rollout self-stabilizes (free-runs *longer* than i.i.d.); `η<1` = errors compound (free-runs *shorter*) | `experiments/horizon_scaling.py` |
 | bits-to-correct | MDL of the oracle's correction of `Δ̂`; `0` iff the prediction is exactly right (host: per-subsystem) | `metrics/bits.py`, `hostmetrics/bits.py` |
 | composition-law | host H13 diagnostic: is composed `H_ε` multiplicative (∏ aᵢ) ↔ weakest-link (min aᵢ) ↔ coupled? | `hostmetrics/composition.py` |
 | interleaving entropy | host H14 dial: thread context-switch rate of a chaos-scheduled workload; `H_ε(interleaving-entropy)` quantifies concurrency's cost | `hostdata/scheduler.py` |
@@ -1482,6 +1493,26 @@ PyTorch is an optional `[model]` extra (see [docs/model-representation.md](docs/
 | collapse readout | embedding std + effective rank — JEPA's collapse diagnostic (→ 0 / → 1 under collapse) | `netmodel/grounded_train.py` |
 | noise / self-forcing | §6.3 drift levers: random input corruption vs model's-own-drift rollout, both oracle-relabeled | `netmodel/graph_train.py` |
 | reachability-faithfulness | fraction of can-A-reach-service(B) entries that agree | `netmetrics/divergence.py` |
+
+### SPEC-10 scaling cheat-sheet (the whole arc, one table)
+
+The scaling layer sweeps the prime-directive metric `H_free = H_ε(ρ=0)` along resource axes and reads it
+*exactly* against the oracle. The throughline: the floor's *shape* is the loop's (world/model-invariant),
+but whether its *height* is a resourcing artifact is **proposer-dependent**.
+
+| Milestone | Holds fixed → sweeps | World / proposer | Verdict |
+|---|---|---|---|
+| **HS1** | world → **capacity** | network / flat | `H_free` lifts ~9× (1.75→15.8), then saturates — the floor was under-resourcing |
+| **HS1.1** | (resourced) → capacity ~400× | network / flat | non-monotone: peaks at `l`, then a data-starvation decline the proxy `p` can't see |
+| **HS1.2** | capacity `xl` → **data** | network / flat | the decline is **data starvation** — data recovers `H_free`, ood η 0.97→1.90 |
+| **HS1.3** | → **capacity × data** (ladder) | network / flat | program-best `l@9.6k` = 19.2/28.75, then returns vanish past `l` |
+| **HS2** | world → capacity | **host** / flat | lift is **cross-world** (1.00→5.08), but the harder world re-lowers the floor ~3–5× |
+| **HS3 (1)** | world → capacity | network / **graph** | **proposer-dependent**: capacity buys neither `p` nor `H_free` (η≈0) — lift does *not* reproduce |
+| **HS3 (2)** | capacity → data | network / graph | **not** data starvation — a genuine ceiling; η<1 (compounds), the wall the flat arm escaped |
+| **HS3 (3)** | capacity → **world size** | network / graph | ceiling is **world-size-invariant** (`H_free`=0, 5→40 hosts) |
+| **HS3 (4)** | → **capacity × world** (ladder) | network / graph | ceiling **survives the joint push** (`H_free`=0), vs HS1.3's flat ladder reaching 19.2 |
+| **HS3-T** | capacity → **LR schedule** | network / graph | the `p` plateau is the **representation, not the flat LR** (schedule lifts only 0.66→0.68) |
+| **HS-synth** | — (figures-from-records) | flat vs graph overlay | the capstone: the floor is **proposer-dependent**, in one figure |
 
 ## Design decisions (the load-bearing ones)
 
