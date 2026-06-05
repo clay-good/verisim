@@ -1,0 +1,10 @@
+panel,key,x,tier,h_eps,dollars,dollars_per_step,ci_lo,ci_hi
+curve,rho,0.0,bit_exact,0.2500,,,0.0000,0.7500
+curve,rho,0.25,bit_exact,2.0000,,,1.0000,4.0000
+curve,rho,0.5,bit_exact,2.0000,,,1.0000,4.0000
+curve,rho,0.75,bit_exact,24.0000,,,24.0000,24.0000
+curve,rho,1.0,bit_exact,32.0000,,,32.0000,32.0000
+h17,metamorphic,,metamorphic,0.2500,156.0000,624.0000,,
+h17,symbolic,,symbolic,0.7500,308.0000,410.6667,,
+h17,bit_exact,,bit_exact,32.0000,512.0000,16.0000,,
+h17,escalate,,escalate,32.0000,691.5000,21.6094,,
