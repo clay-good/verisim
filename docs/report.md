@@ -983,10 +983,14 @@ deepest claim — **deterministic verification as a model-agnostic primitive** �
 ![EH7: four proposers share the floor+cliff shape — the proposer sets the floor, the loop sets the shape](../figures/eh7_invariance.png)
 
 The **cross-world synthesis** ([`synthesis.py`](../src/verisim/experiments/synthesis.py)) overlays
-all three worlds' normalized `H_ε(ρ)` onto **one floor+cliff curve** — the thesis in a single figure:
-the shape is both model- and world-agnostic.
+all four worlds' normalized `H_ε(ρ)` onto **one floor+cliff curve** — the thesis in a single figure:
+the shape is both model- and world-agnostic. The fourth world (SPEC-7, the distributed cluster) makes
+it the strongest version: it is the only world whose bit-exact global oracle is *intractable* (§5,
+NP-complete consistency checking), so its curve is read against a **tiered, cost-bounded** oracle (the
+ED1 `panel == curve` rows at the bit-exact tier) — the floor+cliff is therefore not an artifact of
+having a cheap exact oracle to spend.
 
-![Synthesis: the floor+cliff `H_ε(ρ)` is world-agnostic across filesystem, network, and host](../figures/synthesis_floor_cliff.png)
+![Synthesis: the floor+cliff `H_ε(ρ)` is world-agnostic across filesystem, network, host, and distributed](../figures/synthesis_floor_cliff.png)
 
 ## EH-stream (H15) and EH6 (H16) — two refutations with their mechanisms localized
 

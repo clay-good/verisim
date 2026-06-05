@@ -1,19 +1,23 @@
-"""Cross-world synthesis -- the floor+cliff ``H_ε(ρ)`` across the three worlds (the headline).
+"""Cross-world synthesis -- the floor+cliff ``H_ε(ρ)`` across all four worlds (the headline).
 
 The program's most general empirical statement: the faithful-horizon-vs-consultation curve is the
 **same floor+cliff shape in every world** -- the filesystem (SPEC-2, a tree), the network (SPEC-5, a
-graph), and the host (SPEC-6, a coupled bundle) -- despite entirely different state types, oracles,
-and models. This module reads the three worlds' committed ``H_ε(ρ)`` curve CSVs (the artifacts E1 /
-EN1 / EH1 emit), normalizes each by its own horizon ceiling ``T`` (so worlds with different rollout
+graph), the host (SPEC-6, a coupled bundle), and the distributed cluster (SPEC-7, a replicated
+service under partition/crash/clock faults) -- despite entirely different state types, oracles, and
+models. This module reads the four worlds' committed ``H_ε(ρ)`` curve CSVs (the artifacts E1 / EN1 /
+EH1 / ED1 emit), normalizes each by its own horizon ceiling ``T`` (so worlds with different rollout
 lengths are comparable), averages over difficulty at a fixed tolerance ``ε``, and returns one
 normalized curve per world. Figures are produced *only* from committed records (the SPEC-2 §7.3
 discipline) -- this re-reads them, it does not re-run anything. Pure and dependency-free.
 
-The synthesis makes one figure carry the claim: if the three normalized curves overlay -- a floor
+The synthesis makes one figure carry the claim: if the four normalized curves overlay -- a floor
 across the ``ρ`` interior, then a cliff to ``H_ε/T = 1`` at ``ρ=1`` -- then "a little consultation
 does not buy a lot of horizon; you pay near-linearly for faithfulness" is a property of the
 *oracle-loop method*, not of any one world or model (the SPEC.md §0 model-agnostic-primitive claim,
-now also world-agnostic).
+now also world-agnostic). The distributed world makes it the strongest version of the claim: the
+shape survives even where bit-exact global truth is *intractable* (SPEC-7 §5, NP-complete
+consistency checking), so the floor+cliff is not an artifact of a cheap, exact oracle -- it holds
+under a tiered, cost-bounded one too.
 """
 
 from __future__ import annotations
@@ -24,11 +28,13 @@ from dataclasses import dataclass
 from pathlib import Path
 from statistics import fmean
 
-#: The committed curve CSVs, by world (filesystem E1, network EN1, host EH1).
+#: The committed curve CSVs, by world (filesystem E1, network EN1, host EH1, distributed ED1).
+#: ED1 uses the panel schema (``panel,key,x,...,h_eps,...``); :func:`world_curve` reads both.
 DEFAULT_WORLDS: dict[str, str] = {
     "filesystem (E1)": "figures/e1_curve.csv",
     "network (EN1)": "figures/en1_curve.csv",
     "host (EH1)": "figures/eh1_curve.csv",
+    "distributed (ED1)": "figures/ed1_dist.csv",
 }
 
 
@@ -50,11 +56,23 @@ CSV_HEADER = "world,rho,mean_h,ceiling,frac_h"
 
 
 def world_curve(csv_path: str | Path, epsilon: float) -> list[tuple[float, float]]:
-    """Read one world's curve CSV; return ``[(ρ, difficulty-averaged mean H_ε)]`` at tolerance ε."""
+    """Read one world's curve CSV; return ``[(ρ, difficulty-averaged mean H_ε)]`` at tolerance ε.
+
+    Two schemas are accepted. The filesystem/network/host worlds emit the *standard* curve schema
+    (``difficulty,epsilon,rho,mean_h,...``), read at the requested ``epsilon``. The distributed
+    world (ED1) emits the *panel* schema (``panel,key,x,tier,mode,h_eps,...``); its faithful
+    ``H_ε(ρ)`` curve is the ``panel == "curve"`` rows (``x`` is ``ρ``, ``h_eps`` is the horizon at
+    the bit-exact tier -- the faithful one, so ``epsilon`` does not select among them).
+    """
     by_rho: dict[float, list[float]] = {}
     with Path(csv_path).open() as handle:
-        for row in csv.DictReader(handle):
-            if abs(float(row["epsilon"]) - epsilon) < 1e-9:
+        reader = csv.DictReader(handle)
+        is_panel = reader.fieldnames is not None and "panel" in reader.fieldnames
+        for row in reader:
+            if is_panel:
+                if row["panel"] == "curve":
+                    by_rho.setdefault(float(row["x"]), []).append(float(row["h_eps"]))
+            elif abs(float(row["epsilon"]) - epsilon) < 1e-9:
                 by_rho.setdefault(float(row["rho"]), []).append(float(row["mean_h"]))
     return [(rho, fmean(vals)) for rho, vals in sorted(by_rho.items())]
 
