@@ -300,8 +300,8 @@ Phases are gated by **evidence**, not calendar: **no stage graduates from design
 > 2. **⏸ System oracle** (SPEC-3 §2, milestone **S1**): re-run against a *real* sandboxed shell. Gate: **H4** (mechanism survives reality). *(Orthogonal "faithful-to-reality" upgrade; can run anytime.)*
 > 3. **⏸ Package the working simulator** — the agent-callable "what-if" tool + faithfulness benchmark + RL env (the community artifact, SPEC-2 §15).
 > 4. **▶ ACTIVE — Network world** ([SPEC-5](./SPEC-5.md)): earn the *network* knee, where drift is gradual and partial observability supplies a calibrated signal (the regime the single-FS world lacked). Gate: **H8**.
-> 5. **⏸ Host world** ([SPEC-6](./SPEC-6.md)): earn the *host* knee + composition law. Gate: **H13**.
-> 6. **⏸ Distributed world** ([SPEC-7](./SPEC-7.md)): earn the *distributed* knee + the tiered oracle. Gate: **H17**.
+> 5. **✅ Host world** ([SPEC-6](./SPEC-6.md)): the *host* knee + composition law (H13). Done — the composed `H_ε(ρ)` floor+cliff + the coupled composition law shipped (EH1–EH9), and SPEC-10 then scaled the headline across capacity/data/world-size/proposer.
+> 6. **▶ ACTIVE — Distributed world** ([SPEC-7](./SPEC-7.md)): the layer *above* the host — replicated services where the bit-exact global oracle is *intractable*, so the payload is the **tiered oracle**. Gate: **H17**. **DS0–DS3 + DS5 + the ED1 apparatus ship** (the replicated-KV-under-partition core, the data factory, the divergence/consistency-faithfulness metrics, the metamorphic↔cycle↔symbolic↔bit-exact tiered oracle, the tiered loop, and the first distributed `H_ε(ρ)` curve + H17 measurement — [`ed1_dist.png`](../../figures/ed1_dist.png)); **H17 first result: cheap tiers win per oracle-dollar *conditionally* — for gross errors ($9.4 vs $16/faithful-step) but not subtle ones ($848)** (the learned `M_θ`, DS4, supplies the real error distribution next).
 >
 > The **autonomous research engine** ([SPEC-4](./SPEC-4.md)) is the cross-cutting *tool* used at every stage (its AR0 ratchet already drives the SPEC-2.1 search); it advances its own autonomy levels AR0→AR5 as the science allows, and is not itself a stage.
 

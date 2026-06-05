@@ -5,7 +5,12 @@ a consult, :mod:`verisim.distloop.tier_policy`). Records the per-step divergence
 defines ``H_ε``) and the cumulative oracle-dollars (the §9.4 cost H17 measures).
 """
 
-from verisim.distloop.model import DistModel, DistNullModel, DistOracleBackedModel
+from verisim.distloop.model import (
+    DistModel,
+    DistNoisyModel,
+    DistNullModel,
+    DistOracleBackedModel,
+)
 from verisim.distloop.runner import budget_for_rho, ground_truth_rollout, run_dist_rollout
 from verisim.distloop.tier_policy import (
     EscalatingTierPolicy,
@@ -15,6 +20,7 @@ from verisim.distloop.tier_policy import (
 
 __all__ = [
     "DistModel",
+    "DistNoisyModel",
     "DistNullModel",
     "DistOracleBackedModel",
     "EscalatingTierPolicy",
