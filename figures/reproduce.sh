@@ -220,9 +220,14 @@ echo "   (local sweep, ~10 min on CPU; structured ladder s@5h → xl@40h × 3 se
 python -m verisim.experiments.horizon_graph_joint_scaling --config configs/horizon_graph_joint_scaling.json \
     --out figures/horizon_graph_joint_scaling.csv --plot figures/horizon_graph_joint_scaling.png
 
+echo "== HS3-T: the trainer diagnostic — is the graph p plateau a flat-LR artifact? flat-LR vs warmup+cosine (SPEC-10, §4.11) =="
+echo "   (local sweep, ~6 min on CPU; fixed graph m × {flat-LR, scheduled} × 3 seeds; writes CSV + figure)"
+python -m verisim.experiments.horizon_graph_schedule --config configs/horizon_graph_schedule.json \
+    --out figures/horizon_graph_schedule.csv --plot figures/horizon_graph_schedule.png
+
 echo "== HS-synth: the PROPOSER-DEPENDENCE synthesis — flat resourcing lift vs graph ceiling in one figure (SPEC-10, §4.9) =="
 echo "   (instant; figures-from-records — re-reads horizon_scaling.csv + horizon_graph_scaling.csv, re-runs nothing)"
 python -m verisim.experiments.horizon_synthesis \
     --out figures/horizon_synthesis.csv --plot figures/horizon_synthesis.png
 
-echo "== done: figures/{e1_curve,e2_policies,e3_operators,calibration,e4_ablation,objective,representation,auto_search,en1_curve,en2_policies,en3_operators,en4_graph_vs_flat,en8_grounding,en9_contrastive,en8_scale,en9_scale,en8_capacity,en9_negatives,en7_invariance,en5_selfheal,en6_counterfactual,en8_ls3_hero,en10_two_oracle,eh1_curve,eh1_composition,eh2_policies,eh3_operators,eh4_factored_vs_flat,eh4_drift,eh5_subsystem_policy,eh5_heads,eh_h14_interleaving,eh_h14_scale,eh7_invariance,eh8_privilege,eh6_two_oracle,eh_h13_scale,eh9_denial_weighted,eh6_counterfactual,eh_stream,synthesis_floor_cliff,horizon_scaling,horizon_scaling_xl,horizon_data_scaling,horizon_joint_scaling,horizon_host_scaling,horizon_graph_scaling,horizon_graph_data_scaling,horizon_graph_world_scaling,horizon_graph_joint_scaling,horizon_synthesis}.{png,csv} =="
+echo "== done: figures/{e1_curve,e2_policies,e3_operators,calibration,e4_ablation,objective,representation,auto_search,en1_curve,en2_policies,en3_operators,en4_graph_vs_flat,en8_grounding,en9_contrastive,en8_scale,en9_scale,en8_capacity,en9_negatives,en7_invariance,en5_selfheal,en6_counterfactual,en8_ls3_hero,en10_two_oracle,eh1_curve,eh1_composition,eh2_policies,eh3_operators,eh4_factored_vs_flat,eh4_drift,eh5_subsystem_policy,eh5_heads,eh_h14_interleaving,eh_h14_scale,eh7_invariance,eh8_privilege,eh6_two_oracle,eh_h13_scale,eh9_denial_weighted,eh6_counterfactual,eh_stream,synthesis_floor_cliff,horizon_scaling,horizon_scaling_xl,horizon_data_scaling,horizon_joint_scaling,horizon_host_scaling,horizon_graph_scaling,horizon_graph_data_scaling,horizon_graph_world_scaling,horizon_graph_joint_scaling,horizon_graph_schedule,horizon_synthesis}.{png,csv} =="

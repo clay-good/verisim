@@ -1018,6 +1018,19 @@ the joint scaling that lifted the flat arm to its peak: **across capacity, data,
 product, the structured floor is pinned at 0** — a genuine wall, the strongest form of the verdict, which
 closes the SPEC-10 milestone table.
 
+**And the under-training caveat is now refuted (HS3-T).** Every result above carried one qualifier — *the
+graph trainer plateaus at `p` ≈ 0.66, below the flat arm's 0.82, so maybe the floor is just
+under-training.* That's concrete and testable: the flat arm reached 0.82 with `train_batched`'s
+**warmup+cosine** schedule while the graph trainer used a **flat LR**. HS3-T
+([`horizon_graph_schedule.py`](src/verisim/experiments/horizon_graph_schedule.py)) gives the graph arm the
+flat arm's own schedule (an opt-in `warmup_frac`, default-off so every committed result is byte-identical,
+regression-pinned) and finds it lifts the graph arm's `p` only **0.66 → 0.68** (nowhere near 0.82) with
+`H_free` still **0 for both arms**. So the plateau is the graph arm's **representation on this world, not
+the flat LR** — the structured ceiling survives the trainer fix, and the load-bearing under-training
+caveat is refuted against the flat arm's own winning recipe.
+
+![HS3-T: the schedule that lifted the flat arm to 0.82 barely moves the graph arm (0.66→0.68) and the horizon stays at 0 — the plateau is the representation, not the flat LR](figures/horizon_graph_schedule.png)
+
 ### 34. The SPEC-10 capstone: the floor is proposer-dependent (cross-proposer synthesis)
 
 The whole SPEC-10 arc reduces to one contrast, and
@@ -1441,6 +1454,7 @@ write-up is [docs/report.md](docs/report.md).
 | **HS3 (incr 2)** | The **graph data cross-axis** ([`horizon_graph_data_scaling.py`](src/verisim/experiments/horizon_graph_data_scaling.py), [horizon_graph_data_scaling.png](figures/horizon_graph_data_scaling.png)): fixed graph capacity, sweep the coverage set — the structured floor is **NOT data starvation** (10× data lifts neither `H_free`≈0 nor `p`, η<1 — it free-runs *shorter* than i.i.d.). The structured floor moves with **neither capacity nor data** — the first floor that doesn't dissolve into resourcing ([§32](#32-and-the-structured-floor-is-not-data-starvation-either--a-genuine-ceiling-spec-10--hs3-incr-2--h26)) | ✅ |
 | **HS3 (incr 3)** | The **world-size cross-axis** ([`horizon_graph_world_scaling.py`](src/verisim/experiments/horizon_graph_world_scaling.py), [horizon_graph_world_scaling.png](figures/horizon_graph_world_scaling.png)): fixed graph capacity, sweep `n_hosts` over SPEC-9's `O(N²)` axis — the ceiling is **world-size-invariant** (`H_free`=0 at every world size 5–40, η=0, `p` *degrades*). Completes the HS3 arc: the structured floor is pinned at 0 across **capacity, data, AND world size** ([§33](#33-and-it-survives-the-world-size-axis-too--the-structured-ceiling-is-world-size-invariant-spec-10--hs3-incr-3--h26)) | ✅ |
 | **HS3 (incr 4)** | The **joint capacity×world-size push** ([`horizon_graph_joint_scaling.py`](src/verisim/experiments/horizon_graph_joint_scaling.py), [horizon_graph_joint_scaling.png](figures/horizon_graph_joint_scaling.png)): a structured ladder (bigger graph arm in a bigger world). The ceiling **survives the joint push too** — `H_free`=0 at every rung (s@5h→xl@40h), vs HS1.3's *flat* joint ladder reaching the program-best 19.2/28.75. Across capacity, data, world size, **and** their product the structured floor is pinned at 0 (§33) | ✅ |
+| **HS3-T** | The **trainer diagnostic** ([`horizon_graph_schedule.py`](src/verisim/experiments/horizon_graph_schedule.py), [horizon_graph_schedule.png](figures/horizon_graph_schedule.png)): is the graph `p` plateau a *flat-LR* artifact? Give it the flat arm's warmup+cosine schedule (opt-in `warmup_frac`, default-off, regression-pinned). **No** — the schedule lifts `p` only 0.66→0.68 (vs the flat arm's 0.82) and `H_free` stays 0. The plateau is the **representation, not the trainer**; the under-training caveat is refuted (§33) | ✅ |
 
 The deterministic cores (filesystem and network) have **no runtime dependencies** and need no GPU.
 PyTorch is an optional `[model]` extra (see [docs/model-representation.md](docs/model-representation.md)).

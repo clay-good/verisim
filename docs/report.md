@@ -1336,6 +1336,23 @@ leaves 0. So the structured ceiling survives even the joint scaling that lifted 
 genuine wall, the strongest form of the HS3 verdict (same honest caveat: the graph trainer plateaus at
 `p` ≈ 0.6; strict ε ≤ 0.1).
 
+**Resolving that caveat (HS3-T).** Every HS3 result above carried the same qualifier — *the graph trainer
+plateaus at `p` ≈ 0.66, below the flat arm's 0.82, so maybe the structured floor is just under-training.*
+That hypothesis is concrete and testable, because the flat arm reached 0.82 with `train_batched`'s
+**warmup+cosine** schedule while the graph trainer used a **flat LR**. HS3-T
+([`horizon_graph_schedule.py`](../src/verisim/experiments/horizon_graph_schedule.py)) gives the graph arm
+the flat arm's own schedule (an opt-in `warmup_frac`, default-off so every committed result is
+byte-identical, regression-pinned) and compares.
+
+![HS3-T: the warmup+cosine schedule that lifted the flat arm to 0.82 barely moves the graph arm (0.66→0.68) and the horizon stays at 0 — the plateau is the representation, not the flat LR](../figures/horizon_graph_schedule.png)
+
+The schedule lifts the graph arm's `p` by only ~2 points (**0.66 → 0.68**, CIs nearly touching) — nowhere
+near the flat arm's 0.82 — and `H_free` stays **0 for both arms**. So the plateau is the graph arm's
+**representation on this world, not the flat LR**: the exact recipe that fixed the flat arm does not fix
+the graph arm, and the structured ceiling survives the trainer fix. The load-bearing under-training caveat
+is refuted against the flat arm's own winning recipe (the residual, much smaller: a fundamentally
+different graph optimizer or architecture is untested).
+
 **The capstone, in one figure** ([`horizon_synthesis.py`](../src/verisim/experiments/horizon_synthesis.py)
 — a figures-from-records overlay of the two committed capacity sweeps; re-runs nothing):
 
@@ -1441,6 +1458,9 @@ python -m verisim.experiments.horizon_graph_world_scaling --config configs/horiz
 # SPEC-10 HS3 incr 4 — the joint capacity×world-size push, structured arm (~10 min CPU):
 python -m verisim.experiments.horizon_graph_joint_scaling --config configs/horizon_graph_joint_scaling.json \
     --out figures/horizon_graph_joint_scaling.csv --plot figures/horizon_graph_joint_scaling.png
+# SPEC-10 HS3-T — the trainer diagnostic (flat-LR vs warmup+cosine graph arm; ~6 min CPU):
+python -m verisim.experiments.horizon_graph_schedule --config configs/horizon_graph_schedule.json \
+    --out figures/horizon_graph_schedule.csv --plot figures/horizon_graph_schedule.png
 # SPEC-10 HS-synth — the proposer-dependence capstone (figures-from-records; instant, re-runs nothing):
 python -m verisim.experiments.horizon_synthesis \
     --out figures/horizon_synthesis.csv --plot figures/horizon_synthesis.png

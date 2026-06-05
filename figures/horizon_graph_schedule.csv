@@ -1,0 +1,17 @@
+warmup_frac,label,metric,mean,ci_lo,ci_hi,n
+0,flat-LR,one_step_acc_id,0.661458,0.640625,0.671875,3
+0,flat-LR,h_free_id,0.000000,0.000000,0.000000,3
+0,flat-LR,h_indep_id,1.959282,1.782609,2.047619,3
+0,flat-LR,horizon_efficiency_id,0.000000,0.000000,0.000000,3
+0,flat-LR,one_step_acc_ood,0.651042,0.640625,0.656250,3
+0,flat-LR,h_free_ood,0.000000,0.000000,0.000000,3
+0,flat-LR,h_indep_ood,1.866930,1.782609,1.909091,3
+0,flat-LR,horizon_efficiency_ood,0.000000,0.000000,0.000000,3
+0.1,scheduled@0.1,one_step_acc_id,0.682292,0.671875,0.687500,3
+0.1,scheduled@0.1,h_free_id,0.000000,0.000000,0.000000,3
+0.1,scheduled@0.1,h_indep_id,2.149206,2.047619,2.200000,3
+0.1,scheduled@0.1,horizon_efficiency_id,0.000000,0.000000,0.000000,3
+0.1,scheduled@0.1,one_step_acc_ood,0.656250,0.609375,0.687500,3
+0.1,scheduled@0.1,h_free_ood,0.000000,0.000000,0.000000,3
+0.1,scheduled@0.1,h_indep_ood,1.935873,1.560000,2.200000,3
+0.1,scheduled@0.1,horizon_efficiency_ood,0.000000,0.000000,0.000000,3

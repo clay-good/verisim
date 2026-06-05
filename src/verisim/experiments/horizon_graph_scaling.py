@@ -105,6 +105,7 @@ class GraphHorizonScalingConfig:
     scales: tuple[GraphScale, ...] = DEFAULT_GRAPH_SCALES
     seeds: tuple[int, ...] = (0, 1, 2)  # one freshly-trained model per seed; CIs are over seeds
     noise_prob: float = 0.0  # §6.3 noise-injection lever, off by default (clean capacity reading)
+    warmup_frac: float = 0.0  # 0 = flat LR (the HS3 recipe); >0 = warmup+cosine (HS3-T, §4.11)
     lr: float = 3e-3
     batch_size: int = 32
     eval_driver: str = "weighted"  # in-distribution (id) free-running
@@ -137,6 +138,7 @@ class GraphHorizonScalingConfig:
             scales=scales,
             seeds=tuple(d.get("seeds", b.seeds)),
             noise_prob=d.get("noise_prob", b.noise_prob),
+            warmup_frac=d.get("warmup_frac", b.warmup_frac),
             lr=d.get("lr", b.lr),
             batch_size=d.get("batch_size", b.batch_size),
             eval_driver=d.get("eval_driver", b.eval_driver),
@@ -184,7 +186,8 @@ def _train_graph_scaled(
         n_layer=scale.n_layer, n_head=scale.n_head, seed=seed,
     )
     train_graph_model(
-        wm, examples, steps=scale.train_steps, lr=config.lr, batch_size=config.batch_size, seed=seed
+        wm, examples, steps=scale.train_steps, lr=config.lr, batch_size=config.batch_size,
+        seed=seed, warmup_frac=config.warmup_frac,
     )
     return wm
 

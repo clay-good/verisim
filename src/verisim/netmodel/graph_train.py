@@ -24,6 +24,7 @@ attack the same exposure-bias gap from different angles, and both are on/off EN4
 
 from __future__ import annotations
 
+import math
 import random
 
 import torch
@@ -154,22 +155,42 @@ def train_graph_model(
     lr: float = 3e-3,
     batch_size: int = 32,
     seed: int = 0,
+    warmup_frac: float = 0.0,
 ) -> list[float]:
-    """Minibatch teacher-forced training of the graph arm; return per-step losses."""
+    """Minibatch teacher-forced training of the graph arm; return per-step losses.
+
+    ``warmup_frac`` is **opt-in and defaults to 0.0** (a flat LR -- the original behaviour, so every
+    committed caller is byte-identical). When ``> 0`` it enables the same **linear warmup + cosine
+    decay** schedule :func:`verisim.train.supervised.train_batched` uses for the flat arm (SPEC-2.1
+    §6) -- the lever HS3-T (SPEC-10 §4.11) uses to ask whether the graph arm's `p` plateau is a
+    flat-LR trainer artifact rather than an architectural ceiling.
+    """
     torch.manual_seed(seed)
     gen = torch.Generator()
     gen.manual_seed(seed)
     optimizer = torch.optim.AdamW(model.net.parameters(), lr=lr)
     n = len(examples)
+    use_schedule = warmup_frac > 0.0
+    warmup = max(1, int(warmup_frac * steps))
+
+    def lr_at(step: int) -> float:
+        if step < warmup:
+            return lr * (step + 1) / warmup
+        progress = (step - warmup) / max(1, steps - warmup)
+        return lr * 0.5 * (1.0 + math.cos(math.pi * min(1.0, progress)))
+
     losses: list[float] = []
     perm: list[int] = []
     cursor = 0
-    for _ in range(steps):
+    for step in range(steps):
         if cursor + batch_size > n or not perm:
             perm = torch.randperm(n, generator=gen).tolist()
             cursor = 0
         batch = [examples[i] for i in perm[cursor : cursor + batch_size]]
         cursor += batch_size
+        if use_schedule:  # off by default -> flat LR -> existing results unchanged
+            for group in optimizer.param_groups:
+                group["lr"] = lr_at(step)
         model.net.train()
         optimizer.zero_grad()
         loss = _batch_loss(model, batch, sample=True)

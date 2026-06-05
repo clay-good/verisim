@@ -469,7 +469,9 @@ Two facts, both first-class:
 (`train_graph_model`) plateaus at `p` ≈ 0.66, **below** the flat arm's 0.82 under `train_batched`; more
 iterations (1.5k → 5k) barely move it, so the plateau is real *for this trainer/data*, but part of the
 `H_free`=0 gap is simply the graph arm not reaching the flat arm's per-step operating point — an
-architecture×optimizer interaction, not a proven architectural ceiling. (ii) The graph arm's `p` being
+architecture×optimizer interaction, not a proven architectural ceiling. **(HS3-T, §4.11, now tests this
+directly: giving the graph arm the flat arm's own warmup+cosine schedule lifts it only 0.66 → 0.68 and
+`H_free` stays 0 — so the plateau is the representation, not the flat LR.)** (ii) The graph arm's `p` being
 **flat** in capacity (it already ceilings at `xs`) says it is **data-limited, not capacity-limited** —
 the inductive bias makes it data-efficient (its `xs` 0.64 already exceeds the flat `xs`'s 0.47) but
 early-saturating, so its lever — exactly as HS1.2 found for the flat arm at large capacity — is *data*,
@@ -638,6 +640,44 @@ faithful-horizon floor is **proposer-dependent** -- a resourcing story for the f
 every axis and their product, HS1/HS1.2/HS1.3/HS2), a genuine compounding ceiling for the structured arm
 (it lifts on none of them, HS3 incr 1–4).
 
+### 4.11 The trainer diagnostic (HS3-T): the `p` plateau is the representation, not the flat LR
+
+Every HS3 result carried the same honest caveat: the committed graph trainer plateaus at one-step `p` ≈
+0.66, *below* the flat arm's 0.82, so part of the structured arm's pinned floor *could* be a **trainer**
+confound rather than the architecture. The smoking gun was concrete and fixable: the flat arm reached
+0.82 with `train_batched`'s **warmup + cosine** LR schedule (whose docstring says "the schedule converges
+where a flat LR stalls"), while the graph trainer
+([`train_graph_model`](../../src/verisim/netmodel/graph_train.py)) used a **flat LR**. So the program's
+"method-fails vs. too-small" question, applied to the graph arm's *optimizer*, is exactly: does giving
+the graph arm the *same* schedule that lifted the flat arm raise its `p` — and if so, does `H_free` then
+leave the floor? HS3-T answers it. `train_graph_model` gained an **opt-in** `warmup_frac` (default 0.0 →
+flat LR → every committed result byte-identical, pinned by a regression test); HS3-T
+([`horizon_graph_schedule.py`](../../src/verisim/experiments/horizon_graph_schedule.py), config
+[`horizon_graph_schedule.json`](../../configs/horizon_graph_schedule.json)) trains the fixed-`m` graph
+arm **flat-LR vs scheduled** (`warmup_frac` 0 vs 0.1, 4,000 steps × 3 seeds). Figure
+[`horizon_graph_schedule.png`](../../figures/horizon_graph_schedule.png),
+[`horizon_graph_schedule.csv`](../../figures/horizon_graph_schedule.csv).
+
+| arm | `p` (id) [95% CI] | `p` (ood) | **`H_free`** (id) | `H_free` (ood) | η (id) |
+|---|---|---|---|---|---|
+| flat-LR (the HS3 recipe) | 0.66 [0.64, 0.67] | 0.65 | **0.00** | 0.00 | 0.00 |
+| scheduled@0.1 | 0.68 [0.67, 0.69] | 0.66 | **0.00** | 0.00 | 0.00 |
+
+**Verdict: the plateau is the graph arm's representation on this world, not the flat LR — the HS3
+ceiling survives the trainer fix.** The warmup+cosine schedule that lifted the *flat* arm from 0.47 to
+**0.82** lifts the *graph* arm by only ~2 points (0.66 → 0.68, CIs nearly touching) — nowhere near the
+flat arm's operating point — and `H_free` stays **0 for both arms**. So the "the graph arm is just
+under-trained (in the optimizer sense)" reading is **refuted**: the exact schedule that fixed the flat
+arm does not fix the graph arm. This narrows and bulletproofs the HS3 caveat — the structured ceiling is
+not a flat-LR artifact; the graph arm's per-step accuracy genuinely ceilings at ~0.66–0.68 on this world,
+below the threshold where the rollout self-stabilizes.
+
+*Honest caveat (the residual, now much smaller).* HS3-T refutes the *specific, named* trainer hypothesis
+(the missing warmup+cosine schedule), not *every* conceivable graph optimizer: a fundamentally different
+architecture, regularizer, or far larger scale might still cross the threshold (unmeasured). But the
+load-bearing confound that qualified the whole arc — "you just didn't train the graph arm as well as the
+flat arm" — is now tested against the flat arm's own winning recipe and found not to explain the gap.
+
 ---
 
 ## 5. Milestones (HS0–HS3)
@@ -657,6 +697,7 @@ Non-colliding with `M*/S*/AR*/NW*/HC*/DS*/OG*/LS*`. Gated as ever: measure befor
 | **HS3 (incr 3)** | **The world-size cross-axis**: hold graph capacity fixed and sweep `n_hosts` (SPEC-9's `O(N²)` axis) — is the structured ceiling world-size-invariant, or does the graph arm's structural bias pay off in a bigger world? | regenerates; recorded with honest caveats | ✅ shipped ([`horizon_graph_world_scaling.csv`](../../figures/horizon_graph_world_scaling.csv), [`horizon_graph_world_scaling.png`](../../figures/horizon_graph_world_scaling.png); fixed `m` × 4 world sizes 5–40 hosts × 3 seeds): **the ceiling is *world-size-invariant* — `H_free`=0 at every world size (8× range, zero CIs), η=0, and `p` *degrades* with world size (0.66→0.59). The structural bias does not rescue the floor at scale. Completes the HS3 arc: the structured floor is pinned at 0 across *all three* axes — capacity, data, AND world size** (§4.8) |
 | **HS-synth** | **The proposer-dependence synthesis** (the capstone): a figures-from-records overlay of the flat vs structured capacity sweeps -- the floor is proposer-dependent in one figure. | regenerates from committed CSVs; re-runs nothing | ✅ shipped ([`horizon_synthesis.csv`](../../figures/horizon_synthesis.csv), [`horizon_synthesis.png`](../../figures/horizon_synthesis.png)): **flat `H_free` 1.75 → 15.8 with capacity vs graph pinned at ≈ 0 — "is the floor a resourcing artifact?" depends on the proposer** (§4.9) |
 | **HS3 (incr 4)** | **The joint capacity×world-size push**: a structured compute-optimal ladder (bigger graph arm in a bigger world) — does scaling both together lift it, as HS1.3's joint push lifted the flat arm? | regenerates; recorded with honest caveats | ✅ shipped ([`horizon_graph_joint_scaling.csv`](../../figures/horizon_graph_joint_scaling.csv), [`horizon_graph_joint_scaling.png`](../../figures/horizon_graph_joint_scaling.png); 4-rung ladder s@5h–xl@40h × 3 seeds): **the ceiling survives the joint push too — `H_free`=0 at every rung (η=0), vs HS1.3's flat joint ladder reaching the program-best 19.2/28.75. Across capacity, data, world size, AND their product the structured floor is pinned at 0 — a genuine wall, the strongest form of the HS3 verdict** (§4.10) |
+| **HS3-T** | **The trainer diagnostic**: is the graph arm's `p` plateau a *flat-LR* artifact? Give it the flat arm's warmup+cosine schedule (opt-in `warmup_frac`, default-off so committed results are byte-identical) and compare. | regenerates; the `warmup_frac=0` arm reproduces the plain HS3 cell (regression-tested) | ✅ shipped ([`horizon_graph_schedule.csv`](../../figures/horizon_graph_schedule.csv), [`horizon_graph_schedule.png`](../../figures/horizon_graph_schedule.png); fixed `m` × {flat-LR, scheduled} × 3 seeds): **the plateau is the *representation*, not the flat LR — the schedule that lifted the flat arm to 0.82 lifts the graph arm only 0.66→0.68 and `H_free` stays 0 for both. The HS3 ceiling survives the trainer fix; the load-bearing under-training caveat is refuted against the flat arm's own winning recipe** (§4.11) |
 
 ---
 
