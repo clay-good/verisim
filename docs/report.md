@@ -1291,6 +1291,35 @@ one. Honest caveat: the committed graph trainer plateaus at `p` ≈ 0.6 and `p` 
 the binding constraint is plausibly the trainer/representation on this world, not data per se — "neither lever
 lifts it" is shown for this committed graph recipe, not proven for every possible graph optimizer.
 
+## The graph world-size cross-axis (HS3 incr 3): the structured ceiling is *world-size-invariant*
+
+Increments 1–2 swept capacity and data at the 5-host world. The last axis is the one the graph arm
+exists *for*: **world size** — its inductive bias over network structure has *more* to exploit as the
+world grows, so a bigger world is where the structured arm could finally pull off the floor. HS3 incr 3
+([`horizon_graph_world_scaling.py`](../src/verisim/experiments/horizon_graph_world_scaling.py)) holds
+graph capacity fixed at `m` and sweeps `n_hosts` over SPEC-9's `O(N²)` axis.
+
+![HS3 incr 3: the structured graph arm's free-running horizon stays pinned at 0 across an 8× world-size range — the ceiling is world-size-invariant](../figures/horizon_graph_world_scaling.png)
+
+| n_hosts | `p` (id / ood) | **`H_free`** id [95% CI] | `H_free` ood | `H_indep` id | η (id) |
+|---|---|---|---|---|---|
+| 5 | 0.66 / 0.67 | **0.00** [0, 0] | 0.00 | 1.91 | 0.00 |
+| 10 | 0.63 / 0.67 | **0.00** [0, 0] | 0.00 | 1.67 | 0.00 |
+| 20 | 0.58 / 0.67 | **0.00** [0, 0] | 0.00 | 1.40 | 0.00 |
+| 40 | 0.59 / 0.67 | **0.00** [0, 0] | 0.00 | 1.43 | 0.00 |
+
+**The structured ceiling is world-size-invariant.** Across an **8× world-size range** (5 → 40 hosts)
+`H_free` is **0 at every world size** (tight zero CIs, 3 seeds), η = 0 throughout — and the graph arm's
+per-step `p` **degrades** as the world grows (id 0.66 → 0.59; the bigger world is harder per step,
+faster than the inductive bias compensates). The structural bias the graph arm exists for does **not**
+rescue its floor at scale. **This completes the HS3 sweep: the structured arm's exact free-running floor
+is pinned at 0 across *all three* axes — capacity (§31), data (§32), and world size — so the genuine
+compounding ceiling is not an artifact of any single axis.** Where the flat arm's floor dissolved into a
+resourcing story on every axis (HS1/HS1.2/HS2), the structured arm's floor moves on *none* of them.
+Honest caveat: the committed graph trainer plateaus at `p` ≈ 0.6 and `p` falls with world size, so the
+binding constraint is plausibly the trainer/representation — "world size doesn't lift it" is for this
+committed graph recipe, at the strict tolerance ε ≤ 0.1 (the arm sustains 4–6 steps at ε = 0.2).
+
 ## Threats to validity
 
 - **Scale.** The committed model is ~tiny and trains for a few hundred iterations on
@@ -1378,6 +1407,9 @@ python -m verisim.experiments.horizon_graph_scaling --config configs/horizon_gra
 # SPEC-10 HS3 incr 2 — the data cross-axis for the graph arm (starvation vs ceiling; ~5 min CPU):
 python -m verisim.experiments.horizon_graph_data_scaling --config configs/horizon_graph_data_scaling.json \
     --out figures/horizon_graph_data_scaling.csv --plot figures/horizon_graph_data_scaling.png
+# SPEC-10 HS3 incr 3 — the world-size cross-axis for the graph arm (ceiling vs world size; ~10 min CPU):
+python -m verisim.experiments.horizon_graph_world_scaling --config configs/horizon_graph_world_scaling.json \
+    --out figures/horizon_graph_world_scaling.csv --plot figures/horizon_graph_world_scaling.png
 ```
 
 The run-records are git-ignored (regenerable); the figures and their CSVs are

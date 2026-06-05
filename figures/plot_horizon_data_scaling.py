@@ -19,6 +19,9 @@ def plot_horizon_data_scaling(  # pragma: no cover - local plotting
     path: str | Path,
     *,
     suptitle: str = "HS1.2 — the data cross-axis: capacity wall or data starvation? (SPEC-10)",
+    left_title: str | None = None,
+    xlabel: str = "coverage-set size (transitions)",
+    right_title: str = "Per-step accuracy vs data",
 ) -> Path:
     import matplotlib
 
@@ -49,9 +52,12 @@ def plot_horizon_data_scaling(  # pragma: no cover - local plotting
         if ls == "-":
             ax_l.fill_between(xs, lo, hi, alpha=0.15, color=color)
     ax_l.set_xscale("log")
-    ax_l.set_xlabel("coverage-set size (transitions)")
+    ax_l.set_xlabel(xlabel)
     ax_l.set_ylabel("free-running faithful horizon (steps)")
-    ax_l.set_title(f"Does data recover horizon? (fixed {scale.label}, {scale.params:,} params)")
+    ax_l.set_title(
+        left_title
+        or f"Does data recover horizon? (fixed {scale.label}, {scale.params:,} params)"
+    )
     ax_l.legend(loc="upper left", fontsize=8)
 
     for metric, label, color in (
@@ -65,9 +71,9 @@ def plot_horizon_data_scaling(  # pragma: no cover - local plotting
         ax_r.fill_between(xs, lo, hi, alpha=0.15, color=color)
     ax_r.set_xscale("log")
     ax_r.set_ylim(0.0, 1.02)
-    ax_r.set_xlabel("coverage-set size (transitions)")
+    ax_r.set_xlabel(xlabel)
     ax_r.set_ylabel("one-step acceptance p")
-    ax_r.set_title("Per-step accuracy vs data")
+    ax_r.set_title(right_title)
     ax_r.legend(loc="lower right", fontsize=8)
 
     fig.suptitle(suptitle)

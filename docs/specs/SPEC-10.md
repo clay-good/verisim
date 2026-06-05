@@ -120,9 +120,9 @@ and loop fixed. Capacity is `(n_embd, n_layer, n_head)`; transformer parameters 
 **clean capacity exponent** uncontaminated by message-passing depth or the RSSM belief, so the
 `H_free`-vs-`p` relationship is read against capacity alone. The **host world is now done** (HS2,
 §4.5: the same flat-arm sweep on SPEC-6 confirms the lift is cross-world) and the **graph arm is now
-done** (HS3 incr 1, §4.6: the structured arm does *not* reproduce the lift — it is proposer-dependent);
-larger worlds (SPEC-9's `O(N²)` axis) and the graph data cross-axis remain the open follow-ups (§5,
-HS3 incr 2), not v1.
+done across capacity, data, *and* world size** (HS3 incr 1–3, §4.6–4.8: the structured arm does *not*
+reproduce the lift — its floor is a genuine compounding ceiling on every axis); the joint world-size ×
+capacity structured frontier (HS3 incr 4) is the one open follow-up (§5), not v1.
 
 Everything else reuses shipped machinery verbatim: [`train_model`](../../src/verisim/experiments/en1.py)
 (the EN1 trainer), [`run_net_rollout`](../../src/verisim/netloop/) (the NW5 loop) for `H_free` at
@@ -531,6 +531,49 @@ graph arm sustains 4–6 steps (§4.6). (iii) Seed variance is high at the small
 The load-bearing, twice-measured fact: across a 108× capacity range *and* a 10× data range the
 structured arm's exact `H_free` never leaves the floor and its η stays below 1.
 
+### 4.8 The graph world-size cross-axis (HS3 incr 3): the structured ceiling is *world-size-invariant*
+
+Increments 1–2 swept capacity and data, both at the **5-host** world. The last axis HS3 had not
+touched is the one the graph arm exists *for*: **world size**. The graph arm's whole bet is its
+**inductive bias over network structure** (the message-passing GNN + the RSSM belief, SPEC-5 §6.1–6.2)
+— which has *more* structure to exploit as the world grows, so a larger world is exactly where the
+structured proposer could, in principle, pull off the floor. HS3 incr 3
+([`horizon_graph_world_scaling.py`](../../src/verisim/experiments/horizon_graph_world_scaling.py),
+config [`horizon_graph_world_scaling.json`](../../configs/horizon_graph_world_scaling.json)) tests it
+by holding the graph capacity fixed (at `m`) and sweeping the world size `n_hosts` over SPEC-9's
+`O(N²)` host-count axis ([`scaled_net_config`](../../src/verisim/net/config.py)). Figure
+[`horizon_graph_world_scaling.png`](../../figures/horizon_graph_world_scaling.png),
+[`horizon_graph_world_scaling.csv`](../../figures/horizon_graph_world_scaling.csv); 4 world sizes × 3
+seeds.
+
+| n_hosts | `p` (id / ood) | **`H_free`** (id) [95% CI] | `H_free` (ood) | `H_indep` (id) | η (id) |
+|---|---|---|---|---|---|
+| 5 | 0.66 / 0.67 | **0.00** [0, 0] | 0.00 | 1.91 | 0.00 |
+| 10 | 0.63 / 0.67 | **0.00** [0, 0] | 0.00 | 1.67 | 0.00 |
+| 20 | 0.58 / 0.67 | **0.00** [0, 0] | 0.00 | 1.40 | 0.00 |
+| 40 | 0.59 / 0.67 | **0.00** [0, 0] | 0.00 | 1.43 | 0.00 |
+
+**Verdict: the structured ceiling is world-size-invariant — a bigger world does not lift it.** Across
+an **8× world-size range** (5 → 40 hosts) the graph arm's exact free-running horizon `H_free` is
+**0 at every world size** (tight zero CIs across 3 seeds), with η = 0 throughout. And — the tell — the
+graph arm's per-step `p` **degrades** as the world grows (id 0.66 → 0.59; the world gets harder, more
+state to get exactly right per step, faster than the inductive bias compensates). So the structural
+bias the graph arm exists for does **not** rescue its floor at scale; if anything the larger world
+sinks the per-step accuracy further. This completes the HS3 sweep: **the structured arm's exact
+free-running floor is pinned at 0 across *all three* resource axes — capacity (§4.6), data (§4.7), and
+world size (§4.8)** — so the genuine compounding ceiling is not an artifact of any single axis. Where
+the flat arm's floor dissolved into a resourcing story on every axis (HS1/HS1.2/HS2: capacity, data,
+and world all moved it), the structured arm's floor moves on *none* of them.
+
+**Honest caveats** (the same three, now thrice-measured). (i) The committed graph trainer plateaus at
+`p` ≈ 0.6 and `p` *falls* with world size, so the binding constraint is plausibly the
+trainer/representation, and "world size does not lift it" is for this committed graph recipe. (ii) The
+ceiling is at the strict tolerance ε ≤ 0.1 (the graph arm sustains 4–6 steps at ε = 0.2, §4.6). (iii)
+This holds capacity fixed at `m`; the full world-size × capacity grid (whether a *bigger* graph arm
+free-runs in a *bigger* world) is the natural further follow-up. The load-bearing, thrice-measured
+fact: across capacity × data × world size the structured arm's exact `H_free` never leaves 0 and its η
+never reaches 1.
+
 ---
 
 ## 5. Milestones (HS0–HS3)
@@ -547,7 +590,8 @@ Non-colliding with `M*/S*/AR*/NW*/HC*/DS*/OG*/LS*`. Gated as ever: measure befor
 | **HS2** | **Universality across worlds**: re-run the *identical* HS1 capacity axis on the harder **host** world (SPEC-6); does the capacity-vs-horizon verdict hold where the dynamics are harder? | regenerates; the cross-world verdict is recorded | ✅ shipped ([`horizon_host_scaling.csv`](../../figures/horizon_host_scaling.csv), [`horizon_host_scaling.png`](../../figures/horizon_host_scaling.png); same axis as HS1, 4 capacities × 3 seeds, ~1 h CPU): **the capacity lift is *universal* — `H_free` scales monotonically (id 1.00 → 5.08, disjoint CIs xs vs l) — but the harder world *re-lowers the floor ~3–5×* (host `l` 5.08 vs network `l` 15.7) and has not saturated by `l`; world difficulty sets the floor height and the peak location, the lift survives the world swap** (§4.5) |
 | **HS3 (incr 1)** | **The structured (graph) arm**: re-run the *identical* axis with the GNN+RSSM graph proposer — does a structured model change the capacity verdict? | regenerates; recorded with honest caveats | ✅ shipped ([`horizon_graph_scaling.csv`](../../figures/horizon_graph_scaling.csv), [`horizon_graph_scaling.png`](../../figures/horizon_graph_scaling.png); 4 capacities × 3 seeds): **the lift is *proposer-dependent* — it does NOT reproduce. For the graph arm capacity buys *neither* `p` (flat ~0.66) *nor* `H_free` (≈0 at ε≤0.1, η≈0); HS1's lift was the flat arm's specific p-climb, not a loop property. Honest caveat: the graph trainer plateaus at p≈0.66 < the flat arm's 0.82, and the arm is *data*-limited (HS3 incr-2 = the graph data cross-axis)** (§4.6) |
 | **HS3 (incr 2)** | **The graph data cross-axis**: hold graph capacity fixed and sweep the coverage set — is the structured floor *data* starvation (the HS1.2 reading) or a genuine ceiling? | regenerates; recorded with honest caveats | ✅ shipped ([`horizon_graph_data_scaling.csv`](../../figures/horizon_graph_data_scaling.csv), [`horizon_graph_data_scaling.png`](../../figures/horizon_graph_data_scaling.png); fixed `m` × 4 data budgets 960–9.6k × 3 seeds): **NOT data starvation — a 10× data increase does *not* lift `H_free` (≈0 throughout) or `p` (flat ~0.6), and η stays *below 1* (the graph arm free-runs *shorter* than its i.i.d. prediction — the genuine compounding wall the flat arm never hit). The structured floor moves with *neither* capacity nor data — the first floor in the program that does not dissolve into resourcing** (§4.7) |
-| **HS3 (incr 3)** | **The world-size cross-axis** (follow-up): how does the structured-arm verdict interact with SPEC-9's `O(N²)` host-count axis? | regenerates; recorded with honest caveats | ☐ future |
+| **HS3 (incr 3)** | **The world-size cross-axis**: hold graph capacity fixed and sweep `n_hosts` (SPEC-9's `O(N²)` axis) — is the structured ceiling world-size-invariant, or does the graph arm's structural bias pay off in a bigger world? | regenerates; recorded with honest caveats | ✅ shipped ([`horizon_graph_world_scaling.csv`](../../figures/horizon_graph_world_scaling.csv), [`horizon_graph_world_scaling.png`](../../figures/horizon_graph_world_scaling.png); fixed `m` × 4 world sizes 5–40 hosts × 3 seeds): **the ceiling is *world-size-invariant* — `H_free`=0 at every world size (8× range, zero CIs), η=0, and `p` *degrades* with world size (0.66→0.59). The structural bias does not rescue the floor at scale. Completes the HS3 arc: the structured floor is pinned at 0 across *all three* axes — capacity, data, AND world size** (§4.8) |
+| **HS3 (incr 4)** | **The world-size × capacity grid** (follow-up): does a *bigger* graph arm free-run in a *bigger* world (the joint structured frontier)? | regenerates; recorded with honest caveats | ☐ future |
 
 ---
 
