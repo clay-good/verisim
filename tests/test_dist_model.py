@@ -54,7 +54,7 @@ def test_target_round_trips_over_every_preset():
     """parse(encode(Δ)) == Δ for every delta of every preset rollout — the core guarantee."""
     config = DEFAULT_DIST_CONFIG
     vocab = DistVocab(config)
-    seen_ops = set()
+    seen_ops: set[str] = set()
     for preset in ("uniform", "contention", "adversarial"):
         for seed in range(6):
             for state, action, delta in _rollout(config, preset, seed, 40):
