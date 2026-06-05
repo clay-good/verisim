@@ -1,0 +1,7 @@
+channel,control,kind,passed,detail
+filesystem,path-escape attempt is clamped inside the tree,negative,PASS,'/etc/pwned' -> '/SANDBOX_ROOT/etc/pwned' (under '/SANDBOX_ROOT')
+network,out-of-grammar (egress) action refused before exec,negative,PASS,refused before exec: no system-oracle rendering for action 'curl'
+privilege,runs unprivileged; no privilege gain,negative,PASS,euid=501 (non-root); seal sets PR_SET_NO_NEW_PRIVS on Linux
+persistence,no state survives a step (fresh tree per step),negative,PASS,A created /survivor=True; B sees it=False
+resource,resource ceilings + wall-clock timeout declared,negative,PASS,cpu=4s file_size=8388608B nofile=256 timeout=2.0s
+positive-control,benign in-tree write allowed, then discarded on teardown,positive,PASS,created /allowed=True; leaked trees=[]

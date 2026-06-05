@@ -1,0 +1,8 @@
+metric,value
+platform,darwin
+available,True
+n_repeats,8
+n_transitions,15
+bit_identical,True
+seal_all_sealed,True
+first_divergence,(none)

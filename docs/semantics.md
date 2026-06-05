@@ -62,9 +62,9 @@ unchanged and sets `last = {exit_code: 1, stdout_hash: hash("")}`.
 | `rm -r <path>` | Remove `path` and its entire subtree. | `path` is missing. |
 | `write <path> <token>` | Set the file's content to `token` (creating it if absent). | `path` is a directory; or parent is missing / not a directory (when creating). |
 | `append <path> <token>` | Append `token` to the file's content (creating it with `token` if absent). | `path` is a directory; or parent is missing / not a directory (when creating). |
-| `mv <src> <dst>` | Move `src` (and, if a directory, its whole subtree) to `dst`. If `dst` is an existing directory, move *into* it as `dst/basename(src)`. | `src` is missing; the resolved target already exists; or (non-dir-into case) the target's parent is missing / not a directory. `mv a a` is a no-op success. |
+| `mv <src> <dst>` | Move `src` (and, if a directory, its whole subtree) to `dst`. If `dst` is an existing directory, move *into* it as `dst/basename(src)`. | `src` is missing; the resolved target already exists; the resolved target is inside `src`'s own subtree; or (non-dir-into case) the target's parent is missing / not a directory. `mv a a` is a no-op success. |
 | `cp <src> <dst>` | Copy a file. If `dst` is an existing directory, copy *into* it. If the resolved target is an existing file, overwrite its content. | `src` is missing; `src` is a directory (use `cp -r`); or (new target) parent is missing / not a directory. |
-| `cp -r <src> <dst>` | Copy `src` and its subtree. Dir-into rule as `cp`. | `src` is missing; or the resolved target already exists. |
+| `cp -r <src> <dst>` | Copy `src` and its subtree. Dir-into rule as `cp`. | `src` is missing; the resolved target already exists; or the resolved target is inside `src`'s own subtree. |
 | `chmod <mode> <path>` | Set the node's mode (octal). | `path` is missing. |
 | `cd <path>` | Set `cwd` to `path`. | `path` is not a directory. |
 | `cat <path>` | Emit file content to stdout. No state change. | `path` is not a file. |
@@ -84,3 +84,28 @@ unchanged and sets `last = {exit_code: 1, stdout_hash: hash("")}`.
 - **Root `/` is protected.** `rm`/`rm -r`/`rmdir` of `/`, and `mv`/`cp` with `/`
   as the source, all fail. This preserves the invariant that root always exists
   (cf. real `rm --preserve-root`) and keeps every transition total.
+- **A directory cannot be moved or copied into its own subtree.** `mv /a /a/b` (or
+  `cp -r /a /a/b`) fails — exactly as real `mv`/GNU `cp` reject it. This guard was
+  added after the SPEC-11 system-oracle differential harness caught the reference
+  interpreter producing an *invalid* state here (the moved subtree was orphaned, its
+  parent path gone). It is the canonical example of the H28 loop: the real kernel acting
+  as a debugger for the from-scratch model — surface, localize, fix, re-run to agreement.
+
+### Validated against reality (SPEC-11)
+
+The reference interpreter above is a *from-scratch model* of POSIX. SPEC-11's system oracle
+runs the **same grammar against a real `/bin/sh` on a real kernel**, inside a hermetic
+sandbox, and compares bit-for-bit. The result: on the **structure-building** regime these
+semantics are designed to model, the reference oracle is **bit-exactly faithful to a real
+computer (agreement = 1.000)**. Every disagreement outside that regime is one of a small set
+of *named, intentional modeling boundaries*, enumerated by SY2 and listed here so each is a
+deliberate choice, not an accident:
+
+- **root protection** — the `/`-is-protected rule above (a real kernel operates on `/`);
+- **overwrite policy** — the mv/cp no-clobber rule above (a real kernel clobbers);
+- **permission enforcement** — v0 models `mode` as *data*, not access control: `chmod` records
+  a mode but no later command checks it, whereas a real kernel denies traversal/access through
+  a directory lacking owner-execute. v0 studies structure and consequence, not access control;
+- **self-subtree** — the move/copy-into-own-subtree guard above; GNU `cp` and v0 reject it,
+  BSD `cp` (the macOS dev host) does not detect it — a *coreutils*-portability boundary that
+  agrees on Linux and is platform-stamped on every SY figure.

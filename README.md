@@ -14,11 +14,12 @@
 ## Results at a glance
 
 Twenty-five committed, oracle-grounded figures — the smoke-scale bet in one screen — each detailed below, each
-with its honest negative. **Two one-figure theses frame the rest: the cross-*world* synthesis ([§22](#22-the-thesis-in-one-figure-the-floorcliff-is-the-same-in-every-world-cross-world-synthesis)) — the floor+cliff `H_ε(ρ)` is the *same shape in all four worlds* — and the cross-*proposer* synthesis ([§34](#34-the-spec-10-capstone-the-floor-is-proposer-dependent-cross-proposer-synthesis)) — whether that floor is a *resourcing artifact* depends on the proposer.** **What survives scaling is the real verdict: see [§8](#8-which-wins-survive-scaling--the-honest-mixed-verdict-spec-9).** Every number regenerates from
+with its honest negative, now joined by the **SPEC-11 system-oracle validation** ([§35](#35-the-oracle-is-faithful-to-a-real-computer--the-one-structural-bet-measured-spec-11--sy1--h27)) — *the figure that retires W1*: the program's load-bearing assumption (a free, exact oracle exists for computer worlds) measured against a **real `/bin/sh` on a real kernel**, bit-for-bit. **Two one-figure theses frame the rest: the cross-*world* synthesis ([§22](#22-the-thesis-in-one-figure-the-floorcliff-is-the-same-in-every-world-cross-world-synthesis)) — the floor+cliff `H_ε(ρ)` is the *same shape in all four worlds* — and the cross-*proposer* synthesis ([§34](#34-the-spec-10-capstone-the-floor-is-proposer-dependent-cross-proposer-synthesis)) — whether that floor is a *resourcing artifact* depends on the proposer.** **What survives scaling is the real verdict: see [§8](#8-which-wins-survive-scaling--the-honest-mixed-verdict-spec-9).** Every number regenerates from
 config + seeds (`bash figures/reproduce.sh`).
 
 | | |
 |---|---|
+| [![SY1 the system oracle — the reference oracle agrees with a real /bin/sh bit-for-bit](figures/sy1_agreement.png)](figures/sy1_agreement.png)<br>**The one structural bet, measured against reality (SPEC-11 / SY1 / H27).** Every figure here proves the loop against a *from-scratch reference model* of POSIX — the program's central exposure (W1: "the oracle is a model, not reality"). SY1 closes it: run the exact v0 grammar against a **real `/bin/sh` on a real kernel** in a hermetic sandbox and compare bit-for-bit. On the **structure-building grammar** the reference oracle's predicted next state equals the real kernel's at **agreement = 1.000** (left, the green bars; degenerate CI), and the head-to-head `H_ε(ρ)` curve is **oracle-invariant** (right, max gap = 0.000) — *the oracle substitution is transparent where v0 claims fidelity.* The disagreement branch is a gift (H28): the harness **caught a real reference bug** (subtree-move, now fixed) and every remaining divergence is one of **four named, intentional modeling boundaries** with **residual = 0**. Built macOS-first; the headline is pure POSIX, so it reproduces on Linux CI. "Computer worlds have a free, perfect oracle" stops being an argument and becomes a committed CSV. | [![SY3 the hermeticity contract — no action can occur](figures/sy3_hermeticity.png)](figures/sy3_hermeticity.png)<br>**Proven safe before any number is claimed (SPEC-11 / SY3 / H29).** The agreement figure is only meaningful if the sandbox is a *closed system*. SY3 is the negative-control battery with teeth: every prohibited action — filesystem escape, network egress, privilege gain, cross-step persistence — is **denied**, and the benign positive control is allowed-then-discarded. "No action can occur" made into a green table. With SY4 (the system oracle is bit-reproducible under its determinism seal), this is the gate *on* the agreement claim — prove the checks have teeth before reporting what they catch. |
 | [![HS1.1 the faithful-horizon scaling law — non-monotone, and the proxy goes blind](figures/horizon_scaling_xl.png)](figures/horizon_scaling_xl.png)<br>**Faithful horizon is *non-monotone* in capacity — and the one-step metric can't see it (SPEC-10 / HS1.1 / H26).** Hold the world fixed, sweep model capacity ~400× with an adequate coverage set, and measure free-running faithful horizon `H_ε(ρ=0)` *exactly* against the oracle. It **rises to a compute-optimal peak at `l` (17 id / 28 ood steps)** then **declines** (xxl 9.6) — a Chinchilla-style frontier, but for long-horizon *faithfulness*, not test loss. The headline: across the whole top end the per-step accuracy `p` any normal world-model paper reports stays **flat and high** (0.81–0.90), while the *exact* horizon **falls ~45%** and ood efficiency `η` **crosses below 1** — **a bigger, per-step-more-accurate model that is *less faithful over the horizon*, a divergence only the free exact oracle reveals.** (And the floor itself lifts ~4× from *resourcing alone*: `xs` 1.75 → 6.83.) The data cross-axis (HS1.2) then shows that decline is **data starvation, not a wall** — at fixed `xl`, feeding 2× the data recovers `H_free` 13.9 → 16.2 and ood η from 0.97 back to 1.90, the Chinchilla prescription made exact: once capacity is adequate, the lever is data, and only the oracle could diagnose it (`p` stays flat while the horizon recovers). The joint push (HS1.3) then scales **both** levers together: it lifts the peak to a **program-best `l@9.6k` = 19.2 id / 28.75 ood** (tight, disjoint CIs) but returns vanish past `l` — so the floor+cliff resolves into a **resourcing story with a measurable compute-optimal frontier**, not a fundamental compounding wall, all measured exactly against the oracle. | [![EN1 / K4 the floor](figures/en1_curve.png)](figures/en1_curve.png)<br>**The floor HS1 revises (EN1 / K4 / H8).** Faithful horizon vs consultation budget `H_ε(ρ)` was flat-then-cliff on every world at the committed (tiny) scale: the honest negative that drove every later design choice. HS1/HS1.1 show the *height* of that `ρ=0` floor is not fixed — it scales with capacity+data, then *declines* once capacity outruns the data — which sharpens what this curve does and does not show: a property of the *consultation* axis at fixed model, not a ceiling on what a larger model can free-run. |
 | [![HS2 the scaling law re-run on the host world — the lift is universal, the floor re-lowered](figures/horizon_host_scaling.png)](figures/horizon_host_scaling.png)<br>**The capacity lift is *universal* — and a harder world re-lowers the floor (SPEC-10 / HS2 / H26).** Re-run the *identical* HS1 capacity axis on the harder **host** world (SPEC-6: the composed process/fd/filesystem/exit bundle) and the verdict survives the world swap: free-running `H_free` scales **monotonically** with capacity (id **1.00 → 5.08** over 108× params, **disjoint CIs** xs vs l). So "capacity buys horizon" is a property of the oracle *loop*, not the easy network world. But the richer host dynamics do exactly what HS1 predicted: they **re-lower the floor ~3–5×** (host `l` 5.08 vs network `l` 15.7) and the curve **has not saturated by `l`** (the network saturated by `m`) — a harder world both lowers the floor and re-opens the headroom. The host one-step `p` is far lower (0.11 → 0.49 vs network's 0.47 → 0.79) — a genuinely harder per-step target — and `η`, though > 1 throughout, **declines toward 1 with capacity** here (the mirror of the network's rising `η`). **World difficulty sets the floor height and the peak location; the capacity-buys-horizon verdict is cross-world.** | [![EH1 composed-host floor](figures/eh1_curve.png)](figures/eh1_curve.png)<br>**The host floor HS2 scales (EH1 / HC6).** The composed-host `H_ε(ρ)` is the same flat-then-cliff as the filesystem and network worlds — `ρ=0` drifts in <1 step at the committed tiny scale. HS2 shows the *height* of that host `ρ=0` floor lifts with capacity (xs 1.0 → l 5.1 free-running steps), just as HS1 showed for the network — but stays well below the network's, because the composed bundle is the harder world. |
 | [![HS3 the scaling law with the structured graph arm — the lift is proposer-dependent](figures/horizon_graph_scaling.png)](figures/horizon_graph_scaling.png)<br>**The capacity lift is *proposer-dependent* — it does NOT reproduce for the structured arm (SPEC-10 / HS3 / H26).** Re-run the *identical* HS1 axis with the **GNN+RSSM graph arm** — the proposer that *beats* the flat arm ~6.6× on one-step delta-exact (EN4/H11) — and the verdict flips: for the graph arm capacity buys **neither** per-step accuracy **nor** horizon. `p` is **flat** (0.64 → 0.66, vs the flat arm's 0.47 → 0.82 climb) and `H_free` is **≈ 0 at every capacity** (η ≈ 0) — the floor+cliff in its purest, capacity-invariant form. So **HS1's lift was the flat arm's specific p-vs-capacity climb crossing the self-stabilization threshold, not a universal loop property.** The graph arm makes *near-but-not-exact* predictions (an ε-sweep gives `H_free`=0 up to ε=0.1, only 4–6 steps at ε=0.2) — small but ubiquitous errors the flat arm's self-stabilizing rollout avoided. Honest caveat: the graph trainer plateaus at p≈0.66 < the flat arm's 0.82, and the arm's *flat* p says it is **data-limited, not capacity-limited** (its lever is data, the HS1.2 reading). Consistent with EN7/H22: the loop governs the shape, the proposer's competence sets whether it escapes the floor. | [![EN4 graph beats flat per-step](figures/en4_graph_vs_flat.png)](figures/en4_graph_vs_flat.png)<br>**Why HS3 is the sharp foil (EN4 / H11).** The graph arm *wins* on the one-step metric a normal paper reports — +16.5 pts token accuracy, +30.6 pts delta-exact over the flat arm. HS3 is the catch the oracle exposes: that per-step win **does not** convert to free-running horizon (`H_free`≈0), and capacity doesn't fix it. The metric that wins (delta-exact) and the metric that matters (exact free-running horizon) come apart — exactly the proxy/truth divergence the whole program is built to measure. |
@@ -1068,6 +1069,44 @@ the two capstones bracket the generality: the curve's **shape** is world- and mo
 loop's), while whether its `ρ=0` **floor height** is a resourcing artifact is proposer-dependent (the
 model's). Verification is the invariant; the proposer sets the floor it lives on.
 
+### 35. The oracle is faithful to a *real computer* — the one structural bet, measured (SPEC-11 / SY1 / H27)
+
+Every result above rests on one sentence: *for computer worlds, a deterministic ground-truth oracle is
+free, exact, and resettable.* But every figure to date proves the loop against a **from-scratch reference
+model** of POSIX — a symbolic interpreter, not a real OS. That is the program's central exposure (W1: "the
+oracle is a model, not reality") and the sharpest reviewer attack. SPEC-11 closes it by running the **exact
+v0 grammar against a real `/bin/sh` on a real kernel**, inside a hermetic, no-side-effect sandbox, and
+measuring agreement bit-for-bit.
+
+![SY1: reference vs. real /bin/sh — per-driver agreement (left) is bit-exact 1.000 on the structure-building grammar; the H_ε(ρ) curve overlay (right) is oracle-invariant](figures/sy1_agreement.png)
+
+The result is the strongest honest form the claim can take. On the **structure-building grammar** — the
+regime v0 is *designed* to model — the reference oracle's predicted next state equals the real kernel's
+**bit-for-bit, agreement = 1.000** (degenerate CI), over both an exhaustive action battery and driver
+trajectories. The head-to-head `H_ε(ρ)` curve (right) seals it: swap the `SandboxOracle` in for the
+`ReferenceOracle` and the prime-directive curve is **indistinguishable** (max `|H_ref − H_sys| = 0.000` at
+every ρ) — the oracle substitution is *transparent* where v0 claims fidelity. **"Computer worlds have a
+free, perfect oracle" stops being an argument and becomes a committed CSV.**
+
+And the disagreement branch is a *gift*, exactly as H28 pre-registered: the differential harness is a
+**debugger for the reference model**. It immediately caught a **genuine reference-oracle bug** — `mv`/`cp`
+of a directory into its own subtree (`mv /e /e/e`) produced an *invalid* state with an orphaned subtree —
+now fixed at the source and re-run to agreement. Beyond that one bug, **every** remaining divergence on the
+destructive grammar falls into one of **four named, documented modeling boundaries** with a measured
+**residual of zero**: root protection, overwrite policy, permission enforcement (v0 models `mode` as data,
+not access control), and self-subtree (a GNU-vs-BSD coreutils choice, platform-stamped). The weakness
+becomes a maintenance instrument.
+
+This is built **macOS-first** (the dev host is an Apple Silicon Mac mini; the cross-POSIX
+[`SandboxOracle`](src/verisim/oracle/sandbox.py) runs on BSD and GNU coreutils alike) — "reality" does not
+mean "Linux," and the headline is pure POSIX, so it reproduces on Linux CI for free. The sandbox is proven
+hermetic *before* any agreement number is claimed: [SY3](src/verisim/experiments/sy3.py)'s negative-control
+battery shows every prohibited action (filesystem escape, egress, privilege gain, cross-step persistence)
+is **denied**, and [SY4](src/verisim/experiments/sy4.py) shows the system oracle is **bit-reproducible**
+under its determinism seal. *Prove the checks have teeth before reporting what they catch* —
+[SY3](src/verisim/experiments/sy3.py) → [SY4](src/verisim/experiments/sy4.py) →
+[SY1](src/verisim/experiments/sy1.py) → [SY2](src/verisim/experiments/sy2.py), the gate order.
+
 ## The problem, and what we're trying to accomplish
 
 ### The wall every world model hits
@@ -1247,6 +1286,16 @@ Package map (parallel structure; `net*` mirrors v0 for the graph world):
                partition run + status-typed result), the NeuralDistWorldModel over v0's GPT (a
                drop-in DistModel), and the supervised dataset builders — overfit/grammar-valid/
                loop-protocol tested.
+
+  the SYSTEM ORACLE (SPEC-11, cross-cutting — validating the *reference* oracle against reality)
+  oracle/sandbox.py       SandboxOracle: a real /bin/sh over a real kernel behind the SAME Oracle
+                          protocol — materialize state → render the v0 action → exec under the seal
+                          → snapshot → destroy. v0-resolve path confinement; cross-POSIX (macOS+Linux)
+  oracle/sandbox_seal.py  DeterminismSeal: the per-step env-scrub/umask/rlimit/no-new-privs seal
+  oracle/differential.py  differential_step: ref vs system on the same (s,a); world/exit/stdout
+                          channels + classify_divergence (the named modeling boundaries)
+  experiments/sy{1..4}.py SY3 hermeticity (H29) → SY4 determinism (H30) → SY1 agreement (H27, retires
+                          W1: structure-grammar = 1.000, residual = 0) → SY2 debugger (H28)
 ```
 
 The host **bundle** is the structural novelty: state is a coupled set of subsystems (process table +
@@ -1302,10 +1351,12 @@ host → distributed); three specs are *cross-cutting methods* every world inher
 | [SPEC-8](docs/specs/SPEC-8.md) | **method: oracle-grounded SSL** | put the oracle's truth in the *bulk* of the cake (self-supervised pretraining), not just the cherry (RL) |
 | [SPEC-9](docs/specs/SPEC-9.md) | **method: free-oracle scaling** | because the oracle labels for free, world size is a *compute* choice, not a labeling-budget one — how large/deep the world goes on one machine, and what holds as it grows |
 | [SPEC-10](docs/specs/SPEC-10.md) | **method: the faithful-horizon scaling law** | scales the *prime directive itself* (`H_ε(ρ)`) along model capacity: does free-running faithful horizon grow with scale, or is the one-step→horizon compounding gap fundamental (H26)? |
+| [SPEC-11](docs/specs/SPEC-11.md) | **method: the system oracle** | validates the program's *one structural bet* — that a deterministic ground-truth oracle exists for computer worlds — by running the v0 grammar against a **real `/bin/sh` on a real kernel** in a hermetic sandbox and measuring agreement bit-for-bit (H27–H30). **The figure that retires W1.** |
 
 Semantics docs ([filesystem](docs/semantics.md), [network](docs/network-semantics.md)) pin the normative
-command semantics, paired with the reference oracles, which are the executable truth. The full result
-write-up is [docs/report.md](docs/report.md).
+command semantics, paired with the reference oracles, which are the executable truth. SPEC-11's system
+oracle now validates the filesystem semantics against a real kernel ([§4.1](docs/specs/SPEC-11.md)). The
+full result write-up is [docs/report.md](docs/report.md).
 
 ## Status
 
@@ -1528,8 +1579,18 @@ write-up is [docs/report.md](docs/report.md).
 | **DS0 (incr 2+)** | The Raft-subset consensus group, the transaction/lock table, and the embedded SPEC-6 host / SPEC-5 net inside each node | ☐ next |
 | **DS4 (graph arm)** | The service-graph message-passing + RSSM-belief `M_θ` (the structured arm, §6.1-6.2) — supplies a *real* error distribution under partial observation, mirroring the EN4/EH4 graph arms | ☐ next |
 
-The deterministic cores (filesystem, network, and the distributed DS0 core) have **no runtime
-dependencies** and need no GPU.
+**SPEC-11 — the system oracle (validating the reference oracle against a real `/bin/sh`, H27–H30): complete.** The program's one structural bet, measured. Built **macOS-first** ([§35](#35-the-oracle-is-faithful-to-a-real-computer--the-one-structural-bet-measured-spec-11--sy1--h27)); the cross-POSIX [`SandboxOracle`](src/verisim/oracle/sandbox.py) runs on the Mac dev host and Linux CI alike, all dependency-free (pure stdlib).
+
+| Milestone | What | Status |
+|-----------|------|--------|
+| **SO0** | The [`SandboxOracle`](src/verisim/oracle/sandbox.py) — a real `/bin/sh` over a real kernel behind the v0 `Oracle` protocol — with the [`DeterminismSeal`](src/verisim/oracle/sandbox_seal.py) (env/umask/rlimit/no-new-privs) and the [`differential`](src/verisim/oracle/differential.py) harness (world/exit/stdout channels + the divergence classifier). Materialize → render → exec → snapshot → destroy, with v0-`resolve` path confinement | ✅ |
+| **SO1** | **SY3 hermeticity** ([`sy3.py`](src/verisim/experiments/sy3.py), [sy3_hermeticity.png](figures/sy3_hermeticity.png)): the negative-control battery — filesystem-escape, egress, privilege-gain, persistence each **denied**, the positive control allowed-then-discarded. "No action can occur" (H29) is a green table | ✅ |
+| **SO2** | **SY4 determinism** ([`sy4.py`](src/verisim/experiments/sy4.py), [sy4_determinism.csv](figures/sy4_determinism.csv)): a fixed `(s,a)` battery is **bit-identical across repeats** under the seal, report all-sealed — licensing SY1 as *true* determinism, not recorded replay (H30) | ✅ |
+| **SO3** | **SY1 agreement** ([`sy1.py`](src/verisim/experiments/sy1.py), [sy1_agreement.png](figures/sy1_agreement.png)): Tier-1 exhaustive + Tier-2 trajectories + the Tier-3 head-to-head curve. **Structure-building agreement = 1.000 bit-exact, residual = 0, curve gap = 0** — *the figure that retires W1* (H27) | ✅ |
+| **SO4** | **SY2 debugger** ([`sy2.py`](src/verisim/experiments/sy2.py), [sy2_disagreements.csv](figures/sy2_disagreements.csv)): the divergence atlas (4 named boundaries) + the **teeth control** (a planted synthetic divergence is caught and localized). Already caught **one real reference bug** — subtree-move/copy — now fixed (H28) | ✅ |
+
+The deterministic cores (filesystem, network, and the distributed DS0 core) **and the SPEC-11 system
+oracle** have **no runtime dependencies** and need no GPU.
 PyTorch is an optional `[model]` extra (see [docs/model-representation.md](docs/model-representation.md)).
 
 ## Concepts cheat-sheet
@@ -1566,6 +1627,10 @@ PyTorch is an optional `[model]` extra (see [docs/model-representation.md](docs/
 | **tiered oracle** | SPEC-7's payload: the bit-exact global oracle is *intractable*, so the policy chooses the cheapest tier (metamorphic ↔ cycle ↔ symbolic ↔ bit-exact) that can refute the current prediction (H17, later DS) | `distoracle/` |
 | consistency-faithfulness | SPEC-7's headline-new metric (§9.1): the fraction of objects whose **consistency view** — the converged/split `(version,value)` set across replicas — the model predicts right (the distributed analogue of reachability-faithfulness) | `distmetrics/divergence.py` |
 | oracle-dollar / `π_w` | the distributed loop's new axis (§8.2): not just *when* to consult (`π_c`) but *which tier* (`π_w`); each consult spends its tier's **oracle-dollar** cost, recorded so `H_ε` can be plotted against dollars, not just consults (the H17 quantity) | `distloop/` |
+| **system oracle** | SPEC-11: a *real* `/bin/sh` over a real kernel behind the same `Oracle` protocol — validates the from-scratch reference oracle against reality, bit-for-bit | `oracle/sandbox.py` |
+| `differential_step` | runs the reference + system oracles on the same `(s,a)`; compares **world** (fs+cwd+env) / **exit** / **stdout** channels; classifies any disagreement | `oracle/differential.py` |
+| hermeticity / `DeterminismSeal` | the sandbox is a *closed system* (throwaway tree, no egress, no privilege gain, no persistence, rlimits) under a per-step env/umask/rlimit seal — "no action can occur" (SY3/H29) | `oracle/sandbox.py`, `oracle/sandbox_seal.py` |
+| modeling boundary | a *named, intentional* place v0 deviates from raw POSIX (root-protection / overwrite-policy / permission-enforcement / self-subtree); SY1 residual = 0 means every divergence is one of these | `oracle/differential.py` |
 
 ### SPEC-10 scaling cheat-sheet (the whole arc, one table)
 
@@ -1691,6 +1756,22 @@ for cmd in ["mkdir /a", "write /a/f alpha", "mv /a /b", "cat /b/f"]:
     state = result.state
 ```
 
+```python
+# SPEC-11: the SAME loop, but verified against a REAL /bin/sh on a real kernel.
+# The SandboxOracle is a drop-in Oracle; on the structure-building grammar it agrees
+# with the reference oracle bit-for-bit (the figure that retires W1).
+from verisim.oracle import ReferenceOracle, SandboxOracle
+from verisim.oracle.differential import differential_step
+from verisim.env import State, parse_action
+
+ref, sysorc = ReferenceOracle(), SandboxOracle()   # SandboxOracle: pure stdlib, any POSIX host
+s = State.empty()
+for cmd in ["mkdir /a", "write /a/f alpha", "mkdir /a/b", "mv /a/f /a/b/g"]:
+    rec = differential_step(s, parse_action(cmd), ref, sysorc)
+    assert rec.agree                                # ref's predicted next state == reality, bit-exact
+    s = ref.step(s, parse_action(cmd)).state
+```
+
 Reproduce every figure (E1–E4, calibration, K0/K2/K4, the EN1 curve, EN2/EN3, the EN4 graph-vs-flat
 comparison, the EN8 oracle-grounded-SSL ablation, the EN9 oracle-contrastive ablation) from config +
 seeds — `figures/reproduce.sh` runs them all:
@@ -1707,6 +1788,12 @@ python -m verisim.experiments.en9_scale --world-sizes 5 10 15 --seeds 0 1 2 3 --
 python -m verisim.experiments.en8_capacity --out figures/en8_capacity.csv   # the H24/S3 frontier
 python -m verisim.experiments.en8_scale --world-sizes 25 50 100 200 --d-models 64 128 --seeds 0 1 2 \
     --out figures/en8_surface.csv   # the §8 surface (likewise en9_scale for en9_surface.png)
+# the SPEC-11 system-oracle validation (seconds, no torch; gate order SY3 -> SY4 -> SY1 -> SY2):
+python -m verisim.experiments.sy3 --csv figures/sy3_hermeticity.csv --plot figures/sy3_hermeticity.png
+python -m verisim.experiments.sy4 --csv figures/sy4_determinism.csv
+python -m verisim.experiments.sy1 --config configs/sy1.json --csv figures/sy1_agreement.csv \
+    --plot figures/sy1_agreement.png   # structure-grammar agreement = 1.000, the figure that retires W1
+python -m verisim.experiments.sy2 --csv figures/sy2_disagreements.csv
 ```
 
 ## Layout

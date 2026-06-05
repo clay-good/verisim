@@ -209,6 +209,14 @@ class ReferenceOracle(Oracle):
         if final == src:
             return ([], EXIT_OK, "")  # no-op (e.g. mv a a)
 
+        # A directory cannot be moved or copied into its own subtree. Real mv/cp reject
+        # this ("cannot move '/e' to a subdirectory of itself, '/e/e'"); without the guard
+        # ``Move``/recursive-``Create`` orphans the moved subtree -- an *invalid* state whose
+        # parent path no longer exists. Surfaced by the SPEC-11 system-oracle differential
+        # harness (H28: the real kernel is a debugger for the reference model).
+        if _is_dir(fs, src) and final.startswith(src + "/"):
+            return _fail()
+
         if move:
             # Overwriting an existing target is rejected in v0 (keeps mv total
             # and unambiguous; documented in docs/semantics.md).

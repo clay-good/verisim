@@ -1,0 +1,6 @@
+divergence_class,command,action,state,ref_exit,sys_exit,count,explanation
+root_protection,cp,cp -r / /e/g,3 paths; top-level=['/a'; '/e'],1,0,75,v0 makes '/' undeletable/uncopyable; the real kernel operates on it.
+overwrite_policy,mv,mv /h/g/a/h /h/g/b,9 paths; top-level=['/e'; '/h'],1,0,2,v0 mv/cp refuse to clobber an existing target; the kernel clobbers.
+permission_enforcement,write,write /a/b omega,5 paths; top-level=['/a'; '/e'; '/g'],0,1,55,v0 models mode as data; the kernel enforces traversal/access.
+self_subtree,cp,cp -r /g /g/g,3 paths; top-level=['/c'; '/g'],1,0,1,v0+GNU reject copying a dir into its own subtree; BSD cp (macOS) does not.
+teeth_control,_,planted-bug,_,_,_,PASS,planted-bug on 'mkdir': detected on 20 transition(s); false positives=False

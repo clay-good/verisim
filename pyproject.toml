@@ -24,6 +24,11 @@ viz = ["matplotlib>=3.7"]  # E1 figure plotting (SPEC-2 §7.3); not needed at ru
 # M8 packaging (SPEC-2 §15). The faithfulness benchmark core and the RL
 # environment are dependency-free; only the Inspect *adapter* needs inspect_ai.
 eval = ["inspect_ai>=0.3"]
+# The system oracle (SPEC-11): a real /bin/sh behind the Oracle protocol. Pure standard
+# library (subprocess/os/resource/tempfile), so this extra pins *no* third-party dependency
+# -- it is a documentation marker that the dependency-free promise is preserved. The oracle
+# runs on any POSIX host (macOS-first per SPEC-11 §2.5; Linux CI confirms for free).
+system = []
 dev = ["pytest>=8", "ruff>=0.6", "mypy>=1.11", "build>=1.2"]
 
 [project.urls]

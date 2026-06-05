@@ -1,0 +1,14 @@
+{
+  "name": "sy1",
+  "battery_seeds": [0, 1, 2, 3, 4, 5, 6, 7],
+  "battery_depth": 6,
+  "traj_seeds": [100, 101, 102, 103, 104],
+  "traj_steps": 40,
+  "drivers": ["structural", "trivial", "weighted", "adversarial"],
+  "curve_driver": "structural",
+  "curve_seeds": [200, 201, 202, 203],
+  "curve_steps": 24,
+  "curve_noise": 0.35,
+  "rhos": [0.0, 0.1, 0.25, 0.5, 0.75, 1.0],
+  "epsilon": 0.0
+}
