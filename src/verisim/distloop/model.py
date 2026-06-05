@@ -32,6 +32,22 @@ class DistModel(Protocol):
     def predict_delta(self, state: DistributedState, action: DistAction) -> DistDelta: ...
 
 
+@runtime_checkable
+class DistUncertaintyModel(Protocol):
+    """A :class:`DistModel` that also reports its per-prediction uncertainty (§9.4).
+
+    The signal drives the ``uncertainty``/``drift``-triggered consultation policies (SPEC-7 §8.1) --
+    the ``π_c`` "smart-when" axis of ED2. Models without one (the baselines below) simply do not
+    implement this protocol, and the runner treats their signal as ``0`` (reducing those policies to
+    "never trigger, spend the budget at the tail"). The learned ``M_θ``'s signal is the mean entropy
+    of its constrained decode (DS4 incr 2).
+    """
+
+    def predict_delta_with_uncertainty(
+        self, state: DistributedState, action: DistAction
+    ) -> tuple[DistDelta, float]: ...
+
+
 class DistNullModel:
     """Trivial predictor: predicts no change (the empty delta). The drift floor."""
 

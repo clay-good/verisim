@@ -28,7 +28,7 @@ from typing import Any
 
 from verisim.dist.action import DistAction
 from verisim.dist.config import DEFAULT_DIST_CONFIG, DistConfig
-from verisim.dist.delta import apply
+from verisim.dist.delta import DistDelta, apply
 from verisim.dist.state import DistributedState
 from verisim.distmetrics.divergence import divergence
 from verisim.distoracle.base import DistOracle
@@ -37,7 +37,7 @@ from verisim.loop.policy import ConsultationPolicy, StepContext
 from verisim.loop.runner import budget_for_rho
 from verisim.metrics.record import RunRecord
 
-from .model import DistModel
+from .model import DistModel, DistUncertaintyModel
 from .tier_policy import FixedTierPolicy, TierPolicy
 
 __all__ = ["budget_for_rho", "ground_truth_rollout", "run_dist_rollout"]
@@ -53,6 +53,20 @@ def ground_truth_rollout(
         state = oracle.step(state, action).state
         states.append(state)
     return states
+
+
+def _predict(
+    model: DistModel, state: DistributedState, action: DistAction
+) -> tuple[DistDelta, float]:
+    """Predict the delta and the model's uncertainty (``0`` if it exposes none).
+
+    The uncertainty signal feeds the ``StepContext`` so the §8.1 ``uncertainty``/``drift``-triggered
+    consultation policies (the ``π_c`` "smart-when" axis) can threshold it -- exactly as the network
+    and host runners do. Models without a signal reduce those policies to the spend-down backstop.
+    """
+    if isinstance(model, DistUncertaintyModel):
+        return model.predict_delta_with_uncertainty(state, action)
+    return model.predict_delta(state, action), 0.0
 
 
 def run_dist_rollout(
@@ -88,16 +102,21 @@ def run_dist_rollout(
     schedule: list[bool] = []
     calls = 0
     oracle_dollars = 0
+    cumulative_signal = 0.0
 
     for t, action in enumerate(actions):
-        predicted = apply(state, model.predict_delta(state, action))  # PROPOSE
+        delta, signal = _predict(model, state, action)  # PROPOSE (+ uncertainty)
+        predicted = apply(state, delta)
+        cumulative_signal += signal
 
         has_budget = budget is None or calls < budget
         must_spend = budget is not None and (budget - calls) >= (n_steps - t)
-        consult = has_budget and (must_spend or policy.should_consult(StepContext(step=t)))
+        ctx = StepContext(step=t, signal=signal, cumulative_signal=cumulative_signal)
+        consult = has_budget and (must_spend or policy.should_consult(ctx))
 
         if consult:
             calls += 1
+            cumulative_signal = 0.0  # reset accumulated drift on every consult (§6.1)
             if tier_policy.escalate:
                 verdict = tiered.cheapest_refutation(state, action, predicted)  # VERIFY (cheapest)
             else:

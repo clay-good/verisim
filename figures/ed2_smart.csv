@@ -1,0 +1,13 @@
+panel,policy,rho,h_eps,ci_lo,ci_hi,fixed_h,best_smart,best_smart_h,smart_wins,lift
+cell,fixed,0.25,2.0000,1.0000,4.0000,,,,,
+cell,uncertainty,0.25,0.2500,0.0000,0.7500,,,,,
+cell,drift,0.25,0.2500,0.0000,0.7500,,,,,
+cell,fixed,0.5,2.0000,1.0000,4.0000,,,,,
+cell,uncertainty,0.5,0.2500,0.0000,0.7500,,,,,
+cell,drift,0.5,0.2500,0.0000,0.7500,,,,,
+cell,fixed,0.75,24.0000,24.0000,24.0000,,,,,
+cell,uncertainty,0.75,2.0000,0.2500,4.7500,,,,,
+cell,drift,0.75,0.2500,0.0000,0.7500,,,,,
+verdict,uncertainty,0.25,,,,2.0000,uncertainty,0.2500,0,0.1250
+verdict,uncertainty,0.5,,,,2.0000,uncertainty,0.2500,0,0.1250
+verdict,uncertainty,0.75,,,,24.0000,uncertainty,2.0000,0,0.0833
