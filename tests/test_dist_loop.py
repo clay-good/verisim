@@ -16,6 +16,7 @@ from __future__ import annotations
 import random
 
 from verisim.dist import DEFAULT_DIST_CONFIG, DistributedState
+from verisim.dist.action import DistAction
 from verisim.distdata import DistDriver
 from verisim.distloop import (
     DistNullModel,
@@ -33,10 +34,10 @@ ORACLE = ReferenceDistOracle(CFG)
 S0 = DistributedState.initial(CFG)
 
 
-def _actions(n: int = 24, seed: int = 4) -> list:
+def _actions(n: int = 24, seed: int = 4) -> list[DistAction]:
     driver = DistDriver("adversarial", CFG, random.Random(seed))
     state = S0
-    out = []
+    out: list[DistAction] = []
     for _ in range(n):
         action = driver.sample(state)
         out.append(action)
