@@ -32,9 +32,20 @@ def dist_examples_from_rollout(
     driver: str,
     seed: int,
     n_steps: int,
+    *,
+    fault_prob: float | None = None,
+    partition_bias: float | None = None,
 ) -> list[Example]:
-    """``(prompt_ids, target_ids)`` for each step of one seeded distributed rollout."""
-    driver_obj = DistDriver(name=driver, config=config, rng=random.Random(seed))
+    """``(prompt_ids, target_ids)`` for each step of one seeded distributed rollout.
+
+    ``fault_prob`` / ``partition_bias`` override the driver preset's fault-intensity /
+    partition-entropy dials (SPEC-7 §3.4, the H20/H21 axes) -- ``fault_prob=0.0`` yields a
+    fault-free trajectory (the H21 control arm). ``None`` uses the preset default.
+    """
+    driver_obj = DistDriver(
+        name=driver, config=config, rng=random.Random(seed),
+        fault_prob=fault_prob, partition_bias=partition_bias,
+    )
     state = DistributedState.initial(config)
     examples: list[Example] = []
     for _ in range(n_steps):
@@ -55,9 +66,18 @@ def build_dist_dataset(
     driver: str = "uniform",
     seeds: tuple[int, ...] = (0,),
     n_steps: int = 40,
+    fault_prob: float | None = None,
+    partition_bias: float | None = None,
 ) -> list[Example]:
-    """Build supervised examples across ``seeds`` (the DS4 supervised dataset)."""
+    """Build supervised examples across ``seeds`` (the DS4 supervised dataset).
+
+    ``fault_prob`` / ``partition_bias`` thread through to the driver (the H20/H21 dials) so a
+    caller can build a fault-free vs fault-injected dataset of equal volume (H21, ED4).
+    """
     examples: list[Example] = []
     for seed in seeds:
-        examples += dist_examples_from_rollout(oracle, vocab, config, driver, seed, n_steps)
+        examples += dist_examples_from_rollout(
+            oracle, vocab, config, driver, seed, n_steps,
+            fault_prob=fault_prob, partition_bias=partition_bias,
+        )
     return examples

@@ -1,0 +1,21 @@
+{
+  "name": "ed4-fault",
+  "train_driver": "uniform",
+  "train_seeds": [0, 1, 2, 3],
+  "train_steps_per_traj": 40,
+  "train_fault_prob": 0.45,
+  "n_layer": 2,
+  "n_head": 2,
+  "n_embd": 64,
+  "block_size": 512,
+  "train_iters": 700,
+  "lr": 0.003,
+  "model_seed": 0,
+  "max_int": 256,
+  "eval_fault_probs": [0.0, 0.15, 0.3, 0.45],
+  "eval_seeds": [100, 101, 102, 103, 104, 105, 106, 107],
+  "n_steps": 40,
+  "rho": 0.0,
+  "epsilon": 0.0,
+  "clean_eval_seeds": [200, 201]
+}
