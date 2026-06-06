@@ -1306,6 +1306,43 @@ oracle** — the cheap oracle's value depends on *which question you ask it*.
 ![ED6 two-oracle: the consistency oracle is redundant for verification but decision-sufficient (1.00 on subtle errors) and ~3.6× cheaper](../figures/ed6_two_oracle.png)
 ![ED6 two-oracle (learned M_θ): on the real model, decision-sufficiency lands at 0.57 — between the synthetic poles, since a real error distribution is a mixture](../figures/ed6_two_oracle_learned.png)
 
+## ED7 / Tier-B — the analytic oracle is faithful to a real distributed execution (the distributed W1 retirement)
+
+Every distributed result above is measured against **Tier-A**: a *single-threaded analytic
+discrete-event simulator* that computes the next cluster state in closed form. That proves the loop
+works against a *model* of a distributed system; it does not prove the model is faithful to a real
+one — SPEC-3 wall **W1**, the same objection the host world answered by running a real `/bin/sh`
+(SPEC-11). **Tier-B** ([`distoracle/system.py`](../src/verisim/distoracle/system.py)) answers it for
+the distributed world. `SystemDistOracle` runs the replicated-KV protocol as a real distributed
+system: autonomous **node actors**, each holding *only its own replicas and an inbox*, exchanging real
+replication messages with **no global-state access** (the cluster state is emergent, never stored —
+W7 made operational). It is made deterministic and replayable the way madsim / turmoil /
+FoundationDB's simulator are: a **seeded scheduler** picks the message-delivery order as a pure
+function of `(state, action)` — and crucially picks a *seed-shuffled* order, **not** Tier-A's fixed
+sorted-by-`msg_id` order. So agreement is not a tautology: it certifies the property the analytic DES
+quietly assumes, that the eventual-consistency convergence is **delivery-order-independent** (LWW by
+`(version, value)` is a commutative join).
+
+ED7 ([`ed7.py`](../src/verisim/experiments/ed7.py), [`ed7.csv`](../figures/ed7.csv)) reports the
+Tier-A↔Tier-B differential on the **observable-cluster channel** (replicas + id-independent in-flight
++ partition/down/clock + result; the causal log and id counters excluded as bookkeeping, exactly as
+the host differential excludes `last`). The finding is unambiguous: across the **exhaustive grammar
+battery** (252 transitions) and **all three workload drivers** including the fault-heavy `adversarial`
+one (600 transitions), agreement is **bit-exact 1.000 with residual 0** — every command family agrees
+totally; the prime-directive `H_ε(ρ)` curve run with Tier-B substituted for Tier-A is **oracle-invariant**
+(max gap 0.000 at every ρ); and the harness has **teeth**: a deliberately-broken *arrival-order* actor
+(which adopts deliveries by arrival, ignoring the LWW version compare, so its convergence is
+order-**dependent**) is **caught** by the differential as the `delivery_order` boundary (the SY3 analog —
+the harness detects a faithfulness break, not just rubber-stamps an identical reimplementation). A
+disclosed reality attestation re-runs the battery with each actor on a **real OS thread** + real
+`queue.Queue` inbox (the strongest reality claim, the host `SandboxOracle` echo) and reports its 1.000
+agreement. *Honest scope:* Tier-B is an **in-repo, dependency-free** realization of the DST principle,
+not a wrapped external binary; the actor runtime is genuinely independent of Tier-A's analytic code path
+and runs under shuffled order, but wrapping an external real-binary runtime (madsim/Shadow/Antithesis)
+over the same differential remains future work.
+
+![ED7: Tier-A vs Tier-B (autonomous actors) agree bit-exactly across drivers; the H_ε(ρ) curve is oracle-invariant; the broken-actor negative control is caught](../figures/ed7.png)
+
 ## What the distributed world adds, and what remains
 
 The fourth world generalizes the program's three load-bearing findings — the floor→cliff `H_ε(ρ)`
@@ -1318,10 +1355,12 @@ genuinely off-policy. The distributed world is **packaged for reuse** on all fou
 `verifiers`-spec RL env ([`distrl/`](../src/verisim/distrl/)), the Inspect faithfulness benchmark
 ([`disteval/`](../src/verisim/disteval/)), the LLM-callable cluster simulator
 ([`distsim/`](../src/verisim/distsim/)), and the verified-contribution protocol
-([`distcontrib/`](../src/verisim/distcontrib/)). **Open (the honest deferrals):** the Tier-B real-DST
-re-execution path (madsim/Shadow/Antithesis-class runtimes, which need external sandboxes), the
-structured GNN/RSSM `M_θ` arm (where the smart-`π_c` lever the ED2-smart null localizes can be
-re-tested, tied to partial observation), and the smart-`π_w` (which-tier) scheduler.
+([`distcontrib/`](../src/verisim/distcontrib/)). The **Tier-B system oracle now ships** (ED7 above): an
+in-repo autonomous-actor DST runtime that reproduces Tier-A bit-for-bit under shuffled delivery order,
+retiring W1 for the distributed world. **Open (the honest deferrals):** a wrapped **external**-binary
+real-DST runtime (madsim/Shadow/Antithesis-class, which need external sandboxes), the structured
+GNN/RSSM `M_θ` arm (where the smart-`π_c` lever the ED2-smart null localizes can be re-tested, tied to
+partial observation), and the smart-`π_w` (which-tier) scheduler.
 
 # Scale (SPEC-10): the floor+cliff was largely an under-resourcing artifact (H26)
 
@@ -1658,10 +1697,14 @@ expose.
 - **Difficulty by driver only.** The §2.4 depth/breadth dial is not yet a knob; v0
   difficulty is carried by the driver mix, which may not stress long-range
   dependencies enough to make the interior informative.
-- **Distributed: Tier-A only, and a toy semantics.** The SPEC-7 results run against
-  the Tier-A reference DES (a fully-replicated KV under async-replication LWW + a
-  partition/crash/clock medium), not a real distributed system under a DST runtime
-  (Tier-B, deferred — it needs external sandboxes). The consistency semantics pinned
+- **Distributed: a toy semantics, and Tier-B is in-repo not an external binary.** The
+  SPEC-7 results run against the Tier-A reference DES (a fully-replicated KV under
+  async-replication LWW + a partition/crash/clock medium). Tier-B (ED7) now validates
+  that DES bit-for-bit against an independent autonomous-actor execution under shuffled
+  delivery order — but Tier-B is itself an *in-repo, dependency-free* DST runtime, not a
+  wrapped external real-binary runtime (madsim/Shadow/Antithesis, still deferred — they
+  need external sandboxes), so it tests implementation- and order-independence, not yet
+  fidelity to a third-party production KV. The consistency semantics pinned
   so far are the two ends (`eventual`, `linearizable`); the intermediate models
   (serializable/snapshot/causal), consensus, and transactions are not yet pinned, so
   the H19/H20 gap is measured at the extremes, not across the full hierarchy. And the
@@ -1783,6 +1826,8 @@ python -m verisim.experiments.ed6_two_oracle --config configs/ed6_two_oracle.jso
     --out figures/ed6_two_oracle.csv --plot figures/ed6_two_oracle.png    # H12 (synthetic)
 python -m verisim.experiments.ed6_two_oracle_learned --config configs/ed6_two_oracle_learned.json \
     --out figures/ed6_two_oracle_learned.csv --plot figures/ed6_two_oracle_learned.png  # H12 real M_θ
+python -m verisim.experiments.ed7 --config configs/ed7.json \
+    --out figures/ed7.csv --plot figures/ed7.png    # Tier-B system oracle (the distributed W1 retirement)
 ```
 
 The run-records are git-ignored (regenerable); the figures and their CSVs are

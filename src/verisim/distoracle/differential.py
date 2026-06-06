@@ -1,0 +1,119 @@
+"""The distributed differential-validation harness (SPEC-7 §5.2): run Tier-A (the analytic DES) and
+Tier-B (the autonomous-actor system oracle) on the same ``(state, action)`` and return an exact
+agreement record.
+
+This is the distributed echo of :mod:`verisim.oracle.differential` (SPEC-11 §3). It calls *both*
+oracles on the identical transition and compares them on the **observable-cluster channel** -- the
+state a real cluster actually exposes:
+
+  - **replicas** -- each ``(object, node)`` replica's ``(version, value)``;
+  - **in-flight** -- the set of replication messages sent but not delivered, compared
+    *id-independently* as ``(src, dst, object, version, value, deliver_after)`` tuples (the monotone
+    message id is internal bookkeeping, not observable behavior);
+  - **medium** -- the partition groups, the crashed-node set, and the clock;
+  - **result** -- the client-visible ``(status, value)`` of the step.
+
+The **causal log and the monotone id counters are deliberately excluded** from the channel: they are
+bookkeeping of *our representation*, reconstructed identically by construction (exactly as the host
+differential excludes the ``last`` observation to keep the world channel orthogonal). The headline
+relation is whether the two oracles agree on the *observable cluster*.
+
+When they disagree, :func:`classify_dist_divergence` localizes the cause into a named boundary --
+the only one the DS0-increment-1 KV semantics admits is ``delivery_order`` (a replica whose value
+depends on the order messages were delivered, i.e. a *non-commutative* convergence, which a correct
+LWW actor never produces and the broken-arrival negative control always does) -- or flags it
+``residual`` for inspection. A divergence is never silent.
+"""
+
+from __future__ import annotations
+
+from dataclasses import dataclass
+
+from verisim.dist.action import DistAction
+from verisim.dist.state import DistributedState
+from verisim.distoracle.base import DistOracle, DistStepResult
+
+AGREE = "agree"
+# The one named modeling boundary the KV semantics admits: a converged replica whose value depends
+# on delivery order (a non-commutative join). A correct LWW actor is order-independent, so this is
+# only ever produced by a faithfulness break (the broken-arrival negative control).
+C_DELIVERY_ORDER = "delivery_order"
+RESIDUAL = "residual"  # an unexplained disagreement -- a first-class finding
+
+BOUNDARY_CLASSES = (C_DELIVERY_ORDER,)
+
+
+def cluster_view(state: DistributedState) -> str:
+    """The observable-cluster channel: replicas + in-flight + medium + result, id-independent.
+
+    Excludes the causal log and the monotone ``next_event_id``/``next_msg_id`` counters (internal
+    bookkeeping), so the channel is implementation-independent and orthogonal to representation.
+    """
+    replicas = sorted(
+        (r.object_id, r.node_id, r.version, r.value) for r in state.replicas.values()
+    )
+    inflight = sorted(
+        (m.src, m.dst, m.object_id, m.version, m.value, m.deliver_after)
+        for m in state.inflight.values()
+    )
+    partitions = sorted(sorted(g) for g in state.partitions)
+    return repr({
+        "replicas": replicas,
+        "inflight": inflight,
+        "partitions": partitions,
+        "down": sorted(state.down),
+        "clock": state.clock,
+        "last_result": state.last_result,
+    })
+
+
+@dataclass(frozen=True)
+class DistDiffRecord:
+    """An exact agreement record for one distributed ``(state, action)`` transition (§5.2)."""
+
+    action_raw: str
+    command: str
+    agree_cluster: bool
+    divergence_class: str
+
+    @property
+    def agree(self) -> bool:
+        return self.agree_cluster
+
+
+def dist_differential_step(
+    state: DistributedState, action: DistAction, ref: DistOracle, sys: DistOracle
+) -> DistDiffRecord:
+    """Run ``ref`` (Tier-A) and ``sys`` (Tier-B) on one transition; return the agreement record."""
+    r_ref: DistStepResult = ref.step(state, action)
+    r_sys: DistStepResult = sys.step(state, action)
+    agree = cluster_view(r_ref.state) == cluster_view(r_sys.state)
+    cls = AGREE if agree else classify_dist_divergence(state, action, r_ref.state, r_sys.state)
+    return DistDiffRecord(
+        action_raw=action.raw,
+        command=action.name,
+        agree_cluster=agree,
+        divergence_class=cls,
+    )
+
+
+def classify_dist_divergence(
+    state: DistributedState,
+    action: DistAction,
+    ref_next: DistributedState,
+    sys_next: DistributedState,
+) -> str:
+    """Localize an observable-cluster disagreement to a named boundary (or ``residual``).
+
+    ``advance`` is the only action that delivers messages, so it is the only one whose result can
+    depend on delivery order. A replica-value disagreement on an ``advance`` step is therefore the
+    ``delivery_order`` boundary -- the non-commutative convergence a correct LWW actor never
+    produces. Any other disagreement (or a replica disagreement on a non-``advance`` step) is a
+    first-class ``residual`` finding.
+    """
+    if action.name == "advance":
+        ref_repl = {k: (r.version, r.value) for k, r in ref_next.replicas.items()}
+        sys_repl = {k: (r.version, r.value) for k, r in sys_next.replicas.items()}
+        if ref_repl != sys_repl:
+            return C_DELIVERY_ORDER
+    return RESIDUAL

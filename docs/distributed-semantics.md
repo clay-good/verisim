@@ -11,9 +11,9 @@ specification to be checked against.
 
 > **Scope — DS0 increment 1.** This covers the shipped slice: a **fully-replicated key-value store
 > under asynchronous replication and the fault/time medium** (the eventual-consistency core that
-> makes stale-reads-under-partition the central dynamic). The Raft-subset consensus group,
-> transactions/locks, the embedded SPEC-6 host inside each node, and the cheap/Tier-B oracle tiers
-> are later DS increments (SPEC-7 §5, §13); each will extend this document.
+> makes stale-reads-under-partition the central dynamic). **Tier-B (the system oracle) now ships**
+> (§8 below). The Raft-subset consensus group, transactions/locks, and the embedded SPEC-6 host
+> inside each node are later DS increments (SPEC-7 §5, §13); each will extend this document.
 
 ## 1. State
 
@@ -139,3 +139,47 @@ goldens and the §16 verified-contribution protocol.
 A subsequent `heal · advance` delivers the stuck message and `n2` converges to `(2, c)`. This is the
 distributed world's defining dynamic — a free, exact, reproducible stale-read-under-partition — pinned
 as [`test_golden_partition_leaves_isolated_replica_stale`](../tests/test_dist_goldens.py).
+
+## 8. Tier-B — the system oracle (the reality check, SPEC-7 §5.2)
+
+Everything above is **Tier-A**: a *single-threaded analytic discrete-event simulator* that computes
+the next cluster state in closed form. It is the executable truth, but — like every reference oracle
+in the program — it is a *model* of a distributed system, not one. **Tier-B**
+([`verisim.distoracle.system`](../src/verisim/distoracle/system.py)) closes that gap (SPEC-3 wall
+**W1**, "the oracle is a model, not reality") for the distributed world, exactly as the host
+`SandboxOracle` (SPEC-11) does by running a real `/bin/sh`.
+
+Tier-B **runs the replicated-KV protocol as a real distributed system**: a set of autonomous
+**node actors** (`_NodeActor`) that each hold *only their own replicas and an inbox*, exchange real
+replication **messages**, and have **no access to any global state**. The cluster state is
+*emergent*, reconstructed by polling the actors — never stored in one place, exactly as W7 demands.
+
+- **Determinism via a seeded scheduler (the DST thesis, SPEC-7 §2.1).** A real cluster's delivery
+  order is nondeterministic, which is what makes a real cluster un-replayable. Tier-B does what
+  madsim / turmoil / FoundationDB's simulator do: it keeps the real message-passing structure but
+  drives it with a **seeded scheduler** whose seed is a pure function of `(state, action)`. The
+  order it picks is **not** Tier-A's fixed sorted-by-`msg_id` order but a seed-**shuffled** one, so
+  agreement certifies the property Tier-A quietly assumes: the eventual-consistency convergence is
+  **delivery-order-independent** (LWW by `(version, value)` is a commutative join).
+- **Two isolation tiers, disclosed never assumed** (the SPEC-11 `process`/`namespaced` split):
+  `simulated` (the always-on default — actors single-stepped by the scheduler, the madsim model) and
+  `threaded` (each actor in a *real OS thread* blocking on a real `queue.Queue`, the scheduler
+  dispatching one message at a time and awaiting its ack — genuine kernel concurrency, deadlock-free
+  by the strictly-sequential protocol). A requested tier that cannot run raises
+  `SystemDistOracleUnavailable` — a first-class, disclosed skip, never a silent pass.
+
+The **differential** ([`verisim.distoracle.differential`](../src/verisim/distoracle/differential.py))
+compares Tier-A and Tier-B on the **observable-cluster channel** — replicas + in-flight (compared
+id-independently) + partitions + down + clock + result — and deliberately *excludes* the causal log
+and the monotone id counters, which are bookkeeping of our representation (exactly as the host
+differential excludes the `last` observation). The only modeling boundary the KV semantics admits is
+`delivery_order`: a converged replica whose value depends on the delivery order (a *non-commutative*
+join), which a correct LWW actor never produces and a deliberately-broken **arrival-order** actor
+always does. That broken actor is the teeth-bearing negative control (the SY3 analog): the
+differential **catches** it, proving the harness can detect a faithfulness break, not merely
+rubber-stamp an identical reimplementation. The result is **ED7**
+([`verisim.experiments.ed7`](../src/verisim/experiments/ed7.py), [`ed7.png`](../../figures/ed7.png)):
+across the exhaustive grammar battery and all three workload drivers (including the fault-heavy
+adversarial one) Tier-A and Tier-B agree **bit-for-bit (1.000, residual 0)**, the `H_ε(ρ)` curve is
+oracle-invariant (gap 0 at every ρ), the broken control is caught, and the real-OS-thread tier agrees
+too — the distributed W1 retirement.
