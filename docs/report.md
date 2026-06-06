@@ -784,7 +784,15 @@ makes this trustworthy: without it, the 0.551→0.588 step would look like a cou
 coherent contrast with EN9:** counterfactual *negatives* **did** lift the *contrastive* representation's
 interventional fidelity (structure matters for the contrastive objective) — but counterfactual *examples*
 do not lift plain *supervision*. So H5 is objective-dependent: grounding helps where the objective is
-interventional/contrastive, not where it is reconstruction. **Mild standalone positive:** change-safety
+interventional/contrastive, not where it is reconstruction. **But objective-dependent is not the whole
+story — it is also *world*-dependent (the distributed exception, ED6/SPEC-7).** The same matched-volume
+supervision experiment in the distributed world *reverses* this null: there `+counterfactual` beats the
+volume control decisively (intervention-exact 0.51 vs 0.25, disjoint CIs), because the distributed
+*medium* (partition/crash/in-flight) is a hidden state the on-policy distribution structurally
+underrepresents, so volume cannot substitute for the off-policy oracle fault branch. The network/host
+null holds where on-policy supervision already covers the dynamics; the lift appears where the world has
+off-policy hidden state — the held-out-intervention analogue of the H21 fault-injection result.
+**Mild standalone positive:** change-safety
 (~0.93) ≫ delta-exact (~0.58) across all arms — the graph arm predicts the *reachability effect* of an
 intervention far better than the exact delta, which is exactly the metric the defense application cares
 about. *The two-oracle axis (H12) is measured in EN10 below.*
