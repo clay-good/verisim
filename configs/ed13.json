@@ -1,0 +1,6 @@
+{
+  "name": "ed13-causal",
+  "n_nodes": 3,
+  "n_objects": 4,
+  "object_pairs": [[0, 1], [1, 2], [2, 3], [0, 3], [0, 2], [1, 3]]
+}

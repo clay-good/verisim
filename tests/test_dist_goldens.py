@@ -255,6 +255,34 @@ def test_golden_version_oracle_catches_split_brain_fork():
     assert report.anomaly == "incompatible-order"
 
 
+def test_golden_causal_holds_effect_until_cause_arrives():
+    # The causal-consistency golden (SPEC-7 §3.4, DS0 incr 5): a write that causally depends on a
+    # blocked one is held, so no replica sees the effect before its cause — where `eventual` admits
+    # exactly that anomaly. The scenario routes y to n2 while x is still partitioned away from n2.
+    causal_cfg = DistConfig(
+        name="golden-causal", nodes=("n0", "n1", "n2"), objects=("x", "y"),
+        consistency_model="causal",
+    )
+    causal = ReferenceDistOracle(causal_cfg)
+    script = ["put n0 x a", "partition n0 n1 | n2", "advance 1",
+              "put n1 y b", "partition n0 | n1 n2", "advance 1"]
+
+    s_ev = DistributedState.initial(CONFIG)  # CONFIG is eventual
+    s_ca = DistributedState.initial(causal_cfg)
+    for cmd in script:
+        s_ev = ORACLE.step(s_ev, parse_dist_action(cmd)).state
+        s_ca = causal.step(s_ca, parse_dist_action(cmd)).state
+
+    # eventual: n2 adopted the effect (y=b) but not its cause (x=nil) — the anomaly
+    assert s_ev.replicas[("y", "n2")].value == "b"
+    assert s_ev.replicas[("x", "n2")].value == "nil"
+    # causal: the y message is held (deps={x@1} unmet at n2), so n2 sees neither yet — no anomaly
+    assert s_ca.replicas[("y", "n2")].value == "nil"
+    assert s_ca.replicas[("x", "n2")].value == "nil"
+    held = [m for m in s_ca.inflight.values() if m.object_id == "y" and m.dst == "n2"]
+    assert len(held) == 1 and held[0].deps == (("x", 1),)
+
+
 def test_golden_partial_observation_crash_equals_partition_from_one_vantage():
     # The partial-observation golden (SPEC-7 §5.4): from a single external vantage, a crashed node
     # and a node partitioned away project to byte-identical Observations — the failure-detector

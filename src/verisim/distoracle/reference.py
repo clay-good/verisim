@@ -40,7 +40,7 @@ from verisim.dist.delta import (
     SetResult,
     apply,
 )
-from verisim.dist.state import DistributedState
+from verisim.dist.state import DistributedState, Message
 from verisim.dist.txn import txn_step
 from verisim.distoracle.base import DistStepResult
 
@@ -136,16 +136,39 @@ class ReferenceDistOracle:
             return edits, "ok", value
 
         edits = [ev, ReplicaWrite(key, node, new_version, value)]
+        deps = self._causal_deps(state, node, key)
         msg_id = state.next_msg_id
         for peer in self.config.replicas_of(key):
             if peer == node:
                 continue
             edits.append(
-                MsgSend(msg_id, node, peer, key, new_version, value, state.clock + 1)
+                MsgSend(msg_id, node, peer, key, new_version, value, state.clock + 1, deps)
             )
             msg_id += 1
         edits.append(SetResult("ok", value))
         return edits, "ok", value
+
+    def _causal_deps(
+        self, state: DistributedState, node: str, key: str
+    ) -> tuple[tuple[str, int], ...]:
+        """The causal context a write at ``node`` carries (``causal`` model only; else empty).
+
+        Under ``causal`` consistency a write "happens after" everything the writing node has already
+        observed, so the message it produces must not be delivered anywhere before those
+        observations are. We carry that as the node's applied ``(object, version)`` for each
+        *other* object the node holds at a non-boot version (``version > 0``); boot replicas (v0)
+        are satisfied everywhere and omitted, so most messages still carry no deps. This is the
+        version-vector slice that makes cross-object causal ordering hold (§3.4); under
+        ``eventual`` / ``linearizable`` it is empty -- those models do not order delivery.
+        """
+        if self.config.consistency_model != "causal":
+            return ()
+        deps = [
+            (obj, r.version)
+            for (obj, n), r in state.replicas.items()
+            if n == node and obj != key and r.version > 0
+        ]
+        return tuple(sorted(deps))
 
     def _get(
         self, state: DistributedState, action: DistAction
@@ -174,6 +197,7 @@ class ReferenceDistOracle:
                 msg.deliver_after <= new_clock
                 and working.connected(msg.src, msg.dst)
                 and working.is_up(msg.dst)
+                and self._causal_ready(working, msg)
             )
             if not deliverable:
                 continue
@@ -187,6 +211,22 @@ class ReferenceDistOracle:
             delivered += 1
         edits.append(SetResult("advanced", str(delivered)))
         return edits, "advanced", str(delivered)
+
+    def _causal_ready(self, state: DistributedState, msg: Message) -> bool:
+        """Whether ``msg``'s causal dependencies are satisfied at its destination (``causal`` only).
+
+        Under ``causal`` consistency a message is held until the destination has applied at least
+        the versions the writing node had observed (``msg.deps``) -- so a replica never adopts an
+        effect before its cause. Checked against ``state`` (the in-progress ``advance`` working
+        copy), so a dependency delivered earlier *in the same advance* unblocks a later
+        causally-dependent message (causally-ordered messages can both land in one step). Empty
+        ``deps`` (eventual/linearizable, or a write that observed nothing) is always ready.
+        """
+        for obj, ver in msg.deps:
+            cur = state.replicas.get((obj, msg.dst))
+            if cur is None or cur.version < ver:
+                return False
+        return True
 
     def _partition(
         self, state: DistributedState, action: DistAction

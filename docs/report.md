@@ -1487,6 +1487,37 @@ belief's task is to predict the full state from the observable one, undefined un
 
 ![ED12: the observable-faithful horizon outlasts the bit-faithful one for in-flight errors (no probe can read the replication medium), and a single vantage cannot tell a crash from a partition while a paired vantage can](../figures/ed12.png)
 
+## ED13 / causal consistency — the effect-before-cause anomaly, forbidden without losing concurrency
+
+The consistency curriculum (§3.4) had two ends: `eventual` (the weak default, an in-flight medium and
+stale reads) and `linearizable` (the strong end -- synchronous, CP-under-partition, no in-flight
+medium). ED13 fills the **middle** with **`causal`** -- `eventual`'s async, available-under-partition
+replication plus one guarantee: *if write `B` causally depends on write `A`, no replica ever observes
+`B` before `A`*. It is a **delivery-order refinement**, not a new write path: each replication
+`Message` carries a `deps` slice of the writing node's version vector (the `(object, version)` it had
+observed for other objects), and `advance` defers a message until the destination has applied those
+dependencies. The field is empty under `eventual` / `linearizable` and omitted from the canonical form
+when empty, so the increment is **purely additive** -- every prior golden, hash, tokenization, and the
+Tier-A↔Tier-B differential is byte-for-byte unchanged.
+
+ED13 ([`ed13.py`](../src/verisim/experiments/ed13.py), [`ed13.csv`](../figures/ed13.csv)) routes the
+*effect* to an observer while its *cause* is still partitioned away -- the only way to manufacture
+out-of-causal-order delivery in a group-partition model, since disjoint groups are transitive at any
+single instant. **The anomaly is forbidden.** Under `eventual` the observer reads `y=b, x=nil` -- an
+effect before its cause (anomaly rate **1.0**); under `causal` the `y` message carries `deps={x@1}`,
+unmet at the observer, so it is held (rate **0.0**). **Causal does not over-synchronize, and stays
+live.** Causal holds the *dependent* message (held rate **1.0**) but never the *independent* one
+(written before its writer observed `x`, so it carries no deps -- held rate **0.0**): only
+causally-linked writes are ordered, concurrent writes keep their concurrency. And after a `heal` +
+`advance` every scenario reaches the **identical** durable cluster state under `eventual` and `causal`
+(rate **1.0**, causal's in-flight drained to 0) -- the held message is delivered once its cause arrives,
+so causal is a delivery-*order* refinement, not a different outcome. The only serialization that differs
+is the transient `last_result` count (causal's final `advance` delivers one extra, previously-deferred
+message), which is not part of the converged state. *(Tier-B, the autonomous-actor system oracle,
+implements `eventual` / `linearizable`; a causal Tier-B is a later increment -- ED13 is a Tier-A result.)*
+
+![ED13: under eventual the observer sees the effect before its cause (anomaly rate 1.0); under causal the dependent message is held (0.0), the independent message is delivered freely, and the cluster still converges](../figures/ed13.png)
+
 ## What the distributed world adds, and what remains
 
 The fourth world generalizes the program's three load-bearing findings — the floor→cliff `H_ε(ρ)`
@@ -1509,12 +1540,15 @@ observable history with no oracle and certifies the serializable level reference
 mode made a deterministic object — the substrate the structured `M_θ`'s RSSM belief must roll forward
 under partition — and it surfaces two findings unique to a world no observer fully sees (the
 probe-faithful horizon outlasting the bit-faithful one, and the crash/partition indistinguishability).
+**The consistency curriculum is now three-ended** (ED13 above): `causal` fills the middle between
+`eventual` and `linearizable` — async, partition-available delivery that nonetheless forbids
+effect-before-cause, a purely additive `deps` (version-vector slice) field that leaves every prior
+golden and the Tier-B differential untouched.
 **Open (the honest deferrals):** a wrapped **external**-binary real-DST runtime
 (madsim/Shadow/Antithesis-class, which need external sandboxes), the structured GNN/RSSM `M_θ` arm
 (where the smart-`π_c` lever the ED2-smart null localizes can be re-tested, now that partial
 observation is defined), the smart-`π_w` (which-tier) scheduler, the Raft-subset consensus group,
-lock-based 2PL, and the `causal` read/replication consistency model (it needs cross-node vector-clock
-context).
+lock-based 2PL, and a `causal` Tier-B (the system oracle implements `eventual` / `linearizable`).
 
 # Scale (SPEC-10): the floor+cliff was largely an under-resourcing artifact (H26)
 
@@ -1990,6 +2024,8 @@ python -m verisim.experiments.ed10 --config configs/ed10.json \
     --out figures/ed10.csv --plot figures/ed10.png  # Elle: write-skew recovered black-box (DS3 incr 2)
 python -m verisim.experiments.ed12 --config configs/ed12.json \
     --out figures/ed12.csv --plot figures/ed12.png  # partial observation: probe horizon + FLP (DS3 incr 4)
+python -m verisim.experiments.ed13 --config configs/ed13.json \
+    --out figures/ed13.csv --plot figures/ed13.png  # causal consistency: effect-before-cause anomaly (DS0 incr 5)
 ```
 
 The run-records are git-ignored (regenerable); the figures and their CSVs are

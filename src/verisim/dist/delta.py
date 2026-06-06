@@ -32,7 +32,11 @@ class ReplicaWrite:
 
 @dataclass(frozen=True)
 class MsgSend:
-    """Enqueue an in-flight replication message (a write the coordinator propagates to a peer)."""
+    """Enqueue an in-flight replication message (a write the coordinator propagates to a peer).
+
+    ``deps`` is the message's causal context (DS0 increment 5, the ``causal`` model) -- empty under
+    ``eventual`` / ``linearizable``; see :class:`verisim.dist.state.Message`.
+    """
 
     msg_id: int
     src: str
@@ -41,6 +45,7 @@ class MsgSend:
     version: int
     value: str
     deliver_after: int
+    deps: tuple[tuple[str, int], ...] = ()
 
 
 @dataclass(frozen=True)
@@ -146,7 +151,7 @@ def apply(state: DistributedState, delta: DistDelta) -> DistributedState:
         elif isinstance(edit, MsgSend):
             s.inflight[edit.msg_id] = Message(
                 edit.msg_id, edit.src, edit.dst, edit.object_id,
-                edit.version, edit.value, edit.deliver_after,
+                edit.version, edit.value, edit.deliver_after, edit.deps,
             )
             s.next_msg_id = max(s.next_msg_id, edit.msg_id + 1)
         elif isinstance(edit, (MsgDeliver, MsgDrop)):
@@ -183,9 +188,12 @@ def edit_to_dict(edit: DistEdit) -> dict[str, Any]:
         return {"op": "ReplicaWrite", "object_id": edit.object_id, "node_id": edit.node_id,
                 "version": edit.version, "value": edit.value}
     if isinstance(edit, MsgSend):
-        return {"op": "MsgSend", "msg_id": edit.msg_id, "src": edit.src, "dst": edit.dst,
-                "object_id": edit.object_id, "version": edit.version, "value": edit.value,
-                "deliver_after": edit.deliver_after}
+        d: dict[str, Any] = {"op": "MsgSend", "msg_id": edit.msg_id, "src": edit.src,
+                             "dst": edit.dst, "object_id": edit.object_id, "version": edit.version,
+                             "value": edit.value, "deliver_after": edit.deliver_after}
+        if edit.deps:  # omitted when empty so eventual/linearizable deltas keep their prior form
+            d["deps"] = [list(dep) for dep in edit.deps]
+        return d
     if isinstance(edit, MsgDeliver):
         return {"op": "MsgDeliver", "msg_id": edit.msg_id}
     if isinstance(edit, MsgDrop):
@@ -219,7 +227,8 @@ def edit_from_dict(d: dict[str, Any]) -> DistEdit:
         return ReplicaWrite(d["object_id"], d["node_id"], d["version"], d["value"])
     if op == "MsgSend":
         return MsgSend(d["msg_id"], d["src"], d["dst"], d["object_id"], d["version"],
-                       d["value"], d["deliver_after"])
+                       d["value"], d["deliver_after"],
+                       tuple((o, v) for o, v in d.get("deps", [])))
     if op == "MsgDeliver":
         return MsgDeliver(d["msg_id"])
     if op == "MsgDrop":

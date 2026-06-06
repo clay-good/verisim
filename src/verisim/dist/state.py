@@ -110,6 +110,15 @@ class Message:
     Delivered to ``dst`` by ``advance`` once ``deliver_after <= clock`` and ``src``/``dst``
     are in the same partition group and ``dst`` is up. Until then it waits -- the source of stale
     reads under partition (SPEC-7 §3.1).
+
+    ``deps`` is the **causal context** the message carries (DS0 increment 5, the ``causal``
+    consistency model): a sorted tuple of ``(object_id, version)`` that the *source* node had already
+    observed (applied to its own replicas) when it produced this write, for objects other than the
+    one being written. Under ``causal`` consistency ``advance`` will not deliver the message until the
+    destination has applied at least those versions -- so no replica ever sees an effect before its
+    cause (cross-object causal ordering). It is **empty under ``eventual`` / ``linearizable``** (those
+    models do not order delivery), so the field is omitted from the canonical form when empty and the
+    pre-DS0-incr-5 goldens/hashes are unchanged.
     """
 
     id: int
@@ -119,6 +128,7 @@ class Message:
     version: int
     value: str
     deliver_after: int
+    deps: tuple[tuple[str, int], ...] = ()
 
 
 def _all_connected(nodes: tuple[str, ...]) -> tuple[frozenset[str], ...]:

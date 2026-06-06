@@ -1,0 +1,6 @@
+panel,model,metric,value,detail
+anomaly,eventual,anomaly_rate,1.0000,6/6
+anomaly,causal,anomaly_rate,0.0000,0/6
+over_sync,causal,dependent_held_rate,1.0000,of 6
+over_sync,causal,independent_held_rate,0.0000,of 6
+convergence,both,identical_final_state_rate,1.0000,causal_inflight_after_heal=0

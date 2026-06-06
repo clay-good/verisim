@@ -31,7 +31,11 @@ def dist_facts(state: DistributedState) -> set[Fact]:
     for (obj, node), r in state.replicas.items():
         facts.add(("replica", obj, node, r.version, r.value))
     for m in state.inflight.values():
-        facts.add(("msg", m.id, m.src, m.dst, m.object_id, m.version, m.value, m.deliver_after))
+        # ``m.deps`` (the causal context, empty under eventual/linearizable) is part of the message
+        # state, so a model predicting a ``causal`` message must get it right too; it folds into the
+        # same in-flight fact and leaves the eventual divergence unchanged (deps == () both sides).
+        facts.add(("msg", m.id, m.src, m.dst, m.object_id, m.version, m.value, m.deliver_after,
+                   m.deps))
     for group in state.partitions:
         facts.add(("part", frozenset(group)))
     for node in state.down:

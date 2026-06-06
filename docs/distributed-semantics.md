@@ -64,6 +64,55 @@ of stale reads, the `subtle` error class of ED1/ED3/ED5, and the slack that lets
 faithful horizon outlast the bit-faithful one in H19); strong consistency removes it, so every error
 is immediately consistency-visible and that slack collapses.
 
+### 2.2 The middle: `causal` consistency (DS0 increment 5)
+
+A third model, **`causal`**, ships as the *middle* of the curriculum — strictly stronger than
+`eventual`, strictly weaker than `linearizable`. It keeps `eventual`'s async, available-under-partition
+replication (writes commit locally, peers converge on `advance`) but adds **one guarantee**: *if write
+`B` causally depends on write `A`, no replica ever observes `B` before `A`*. This is the cross-object
+delivery ordering a defender/SRE relies on — you never see an effect whose cause is still invisible.
+
+It is implemented as a **delivery-order refinement**, not a new write path. Each replication
+`Message` carries a `deps` field — the **causal context**: the `(object, version)` pairs the writing
+node had already *observed* (applied to its own replicas, at a non-boot `version > 0`) for objects
+other than the one being written. That is a slice of the node's version vector. On `advance`, a
+message is delivered only when (the existing conditions hold **and**) the destination has already
+applied at least those dependency versions; otherwise it **waits in flight** — the message is held,
+not lost, and is delivered once its cause arrives. `deps` is empty under `eventual` / `linearizable`
+(those models do not order delivery) and is **omitted from the canonical form when empty**, so every
+pre-DS0-incr-5 golden, hash, and tokenization is byte-for-byte unchanged (a purely additive field).
+
+| | `eventual` | **`causal`** | `linearizable` |
+|---|---|---|---|
+| replication | async, greedy delivery | async, **dependency-ordered** delivery | synchronous, all-replica |
+| effect-before-cause | **admitted** (a replica can see `y` before its cause `x`) | **forbidden** (the `y` message holds for `x@1`) | impossible (no in-flight) |
+| concurrency | full | full — only *causally-linked* writes are ordered, independent ones stay free | n/a (no in-flight) |
+| under partition | available | available | rejected (CP) |
+| in-flight medium | present | present (with deps) | absent |
+
+The mechanism (and the scenario the golden + **ED13** pin) routes the *effect* `y` to an observer
+`n2` while its *cause* `x` is still partitioned away — the only way to manufacture out-of-causal-order
+delivery in a group-partition model, since disjoint groups are transitive at any single instant:
+
+```
+put n0 x a               # cause: x=a@1 at n0
+partition n0 n1 | n2     # isolate the observer n2
+advance 1                # x@1 -> n1 delivers; x@1 -> n2 is blocked
+put n1 y b               # n1 has now observed x@1, so y=b@1 carries deps={x@1}
+partition n0 | n1 n2     # re-route so y can reach n2 while x cannot
+advance 1                # eventual: y -> n2 (effect before cause!); causal: y held (dep unmet)
+```
+
+Under `eventual`, `n2` reads `y=b, x=nil` (the anomaly). Under `causal`, the `y` message's
+`deps={x@1}` is unmet at `n2`, so it is held: `n2` reads `y=nil, x=nil`, and after `heal`+`advance`
+both arrive in causal order and the cluster converges to the *identical* durable state `eventual`
+reaches. ED13 ([`ed13.py`](../src/verisim/experiments/ed13.py),
+[`ed13.png`](../../figures/ed13.png)) reports the anomaly rate (**eventual 1.0, causal 0.0**), that
+`causal` holds the *dependent* message but never the *independent* one (it orders only causally-linked
+writes), and that convergence is preserved (eventual ≡ causal final state, in-flight drains to 0).
+*(Tier-B, the autonomous-actor system oracle, implements `eventual` / `linearizable`; a causal Tier-B
+is a later increment — ED13 is a Tier-A result.)*
+
 ## 3. Actions
 
 ### Client ops (append a causal-log event; set `last_result`)

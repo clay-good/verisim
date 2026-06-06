@@ -16,6 +16,18 @@ from typing import Any
 from verisim.dist.state import DistributedState, Event, Message, ReplicaState, TxnState
 
 
+def _msg_canonical(m: Message) -> dict[str, Any]:
+    """One in-flight message's normal form. ``deps`` is omitted when empty so that an ``eventual`` /
+    ``linearizable`` message serializes to the exact pre-DS0-incr-5 form (goldens/hashes unchanged)."""
+    out: dict[str, Any] = {
+        "id": m.id, "src": m.src, "dst": m.dst, "object_id": m.object_id, "version": m.version,
+        "value": m.value, "deliver_after": m.deliver_after,
+    }
+    if m.deps:
+        out["deps"] = [list(dep) for dep in m.deps]
+    return out
+
+
 def to_canonical(state: DistributedState) -> dict[str, Any]:
     """The sorted, deterministic normal form of a :class:`DistributedState`."""
     replicas = [
@@ -28,8 +40,7 @@ def to_canonical(state: DistributedState) -> dict[str, Any]:
         for e in sorted(state.log, key=lambda e: e.id)
     ]
     inflight = [
-        {"id": m.id, "src": m.src, "dst": m.dst, "object_id": m.object_id, "version": m.version,
-         "value": m.value, "deliver_after": m.deliver_after}
+        _msg_canonical(m)
         for m in sorted(state.inflight.values(), key=lambda m: m.id)
     ]
     partitions = sorted(sorted(g) for g in state.partitions)
@@ -71,7 +82,8 @@ def from_canonical(d: dict[str, Any]) -> DistributedState:
     )
     inflight = {
         m["id"]: Message(m["id"], m["src"], m["dst"], m["object_id"], m["version"],
-                         m["value"], m["deliver_after"])
+                         m["value"], m["deliver_after"],
+                         tuple((o, v) for o, v in m.get("deps", [])))
         for m in d["inflight"]
     }
     partitions = tuple(frozenset(g) for g in d["partitions"])
