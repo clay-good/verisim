@@ -9,10 +9,14 @@ acyclic, and the canonical anomaly classes (G0/G1c/G2) are distinguished.
 from __future__ import annotations
 
 from verisim.distoracle.elle import (
+    AppendObservation,
     Edge,
     TxnObservation,
+    appends_to_version_history,
     build_dsg,
     check_serializable,
+    check_serializable_appends,
+    recover_versions,
 )
 
 
@@ -104,3 +108,104 @@ def test_build_dsg_is_deterministic():
         TxnObservation("B", reads=(("x", 0), ("y", 0)), writes=(("y", 1),)),
     ]
     assert build_dsg(history) == build_dsg(list(reversed(history)))
+
+
+# --- the version oracle: list-append / value-recoverable histories (DS3 increment 3) --------------
+
+
+def test_version_oracle_recovers_order_from_read_prefixes():
+    # Three reads of one key, all prefixes of the same growing append log -> the order is [a,b,c].
+    history = [
+        AppendObservation("A", appends=(("x", "a"),)),
+        AppendObservation("B", appends=(("x", "b"),), list_reads=(("x", ("a",)),)),
+        AppendObservation("C", appends=(("x", "c"),), list_reads=(("x", ("a", "b")),)),
+        AppendObservation("R", list_reads=(("x", ("a", "b", "c")),)),
+    ]
+    recovered = recover_versions(history)
+    assert recovered.ok
+    assert recovered.order == {"x": ["a", "b", "c"]}
+
+
+def test_version_oracle_recovers_write_skew_as_a_g2_cycle_from_values():
+    # The list-append form of write skew: both read empty {x,y}, append disjoint halves.
+    history = [
+        AppendObservation("A", appends=(("x", "ax"),), list_reads=(("x", ()), ("y", ()))),
+        AppendObservation("B", appends=(("y", "by"),), list_reads=(("x", ()), ("y", ()))),
+    ]
+    report = check_serializable_appends(history)
+    assert not report.serializable
+    assert report.anomaly == "G2"
+    assert set(report.cycle) == {"A", "B"}
+    assert set(report.cycle_kinds) == {"rw"}
+
+
+def test_value_recovery_matches_supplied_versions_on_a_clean_schedule():
+    # The same schedule, two ways: the value-recovery path and the integer-version path agree.
+    supplied = [
+        TxnObservation("A", reads=(("x", 0),), writes=(("x", 1),)),
+        TxnObservation("B", reads=(("x", 1),), writes=(("y", 1),)),
+    ]
+    appends = [
+        AppendObservation("A", appends=(("x", "x#1"),), list_reads=(("x", ()),)),
+        AppendObservation("B", appends=(("y", "y#1"),), list_reads=(("x", ("x#1",)),)),
+    ]
+    recovered = recover_versions(appends)
+    assert recovered.ok
+    # the version oracle reproduces the store's exact version history (soundness)
+    assert appends_to_version_history(appends, recovered) == supplied
+    val, ver = check_serializable_appends(appends), check_serializable(supplied)
+    assert val.serializable == ver.serializable
+
+
+def test_split_brain_fork_is_incompatible_order():
+    # Two reads of x disagree on append order (neither a prefix of the other) -> a fork.
+    history = [
+        AppendObservation("A", appends=(("x", "a"),)),
+        AppendObservation("B", appends=(("x", "b"),)),
+        AppendObservation("R1", list_reads=(("x", ("a", "b")),)),
+        AppendObservation("R2", list_reads=(("x", ("b", "a")),)),
+    ]
+    report = check_serializable_appends(history)
+    assert not report.serializable
+    assert report.anomaly == "incompatible-order"
+    assert report.cycle == ()  # a recovery anomaly, not a DSG cycle
+    assert "incompatible-order (recovery anomaly" in report.detail
+
+
+def test_dirty_read_of_an_uncommitted_value():
+    # A read observes a value no committed transaction ever appended (Adya G1a).
+    history = [AppendObservation("A", list_reads=(("x", ("ghost",)),))]
+    report = check_serializable_appends(history)
+    assert not report.serializable
+    assert report.anomaly == "dirty-read"
+
+
+def test_duplicate_write_is_caught():
+    history = [
+        AppendObservation("A", appends=(("x", "v"),)),
+        AppendObservation("B", appends=(("x", "v"),)),  # same value appended twice
+    ]
+    report = check_serializable_appends(history)
+    assert not report.serializable
+    assert report.anomaly == "duplicate-write"
+
+
+def test_recover_versions_places_unread_appends_after_the_read_prefix():
+    # 'a' is read (pinned first), 'b' and 'c' are appended but never read -> after, value-sorted.
+    history = [
+        AppendObservation("A", appends=(("x", "a"),)),
+        AppendObservation("R", list_reads=(("x", ("a",)),)),
+        AppendObservation("C", appends=(("x", "c"),)),
+        AppendObservation("B", appends=(("x", "b"),)),
+    ]
+    recovered = recover_versions(history)
+    assert recovered.order == {"x": ["a", "b", "c"]}
+
+
+def test_recover_versions_is_deterministic_under_reordering():
+    history = [
+        AppendObservation("A", appends=(("x", "a"),)),
+        AppendObservation("B", appends=(("x", "b"),), list_reads=(("x", ("a",)),)),
+        AppendObservation("R", list_reads=(("x", ("a", "b")),)),
+    ]
+    assert recover_versions(history).order == recover_versions(list(reversed(history))).order

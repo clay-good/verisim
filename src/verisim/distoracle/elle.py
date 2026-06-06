@@ -40,6 +40,28 @@ Version ``0`` is the boot version of every replica; it has no writer (a virtual 
 real ``ww``/``wr`` edge originates at it, but a transaction that *reads* version ``0`` still gets an
 ``rw`` edge to whoever installed version ``1``. Pure standard library, dependency-free, GPU-free;
 deterministic (edges and the cycle search are built in sorted order).
+
+The version oracle (DS3 increment 3 — list-append / value-recoverable histories).
+:class:`TxnObservation` above is the *version-supplied* mode: the store hands Elle the integer MVCC
+version each read pinned and each write installed. That is one cooperation Jepsen's Elle removes,
+and the reason it works against a true black box. Over a **list-append** register — every write
+*appends* a globally-unique value to a key's list, every read returns the **whole list** — the
+per-key version order is **recoverable from the read values themselves**: a read returning
+``[x, y, z]`` is direct testimony that the append of ``x`` preceded ``y`` preceded ``z``, with no
+question put to the store (Kingsbury & Alvaro 2020, the "version oracle"). :func:`recover_versions`
+is that recovery — it merges every observed list-read for a key (each is a *prefix* of the one
+growing append log) into a single total order, then :func:`check_serializable_appends` assigns each
+appended value its recovered version and reuses the exact DSG/cycle machinery above. Two anomaly
+classes only the value-recovery path can even *represent* (the integer-version mode receives a
+single non-contradictory version sequence and so cannot express them) surface during recovery,
+before any cycle search:
+
+  - **incompatible-order** — two reads of one key disagree on append order (neither list is a prefix
+    of the other: a *fork*). This is the black-box signature of split-brain — a partition let two
+    sides extend the same key divergently — the distributed anomaly the §9.1 consistency view exists
+    to catch, now caught from the client-visible history alone.
+  - **dirty-read** (Adya G1a, aborted read) / **duplicate-write** — a read observed a value no
+    committed transaction appended, or a value was appended/observed twice.
 """
 
 from __future__ import annotations
@@ -87,6 +109,8 @@ class ElleReport:
     def detail(self) -> str:
         if self.serializable:
             return f"serializable ({self.n_txns} txns, {len(self.edges)} DSG edges)"
+        if not self.cycle:  # a recovery anomaly (incompatible-order / dirty-read / duplicate-write)
+            return f"{self.anomaly} (recovery anomaly, no DSG cycle)"
         return f"{self.anomaly} cycle {'->'.join(self.cycle)} via {','.join(self.cycle_kinds)}"
 
 
@@ -221,3 +245,134 @@ def check_serializable(history: list[TxnObservation]) -> ElleReport:
             edges=edges,
         )
     return ElleReport(serializable=True, anomaly="", n_txns=len(nodes), edges=edges)
+
+
+# --- the version oracle: list-append / value-recoverable histories (DS3 increment 3) --------------
+
+
+@dataclass(frozen=True)
+class AppendObservation:
+    """One committed transaction over a **list-append** register: what it appended and what it read.
+
+    ``appends`` maps each key the transaction wrote to the **value it appended** (each value
+    globally unique per key — the list-append datatype's contract). ``list_reads`` maps each key it
+    read to the **whole observed list** of values, in list order. Unlike :class:`TxnObservation` no
+    integer version appears: the version order is *recovered* from the read lists
+    (:func:`recover_versions`), which lets Elle check a true black box that never exposes versions.
+    """
+
+    txn_id: str
+    appends: tuple[tuple[str, str], ...] = ()
+    list_reads: tuple[tuple[str, tuple[str, ...]], ...] = ()
+
+
+@dataclass(frozen=True)
+class RecoveredOrder:
+    """The version oracle's output: the recovered per-key append order, or the blocking anomaly.
+
+    ``order`` maps each key to its recovered total append order (``order[k][i]`` is the value at
+    version ``i+1``; version ``0`` is the empty boot list). ``anomaly`` is empty when recovery
+    succeeded; otherwise it names the class (``incompatible-order`` / ``dirty-read`` /
+    ``duplicate-write``) and ``detail`` is a one-line witness. ``ok`` is the success predicate.
+    """
+
+    order: dict[str, list[str]]
+    anomaly: str = ""
+    detail: str = ""
+
+    @property
+    def ok(self) -> bool:
+        return not self.anomaly
+
+
+def _merge_prefixes(reads: list[tuple[str, ...]]) -> tuple[str, ...] | None:
+    """Merge list-append reads of one key into the maximal list they are all prefixes of.
+
+    Every read of a list-append register returns a *prefix* of the single growing append log, so the
+    reads of one key must form a chain under the prefix relation. Returns the longest such list, or
+    ``None`` if any two reads diverge (neither is a prefix of the other — a fork / split-brain).
+    """
+    longest: tuple[str, ...] = ()
+    for lst in reads:
+        if len(lst) > len(longest):
+            if longest != lst[: len(longest)]:  # the shorter incumbent must be a prefix of the new
+                return None
+            longest = lst
+        elif lst != longest[: len(lst)]:  # the new (shorter-or-equal) must be a prefix of longest
+            return None
+    return longest
+
+
+def recover_versions(history: list[AppendObservation]) -> RecoveredOrder:
+    """Recover each key's append (version) order from the observed list-reads alone — no store.
+
+    The version oracle (Kingsbury & Alvaro 2020): per key, merge every observed read-list into the
+    one total order they are all prefixes of, then place any appended-but-never-read value after
+    that prefix (deterministic value-sorted tiebreak — its position relative to the read prefix is
+    fixed, relative to its unread siblings is unconstrained). Surfaces the recovery anomalies the
+    integer-version mode cannot represent: a **fork** (``incompatible-order``), a read of an
+    uncommitted value (``dirty-read``), or a duplicated value (``duplicate-write``). Deterministic.
+    """
+    appends_by_key: dict[str, list[str]] = {}
+    reads_by_key: dict[str, list[tuple[str, ...]]] = {}
+    for t in sorted(history, key=lambda t: t.txn_id):
+        for k, v in t.appends:
+            appends_by_key.setdefault(k, []).append(v)
+        for k, lst in t.list_reads:
+            reads_by_key.setdefault(k, []).append(tuple(lst))
+
+    order: dict[str, list[str]] = {}
+    for key in sorted(set(appends_by_key) | set(reads_by_key)):
+        appended = appends_by_key.get(key, [])
+        appended_set = set(appended)
+        if len(appended) != len(appended_set):
+            return RecoveredOrder(order, "duplicate-write", f"key {key}: a value appended twice")
+        reads = reads_by_key.get(key, [])
+        for lst in reads:
+            if len(set(lst)) != len(lst):
+                return RecoveredOrder(order, "duplicate-write", f"key {key}: value read twice")
+            for v in lst:
+                if v not in appended_set:
+                    return RecoveredOrder(order, "dirty-read", f"key {key}: read uncommitted {v!r}")
+        merged = _merge_prefixes(reads)
+        if merged is None:
+            return RecoveredOrder(order, "incompatible-order", f"key {key}: reads fork on order")
+        merged_set = set(merged)
+        unread = sorted(v for v in appended if v not in merged_set)
+        order[key] = list(merged) + unread
+    return RecoveredOrder(order)
+
+
+def appends_to_version_history(
+    history: list[AppendObservation], recovered: RecoveredOrder
+) -> list[TxnObservation]:
+    """Map a list-append history onto the integer-version :class:`TxnObservation` form.
+
+    Using the recovered order, every appended value becomes ``(key, version)`` (its 1-based
+    position) and every read of a length-``L`` list becomes ``(key, L)`` (it observed the
+    version-``L`` prefix). The result feeds the unchanged :func:`build_dsg` /
+    :func:`check_serializable` machinery, so value-recovery and version-supplied agree by build.
+    """
+    index = {k: {v: i + 1 for i, v in enumerate(seq)} for k, seq in recovered.order.items()}
+    out: list[TxnObservation] = []
+    for t in history:
+        writes = tuple(sorted((k, index[k][v]) for k, v in t.appends))
+        reads = tuple(sorted((k, len(lst)) for k, lst in t.list_reads))
+        out.append(TxnObservation(t.txn_id, reads=reads, writes=writes))
+    return out
+
+
+def check_serializable_appends(history: list[AppendObservation]) -> ElleReport:
+    """Elle's verdict over a **black-box list-append history** — values only, no supplied versions.
+
+    Recovers the per-key version order from the read values (:func:`recover_versions`); a recovery
+    anomaly (fork / dirty-read / duplicate-write) is itself a non-serializable verdict reported
+    before any cycle search. Otherwise the recovered version history is checked for a DSG cycle
+    exactly as :func:`check_serializable` does — clean schedules make the two modes agree by build.
+    """
+    recovered = recover_versions(history)
+    if not recovered.ok:
+        return ElleReport(
+            serializable=False, anomaly=recovered.anomaly, n_txns=len({t.txn_id for t in history})
+        )
+    return check_serializable(appends_to_version_history(history, recovered))

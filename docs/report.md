@@ -1418,10 +1418,39 @@ independently of the oracle. This is the H17 story read from the other side: whe
 the cheap tiers refute *nothing* for a grammar-constrained learned model, Elle shows a cheap,
 reference-free tier that refutes *exactly the right thing* for the question it is built to answer —
 the tiered oracle's value is, once again, a function of *which question you ask it*. *Honest scope:*
-ED10 supplies the store's MVCC version order to Elle (its version-oracle mode); recovering the
-version order from observed values alone (Elle's list-append recoverability) is deferred.
+ED10 still supplies the store's MVCC version order to Elle; recovering the version order from
+observed values alone (Elle's list-append recoverability) is ED11, below.
 
 ![ED10: Elle recovers the write-skew anomaly black-box (a G2 anti-dependency cycle) at exactly the rate the oracle sees, and certifies the serializable level (zero non-serializable histories) while catching the snapshot anomalies](../figures/ed10.png)
+
+## ED11 / Elle's version oracle — serializability from values alone, and the split-brain fork
+
+ED10 was black-box about *reads and writes* but still let the store hand Elle the integer MVCC
+version each transaction read and installed. That is the one cooperation Jepsen's Elle removes, and
+the reason it works against a true black box. Over a **list-append** register — every write appends a
+globally-unique value, every read returns the whole list — the per-key version order is **recoverable
+from the read values themselves** (Kingsbury & Alvaro 2020, the "version oracle"): a read returning
+`[x, y, z]` is direct testimony that the append of `x` preceded `y` preceded `z`, with no question put
+to the store. [`recover_versions`](../src/verisim/distoracle/elle.py) merges each key's read-lists
+(every one a *prefix* of the single growing append log) into one total order, then
+`check_serializable_appends` assigns each value its recovered version and reuses the *unchanged* DSG/
+cycle machinery.
+
+ED11 ([`ed11.py`](../src/verisim/experiments/ed11.py), [`ed11.csv`](../figures/ed11.csv)) reports two
+findings. **The version oracle is sound:** recovering versions from values alone reproduces the
+store's *exact* version history on every scenario (`recovery_sound` = true), so the G2 write-skew rate
+is ED10's — **1.0 under `snapshot`, 0.0 under `serializable`** — recovered with *zero* store
+cooperation. **The split-brain fork only value-recovery can represent:** when a partition lets two
+sides extend one key divergently (a later read sees `[a, b]`, another `[a, c]`, neither a prefix of
+the other) the version oracle reports an **`incompatible-order`** anomaly at rate **1.0** (clean
+control **0.0**) — the black-box signature of split-brain, the §9.1 consistency anomaly caught
+reference-free from the client history alone, which ED10's single-integer-sequence mode is
+*structurally unable* to express. Two further recovery anomalies surface before any cycle search:
+`dirty-read` (Adya G1a, a read of an uncommitted value) and `duplicate-write`. The same DSG machinery,
+a strictly stronger front-end: Elle now checks the cluster the way an operator must — from the
+outside, trusting nothing it is handed.
+
+![ED11: Elle's version oracle recovers the write-skew verdict from list-append values alone (sound against the store's exact versions) and catches the split-brain incompatible-order fork the integer-version mode cannot represent](../figures/ed11.png)
 
 ## What the distributed world adds, and what remains
 

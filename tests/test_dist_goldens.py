@@ -223,6 +223,38 @@ def test_golden_elle_recovers_write_skew_as_a_g2_cycle_black_box():
     assert check_serializable(serializable_history).serializable
 
 
+def test_golden_version_oracle_recovers_write_skew_from_values_alone():
+    # The DS3-incr-3 counterpart: the same write skew, but Elle is handed only list-append *values*
+    # (no store-supplied MVCC versions) and must recover the order itself (the version oracle).
+    from verisim.distoracle.elle import AppendObservation, check_serializable_appends
+
+    # Both txns read empty {x, y} then append disjoint halves; only the values reach Elle.
+    snapshot_appends = [
+        AppendObservation("A", appends=(("x", "ax"),), list_reads=(("x", ()), ("y", ()))),
+        AppendObservation("B", appends=(("y", "by"),), list_reads=(("x", ()), ("y", ()))),
+    ]
+    report = check_serializable_appends(snapshot_appends)
+    assert not report.serializable
+    assert report.anomaly == "G2"  # recovered from values, identical to the supplied-version golden
+    assert set(report.cycle) == {"A", "B"}
+    assert set(report.cycle_kinds) == {"rw"}
+
+
+def test_golden_version_oracle_catches_split_brain_fork():
+    # The split-brain anomaly the integer-version mode cannot represent: two reads of x fork.
+    from verisim.distoracle.elle import AppendObservation, check_serializable_appends
+
+    fork = [
+        AppendObservation("A", appends=(("x", "a"),)),
+        AppendObservation("B", appends=(("x", "b"),)),
+        AppendObservation("R1", list_reads=(("x", ("a", "b")),)),
+        AppendObservation("R2", list_reads=(("x", ("b", "a")),)),
+    ]
+    report = check_serializable_appends(fork)
+    assert not report.serializable
+    assert report.anomaly == "incompatible-order"
+
+
 def test_golden_linearizable_rejects_write_under_partition():
     # CP under partition: a synchronous write that cannot reach all replicas is rejected
     # (``unavailable``) rather than committed locally — so no replica is ever stale (vs the

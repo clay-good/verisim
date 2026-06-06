@@ -1,0 +1,4 @@
+panel,key,metric,value,ci_lo,ci_hi,detail
+recovery,serializable,elle_g2_rate,0.0000,,,sound=True;agrees_supplied=True
+recovery,snapshot,elle_g2_rate,1.0000,,,sound=True;agrees_supplied=True
+fork,split_brain,incompatible_order_rate,1.0000,1.0000,1.0000,clean_control=0.0000
