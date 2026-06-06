@@ -10,6 +10,14 @@ from verisim.distloop.model import (
     DistNoisyModel,
     DistNullModel,
     DistOracleBackedModel,
+    DistUncertaintyModel,
+)
+from verisim.distloop.operator import (
+    CorrectionOperator,
+    HardReset,
+    Projection,
+    ReplicasOnlyCorrection,
+    Residual,
 )
 from verisim.distloop.runner import budget_for_rho, ground_truth_rollout, run_dist_rollout
 from verisim.distloop.tier_policy import (
@@ -19,12 +27,18 @@ from verisim.distloop.tier_policy import (
 )
 
 __all__ = [
+    "CorrectionOperator",
     "DistModel",
     "DistNoisyModel",
     "DistNullModel",
     "DistOracleBackedModel",
+    "DistUncertaintyModel",
     "EscalatingTierPolicy",
     "FixedTierPolicy",
+    "HardReset",
+    "Projection",
+    "ReplicasOnlyCorrection",
+    "Residual",
     "TierPolicy",
     "budget_for_rho",
     "ground_truth_rollout",

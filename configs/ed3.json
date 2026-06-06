@@ -1,0 +1,11 @@
+{
+  "name": "ed3-dist",
+  "driver": "contention",
+  "eval_seeds": [100, 101, 102, 103, 104, 105, 106, 107],
+  "n_steps": 40,
+  "noise": 0.4,
+  "rho": 0.5,
+  "operators": ["hard_reset", "residual", "projection", "replicas_only"],
+  "modes": ["gross", "subtle"],
+  "epsilon": 0.0
+}

@@ -38,6 +38,7 @@ from verisim.loop.runner import budget_for_rho
 from verisim.metrics.record import RunRecord
 
 from .model import DistModel, DistUncertaintyModel
+from .operator import CorrectionOperator, HardReset
 from .tier_policy import FixedTierPolicy, TierPolicy
 
 __all__ = ["budget_for_rho", "ground_truth_rollout", "run_dist_rollout"]
@@ -79,6 +80,7 @@ def run_dist_rollout(
     epsilon: float,
     config: DistConfig = DEFAULT_DIST_CONFIG,
     tier_policy: TierPolicy | None = None,
+    operator: CorrectionOperator | None = None,
     budget: int | None = None,
     seed: int = 0,
     record_config: dict[str, Any] | None = None,
@@ -89,10 +91,13 @@ def run_dist_rollout(
     consult once the remaining budget would otherwise be stranded, so every policy spends *exactly*
     ``budget`` (true equal-``ρ`` comparison, SPEC-2 §16). ``tier_policy`` (``π_w``) chooses which
     tier each consult spends -- default full-truth (``bit_exact``), comparable to every prior world.
-    The cumulative ``oracle_dollars`` is recorded on the run-record config (the §9.4 cost
-    H17 measures against faithful horizon).
+    ``operator`` (``C``, §8.3) decides the post-consultation coupled state from ``(predicted,
+    truth)`` -- default the full ``HardReset``; a partial operator (e.g. ``ReplicasOnlyCorrection``)
+    corrects strictly less (ED3). The cumulative ``oracle_dollars`` is recorded on the run-record
+    config (the §9.4 cost H17 measures against faithful horizon).
     """
     tier_policy = tier_policy or FixedTierPolicy("bit_exact")
+    correct = (operator or HardReset()).correct
     tiered = TieredOracle(config)
     truth_states = ground_truth_rollout(oracle, s0, actions)
     n_steps = len(actions)
@@ -126,7 +131,8 @@ def run_dist_rollout(
             if verdict.refuted:
                 if verdict.tier != "bit_exact":
                     oracle_dollars += TIER_COSTS["bit_exact"]  # recompute truth to CORRECT
-                state = oracle.step(state, action).state  # CORRECT: snap to truth
+                truth = oracle.step(state, action).state
+                state = correct(predicted, truth)  # CORRECT (operator C, §8.3)
             else:
                 state = predicted  # trust the model (the tier could not refute it)
         else:

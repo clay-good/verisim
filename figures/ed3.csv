@@ -1,0 +1,11 @@
+panel,mode,operator,h_eps,ci_lo,ci_hi,repaired_fraction,full_h,partial_h,gap,break
+cell,gross,hard_reset,7.2500,4.5000,9.5000,0.0000,,,,
+cell,gross,residual,7.2500,4.5000,9.5000,0.9878,,,,
+cell,gross,projection,7.2500,4.5000,9.5000,0.0466,,,,
+cell,gross,replicas_only,7.2500,4.5000,9.5000,0.0466,,,,
+cell,subtle,hard_reset,6.2500,4.0000,8.5000,0.0000,,,,
+cell,subtle,residual,6.2500,4.0000,8.5000,1.0516,,,,
+cell,subtle,projection,6.2500,4.0000,8.5000,0.0474,,,,
+cell,subtle,replicas_only,1.7500,0.2500,3.7500,0.0468,,,,
+verdict,gross,replicas_only,,,,,7.2500,7.2500,0.0000,0
+verdict,subtle,replicas_only,,,,,6.2500,1.7500,4.5000,1
