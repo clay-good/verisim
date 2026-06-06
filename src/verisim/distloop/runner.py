@@ -30,7 +30,7 @@ from verisim.dist.action import DistAction
 from verisim.dist.config import DEFAULT_DIST_CONFIG, DistConfig
 from verisim.dist.delta import DistDelta, apply
 from verisim.dist.state import DistributedState
-from verisim.distmetrics.divergence import divergence
+from verisim.distmetrics.divergence import consistency_faithfulness, divergence
 from verisim.distoracle.base import DistOracle
 from verisim.distoracle.tiers import TIER_COSTS, TieredOracle
 from verisim.loop.policy import ConsultationPolicy, StepContext
@@ -104,6 +104,7 @@ def run_dist_rollout(
 
     state = s0
     divergences: list[float] = []
+    consistency_divergences: list[float] = []
     schedule: list[bool] = []
     calls = 0
     oracle_dollars = 0
@@ -140,11 +141,21 @@ def run_dist_rollout(
 
         schedule.append(consult)
         divergences.append(divergence(state, truth_states[t + 1]))
+        # The §9.1 headline-new consistency-faithfulness, recorded alongside bit-exact divergence
+        # (1 - cf, so it reads as a divergence and feeds the same faithful_horizon). It is the
+        # metric that survives W7 where bit-exact does not: many bit-states map to one admissible
+        # consistency view, so a consistency-faithful horizon can outlast the bit-faithful one
+        # (H19, ED5). The in-flight medium is the gap — bit-visible, consistency-invisible until a
+        # message is delivered and writes a replica.
+        consistency_divergences.append(
+            1.0 - consistency_faithfulness(truth_states[t + 1], state)
+        )
 
     cfg = dict(record_config or {})
     cfg.setdefault("world", "distributed")
     cfg["oracle_dollars"] = oracle_dollars
     cfg["tier_policy"] = "escalate" if tier_policy.escalate else tier_policy.tier(0)
+    cfg["consistency_divergences"] = consistency_divergences
     return RunRecord(
         config=cfg, seed=seed, epsilon=epsilon, divergences=divergences,
         consultation_schedule=schedule,
