@@ -1,0 +1,5 @@
+panel,isolation,metric,value,ci_lo,ci_hi,detail
+write_skew,serializable,elle_g2_rate,0.0000,,,g2=0/3;matches_oracle=True
+write_skew,snapshot,elle_g2_rate,1.0000,,,g2=3/3;matches_oracle=True
+contention,serializable,nonserializable_rate,0.0000,0.0000,0.0000,none
+contention,snapshot,nonserializable_rate,0.6000,0.3000,0.9000,G2=6

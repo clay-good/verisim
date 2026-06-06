@@ -256,3 +256,45 @@ forbidding it are pinned by **ED9** ([`verisim.experiments.ed9`](../src/verisim/
 (`0.70` vs `0.55`, disjoint CIs) — the extra aborts are precisely the price of the stronger
 guarantee. Both compose with Tier-B (the autonomous-actor system oracle agrees on every scenario).
 
+### 9.2 Elle-style serializability checking — the black-box history verifier (DS3 increment 2)
+
+ED9 detected write skew the way an omniscient observer would: by counting which transactions the
+oracle let commit. **Elle** ([`verisim.distoracle.elle`](../src/verisim/distoracle/elle.py)) detects
+it the way a real operator must — from the **observable transaction history alone**, with no oracle
+and no cluster state. It is the distributed analogue of Jepsen's Elle (Kingsbury & Alvaro, VLDB
+2020), and the *stronger-consistency, over-a-history* sibling of the per-step `cycle` oracle tier
+(§8 / SPEC-7 §5), which is the eventual-consistency form.
+
+The theory (Adya 1999). A history over a multi-version store is **serializable iff its Direct
+Serialization Graph is acyclic**. The DSG has one node per committed transaction and three edge kinds,
+all read off the per-object MVCC **version order**:
+
+| Edge | When | Meaning |
+|---|---|---|
+| `ww` (write-depends) | `Ti` installs version `v` of `k`, `Tj` installs the next installed version of `k` | the write order |
+| `wr` (read-depends) | `Ti` installs version `v` of `k`, `Tj` reads exactly `v` | `Tj` saw `Ti`'s write |
+| `rw` (anti-dependency) | `Ti` reads version `v` of `k`, `Tj` installs the version immediately after `v` | `Tj` overwrote what `Ti` read |
+
+A cycle is classified by Adya's G-hierarchy: **G0** (a `ww`-only cycle, dirty write), **G1c** (a
+`ww`/`wr` cycle, circular information flow), **G2** (any cycle with an `rw` edge, the general
+non-serializable form). **Write skew is the canonical G2**: `A` reads `{x@0, y@0}` and installs
+`x@1`; `B` reads `{x@0, y@0}` and installs `y@1`; `B` read `x@0` that `A` overwrote (`rw B→A` on `x`)
+and `A` read `y@0` that `B` overwrote (`rw A→B` on `y`) — a two-cycle of anti-dependency edges.
+
+**ED10** ([`verisim.experiments.ed10`](../src/verisim/experiments/ed10.py),
+[`ed10.png`](../../figures/ed10.png)) records only each committed transaction's read/installed
+versions and hands that history to Elle:
+
+- **the write-skew anomaly, recovered black-box.** Elle's G2-cycle rate is **1.0 under `snapshot`,
+  0.0 under `serializable`** — identical to ED9's oracle-side anomaly rate, and it agrees with the
+  oracle on every single scenario (`elle_matches_oracle = True`). The free, reference-free checker
+  recovers exactly the anomaly the expensive bit-exact oracle sees.
+- **Elle certifies the serializable level.** Under a read-heavy contended workload, Elle flags
+  **0.60 [0.30, 0.90]** of `snapshot` histories non-serializable (the G2 anomalies that level admits)
+  and **0.0** of `serializable` histories (the guarantee that level enforces — certified
+  independently of the oracle that enforces it).
+
+ED10 supplies the store's MVCC version order to Elle (its *version-oracle* mode); recovering the
+version order from observed values alone (Elle's list-append / unique-write recoverability) is
+deferred. Pure standard library, dependency-free, GPU-free.
+

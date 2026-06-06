@@ -1393,6 +1393,36 @@ transactions and the consistency models before them, inherits the W1 reality che
 
 ![ED9: snapshot admits the write-skew anomaly (both disjoint-write txns commit) while serializable forbids it; serializable pays a higher abort rate under contention — the price of the guarantee](../figures/ed9.png)
 
+## ED10 / Elle — the write-skew anomaly, recovered black-box from the history
+
+ED9 caught write skew the way an omniscient observer would: by counting which transactions the
+oracle let commit. ED10 asks the operationally harder question a real defender faces — can a checker
+that sees **only the client-visible history**, with no oracle and no cluster state, recover the same
+verdict? **Elle** ([`distoracle/elle.py`](../src/verisim/distoracle/elle.py)) does. It is the
+distributed analogue of Jepsen's Elle (Kingsbury & Alvaro, VLDB 2020) and the stronger-consistency,
+over-a-history sibling of the per-step `cycle` oracle tier (which is the eventual-consistency form,
+the DS3-deferred piece now shipped). From each committed transaction's read/installed MVCC versions
+it reconstructs Adya's **Direct Serialization Graph** (`ww`/`wr`/`rw` edges) and reports a violation
+iff the graph has a cycle, classified by Adya's G-hierarchy (`G0`/`G1c`/`G2`).
+
+ED10 ([`ed10.py`](../src/verisim/experiments/ed10.py), [`ed10.csv`](../figures/ed10.csv)) reports
+two numbers. **The write-skew anomaly, recovered black-box:** Elle's G2-anti-dependency-cycle rate
+(`A →rw B →rw A`) is **1.0 under `snapshot`, 0.0 under `serializable`** — identical to ED9's
+oracle-side anomaly rate, and Elle agrees with the oracle on *every* scenario (`elle_matches_oracle`
+= true). A reference-free checker recovers exactly the anomaly the expensive bit-exact oracle sees,
+because the anomaly is *defined* by the history's dependency structure, not by anything only the
+oracle can see. **Elle certifies the serializable level:** under a read-heavy contended workload it
+flags **0.60 [0.30, 0.90]** of `snapshot` histories non-serializable (the G2 cycles that level
+admits) and **0.0** of `serializable` histories — the guarantee the oracle enforces, certified
+independently of the oracle. This is the H17 story read from the other side: where ED2-learned found
+the cheap tiers refute *nothing* for a grammar-constrained learned model, Elle shows a cheap,
+reference-free tier that refutes *exactly the right thing* for the question it is built to answer —
+the tiered oracle's value is, once again, a function of *which question you ask it*. *Honest scope:*
+ED10 supplies the store's MVCC version order to Elle (its version-oracle mode); recovering the
+version order from observed values alone (Elle's list-append recoverability) is deferred.
+
+![ED10: Elle recovers the write-skew anomaly black-box (a G2 anti-dependency cycle) at exactly the rate the oracle sees, and certifies the serializable level (zero non-serializable histories) while catching the snapshot anomalies](../figures/ed10.png)
+
 ## What the distributed world adds, and what remains
 
 The fourth world generalizes the program's three load-bearing findings — the floor→cliff `H_ε(ρ)`
@@ -1408,7 +1438,9 @@ genuinely off-policy. The distributed world is **packaged for reuse** on all fou
 ([`distcontrib/`](../src/verisim/distcontrib/)). The **Tier-B system oracle now ships** (ED7 above): an
 in-repo autonomous-actor DST runtime that reproduces Tier-A bit-for-bit under shuffled delivery order,
 retiring W1 for the distributed world. The deterministic core also grows a **multi-key OCC
-transaction** layer with two **isolation levels** — `serializable` and `snapshot` (ED8/ED9 above).
+transaction** layer with two **isolation levels** — `serializable` and `snapshot` (ED8/ED9 above) —
+and a black-box **Elle-style serializability checker** that recovers the write-skew anomaly from the
+observable history with no oracle and certifies the serializable level reference-free (ED10 above).
 **Open (the honest deferrals):** a wrapped **external**-binary real-DST runtime
 (madsim/Shadow/Antithesis-class, which need external sandboxes), the structured GNN/RSSM `M_θ` arm
 (where the smart-`π_c` lever the ED2-smart null localizes can be re-tested, tied to partial
@@ -1885,6 +1917,8 @@ python -m verisim.experiments.ed8 --config configs/ed8.json \
     --out figures/ed8.csv --plot figures/ed8.png    # OCC transaction commit/abort frontier (DS0 incr 2)
 python -m verisim.experiments.ed9 --config configs/ed9.json \
     --out figures/ed9.csv --plot figures/ed9.png    # txn isolation: write-skew + price of serializability
+python -m verisim.experiments.ed10 --config configs/ed10.json \
+    --out figures/ed10.csv --plot figures/ed10.png  # Elle: write-skew recovered black-box (DS3 incr 2)
 ```
 
 The run-records are git-ignored (regenerable); the figures and their CSVs are

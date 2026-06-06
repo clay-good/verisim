@@ -198,6 +198,31 @@ def test_golden_write_skew_admitted_under_snapshot_forbidden_under_serializable(
     assert (ser_x, ser_y) == ("a", "nil")  # only A's write landed
 
 
+def test_golden_elle_recovers_write_skew_as_a_g2_cycle_black_box():
+    # The Elle (DS3 incr 2) counterpart of the write-skew golden: a checker that sees only the
+    # observable transaction history reconstructs Adya's DSG and reports the anomaly the oracle
+    # admits — a G2 anti-dependency cycle A->B->A — with no oracle and no cluster state consulted.
+    from verisim.distoracle.elle import TxnObservation, check_serializable
+
+    # The observable footprint of the snapshot write-skew run: both txns read {x@0, y@0}; A installs
+    # x@1, B installs y@1 (both committed, the anomaly).
+    snapshot_history = [
+        TxnObservation("A", reads=(("x", 0), ("y", 0)), writes=(("x", 1),)),
+        TxnObservation("B", reads=(("x", 0), ("y", 0)), writes=(("y", 1),)),
+    ]
+    report = check_serializable(snapshot_history)
+    assert not report.serializable
+    assert report.anomaly == "G2"
+    assert set(report.cycle) == {"A", "B"}
+    assert set(report.cycle_kinds) == {"rw"}  # write skew is a pure anti-dependency cycle
+
+    # Under serializable, B aborts, so the history is the single committed txn A — acyclic.
+    serializable_history = [
+        TxnObservation("A", reads=(("x", 0), ("y", 0)), writes=(("x", 1),)),
+    ]
+    assert check_serializable(serializable_history).serializable
+
+
 def test_golden_linearizable_rejects_write_under_partition():
     # CP under partition: a synchronous write that cannot reach all replicas is rejected
     # (``unavailable``) rather than committed locally — so no replica is ever stale (vs the

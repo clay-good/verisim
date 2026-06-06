@@ -6,6 +6,12 @@ from verisim.distoracle.differential import (
     cluster_view,
     dist_differential_step,
 )
+from verisim.distoracle.elle import (
+    ElleReport,
+    TxnObservation,
+    build_dsg,
+    check_serializable,
+)
 from verisim.distoracle.reference import ReferenceDistOracle
 from verisim.distoracle.system import (
     DistDeterminismReport,
@@ -21,11 +27,15 @@ __all__ = [
     "DistDiffRecord",
     "DistOracle",
     "DistStepResult",
+    "ElleReport",
     "ReferenceDistOracle",
     "SystemDistOracle",
     "SystemDistOracleUnavailable",
     "TierVerdict",
     "TieredOracle",
+    "TxnObservation",
+    "build_dsg",
+    "check_serializable",
     "cluster_view",
     "dist_differential_step",
 ]
