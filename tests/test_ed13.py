@@ -43,6 +43,14 @@ def test_panel_b_orders_only_causal_links_and_converges():
     assert c["causal_inflight_after_heal"] == 0
 
 
+def test_tier_b_reproduces_causal_delivery():
+    """The W1 retirement for causal: the autonomous-actor Tier-B agrees with Tier-A bit-for-bit on
+    every causal scenario, under the seed-shuffled scheduler."""
+    result = run_ed13(_tiny())
+    assert result.tier_b_agrees is True
+    assert result.tier_b_steps > 0
+
+
 def test_write_csv(tmp_path):
     result = run_ed13(_tiny())
     out = write_csv(result, tmp_path / "ed13.csv")

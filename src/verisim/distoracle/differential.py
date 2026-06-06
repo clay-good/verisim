@@ -53,7 +53,11 @@ def cluster_view(state: DistributedState) -> str:
         (r.object_id, r.node_id, r.version, r.value) for r in state.replicas.values()
     )
     inflight = sorted(
-        (m.src, m.dst, m.object_id, m.version, m.value, m.deliver_after)
+        # ``deps`` (the causal context, empty under eventual/linearizable) is part of the observable
+        # message, so it is compared too — validating that Tier-B attaches the same causal deps as
+        # Tier-A. It folds in id-independently and is a no-op where the model does not order
+        # delivery (deps is () under eventual / linearizable, so the channel is unchanged there).
+        (m.src, m.dst, m.object_id, m.version, m.value, m.deliver_after, m.deps)
         for m in state.inflight.values()
     )
     partitions = sorted(sorted(g) for g in state.partitions)

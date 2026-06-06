@@ -64,8 +64,10 @@ def plot_ed13(result: ED13Result, path: str | Path) -> Path:  # pragma: no cover
                    "and still converges (a delivery-order refinement)", fontsize=10)
     ax_r.grid(True, axis="y", alpha=0.3)
 
-    fig.suptitle("ED13 — causal consistency (DS0 incr 5): the effect-before-cause anomaly "
-                 "forbidden, concurrency + convergence preserved", y=1.01, fontsize=9.5)
+    fig.suptitle("ED13 — causal consistency (DS0 incr 5): effect-before-cause anomaly forbidden, "
+                 "concurrency + convergence preserved  •  "
+                 f"Tier-B reproduces it bit-for-bit = {result.tier_b_agrees} "
+                 f"({result.tier_b_steps} steps)", y=1.01, fontsize=9.0)
     fig.tight_layout()
     out = Path(path)
     fig.savefig(out, dpi=130, bbox_inches="tight")

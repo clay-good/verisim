@@ -1513,10 +1513,23 @@ causally-linked writes are ordered, concurrent writes keep their concurrency. An
 (rate **1.0**, causal's in-flight drained to 0) -- the held message is delivered once its cause arrives,
 so causal is a delivery-*order* refinement, not a different outcome. The only serialization that differs
 is the transient `last_result` count (causal's final `advance` delivers one extra, previously-deferred
-message), which is not part of the converged state. *(Tier-B, the autonomous-actor system oracle,
-implements `eventual` / `linearizable`; a causal Tier-B is a later increment -- ED13 is a Tier-A result.)*
+message), which is not part of the converged state.
 
-![ED13: under eventual the observer sees the effect before its cause (anomaly rate 1.0); under causal the dependent message is held (0.0), the independent message is delivered freely, and the cluster still converges](../figures/ed13.png)
+**Faithful to a real execution (the causal Tier-B, DS0 increment 6).** ED13 also reports the W1
+retirement extended to `causal`: the autonomous-actor **system oracle** (Tier-B) reproduces causal
+delivery **bit-for-bit** under the seed-shuffled scheduler. This is a *stronger* test than `eventual`'s
+-- the shuffle may try a message before its cause, so a correct actor must hold it. Tier-B's `_advance`
+therefore runs delivery to a **fixed point**: it repeatedly delivers any message whose `deps` are
+satisfied at the destination actor (read from the actor's *own* replicas -- the no-global-state
+guarantee), until a pass delivers nothing. The fixed point yields exactly the causally-ready closure
+*independent of the shuffle*, so it reproduces Tier-A's sorted-order result (msg ids are topologically
+ordered). Both oracles attach deps via the *shared* `causal_deps` helper and the differential's
+observable channel now includes `deps`, so a mis-computed dependency would be caught. Tier-A and Tier-B
+agree on every step across a 1080+-step driver battery (all three drivers), the held-message anomaly is
+reproduced exactly, and the broken-arrival negative control is still caught -- a causal `M_θ` would be
+graded against a genuine message-passing execution, not only the analytic DES.
+
+![ED13: under eventual the observer sees the effect before its cause (anomaly rate 1.0); under causal the dependent message is held (0.0), the independent message is delivered freely, the cluster still converges, and the autonomous-actor Tier-B reproduces causal delivery bit-for-bit](../figures/ed13.png)
 
 ## What the distributed world adds, and what remains
 
@@ -1543,12 +1556,14 @@ probe-faithful horizon outlasting the bit-faithful one, and the crash/partition 
 **The consistency curriculum is now three-ended** (ED13 above): `causal` fills the middle between
 `eventual` and `linearizable` — async, partition-available delivery that nonetheless forbids
 effect-before-cause, a purely additive `deps` (version-vector slice) field that leaves every prior
-golden and the Tier-B differential untouched.
+golden and the Tier-B differential untouched — and the **causal Tier-B** (DS0 incr 6) then extends the
+W1 retirement to it: the autonomous-actor system oracle reproduces causal delivery bit-for-bit under
+the seed-shuffled scheduler (a fixed-point that delivers exactly the causally-ready closure).
 **Open (the honest deferrals):** a wrapped **external**-binary real-DST runtime
 (madsim/Shadow/Antithesis-class, which need external sandboxes), the structured GNN/RSSM `M_θ` arm
 (where the smart-`π_c` lever the ED2-smart null localizes can be re-tested, now that partial
 observation is defined), the smart-`π_w` (which-tier) scheduler, the Raft-subset consensus group,
-lock-based 2PL, and a `causal` Tier-B (the system oracle implements `eventual` / `linearizable`).
+lock-based 2PL, and the embedded SPEC-6 host / SPEC-5 net inside each node.
 
 # Scale (SPEC-10): the floor+cliff was largely an under-resourcing artifact (H26)
 

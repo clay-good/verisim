@@ -182,3 +182,63 @@ def test_scaled_cluster_agrees():
         a = drv.sample(s)
         assert cluster_view(sys.step(s, a).state) == cluster_view(ref.step(s, a).state)
         s = ref.step(s, a).state
+
+
+# --- causal consistency (DS0 incr 6): Tier-B honors causal delivery under the shuffled order ---
+
+CAUSAL_CFG = DistConfig(name="causal", consistency_model="causal")
+CAUSAL_REF = ReferenceDistOracle(CAUSAL_CFG)
+
+
+def test_causal_tier_b_agrees_bit_for_bit_on_every_driver():
+    """Tier-B reproduces causal delivery bit-for-bit — the W1 retirement extended to the `causal`
+    model. This is a *stronger* test than eventual's: the seed-shuffled scheduler may try a message
+    before its cause, so Tier-B must hold it (the fixed-point delivers only the causally-ready
+    closure) and still match Tier-A's sorted-order result on every step."""
+    sys = SystemDistOracle(CAUSAL_CFG)
+    for driver in DIST_DRIVERS:
+        agree = total = 0
+        for seed in range(8):
+            drv = DistDriver(driver, CAUSAL_CFG, random.Random(seed))
+            s = DistributedState.initial(CAUSAL_CFG)
+            for _ in range(40):
+                a = drv.sample(s)
+                rec = dist_differential_step(s, a, CAUSAL_REF, sys)
+                total += 1
+                agree += rec.agree
+                s = CAUSAL_REF.step(s, a).state
+        assert agree == total, f"causal/{driver}: {agree}/{total} agree"
+
+
+def test_causal_tier_b_holds_the_effect_before_cause_message():
+    """The ED13 anomaly scenario: Tier-B holds the dependent message exactly as Tier-A does — the
+    observer sees neither the effect nor its cause until the cause arrives."""
+    sys = SystemDistOracle(CAUSAL_CFG)
+    script = ["put n0 x a", "partition n0 n1 | n2", "advance 1",
+              "put n1 y b", "partition n0 | n1 n2", "advance 1"]
+    sa = sb = DistributedState.initial(CAUSAL_CFG)
+    for cmd in script:
+        action = parse_dist_action(cmd)
+        ra, rb = CAUSAL_REF.step(sa, action), sys.step(sb, action)
+        assert cluster_view(ra.state) == cluster_view(rb.state)
+        sa, sb = ra.state, rb.state
+    # Tier-B held the y→n2 message (the observer adopted neither the effect nor its cause)
+    assert sb.replicas[("y", "n2")].value == "nil"
+    assert sb.replicas[("x", "n2")].value == "nil"
+
+
+def test_causal_tier_b_converges_after_heal():
+    """After heal+advance, Tier-B delivers the held message in causal order and converges to the
+    Tier-A durable state — a delivery-order refinement, faithful under a real actor execution."""
+    sys = SystemDistOracle(CAUSAL_CFG)
+    script = ["put n0 x a", "partition n0 n1 | n2", "advance 1",
+              "put n1 y b", "partition n0 | n1 n2", "advance 1", "heal", "advance 5"]
+    sa = sb = DistributedState.initial(CAUSAL_CFG)
+    for cmd in script:
+        action = parse_dist_action(cmd)
+        sa = CAUSAL_REF.step(sa, action).state
+        sb = sys.step(sb, action).state
+    assert cluster_view(sa) == cluster_view(sb)
+    assert sb.replicas[("x", "n2")].value == "a"
+    assert sb.replicas[("y", "n2")].value == "b"
+    assert not sb.inflight

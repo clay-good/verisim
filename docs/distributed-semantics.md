@@ -110,8 +110,7 @@ reaches. ED13 ([`ed13.py`](../src/verisim/experiments/ed13.py),
 [`ed13.png`](../../figures/ed13.png)) reports the anomaly rate (**eventual 1.0, causal 0.0**), that
 `causal` holds the *dependent* message but never the *independent* one (it orders only causally-linked
 writes), and that convergence is preserved (eventual ≡ causal final state, in-flight drains to 0).
-*(Tier-B, the autonomous-actor system oracle, implements `eventual` / `linearizable`; a causal Tier-B
-is a later increment — ED13 is a Tier-A result.)*
+**Tier-B (the autonomous-actor system oracle, §8) reproduces causal delivery bit-for-bit** — see §8.1.
 
 ## 3. Actions
 
@@ -245,6 +244,25 @@ across the exhaustive grammar battery and all three workload drivers (including 
 adversarial one) Tier-A and Tier-B agree **bit-for-bit (1.000, residual 0)**, the `H_ε(ρ)` curve is
 oracle-invariant (gap 0 at every ρ), the broken control is caught, and the real-OS-thread tier agrees
 too — the distributed W1 retirement.
+
+### 8.1 Tier-B under causal consistency (DS0 increment 6)
+
+Tier-B honors the `causal` model too — the W1 retirement extended to the third consistency end, and a
+**stronger** test than `eventual`'s. Under `eventual` a correct actor may deliver in any order (LWW is
+a commutative join), so the seed-shuffle is the whole challenge. Under `causal` the actor must *also*
+hold a message until its `deps` are applied locally — and because the shuffle may try a message
+*before* its cause, Tier-B's `_advance` runs delivery to a **fixed point**: it repeatedly scans the
+not-yet-delivered messages, delivering any whose deps are now satisfied at the destination actor (read
+from the actor's *own* replicas — the no-global-state guarantee), until a pass delivers nothing. A
+message whose deps never arrive stays in flight. The fixed point delivers exactly the causally-ready
+closure, **independent of the shuffle**, so it reproduces Tier-A's sorted-order result (message ids
+are topologically ordered: a causally-later write always has a higher id, so Tier-A's single sorted
+pass is already a valid causal order). Both oracles attach deps via the *shared* `causal_deps` helper,
+and the differential's observable channel now includes `deps`, so a Tier-B that mis-computed or
+mis-ordered them would be caught. Across the exhaustive grammar battery and all three drivers (1080+
+steps) Tier-A and Tier-B agree **bit-for-bit under `causal`**, the broken-arrival control is still
+caught, and the held-message anomaly (ED13) is reproduced exactly — a causal `M_θ` would be graded
+against a real autonomous-actor execution, not only the analytic DES.
 
 ## 9. Transactions — optimistic concurrency control (DS0 increment 2, SPEC-7 §3.2)
 

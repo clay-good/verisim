@@ -52,7 +52,9 @@ from verisim.dist.action import parse_dist_action
 from verisim.dist.config import DistConfig, scaled_dist_config
 from verisim.dist.state import DistributedState
 from verisim.distmetrics.divergence import divergence
+from verisim.distoracle.differential import cluster_view
 from verisim.distoracle.reference import ReferenceDistOracle
+from verisim.distoracle.system import SystemDistOracle
 
 CONSISTENCY_MODELS: tuple[str, ...] = ("eventual", "causal")
 
@@ -90,6 +92,10 @@ class ED13Result:
     over_sync: dict[str, Any] = field(default_factory=dict)
     #: convergence preserved (B-ii): eventual and causal reach the identical final state.
     convergence: dict[str, Any] = field(default_factory=dict)
+    #: Tier-B (the autonomous-actor system oracle) reproduces causal delivery bit-for-bit (W1).
+    tier_b_agrees: bool = True
+    #: how many (scenario × step) the Tier-A↔Tier-B causal differential checked.
+    tier_b_steps: int = 0
 
 
 def _config(cfg: ED13Config, model: str) -> DistConfig:
@@ -192,6 +198,28 @@ def run_ed13(cfg: ED13Config | None = None) -> ED13Result:
         "causal_inflight_after_heal": causal_inflight_after_heal,    # expect 0: all deps arrived
         "scenarios": n,
     }
+
+    # --- Tier-B (W1): the autonomous-actor system oracle reproduces causal delivery bit-for-bit ---
+    # The §5.2 differential under the *seed-shuffled* scheduler — a stronger test than eventual's,
+    # because causal delivery must hold the dependent message no matter what order the scheduler
+    # tries it (the fixed-point delivers exactly the causally-ready closure). Run every dependent
+    # scenario (+ heal/advance) through both oracles and compare the observable cluster each step.
+    ref = ReferenceDistOracle(causal)
+    sysb = SystemDistOracle(causal)
+    agrees = True
+    steps = 0
+    for xi, yi in cfg.object_pairs:
+        sa = DistributedState.initial(causal)
+        sb = DistributedState.initial(causal)
+        for cmd in [*_dependent_script(f"o{xi}", f"o{yi}"), "heal", "advance 5"]:
+            action = parse_dist_action(cmd)
+            ra, rb = ref.step(sa, action), sysb.step(sb, action)
+            steps += 1
+            if cluster_view(ra.state) != cluster_view(rb.state):
+                agrees = False
+            sa, sb = ra.state, rb.state
+    result.tier_b_agrees = agrees
+    result.tier_b_steps = steps
     return result
 
 
@@ -213,6 +241,8 @@ def write_csv(result: ED13Result, path: str | Path) -> Path:
     c = result.convergence
     lines.append(f"convergence,both,identical_final_state_rate,{c['identical_final_state_rate']:.4f},"
                  f"causal_inflight_after_heal={c['causal_inflight_after_heal']}")
+    lines.append(f"tier_b,causal,agrees,{1.0 if result.tier_b_agrees else 0.0:.4f},"
+                 f"steps={result.tier_b_steps}")
     out.write_text("\n".join(lines) + "\n")
     return out
 
@@ -245,6 +275,8 @@ def main() -> None:  # pragma: no cover - CLI entry point
     print(f"    eventual ≡ causal final state after heal: "
           f"{c['identical_final_state_rate']:.2f} (expect 1.0); "
           f"causal in-flight after heal={c['causal_inflight_after_heal']} (expect 0)")
+    print(f"  Tier-B (W1) — system oracle reproduces causal delivery bit-for-bit: "
+          f"{result.tier_b_agrees} over {result.tier_b_steps} steps")
     try:
         from figures.plot_ed13 import plot_ed13
 

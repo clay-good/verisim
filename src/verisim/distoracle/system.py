@@ -64,9 +64,10 @@ from verisim.dist.delta import (
     SetResult,
     apply,
 )
-from verisim.dist.state import DistributedState
+from verisim.dist.state import DistributedState, Message
 from verisim.dist.txn import txn_step
 from verisim.distoracle.base import DistStepResult
+from verisim.distoracle.reference import causal_deps
 
 TIER_SIMULATED = "simulated"
 TIER_THREADED = "threaded"
@@ -301,11 +302,16 @@ class SystemDistOracle:
             return edits, "ok", value
 
         edits = [ev, ReplicaWrite(key, node, new_version, value)]
+        # The causal context the replication carries — the *shared* helper, so Tier-A and Tier-B
+        # attach byte-identical deps; empty under eventual (which does not order delivery).
+        deps = causal_deps(state, node, key) if self.config.consistency_model == "causal" else ()
         msg_id = state.next_msg_id
         for peer in self.config.replicas_of(key):
             if peer == node:
                 continue
-            edits.append(MsgSend(msg_id, node, peer, key, new_version, value, state.clock + 1))
+            edits.append(
+                MsgSend(msg_id, node, peer, key, new_version, value, state.clock + 1, deps)
+            )
             msg_id += 1
         edits.append(SetResult("ok", value))
         return edits, "ok", value
@@ -332,6 +338,16 @@ class SystemDistOracle:
         replica, so a later delivery sees an earlier one's effect -- exactly as a real node does.
         Because the actors apply LWW by ``(version, value)`` (a commutative join), the converged
         replicas are independent of the shuffle, which is the property agreement certifies.
+
+        **Causal delivery (the §3.4 ``causal`` model).** A message carries ``deps`` (a
+        version-vector slice); an actor must not adopt it before those dependencies are applied. The
+        shuffled order may try a message before its cause, so delivery runs to a **fixed point**:
+        repeatedly scan the not-yet-delivered messages, delivering any whose deps are now satisfied
+        at its destination, until a full pass delivers nothing. A message whose deps never arrive
+        stays in flight (held, not lost). The fixed point delivers exactly the causally-ready
+        closure -- *independent of the shuffle* -- so it reproduces Tier-A's sorted-order result
+        (msg ids are topologically ordered: a causally-later write has a higher id). Under
+        ``eventual`` no message has deps, so the first pass delivers all and the loop is one pass.
         """
         dt = int(action.args[0])
         new_clock = state.clock + dt
@@ -345,21 +361,32 @@ class SystemDistOracle:
             and state.is_up(msg.dst)
         ]
         order = self._delivery_order(state, action, deliverable_ids)
+        causal = self.config.consistency_model == "causal"
 
         # One actor per destination node, carrying its current replicas across the batch so each
-        # delivery's LWW sees the running result (the actor is the only thing that mutates it).
+        # delivery's LWW (and deps check) sees the running result (the actor is the only mutator).
         actors: dict[str, _NodeActor] = {}
+        delivered_ids: set[int] = set()
         delivered = 0
-        for mid in order:
-            msg = state.inflight[mid]
-            actor = actors.setdefault(msg.dst, self._actor_for(state, msg.dst))
-            before = actor.snapshot().get(msg.object_id)
-            self._dispatch(actor, ("deliver", msg.object_id, msg.version, msg.value))
-            after = actor.snapshot().get(msg.object_id)
-            edits.append(MsgDeliver(mid))
-            if after != before and after is not None:
-                edits.append(ReplicaWrite(msg.object_id, msg.dst, after[0], after[1]))
-            delivered += 1
+        progress = True
+        while progress:
+            progress = False
+            for mid in order:
+                if mid in delivered_ids:
+                    continue
+                msg = state.inflight[mid]
+                actor = actors.setdefault(msg.dst, self._actor_for(state, msg.dst))
+                if causal and not _deps_satisfied(actor, msg):
+                    continue  # held: a causal dependency is not yet applied at the destination
+                before = actor.snapshot().get(msg.object_id)
+                self._dispatch(actor, ("deliver", msg.object_id, msg.version, msg.value))
+                after = actor.snapshot().get(msg.object_id)
+                edits.append(MsgDeliver(mid))
+                if after != before and after is not None:
+                    edits.append(ReplicaWrite(msg.object_id, msg.dst, after[0], after[1]))
+                delivered_ids.add(mid)
+                delivered += 1
+                progress = True
         edits.append(SetResult("advanced", str(delivered)))
         return edits, "advanced", str(delivered)
 
@@ -436,6 +463,22 @@ class SystemDistOracle:
             ) from exc
         thread.join(timeout=THREAD_ACK_TIMEOUT_S)
         return result
+
+
+def _deps_satisfied(actor: _NodeActor, msg: Message) -> bool:
+    """Whether ``msg``'s causal dependencies are applied at its destination actor (``causal`` only).
+
+    Checked against the actor's *own* current replicas (the no-global-state guarantee) -- the Tier-B
+    analogue of Tier-A's ``_causal_ready``, but read from the autonomous actor rather than the
+    global ``DistributedState``. A dep ``(obj, ver)`` is met iff the actor holds ``obj`` at
+    ``version >= ver``.
+    """
+    snap = actor.snapshot()
+    for obj, ver in msg.deps:
+        cur = snap.get(obj)
+        if cur is None or cur[0] < ver:
+            return False
+    return True
 
 
 # --- seeding + a tiny dependency-free RNG (no global random state) -------------------------------

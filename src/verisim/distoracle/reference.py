@@ -45,6 +45,26 @@ from verisim.dist.txn import txn_step
 from verisim.distoracle.base import DistStepResult
 
 
+def causal_deps(state: DistributedState, node: str, key: str) -> tuple[tuple[str, int], ...]:
+    """The causal context a write at ``node`` to ``key`` carries (the ``causal`` model, §3.4).
+
+    A write "happens after" everything the writing node has already observed, so the message it
+    produces must not be delivered anywhere before those observations are. The context is the node's
+    currently-applied ``(object, version)`` for every *other* object it holds at a non-boot version
+    (``version > 0``); boot replicas (v0) are satisfied everywhere and omitted, so most messages
+    still carry no deps. This is the version-vector slice that makes cross-object causal ordering
+    hold. **Shared by Tier-A and Tier-B** so the two oracles compute identical deps (the
+    differential would otherwise diverge); callers attach it only under ``consistency_model ==
+    "causal"``.
+    """
+    deps = [
+        (obj, r.version)
+        for (obj, n), r in state.replicas.items()
+        if n == node and obj != key and r.version > 0
+    ]
+    return tuple(sorted(deps))
+
+
 class ReferenceDistOracle:
     """The Tier-A deterministic DES (§5.1). Pure: ``step`` is a function of (state, action)."""
 
@@ -136,7 +156,7 @@ class ReferenceDistOracle:
             return edits, "ok", value
 
         edits = [ev, ReplicaWrite(key, node, new_version, value)]
-        deps = self._causal_deps(state, node, key)
+        deps = causal_deps(state, node, key) if self.config.consistency_model == "causal" else ()
         msg_id = state.next_msg_id
         for peer in self.config.replicas_of(key):
             if peer == node:
@@ -147,28 +167,6 @@ class ReferenceDistOracle:
             msg_id += 1
         edits.append(SetResult("ok", value))
         return edits, "ok", value
-
-    def _causal_deps(
-        self, state: DistributedState, node: str, key: str
-    ) -> tuple[tuple[str, int], ...]:
-        """The causal context a write at ``node`` carries (``causal`` model only; else empty).
-
-        Under ``causal`` consistency a write "happens after" everything the writing node has already
-        observed, so the message it produces must not be delivered anywhere before those
-        observations are. We carry that as the node's applied ``(object, version)`` for each
-        *other* object the node holds at a non-boot version (``version > 0``); boot replicas (v0)
-        are satisfied everywhere and omitted, so most messages still carry no deps. This is the
-        version-vector slice that makes cross-object causal ordering hold (§3.4); under
-        ``eventual`` / ``linearizable`` it is empty -- those models do not order delivery.
-        """
-        if self.config.consistency_model != "causal":
-            return ()
-        deps = [
-            (obj, r.version)
-            for (obj, n), r in state.replicas.items()
-            if n == node and obj != key and r.version > 0
-        ]
-        return tuple(sorted(deps))
 
     def _get(
         self, state: DistributedState, action: DistAction
