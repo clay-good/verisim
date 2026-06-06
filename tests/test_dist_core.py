@@ -64,6 +64,15 @@ def test_state_serialization_round_trips():
     assert from_canonical(to_canonical(state)) == state
 
 
+def test_partition_order_is_canonical_so_round_trip_is_exact():
+    # a partition declared in *non-sorted* group order must still round-trip bit-for-bit: the state
+    # stores partitions in canonical (sorted) order, so to_canonical/from_canonical is an exact
+    # inverse regardless of how the oracle/driver happened to name the groups (the §16 prereq).
+    state = _run(["partition n1 n2 | n0"])[-1].state
+    assert state.partitions == (frozenset({"n0"}), frozenset({"n1", "n2"}))  # sorted, not declared
+    assert from_canonical(to_canonical(state)) == state
+
+
 def test_delta_serialization_round_trips():
     for result in _run(["put n0 x b", "advance 2", "crash n1", "heal", "get n0 x"]):
         assert delta_from_list(delta_to_list(result.delta)) == result.delta

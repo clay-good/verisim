@@ -139,7 +139,10 @@ def apply(state: DistributedState, delta: DistDelta) -> DistributedState:
             s.log = (*s.log, Event(edit.id, edit.node, edit.op, edit.clock, edit.happens_before))
             s.next_event_id = max(s.next_event_id, edit.id + 1)
         elif isinstance(edit, PartitionSet):
-            s.partitions = tuple(frozenset(g) for g in edit.groups)
+            # canonical (sorted) group order: partitions is conceptually a set, and this keeps
+            # equality + the to_canonical/from_canonical round-trip exact (§16, the verified-
+            # contribution protocol re-executes through from_canonical and compares bit-for-bit).
+            s.partitions = tuple(sorted((frozenset(g) for g in edit.groups), key=sorted))
         elif isinstance(edit, NodeDown):
             s.down = s.down | {edit.node}
         elif isinstance(edit, NodeUp):

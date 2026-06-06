@@ -100,6 +100,15 @@ class DistributedState:
     next_msg_id: int = 0
     last_result: tuple[str, str] | None = None  # (status, value_token) of the last client op
 
+    def __post_init__(self) -> None:
+        # ``partitions`` is conceptually a *set* of disjoint groups, but stored as a tuple; keep it
+        # in canonical (sorted) order so equality and the to_canonical/from_canonical round-trip
+        # are exact regardless of the order the oracle built the groups in (the §16 verified-
+        # contribution protocol re-executes through from_canonical and compares bit-for-bit).
+        ordered = tuple(sorted(self.partitions, key=sorted))
+        if ordered != self.partitions:
+            self.partitions = ordered
+
     @staticmethod
     def initial(config: DistConfig) -> DistributedState:
         """The boot cluster: every replica at version 0 holding the config default, no faults."""
