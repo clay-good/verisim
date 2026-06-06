@@ -1,0 +1,5 @@
+panel,isolation,metric,value,ci_lo,ci_hi,detail
+write_skew,serializable,anomaly_rate,0.0000,,,anomalies=0/3;tier_b_agrees=True
+write_skew,snapshot,anomaly_rate,1.0000,,,anomalies=3/3;tier_b_agrees=True
+abort_rate,serializable,abort_rate,0.7000,0.6625,0.7375,
+abort_rate,snapshot,abort_rate,0.5500,0.5125,0.5875,

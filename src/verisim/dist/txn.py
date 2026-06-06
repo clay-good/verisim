@@ -78,7 +78,7 @@ def txn_step(
     if name == "tget":
         return _tget(state, ev, txn, action.args[2])
     if name == "tput":
-        return _tput(ev, txn, action.args[2], action.args[3])
+        return _tput(state, ev, txn, action.args[2], action.args[3])
     if name == "commit":
         return _commit(state, ev, txn, config)
     if name == "abort":
@@ -96,26 +96,39 @@ def _tget(
     if replica is None:
         return [ev, SetResult("no_replica", "")], "no_replica", ""
     if txn.read_version(key) is None:  # first read pins the version the commit validates against
-        updated = TxnState(txn.txn_id, txn.node, (*txn.reads, (key, replica.version)), txn.writes)
+        updated = TxnState(txn.txn_id, txn.node, (*txn.reads, (key, replica.version)),
+                           txn.writes, txn.write_versions)
         return [ev, TxnSet(updated), SetResult("ok", replica.value)], "ok", replica.value
     return [ev, SetResult("ok", replica.value)], "ok", replica.value  # re-read: version pinned
 
 
 def _tput(
-    ev: EventAppend, txn: TxnState, key: str, value: str
+    state: DistributedState, ev: EventAppend, txn: TxnState, key: str, value: str
 ) -> tuple[DistDelta, str, str]:
-    updated = TxnState(txn.txn_id, txn.node, txn.reads, (*txn.writes, (key, value)))
+    writes = (*txn.writes, (key, value))
+    write_versions = txn.write_versions
+    if txn.write_version(key) is None:  # pin the version on first write (snapshot-isolation check)
+        replica = state.replicas.get((key, txn.node))
+        write_versions = (*write_versions, (key, replica.version if replica is not None else 0))
+    updated = TxnState(txn.txn_id, txn.node, txn.reads, writes, write_versions)
     return [ev, TxnSet(updated), SetResult("ok", value)], "ok", value
 
 
 def _commit(
     state: DistributedState, ev: EventAppend, txn: TxnState, config: DistConfig
 ) -> tuple[DistDelta, str, str]:
-    # OCC validation: every read key's local version must be unchanged since it was read.
-    for key, read_version in txn.reads:
+    # OCC validation — the isolation level decides *which* set is checked (SPEC-7 §3.2, DS0 incr 3):
+    #   serializable: every **read** key's version must be unchanged since it was read (backward
+    #                 validation). This catches the read that another txn's write invalidated, so it
+    #                 forbids write skew (A reads y, B writes y -> A aborts).
+    #   snapshot:     only every **written** key's version must be unchanged since it was first
+    #                 written (write-write conflict, first-committer-wins). A read another txn wrote
+    #                 is *not* checked, so disjoint-write-set txns both commit -> write skew admitted.
+    validation_set = txn.reads if config.txn_isolation == "serializable" else txn.write_versions
+    for key, pinned_version in validation_set:
         replica = state.replicas.get((key, txn.node))
         current = replica.version if replica is not None else 0
-        if current != read_version:  # a concurrent committer won the race -> abort (first wins)
+        if current != pinned_version:  # a concurrent committer won the race -> abort (first wins)
             return [ev, TxnDel(txn.txn_id), SetResult("conflict", "")], "conflict", ""
 
     # The set of keys to write, last buffered value per key, in deterministic (sorted) order.

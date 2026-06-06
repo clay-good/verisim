@@ -61,9 +61,9 @@ class Event:
 class TxnState:
     """An in-flight client transaction at its coordinator (SPEC-7 §3.2, DS0 increment 2).
 
-    A multi-key transaction under **optimistic concurrency control** (OCC, first-committer-wins): the
-    coordinator buffers the txn's reads and writes locally and validates at ``commit``. ``reads``
-    pins the ``(key, version)`` each key was first read at (the snapshot the validation checks);
+    A multi-key transaction under **optimistic concurrency control** (OCC, first-committer-wins):
+    the coordinator buffers the txn's reads and writes locally and validates at ``commit``.
+    ``reads`` pins the ``(key, version)`` each key was first read at (the snapshot it validates);
     ``writes`` is the ordered buffer of ``(key, value)`` the txn applies atomically on commit (a later
     write to the same key supersedes an earlier one). A transaction is *active* exactly while it is
     present in ``DistributedState.txns``; ``commit``/``abort`` remove it. OCC is deterministic and
@@ -75,10 +75,21 @@ class TxnState:
     node: str
     reads: tuple[tuple[str, int], ...] = ()
     writes: tuple[tuple[str, str], ...] = ()
+    # The version each written key held when the txn first wrote it — pinned at `tput`. Snapshot
+    # isolation validates *these* (write-write conflicts, first-committer-wins) where serializable
+    # validates `reads`; the difference is exactly what admits or forbids write skew (DS0 incr 3).
+    write_versions: tuple[tuple[str, int], ...] = ()
 
     def read_version(self, key: str) -> int | None:
         """The version this txn pinned for ``key`` on first read, or ``None`` if never read."""
         for k, v in self.reads:
+            if k == key:
+                return v
+        return None
+
+    def write_version(self, key: str) -> int | None:
+        """The version this txn pinned for ``key`` on first write, or ``None`` if never written."""
+        for k, v in self.write_versions:
             if k == key:
                 return v
         return None

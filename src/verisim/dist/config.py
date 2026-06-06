@@ -34,6 +34,12 @@ CONSISTENCY_MODELS: tuple[str, ...] = (
     "eventual",
 )
 
+# Transaction isolation levels (DS0 increment 3, SPEC-7 §3.2). ``serializable`` is OCC backward
+# validation of the **read-set** (a committed txn's read versions must be unchanged) — it prevents
+# write skew; ``snapshot`` validates only **write-write** conflicts (the write-set versions,
+# first-committer-wins) — it permits write skew, the classic SI anomaly the experiment exhibits.
+TXN_ISOLATION_LEVELS: tuple[str, ...] = ("serializable", "snapshot")
+
 
 @dataclass(frozen=True)
 class DistConfig:
@@ -46,12 +52,18 @@ class DistConfig:
     replication_factor: int = 3  # DS0 incr 1: full replication (every node holds every object)
     consistency_model: str = "eventual"
     default_value: str = "nil"  # the boot value of every replica (version 0)
+    txn_isolation: str = "serializable"  # DS0 incr 3: serializable (read-set OCC) | snapshot (SI)
 
     def __post_init__(self) -> None:
         if self.consistency_model not in CONSISTENCY_MODELS:
             raise ValueError(
                 f"unknown consistency_model {self.consistency_model!r}; "
                 f"choose from {list(CONSISTENCY_MODELS)}"
+            )
+        if self.txn_isolation not in TXN_ISOLATION_LEVELS:
+            raise ValueError(
+                f"unknown txn_isolation {self.txn_isolation!r}; "
+                f"choose from {list(TXN_ISOLATION_LEVELS)}"
             )
         if not 1 <= self.replication_factor <= len(self.nodes):
             raise ValueError(
@@ -78,6 +90,7 @@ class DistConfig:
             "replication_factor": self.replication_factor,
             "consistency_model": self.consistency_model,
             "default_value": self.default_value,
+            "txn_isolation": self.txn_isolation,
         }
 
     def config_hash(self) -> str:
@@ -95,6 +108,7 @@ def scaled_dist_config(
     n_objects: int = 2,
     replication_factor: int | None = None,
     consistency_model: str = "eventual",
+    txn_isolation: str = "serializable",
     name: str | None = None,
 ) -> DistConfig:
     """A :class:`DistConfig` of ``n_nodes`` nodes and ``n_objects`` objects (SPEC-7 §3.4).
@@ -116,4 +130,5 @@ def scaled_dist_config(
         objects=objects,
         replication_factor=rf,
         consistency_model=consistency_model,
+        txn_isolation=txn_isolation,
     )

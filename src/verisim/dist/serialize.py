@@ -50,7 +50,8 @@ def to_canonical(state: DistributedState) -> dict[str, Any]:
     if state.txns:
         out["txns"] = [
             {"txn_id": t.txn_id, "node": t.node,
-             "reads": [list(r) for r in t.reads], "writes": [list(w) for w in t.writes]}
+             "reads": [list(r) for r in t.reads], "writes": [list(w) for w in t.writes],
+             "write_versions": [list(w) for w in t.write_versions]}
             for t in sorted(state.txns.values(), key=lambda t: t.txn_id)
         ]
     return out
@@ -80,6 +81,7 @@ def from_canonical(d: dict[str, Any]) -> DistributedState:
             t["txn_id"], t["node"],
             tuple((k, v) for k, v in t["reads"]),
             tuple((k, val) for k, val in t["writes"]),
+            tuple((k, v) for k, v in t.get("write_versions", [])),
         )
         for t in d.get("txns", [])
     }

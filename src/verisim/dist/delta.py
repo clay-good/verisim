@@ -98,7 +98,7 @@ class ClockSet:
 
 @dataclass(frozen=True)
 class TxnSet:
-    """Upsert an active transaction's state (``begin``/``tget``/``tput`` produce this; DS0 incr2)."""
+    """Upsert an active transaction's buffered state (``begin``/``tget``/``tput`` produce this)."""
 
     txn: TxnState
 
@@ -204,7 +204,8 @@ def edit_to_dict(edit: DistEdit) -> dict[str, Any]:
     if isinstance(edit, TxnSet):
         return {"op": "TxnSet", "txn_id": edit.txn.txn_id, "node": edit.txn.node,
                 "reads": [list(r) for r in edit.txn.reads],
-                "writes": [list(w) for w in edit.txn.writes]}
+                "writes": [list(w) for w in edit.txn.writes],
+                "write_versions": [list(w) for w in edit.txn.write_versions]}
     if isinstance(edit, TxnDel):
         return {"op": "TxnDel", "txn_id": edit.txn_id}
     assert isinstance(edit, SetResult)
@@ -239,6 +240,7 @@ def edit_from_dict(d: dict[str, Any]) -> DistEdit:
             d["txn_id"], d["node"],
             tuple((k, v) for k, v in d["reads"]),
             tuple((k, val) for k, val in d["writes"]),
+            tuple((k, v) for k, v in d.get("write_versions", [])),
         ))
     if op == "TxnDel":
         return TxnDel(d["txn_id"])

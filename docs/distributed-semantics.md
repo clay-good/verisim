@@ -213,8 +213,8 @@ the version the txn read. If any changed (a concurrent transaction committed it 
 *Rationale:* OCC is **deterministic and deadlock-free** — no lock table, no lock-acquisition order,
 no deadlock detection / victim selection (all of which would inject nondeterminism or require a
 scheduler) — so it is the discipline the deterministic core pins first, exactly as the KV core
-pinned async-replication LWW before consensus. Lock-based 2PL (and the serializable/snapshot
-isolation levels it enables) is a later refinement.
+pinned async-replication LWW before consensus. *Lock-based 2PL is a later refinement; the two OCC
+isolation levels (`serializable`/`snapshot`) ship now — see §9.1.*
 
 **Composition.** A committed transaction's writes flow through the existing replication medium, so
 they inherit the consistency model unchanged: under `eventual` the peers converge on a later
@@ -228,3 +228,31 @@ by **ED8** ([`verisim.experiments.ed8`](../src/verisim/experiments/ed8.py),
 [`ed8.png`](../../figures/ed8.png)): at concurrency `K` over `M` objects the measured commit rate
 tracks the balls-in-bins occupancy law `M·(1−(1−1/M)^K)/K` (the semantics are exactly right, not
 merely plausible), with Tier-B agreeing on every scenario.
+
+### 9.1 Isolation levels — `serializable` vs `snapshot` (DS0 increment 3)
+
+The `txn_isolation` config dial selects *which set* `commit` validates (design decision `DD-D4`):
+
+| Level | Validates at commit | Forbids write skew? |
+|---|---|---|
+| `serializable` (default) | the **read-set** — every read key's local version must be unchanged since it was read (OCC backward validation, Kung–Robinson) | **yes** — a read another txn wrote is caught |
+| `snapshot` | only the **write-set** — every written key's version must be unchanged since the txn first wrote it (write-write conflict, first-committer-wins) | **no** — disjoint write-sets both commit |
+
+The distinction is the classic **write-skew** anomaly. Two transactions both read `{x, y}`, then
+`A` writes `x` and `B` writes `y`:
+
+- under `snapshot`, `A`'s write-set `{x}` and `B`'s write-set `{y}` are disjoint, so neither write-write
+  check fails and **both commit** — a pair of outcomes no serial schedule produces, silently breaking
+  any cross-object invariant they each verified;
+- under `serializable`, when `A` commits (bumping `x`), `B`'s pinned read of `x` is now stale, so `B`'s
+  read-set validation fails and it **aborts** — the anomaly cannot occur.
+
+Both levels remain OCC (deterministic, deadlock-free) and share every other rule above; only the
+validation set differs, so the write version is pinned at first `tput` (the `write_versions` field on
+`TxnState`) exactly as the read version is pinned at first `tget`. The anomaly and the cost of
+forbidding it are pinned by **ED9** ([`verisim.experiments.ed9`](../src/verisim/experiments/ed9.py),
+[`ed9.png`](../../figures/ed9.png)): the write-skew anomaly rate is **1.0 under `snapshot`, 0.0 under
+`serializable`**, and under a read-heavy contended workload `serializable` aborts strictly more
+(`0.70` vs `0.55`, disjoint CIs) — the extra aborts are precisely the price of the stronger
+guarantee. Both compose with Tier-B (the autonomous-actor system oracle agrees on every scenario).
+

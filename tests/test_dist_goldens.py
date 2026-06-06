@@ -170,6 +170,34 @@ def test_golden_transaction_conflict_aborts_first_committer_wins():
     }
 
 
+def test_golden_write_skew_admitted_under_snapshot_forbidden_under_serializable():
+    # The canonical write-skew scenario: A and B both read {x, y}; A writes x, B writes y. Under
+    # snapshot isolation (write-write validation only) both disjoint-write txns commit — write skew.
+    # Under serializable (read-set validation) A's commit invalidates B's read of x, so B aborts.
+    skew = ["begin n0 A", "begin n0 B", "tget n0 A x", "tget n0 A y", "tget n0 B x", "tget n0 B y",
+            "tput n0 A x a", "tput n0 B y b", "commit n0 A", "commit n0 B"]
+
+    def outcomes(isolation: str) -> tuple[list[str], str, str]:
+        config = DistConfig(name="golden-iso", nodes=("n0", "n1", "n2"), objects=("x", "y"),
+                            txn_isolation=isolation)
+        oracle = ReferenceDistOracle(config)
+        state = DistributedState.initial(config)
+        statuses: list[str] = []
+        for cmd in skew:
+            r = oracle.step(state, parse_dist_action(cmd))
+            statuses.append(r.status)
+            state = r.state
+        return statuses[-2:], state.replicas[("x", "n0")].value, state.replicas[("y", "n0")].value
+
+    snap_commits, snap_x, snap_y = outcomes("snapshot")
+    assert snap_commits == ["committed", "committed"]  # both commit — write skew
+    assert (snap_x, snap_y) == ("a", "b")  # both writes landed (the anomaly)
+
+    ser_commits, ser_x, ser_y = outcomes("serializable")
+    assert ser_commits == ["committed", "conflict"]  # A commits, B aborts — no write skew
+    assert (ser_x, ser_y) == ("a", "nil")  # only A's write landed
+
+
 def test_golden_linearizable_rejects_write_under_partition():
     # CP under partition: a synchronous write that cannot reach all replicas is rejected
     # (``unavailable``) rather than committed locally — so no replica is ever stale (vs the

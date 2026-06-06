@@ -1369,6 +1369,30 @@ Tier-A's observable cluster on *every* scenario (it delivers the committed write
 
 ![ED8: the OCC commit rate tracks the balls-in-bins occupancy law as contention drops; first-committer-wins aborts melt as objects multiply; Tier-B agrees throughout](../figures/ed8.png)
 
+## ED9 / isolation levels — the write-skew anomaly, and the price of serializability
+
+Transactions admit two **isolation levels** (DS0 increment 3, the `txn_isolation` dial), and the
+difference is the textbook one. Both are OCC (deterministic, deadlock-free); they differ only in
+*which set* `commit` validates: **serializable** validates the **read-set** (every read key's version
+must be unchanged — OCC backward validation), **snapshot** validates only **write-write** conflicts
+(the write-set, first-committer-wins). ED9 ([`ed9.py`](../src/verisim/experiments/ed9.py),
+[`ed9.csv`](../figures/ed9.csv)) exhibits the consequence on the canonical **write-skew** scenario:
+two transactions both read `{x, y}`, then `A` writes `x` and `B` writes `y`. Under **snapshot** their
+write-sets `{x}`/`{y}` are disjoint, so both commit — a pair of outcomes no serial schedule produces,
+silently breaking the cross-object invariant they each checked (anomaly rate **1.0**). Under
+**serializable**, `A`'s commit invalidates `B`'s pinned read of `x`, so `B` aborts and the anomaly
+cannot occur (rate **0.0**).
+
+That guarantee is not free, and ED9 measures its price: under a read-heavy contended workload (each
+of `K` transactions reads two keys, writes one), serializable's read-set validation aborts strictly
+more than snapshot's write-set-only validation — **0.70 vs 0.55**, disjoint CIs. The extra aborts are
+exactly what buys serializability; an application that can tolerate write skew (or has no
+cross-object invariants) keeps the throughput snapshot leaves on the table. Both levels compose with
+Tier-B — the autonomous-actor system oracle reproduces Tier-A on every scenario, so isolation, like
+transactions and the consistency models before them, inherits the W1 reality check unchanged.
+
+![ED9: snapshot admits the write-skew anomaly (both disjoint-write txns commit) while serializable forbids it; serializable pays a higher abort rate under contention — the price of the guarantee](../figures/ed9.png)
+
 ## What the distributed world adds, and what remains
 
 The fourth world generalizes the program's three load-bearing findings — the floor→cliff `H_ε(ρ)`
@@ -1384,12 +1408,12 @@ genuinely off-policy. The distributed world is **packaged for reuse** on all fou
 ([`distcontrib/`](../src/verisim/distcontrib/)). The **Tier-B system oracle now ships** (ED7 above): an
 in-repo autonomous-actor DST runtime that reproduces Tier-A bit-for-bit under shuffled delivery order,
 retiring W1 for the distributed world. The deterministic core also grows a **multi-key OCC
-transaction** layer (ED8 above), the substrate the serializable/snapshot consistency models need.
+transaction** layer with two **isolation levels** — `serializable` and `snapshot` (ED8/ED9 above).
 **Open (the honest deferrals):** a wrapped **external**-binary real-DST runtime
 (madsim/Shadow/Antithesis-class, which need external sandboxes), the structured GNN/RSSM `M_θ` arm
 (where the smart-`π_c` lever the ED2-smart null localizes can be re-tested, tied to partial
-observation), the smart-`π_w` (which-tier) scheduler, the Raft-subset consensus group, and the
-serializable/snapshot isolation levels (now that transactions exist) and lock-based 2PL.
+observation), the smart-`π_w` (which-tier) scheduler, the Raft-subset consensus group, lock-based
+2PL, and the `causal` read/replication consistency model (it needs cross-node vector-clock context).
 
 # Scale (SPEC-10): the floor+cliff was largely an under-resourcing artifact (H26)
 
@@ -1859,6 +1883,8 @@ python -m verisim.experiments.ed7 --config configs/ed7.json \
     --out figures/ed7.csv --plot figures/ed7.png    # Tier-B system oracle (the distributed W1 retirement)
 python -m verisim.experiments.ed8 --config configs/ed8.json \
     --out figures/ed8.csv --plot figures/ed8.png    # OCC transaction commit/abort frontier (DS0 incr 2)
+python -m verisim.experiments.ed9 --config configs/ed9.json \
+    --out figures/ed9.csv --plot figures/ed9.png    # txn isolation: write-skew + price of serializability
 ```
 
 The run-records are git-ignored (regenerable); the figures and their CSVs are

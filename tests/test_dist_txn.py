@@ -150,7 +150,9 @@ def test_empty_txns_omitted_from_canonical_but_active_txns_roundtrip():
     canon = to_canonical(s)
     assert "txns" in canon
     assert from_canonical(canon) == s
-    assert s.txns["t0"] == TxnState("t0", "n0", (("y", 0),), (("x", "a"),))
+    # reads pin the read version (y@0); writes buffer the value (x="a") AND pin the write version
+    # (x@0) for snapshot-isolation validation
+    assert s.txns["t0"] == TxnState("t0", "n0", (("y", 0),), (("x", "a"),), (("x", 0),))
 
 
 def test_transactional_preset_is_named_but_not_in_default_sweep():
