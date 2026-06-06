@@ -1055,6 +1055,245 @@ steps where the full delta is wrong, at **~31%** of the consult bits. The same t
 the network found, now in the host: the cheap oracle's value is *cost and decision-relevance*, not
 non-redundancy.
 
+# Distributed world (SPEC-7): the tiered oracle, where the bit-exact global oracle is *intractable*
+
+The fourth world is the layer *above* the host: replicated services across machines — per-(object,
+node) replicas, a causal event log, in-flight replication messages, and a partition/crash/clock
+**medium** — under faults. It is the first world where the bit-exact global oracle, while still
+*definable* (a deterministic discrete-event simulator, `apply == oracle` pinned by goldens), is too
+**expensive to spend every step** at scale (W7: no affordable global snapshot of a live cluster). So
+the SPEC-7 payload is not the oracle but the **tiered oracle** — a menu of verifiers of increasing
+price and power (**metamorphic** ¢1 → **cycle** ¢2 → **symbolic** ¢4 → **bit-exact** ¢16) — and the
+question changes from *"how little oracle can we get away with"* (the `ρ` axis of every prior world)
+to *"which price of truth do we buy, and when"* (the new tier axis, `π_w`). Every number below is
+bit-exact and oracle-grounded, regenerates from config + seeds, and is reported with its honest
+negative. Two error classes recur and are the load-bearing distinction of the whole world: a
+**`gross`** error corrupts a durable replica (immediately bit- *and* consistency-visible, catchable
+by the cheapest tier) while a **`subtle`** error corrupts an in-flight message (bit-visible but
+**consistency-invisible** until delivery, catchable only by bit-exact). The in-flight medium is the
+distributed world's hidden state, and almost every result turns on it.
+
+## ED1 / H8 + H17 — the prime directive, and the tiered oracle is a *conditional* lever
+
+ED1 ([`ed1.py`](../src/verisim/experiments/ed1.py), [`ed1_dist.csv`](../figures/ed1_dist.csv)) plots
+the distributed `H_ε(ρ)` curve and the first tiered-oracle measurement. The curve is the **same
+floor→cliff** as every prior world — `H_ε` 0.25 free-running (ρ=0) → 40 fully consulted (ρ=1), no
+interior knee — so **H8's no-knee negative holds in the fourth world too** (the cross-world synthesis
+figure below normalizes all four curves onto one shape).
+
+![ED1: the distributed H_ε(ρ) floor→cliff + the tiered-oracle dollars-per-faithful-step by tier × error class](../figures/ed1_dist.png)
+
+The H17 panel reports **oracle-dollars per faithful step** by tier × error class, and the answer is
+sharper than "cheap wins" — it **depends where the model's errors fall**:
+
+| error class | metamorphic ($/faithful-step) | symbolic | bit-exact |
+|---|---|---|---|
+| **gross** (durable replica) | **$9.35** | $16.98 | $16.00 |
+| **subtle** (in-flight) | $848.00 | $688.00 | **$16.00** |
+
+For `gross` errors the cheapest metamorphic tier buys faithful horizon at **$9.35/step vs bit-exact's
+$16** (tiering wins); for `subtle` errors the cheap tiers miss the drift entirely (`H_ε` ≈ 0.25, so
+the few dollars they spend buy almost no horizon — $848/step) and **only full bit-exact truth is
+efficient**. The learned `M_θ` (ED1-learned, [`ed1_learned.csv`](../figures/ed1_learned.csv)) makes
+this the **honest inverse**: its LL(1)-constrained decoder removes the `gross` (out-of-vocab) class
+*by construction*, so a real model lives entirely in the `subtle` regime — metamorphic $624/step,
+symbolic $411/step, only **bit_exact efficient at $16**, and the cheapest-refutation `escalate` policy
+reaches full horizon but pays **more** ($21.61) because a real model's errors need the bit-exact
+correction anyway. **A cheap tier helps exactly when a model makes cheaply-catchable errors; a
+grammar-constrained learned model, by design, does not. The tiered oracle's value is model-dependent
+— reported, not assumed.**
+
+## ED2 / H17 + H18 — the equal-*dollar*-budget frontier confirms it, in the form the spec poses
+
+ED1 asked "which tier is cheaper per faithful step?"; ED2
+([`ed2.py`](../src/verisim/experiments/ed2.py), [`ed2.csv`](../figures/ed2.csv)) asks the question the
+hypothesis is really about — *at an equal oracle-dollar budget, does a cheap or cheapest-refutation
+tier policy buy more faithful horizon than spending the same dollars on bit-exact truth?* — by
+sweeping `ρ` and comparing policies along their faithful-horizon-vs-dollar Pareto envelope at a
+matched budget, reading the **H18 competitive ratio** at the sub-linear quarter budget `B/4 = $160`.
+
+![ED2: the equal-dollar-budget horizon frontier per tier policy, gross vs subtle error class](../figures/ed2.png)
+
+| error class @ `B/4` | metamorphic | bit-exact | H18 ratio (winner / ceiling) |
+|---|---|---|---|
+| **gross** | **H = 14.2** | 4.2 | **0.36** (tiering wins) |
+| **subtle** | 1.5 (floor) | **4.2** | 0.11 (bit-exact wins; `escalate` *loses*) |
+
+For `gross` errors the metamorphic tier reaches **H = 14.2 vs bit-exact's 4.2** at ¼ the cost (ratio
+0.36 of the full-truth ceiling — H17 holds); for `subtle` errors the cheap tiers sit flat at the floor
+(1.5) and even `escalate` loses to single-tier bit-exact — **H17's honest negative, in budget form.**
+The learned arm (ED2-learned, [`ed2_learned.csv`](../figures/ed2_learned.csv)) again puts a real model
+entirely in the `subtle` regime: at `B/4 = $128` only bit-exact buys horizon (H = 2.0 vs the cheap
+tiers' ≤ 0.75), `escalate` *loses* (and at every ρ spends strictly more — $691 vs $512 to reach the
+H = 32 ceiling), and the **H18 ratio is just 0.06**. A sub-linear budget buys little horizon however
+the tiers are sliced, for a grammar-constrained model.
+
+## ED2-smart / H9 — entropy-gated consultation is *worse* than fixed, carried into the fourth world
+
+The missing *when* axis (`π_c`): at a fixed interior budget, does spending consults on the steps the
+flat `M_θ` is least sure about (its constrained-decode entropy) beat spreading them evenly? ED2-smart
+([`ed2_smart.py`](../src/verisim/experiments/ed2_smart.py), [`ed2_smart.csv`](../figures/ed2_smart.csv))
+finds it does **not — it is strictly worse than `fixed` (lift 0.08–0.12× at every budget, `smart_wins`
+= 0).** Faithful horizon is a *prefix* property: `fixed` consults at step 0 to protect the prefix while
+the entropy signal spends late and lets the model derail early. The flat decode-entropy is a
+decode-time artifact, not a calibrated belief — the standing H2/H9 negative, carried in and *sharper
+than a tie*. This localizes the smart-`π_c` lever to the (deferred) structured `M_θ`'s RSSM belief
+variance — the host EH2 lesson, where a calibrated belief beat fixed ~2.2× where flat entropy could
+not.
+
+![ED2-smart: entropy-gated consultation is strictly worse than fixed at every interior budget](../figures/ed2_smart.png)
+
+## ED3 — the distributed world breaks v0's correction-operator identity, on the in-flight medium
+
+v0 proved an *identity*: a full-truth consult makes `hard_reset` / `residual` / `projection`
+behaviorally identical on `H_ε` (they all snap to the same truth). ED3
+([`ed3.py`](../src/verisim/experiments/ed3.py), [`ed3.csv`](../figures/ed3.csv)) shows the distributed
+world **breaks it, mode-dependently**, with a *partial* operator — `ReplicasOnlyCorrection` snaps the
+durable replicas to truth but **trusts the model's predicted in-flight**:
+
+| error class | full operators (hard_reset / residual / projection) | replicas_only | gap |
+|---|---|---|---|
+| **gross** (replica write) | H = 7.25 | 7.25 | **0** (identity holds) |
+| **subtle** (in-flight) | H = 6.25 | **1.75** | **4.5** (identity broken) |
+
+For `gross` errors all four operators recover the same horizon (identity holds); for `subtle` errors
+the partial operator **collapses to H = 1.75** because it cannot see the in-flight medium it trusted —
+the same hidden state H17/H19 turn on.
+
+![ED3: the partial replicas-only operator breaks v0's identity on subtle in-flight errors](../figures/ed3.png)
+
+## ED4 / H21 — fault-injected training beats fault-free at equal volume (the DST data-factory lesson)
+
+ED4-fault ([`ed4_fault.py`](../src/verisim/experiments/ed4_fault.py),
+[`ed4_fault.csv`](../figures/ed4_fault.csv)) trains two equal-volume `M_θ` — one fault-free
+(`fault_prob=0`), one fault-injected — then sweeps the eval workload's fault-intensity **free-running**
+(ρ=0, so it exposes the *model*, not the loop). At zero eval-fault the two coincide; as faults
+intensify the **fault-injected model holds ~3× more free-run horizon (0.375 vs 0.125 steps)** — *even
+though the fault-free model is the better clean predictor* (teacher-forced accuracy **0.60 vs 0.49**).
+The fault-free model never saw a partition/crash/heal, so under fault it derails immediately. **Fault
+injection buys robustness that factual data cannot — DST as a *data factory*, not just a test
+harness** (H21 confirmed), with a bonus proxy/truth-divergence instance: higher clean accuracy, lower
+compounding horizon.
+
+![ED4 / H21: the fault-injected model holds ~3× more free-run horizon under fault despite lower clean accuracy](../figures/ed4_fault.png)
+
+## ED4 / H20 — the H19 gap is a *weak-consistency* phenomenon: it tracks the in-flight medium
+
+ED4-consistency ([`ed4_consistency.py`](../src/verisim/experiments/ed4_consistency.py),
+[`ed4_consistency.csv`](../figures/ed4_consistency.csv)) adds a strong end to the `CONSISTENCY_MODELS`
+dial — **`linearizable`** (synchronous all-replica writes, CP write-rejection under partition, so no
+replica is ever stale and there is **no in-flight medium**) — and sweeps the declared model. The
+result resolves H20 *through* H19:
+
+| consistency model | in-flight rate | subtle-error gap (cons_h − bit_h) | gross gap (control) |
+|---|---|---|---|
+| **eventual** | 3.21 / step | **+10.5** (cons 13.0 vs bit 2.5) | 0 |
+| **linearizable** | 0 | **0** | 0 |
+
+The consistency-vs-bit gap is **exclusively a weak-consistency phenomenon** — it needs the
+consistency-invisible in-flight medium, which strong consistency structurally removes. Strong
+consistency buys the model no forgiveness because there is no hidden state to forgive.
+
+![ED4 / H20: the consistency-vs-bit horizon gap is present under eventual consistency, zero under linearizable](../figures/ed4_consistency.png)
+
+## ED5 / H19 + H18 — consistency-faithful horizon *outlasts* bit-faithful, and the loop is learning-augmented
+
+ED5 ([`ed5.py`](../src/verisim/experiments/ed5.py), [`ed5.csv`](../figures/ed5.csv)) is the §9.1
+consistency-faithfulness metric's first loop consumer. **H19 confirmed mode-dependently**: free-running,
+the consistency-faithful horizon **outlasts** the bit-faithful one for `subtle` (in-flight) errors —
+**H = 13.1 vs 1.5, gap +11.6 (disjoint CI)** — because the corrupted in-flight message is bit-visible
+but consistency-invisible until `advance` delivers it and writes a replica; for `gross` (durable)
+errors the two coincide (gap 0.75, the control). So W7's "no affordable global state" *does* buy the
+model forgiveness — but only where the error hides in the consistency-invisible medium.
+
+**H18 splits.** The competitive ratio `H_ε(ρ)/ceiling` fit across `ρ × prediction error` confirms the
+learning-augmented signature in the *error* axis — at a fixed quarter budget the ratio **degrades
+gracefully with prediction error** (1.00 for a perfect model down to 0.05 at full noise, recovering
+the trivial bound) — but reproduces the **floor→cliff / no-knee** negative in the *budget* axis (the
+ratio sits near the floor across the interior, the cliff only at ρ→1). **Learning-augmented in the
+error axis; no free lunch in the budget axis.**
+
+![ED5: consistency-faithful horizon outlasts bit-faithful for subtle errors; the competitive ratio degrades gracefully with error but stays floor→cliff in budget](../figures/ed5.png)
+
+## ED6 / H5 — the distributed world is where counterfactual replay finally pays
+
+The deterministic DES is *total*, so from any visited cluster state it returns the true next state of
+an **alternative fault** the trajectory never took — a free counterfactual branch (re-run from
+`(seed, t)` with one fault flipped). ED6 ([`ed6.py`](../src/verisim/experiments/ed6.py),
+[`ed6.csv`](../figures/ed6.csv)) trains three matched-count arms of the same flat `M_θ` and scores
+**held-out fault interventions**:
+
+| arm | intervention-exact | medium-recall (predicts the split-brain) |
+|---|---|---|
+| trajectory (base) | 0.06 | 0.05 |
+| trajectory-more (5× on-policy, volume control) | 0.25 | 0.22 |
+| **+counterfactual** (free oracle fault branches) | **0.51** | **0.56** |
+
+`+counterfactual` beats **both** the base **and** the matched-volume control on **both** metrics, with
+disjoint CIs — the **honest inverse** of the network (EN6) and host (EH6/H16) supervision *null*, where
+counterfactual data did not beat volume. The mechanism is the distributed **medium**: a hidden state
+the light-fault on-policy distribution structurally underrepresents, so on-policy *volume* buys little
+(0.06 → 0.25) while off-policy oracle **fault branches** buy a lot (0.25 → 0.51) — the held-out
+analogue of the H21 data-factory result. *Honest caveat:* the branches are fault-heavier than the
+on-policy control, so the lift conflates counterfactual *branching* with the fault *coverage* it
+carries — but EN6/EH6 found null under the identical design, so the distributed positive is the result;
+the disentanglement is future work (tied to H21).
+
+![ED6 / H5: counterfactual fault-branch training beats both the base and the matched-volume control on held-out interventions](../figures/ed6.png)
+
+## ED6 two-oracle / H12 — the consistency oracle is redundant for verification but cheaper + decision-sufficient
+
+The distributed analogue of the network's control-plane oracle (EN10) and the host's privilege oracle
+(EH6): the cheap **consistency oracle** (the §9.1 split-brain decision — is each object converged or
+split?) as a second oracle against the full **bit-exact** one. ED6-two-oracle
+([`ed6_two_oracle.py`](../src/verisim/experiments/ed6_two_oracle.py),
+[`ed6_two_oracle.csv`](../figures/ed6_two_oracle.csv)), teacher-forced over the fault-heavy
+`adversarial` workload on the synthetic proposer:
+
+| error class | non-redundant rate | consistency-sufficient rate | consult-fact ratio |
+|---|---|---|---|
+| **gross** (durable) | 0.00 | 0.00 | 0.28 |
+| **subtle** (in-flight) | 0.00 | **1.00** | 0.28 |
+
+**Non-redundant rate 0 by construction** — the consistency view is a pure function of the replica
+state, so a bit-exact-correct prediction is always consistency-correct (the cheap oracle catches
+*nothing* the full one misses: *redundant for verification*). But **consistency-sufficient 1.00 for
+`subtle` vs 0.00 for `gross`** (disjoint, the per-step form of ED5's H19 horizon gap) at a **consult
+ratio of 0.28 (~3.6× cheaper)** — redundant for verification, but a cheaper, decision-sufficient
+consult for the question an SRE actually asks.
+
+The **learned-`M_θ` re-pointing** (ED6-two-oracle-learned,
+[`ed6_two_oracle_learned.py`](../src/verisim/experiments/ed6_two_oracle_learned.py),
+[`ed6_two_oracle_learned.csv`](../figures/ed6_two_oracle_learned.csv)) lands the verdict on the *real*
+error distribution: trained flat `M_θ`, teacher-forced on the fault-heavy eval, the consistency oracle
+is decision-sufficient on **0.57 [0.53, 0.61]** of the model's bit-wrong steps — *between* the synthetic
+`gross` (0.00) and `subtle` (1.00) poles because a real error distribution is a **mixture**
+(predominantly the consistency-invisible in-flight class) — at the same ~3.6× cheaper consult, **even as
+the full prediction is wrong 87% of the time.** The clearest single statement of the program's
+tiered-oracle thesis: the *same* model, same constrained decoder, **loses as a verifier** (ED2-learned's
+cheap tiers refute nothing) yet is **decision-sufficient on the majority of errors as a decision
+oracle** — the cheap oracle's value depends on *which question you ask it*.
+
+![ED6 two-oracle: the consistency oracle is redundant for verification but decision-sufficient (1.00 on subtle errors) and ~3.6× cheaper](../figures/ed6_two_oracle.png)
+![ED6 two-oracle (learned M_θ): on the real model, decision-sufficiency lands at 0.57 — between the synthetic poles, since a real error distribution is a mixture](../figures/ed6_two_oracle_learned.png)
+
+## What the distributed world adds, and what remains
+
+The fourth world generalizes the program's three load-bearing findings — the floor→cliff `H_ε(ρ)`
+(H8), the model-dependence of the tiered oracle (H17), and the proxy/truth divergence (a per-step-more-
+accurate fault-free model that free-runs *shorter*, ED4/H21) — into the first world whose full oracle
+is unaffordable, and adds two findings unique to it: the **consistency-vs-bit horizon gap** that tracks
+the in-flight medium (H19/H20), and the **counterfactual-replay positive** (H5) that the network and
+host worlds could not produce, because only here is the intervened-on variable (the fault medium)
+genuinely off-policy. The distributed world is **packaged for reuse** on all four DoD §4 surfaces — the
+`verifiers`-spec RL env ([`distrl/`](../src/verisim/distrl/)), the Inspect faithfulness benchmark
+([`disteval/`](../src/verisim/disteval/)), the LLM-callable cluster simulator
+([`distsim/`](../src/verisim/distsim/)), and the verified-contribution protocol
+([`distcontrib/`](../src/verisim/distcontrib/)). **Open (the honest deferrals):** the Tier-B real-DST
+re-execution path (madsim/Shadow/Antithesis-class runtimes, which need external sandboxes), the
+structured GNN/RSSM `M_θ` arm (where the smart-`π_c` lever the ED2-smart null localizes can be
+re-tested, tied to partial observation), and the smart-`π_w` (which-tier) scheduler.
+
 # Scale (SPEC-10): the floor+cliff was largely an under-resourcing artifact (H26)
 
 Every curve above has the floor+cliff shape, and the report's own *Threats to validity* names the
@@ -1390,6 +1629,17 @@ expose.
 - **Difficulty by driver only.** The §2.4 depth/breadth dial is not yet a knob; v0
   difficulty is carried by the driver mix, which may not stress long-range
   dependencies enough to make the interior informative.
+- **Distributed: Tier-A only, and a toy semantics.** The SPEC-7 results run against
+  the Tier-A reference DES (a fully-replicated KV under async-replication LWW + a
+  partition/crash/clock medium), not a real distributed system under a DST runtime
+  (Tier-B, deferred — it needs external sandboxes). The consistency semantics pinned
+  so far are the two ends (`eventual`, `linearizable`); the intermediate models
+  (serializable/snapshot/causal), consensus, and transactions are not yet pinned, so
+  the H19/H20 gap is measured at the extremes, not across the full hierarchy. And the
+  ED5/ED1/ED2/ED3 synthetic-proposer arms use a tunable-noise model whose error *mode*
+  is dialed (`gross`/`subtle`); the learned-`M_θ` arms (ED1/ED2-learned, ED6,
+  ED6-two-oracle-learned) confirm the direction on a *real* error distribution, which
+  is the load-bearing evidence where the two agree.
 
 ## Reproduce
 
@@ -1476,6 +1726,32 @@ python -m verisim.experiments.horizon_graph_schedule --config configs/horizon_gr
 # SPEC-10 HS-synth — the proposer-dependence capstone (figures-from-records; instant, re-runs nothing):
 python -m verisim.experiments.horizon_synthesis \
     --out figures/horizon_synthesis.csv --plot figures/horizon_synthesis.png
+# SPEC-7 distributed world (the tiered oracle). ED1/ED2/ED2-smart/ED3/ED4/ED5/ED6 + the two-oracle
+# slice. The synthetic-proposer arms are dependency-free; the *-learned arms + ED6 need [model].
+python -m verisim.experiments.ed1 --config configs/ed1_dist.json \
+    --out figures/ed1_dist.csv --plot figures/ed1_dist.png          # H8 + H17 (synthetic)
+python -m verisim.experiments.ed1_learned --config configs/ed1_learned.json \
+    --out figures/ed1_learned.csv --plot figures/ed1_learned.png    # H17 on the real M_θ
+python -m verisim.experiments.ed2 --config configs/ed2.json \
+    --out figures/ed2.csv --plot figures/ed2.png                    # H17 + H18 equal-dollar
+python -m verisim.experiments.ed2_learned --config configs/ed2_learned.json \
+    --out figures/ed2_learned.csv --plot figures/ed2_learned.png    # H17/H18 on the real M_θ
+python -m verisim.experiments.ed2_smart --config configs/ed2_smart.json \
+    --out figures/ed2_smart.csv --plot figures/ed2_smart.png        # H9 (smart-when null)
+python -m verisim.experiments.ed3 --config configs/ed3.json \
+    --out figures/ed3.csv --plot figures/ed3.png                    # the operator-identity break
+python -m verisim.experiments.ed4_fault --config configs/ed4_fault.json \
+    --out figures/ed4_fault.csv --plot figures/ed4_fault.png        # H21 (DST data factory)
+python -m verisim.experiments.ed4_consistency --config configs/ed4_consistency.json \
+    --out figures/ed4_consistency.csv --plot figures/ed4_consistency.png  # H20 (consistency level)
+python -m verisim.experiments.ed5 --config configs/ed5.json \
+    --out figures/ed5.csv --plot figures/ed5.png                    # H19 + H18
+python -m verisim.experiments.ed6 --config configs/ed6.json \
+    --out figures/ed6.csv --plot figures/ed6.png                    # H5 (counterfactual lift)
+python -m verisim.experiments.ed6_two_oracle --config configs/ed6_two_oracle.json \
+    --out figures/ed6_two_oracle.csv --plot figures/ed6_two_oracle.png    # H12 (synthetic)
+python -m verisim.experiments.ed6_two_oracle_learned --config configs/ed6_two_oracle_learned.json \
+    --out figures/ed6_two_oracle_learned.csv --plot figures/ed6_two_oracle_learned.png  # H12 real M_θ
 ```
 
 The run-records are git-ignored (regenerable); the figures and their CSVs are
