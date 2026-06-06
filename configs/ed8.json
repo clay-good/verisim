@@ -1,0 +1,8 @@
+{
+  "name": "ed8-txn-contention",
+  "n_nodes": 3,
+  "n_txns": 8,
+  "object_counts": [1, 2, 3, 4, 6, 8],
+  "seeds": [0, 1, 2, 3, 4, 5, 6, 7, 8, 9],
+  "values": ["a", "b", "c", "d"]
+}

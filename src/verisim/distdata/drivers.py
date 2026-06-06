@@ -42,16 +42,27 @@ from verisim.dist.state import DistributedState
 #   advance_prob   -- P(a non-fault step is ``advance``) vs a client op.
 #   cas_share      -- among client ops, the share that are ``cas`` (the rest split put/get).
 #   hot_key        -- if True, writes concentrate on the first object (contention).
+#   txn_share      -- among client ops, the share that drive a transaction (begin/tget/tput/commit);
+#                     0 for the DS0-increment-1 presets, so their behavior is unchanged.
 _PRESETS: dict[str, dict[str, float | bool]] = {
     "uniform": {"fault_prob": 0.10, "partition_bias": 0.5, "advance_prob": 0.35,
-                "cas_share": 0.15, "hot_key": False},
+                "cas_share": 0.15, "hot_key": False, "txn_share": 0.0},
     "contention": {"fault_prob": 0.10, "partition_bias": 0.4, "advance_prob": 0.30,
-                   "cas_share": 0.45, "hot_key": True},
+                   "cas_share": 0.45, "hot_key": True, "txn_share": 0.0},
     "adversarial": {"fault_prob": 0.40, "partition_bias": 0.7, "advance_prob": 0.35,
-                    "cas_share": 0.25, "hot_key": False},
+                    "cas_share": 0.25, "hot_key": False, "txn_share": 0.0},
+    # ``transactional`` (DS0 incr 2): a contended multi-key transaction workload on a hot key —
+    # concurrent OCC transactions read-then-write the same objects, so commits race and the loser
+    # aborts (``conflict``). Light faults keep the focus on transaction outcomes, not the medium.
+    "transactional": {"fault_prob": 0.05, "partition_bias": 0.5, "advance_prob": 0.25,
+                      "cas_share": 0.0, "hot_key": True, "txn_share": 0.85},
 }
 
-DIST_DRIVERS = tuple(_PRESETS)
+# The default workload sweep set (what the experiments and data tests iterate). ``transactional``
+# (DS0 incr 2) is a named preset usable via ``DistDriver("transactional", ...)`` but kept out of the
+# default sweep so the DS0-increment-1 experiments/figures are unchanged by the txn substrate.
+DIST_DRIVERS = ("uniform", "contention", "adversarial")
+ALL_DIST_DRIVERS = tuple(_PRESETS)
 
 
 @dataclass
@@ -81,6 +92,8 @@ class DistDriver:
         self._advance_prob = float(preset["advance_prob"])
         self._cas_share = float(preset["cas_share"])
         self._hot_key = bool(preset["hot_key"])
+        self._txn_share = float(preset.get("txn_share", 0.0))
+        self._next_txn = 0  # monotonic source of unique transaction ids
 
     def sample(self, state: DistributedState) -> DistAction:
         return parse_dist_action(self._build(state))
@@ -136,6 +149,10 @@ class DistDriver:
         return f"crash {self.rng.choice(up)}"
 
     def _client(self, state: DistributedState) -> str | None:
+        if self._txn_share > 0.0 and self.rng.random() < self._txn_share:
+            txn = self._txn_op(state)
+            if txn is not None:
+                return txn
         key = self.config.objects[0] if self._hot_key else self.rng.choice(self.config.objects)
         node = self._coordinator_for(state, key)
         if node is None:
@@ -149,3 +166,32 @@ class DistDriver:
         if roll < self._cas_share + (1.0 - self._cas_share) / 2:
             return f"put {node} {key} {self.rng.choice(self.config.values)}"
         return f"get {node} {key}"
+
+    def _txn_op(self, state: DistributedState) -> str | None:
+        """Drive a transaction lifecycle (DS0 incr 2): continue an open txn, or begin a new one.
+
+        Reads ``state.txns`` to act on transactions already open at an up coordinator — emitting
+        ``tget``/``tput`` to build read/write sets, then ``commit`` (occasionally ``abort``). With
+        several transactions open on a hot key, their read-then-commit sequences race, so the
+        first committer wins and the others abort (the OCC ``conflict`` outcome the experiment
+        measures). When no txn is open (or by chance) it opens a new one. State-aware so the
+        trajectories stay valid and productive, exactly like the ``put``/``get`` client path.
+        """
+        open_here = [t for t in state.txns.values() if state.is_up(t.node)]
+        # Begin a new txn when none are open, or sometimes to raise concurrency (more racing txns).
+        if not open_here or (len(open_here) < len(self.config.nodes) and self.rng.random() < 0.4):
+            node = self._coordinator_for(state, self.config.objects[0])
+            if node is None:
+                return None
+            self._next_txn += 1
+            return f"begin {node} t{self._next_txn}"
+        txn = self.rng.choice(open_here)
+        key = self.config.objects[0] if self._hot_key else self.rng.choice(self.config.objects)
+        roll = self.rng.random()
+        if roll < 0.4:
+            return f"tget {txn.node} {txn.txn_id} {key}"
+        if roll < 0.7:
+            return f"tput {txn.node} {txn.txn_id} {key} {self.rng.choice(self.config.values)}"
+        if roll < 0.92:
+            return f"commit {txn.node} {txn.txn_id}"
+        return f"abort {txn.node} {txn.txn_id}"

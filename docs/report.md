@@ -1343,6 +1343,32 @@ over the same differential remains future work.
 
 ![ED7: Tier-A vs Tier-B (autonomous actors) agree bit-exactly across drivers; the H_ε(ρ) curve is oracle-invariant; the broken-actor negative control is caught](../figures/ed7.png)
 
+## ED8 / transactions — the OCC commit/abort frontier tracks the occupancy law
+
+The deterministic core grows a **multi-key transaction** layer (DS0 increment 2,
+[`dist/txn.py`](../src/verisim/dist/txn.py)): `begin`/`tget`/`tput`/`commit`/`abort` under
+**optimistic concurrency control** (OCC, first-committer-wins). A coordinator buffers a
+transaction's reads (pinning the version of each key it read) and writes; `commit` validates the
+read-set and either applies every buffered write atomically (an MVCC bump + replication through the
+same in-flight medium as `put`) or aborts on a `conflict`. OCC is chosen over lock-based 2PL by
+design (DD-D3): it is *deterministic and deadlock-free* — no lock table, no acquisition order, no
+victim selection — so it is the discipline the deterministic core pins first, and it is the
+substrate the serializable/snapshot consistency models will build on.
+
+ED8 ([`ed8.py`](../src/verisim/experiments/ed8.py), [`ed8.csv`](../figures/ed8.csv)) verifies the
+semantics are *exactly* right, not merely plausible. `K` concurrent transactions each read-then-write
+one of `M` objects and all commit in order; under first-committer-wins, for each object exactly the
+first committer succeeds and the rest abort, so the committed count equals the number of distinct
+objects touched — whose expectation is the **balls-in-bins occupancy law** `M·(1−(1−1/M)^K)/K`. The
+measured commit rate sits on that closed-form curve across the whole contention sweep (max gap
+**0.03** at `K=8`, within sampling noise): at `M=1` (one hot object) exactly **1/8** of each batch
+commits and the rest abort; the aborts melt away as objects multiply and read-sets stop colliding.
+And the transaction layer **composes with Tier-B** — the autonomous-actor system oracle reproduces
+Tier-A's observable cluster on *every* scenario (it delivers the committed writes' replication on
+`advance`), so transactions inherit the ED7 W1 retirement for free.
+
+![ED8: the OCC commit rate tracks the balls-in-bins occupancy law as contention drops; first-committer-wins aborts melt as objects multiply; Tier-B agrees throughout](../figures/ed8.png)
+
 ## What the distributed world adds, and what remains
 
 The fourth world generalizes the program's three load-bearing findings — the floor→cliff `H_ε(ρ)`
@@ -1357,10 +1383,13 @@ genuinely off-policy. The distributed world is **packaged for reuse** on all fou
 ([`distsim/`](../src/verisim/distsim/)), and the verified-contribution protocol
 ([`distcontrib/`](../src/verisim/distcontrib/)). The **Tier-B system oracle now ships** (ED7 above): an
 in-repo autonomous-actor DST runtime that reproduces Tier-A bit-for-bit under shuffled delivery order,
-retiring W1 for the distributed world. **Open (the honest deferrals):** a wrapped **external**-binary
-real-DST runtime (madsim/Shadow/Antithesis-class, which need external sandboxes), the structured
-GNN/RSSM `M_θ` arm (where the smart-`π_c` lever the ED2-smart null localizes can be re-tested, tied to
-partial observation), and the smart-`π_w` (which-tier) scheduler.
+retiring W1 for the distributed world. The deterministic core also grows a **multi-key OCC
+transaction** layer (ED8 above), the substrate the serializable/snapshot consistency models need.
+**Open (the honest deferrals):** a wrapped **external**-binary real-DST runtime
+(madsim/Shadow/Antithesis-class, which need external sandboxes), the structured GNN/RSSM `M_θ` arm
+(where the smart-`π_c` lever the ED2-smart null localizes can be re-tested, tied to partial
+observation), the smart-`π_w` (which-tier) scheduler, the Raft-subset consensus group, and the
+serializable/snapshot isolation levels (now that transactions exist) and lock-based 2PL.
 
 # Scale (SPEC-10): the floor+cliff was largely an under-resourcing artifact (H26)
 
@@ -1828,6 +1857,8 @@ python -m verisim.experiments.ed6_two_oracle_learned --config configs/ed6_two_or
     --out figures/ed6_two_oracle_learned.csv --plot figures/ed6_two_oracle_learned.png  # H12 real M_θ
 python -m verisim.experiments.ed7 --config configs/ed7.json \
     --out figures/ed7.csv --plot figures/ed7.png    # Tier-B system oracle (the distributed W1 retirement)
+python -m verisim.experiments.ed8 --config configs/ed8.json \
+    --out figures/ed8.csv --plot figures/ed8.png    # OCC transaction commit/abort frontier (DS0 incr 2)
 ```
 
 The run-records are git-ignored (regenerable); the figures and their CSVs are

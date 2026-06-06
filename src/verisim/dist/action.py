@@ -34,9 +34,17 @@ _ARITY: dict[str, int | None] = {
     "heal": 0,
     "crash": 1,  # node
     "restart": 1,  # node
+    # Transaction family (DS0 increment 2): a multi-key OCC transaction at a coordinator node.
+    "begin": 2,  # node txn  -- open a transaction
+    "tget": 3,  # node txn key  -- read <key> within the txn (pins the read version for validation)
+    "tput": 4,  # node txn key val  -- buffer a write to <key> within the txn
+    "commit": 2,  # node txn  -- validate the read-set + apply buffered writes atomically, or abort
+    "abort": 2,  # node txn  -- discard the txn
 }
 
-CLIENT_OPS = frozenset({"put", "get", "cas"})
+# ``begin``/``commit``/``abort`` + the txn-scoped ``tget``/``tput`` are client ops (the workload).
+CLIENT_OPS = frozenset({"put", "get", "cas", "begin", "tget", "tput", "commit", "abort"})
+TXN_OPS = frozenset({"begin", "tget", "tput", "commit", "abort"})
 FAULT_OPS = frozenset({"advance", "partition", "heal", "crash", "restart"})
 
 

@@ -17,7 +17,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Any
 
-from verisim.dist.state import DistributedState, Event, Message, ReplicaState
+from verisim.dist.state import DistributedState, Event, Message, ReplicaState, TxnState
 
 
 @dataclass(frozen=True)
@@ -97,6 +97,20 @@ class ClockSet:
 
 
 @dataclass(frozen=True)
+class TxnSet:
+    """Upsert an active transaction's state (``begin``/``tget``/``tput`` produce this; DS0 incr2)."""
+
+    txn: TxnState
+
+
+@dataclass(frozen=True)
+class TxnDel:
+    """Remove an active transaction (``commit``/``abort`` produce this)."""
+
+    txn_id: str
+
+
+@dataclass(frozen=True)
 class SetResult:
     """The client-visible result of the step: ``(status, value_token)``."""
 
@@ -114,6 +128,8 @@ DistEdit = (
     | NodeDown
     | NodeUp
     | ClockSet
+    | TxnSet
+    | TxnDel
     | SetResult
 )
 DistDelta = list[DistEdit]
@@ -149,6 +165,10 @@ def apply(state: DistributedState, delta: DistDelta) -> DistributedState:
             s.down = s.down - {edit.node}
         elif isinstance(edit, ClockSet):
             s.clock = edit.clock
+        elif isinstance(edit, TxnSet):
+            s.txns[edit.txn.txn_id] = edit.txn
+        elif isinstance(edit, TxnDel):
+            s.txns.pop(edit.txn_id, None)
         else:
             assert isinstance(edit, SetResult)
             s.last_result = (edit.status, edit.value)
@@ -181,6 +201,12 @@ def edit_to_dict(edit: DistEdit) -> dict[str, Any]:
         return {"op": "NodeUp", "node": edit.node}
     if isinstance(edit, ClockSet):
         return {"op": "ClockSet", "clock": edit.clock}
+    if isinstance(edit, TxnSet):
+        return {"op": "TxnSet", "txn_id": edit.txn.txn_id, "node": edit.txn.node,
+                "reads": [list(r) for r in edit.txn.reads],
+                "writes": [list(w) for w in edit.txn.writes]}
+    if isinstance(edit, TxnDel):
+        return {"op": "TxnDel", "txn_id": edit.txn_id}
     assert isinstance(edit, SetResult)
     return {"op": "SetResult", "status": edit.status, "value": edit.value}
 
@@ -208,6 +234,14 @@ def edit_from_dict(d: dict[str, Any]) -> DistEdit:
         return NodeUp(d["node"])
     if op == "ClockSet":
         return ClockSet(d["clock"])
+    if op == "TxnSet":
+        return TxnSet(TxnState(
+            d["txn_id"], d["node"],
+            tuple((k, v) for k, v in d["reads"]),
+            tuple((k, val) for k, val in d["writes"]),
+        ))
+    if op == "TxnDel":
+        return TxnDel(d["txn_id"])
     if op == "SetResult":
         return SetResult(d["status"], d["value"])
     raise ValueError(f"unknown edit op {op!r}")

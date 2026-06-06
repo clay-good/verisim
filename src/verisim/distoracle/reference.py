@@ -41,6 +41,7 @@ from verisim.dist.delta import (
     apply,
 )
 from verisim.dist.state import DistributedState
+from verisim.dist.txn import txn_step
 from verisim.distoracle.base import DistStepResult
 
 
@@ -64,6 +65,11 @@ class ReferenceDistOracle:
             return self._write(state, action)
         if name == "get":
             return self._get(state, action)
+        if name in ("begin", "tget", "tput", "commit", "abort"):
+            # The transaction family (DS0 increment 2) — shared OCC logic; a committed write's
+            # async replication flows through the same in-flight medium as ``put`` (delivered by
+            # ``advance``), so it composes with the fault/time semantics unchanged.
+            return txn_step(state, action, self.config)
         if name == "advance":
             return self._advance(state, action)
         if name == "partition":

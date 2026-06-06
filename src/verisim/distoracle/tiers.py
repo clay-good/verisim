@@ -142,10 +142,20 @@ class TieredOracle:
         canonical next-state, but catches the action-specific structural errors bit-exact would.
         """
         name = action.name
-        if name in ("get", "partition", "heal", "crash", "restart"):
-            # none of these write replicas; the replica map must be unchanged
+        no_write = ("get", "partition", "heal", "crash", "restart",
+                    "begin", "tget", "tput", "abort")
+        if name in no_write:
+            # none of these write replicas; the replica map must be unchanged. The txn ops
+            # begin/tget/tput/abort only touch the (consistency-invisible) txn buffer — a committed
+            # write reaches replicas only via ``commit`` (handled below); a read/buffer/abort that
+            # mutated a replica is an inadmissible transition the cheap symbolic tier can refute.
             if predicted.replicas != state.replicas:
                 return True, f"{name} must not change any replica"
+            return False, ""
+        if name == "commit":
+            # ``commit`` applies the txn's buffered writes (an MVCC bump per key) or aborts on a
+            # read-set conflict; the exact post-state depends on the buffered writes the symbolic
+            # tier does not track, so it defers to bit-exact (no cheap-tier refutation here).
             return False, ""
         if name in ("put", "cas"):
             node, key = action.args[0], action.args[1]

@@ -58,6 +58,41 @@ class Event:
 
 
 @dataclass(frozen=True)
+class TxnState:
+    """An in-flight client transaction at its coordinator (SPEC-7 §3.2, DS0 increment 2).
+
+    A multi-key transaction under **optimistic concurrency control** (OCC, first-committer-wins): the
+    coordinator buffers the txn's reads and writes locally and validates at ``commit``. ``reads``
+    pins the ``(key, version)`` each key was first read at (the snapshot the validation checks);
+    ``writes`` is the ordered buffer of ``(key, value)`` the txn applies atomically on commit (a later
+    write to the same key supersedes an earlier one). A transaction is *active* exactly while it is
+    present in ``DistributedState.txns``; ``commit``/``abort`` remove it. OCC is deterministic and
+    deadlock-free (no lock table), which is why it is the discipline the deterministic core pins
+    first — 2PL/lock-based isolation is a later refinement (``docs/distributed-semantics.md`` §9).
+    """
+
+    txn_id: str
+    node: str
+    reads: tuple[tuple[str, int], ...] = ()
+    writes: tuple[tuple[str, str], ...] = ()
+
+    def read_version(self, key: str) -> int | None:
+        """The version this txn pinned for ``key`` on first read, or ``None`` if never read."""
+        for k, v in self.reads:
+            if k == key:
+                return v
+        return None
+
+    def buffered_write(self, key: str) -> str | None:
+        """The value this txn has buffered for ``key`` (read-your-writes), or ``None``."""
+        result: str | None = None
+        for k, val in self.writes:
+            if k == key:
+                result = val  # last buffered write to the key wins
+        return result
+
+
+@dataclass(frozen=True)
 class Message:
     """An in-flight replication message: a write the coordinator is propagating to a peer replica.
 
@@ -99,6 +134,7 @@ class DistributedState:
     next_event_id: int = 0
     next_msg_id: int = 0
     last_result: tuple[str, str] | None = None  # (status, value_token) of the last client op
+    txns: dict[str, TxnState] = field(default_factory=dict)  # active transactions, keyed by txn_id
 
     def __post_init__(self) -> None:
         # ``partitions`` is conceptually a *set* of disjoint groups, but stored as a tuple; keep it
@@ -133,6 +169,7 @@ class DistributedState:
             next_event_id=self.next_event_id,
             next_msg_id=self.next_msg_id,
             last_result=self.last_result,
+            txns=dict(self.txns),
         )
 
     def connected(self, a: str, b: str) -> bool:

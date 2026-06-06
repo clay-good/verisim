@@ -13,7 +13,7 @@ import hashlib
 import json
 from typing import Any
 
-from verisim.dist.state import DistributedState, Event, Message, ReplicaState
+from verisim.dist.state import DistributedState, Event, Message, ReplicaState, TxnState
 
 
 def to_canonical(state: DistributedState) -> dict[str, Any]:
@@ -33,7 +33,7 @@ def to_canonical(state: DistributedState) -> dict[str, Any]:
         for m in sorted(state.inflight.values(), key=lambda m: m.id)
     ]
     partitions = sorted(sorted(g) for g in state.partitions)
-    return {
+    out: dict[str, Any] = {
         "replicas": replicas,
         "log": log,
         "inflight": inflight,
@@ -44,6 +44,16 @@ def to_canonical(state: DistributedState) -> dict[str, Any]:
         "next_msg_id": state.next_msg_id,
         "last_result": list(state.last_result) if state.last_result is not None else None,
     }
+    # ``txns`` is included only when non-empty so a cluster with no open transactions serializes to
+    # the exact DS0-increment-1 normal form (the goldens and contributed hashes predating DS0 incr 2
+    # stay valid; the transaction substrate is purely additive).
+    if state.txns:
+        out["txns"] = [
+            {"txn_id": t.txn_id, "node": t.node,
+             "reads": [list(r) for r in t.reads], "writes": [list(w) for w in t.writes]}
+            for t in sorted(state.txns.values(), key=lambda t: t.txn_id)
+        ]
+    return out
 
 
 def from_canonical(d: dict[str, Any]) -> DistributedState:
@@ -65,6 +75,14 @@ def from_canonical(d: dict[str, Any]) -> DistributedState:
     }
     partitions = tuple(frozenset(g) for g in d["partitions"])
     last = d["last_result"]
+    txns = {
+        t["txn_id"]: TxnState(
+            t["txn_id"], t["node"],
+            tuple((k, v) for k, v in t["reads"]),
+            tuple((k, val) for k, val in t["writes"]),
+        )
+        for t in d.get("txns", [])
+    }
     return DistributedState(
         replicas=replicas,
         partitions=partitions,
@@ -75,6 +93,7 @@ def from_canonical(d: dict[str, Any]) -> DistributedState:
         next_event_id=d["next_event_id"],
         next_msg_id=d["next_msg_id"],
         last_result=(last[0], last[1]) if last is not None else None,
+        txns=txns,
     )
 
 

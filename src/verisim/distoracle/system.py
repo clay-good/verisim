@@ -65,6 +65,7 @@ from verisim.dist.delta import (
     apply,
 )
 from verisim.dist.state import DistributedState
+from verisim.dist.txn import txn_step
 from verisim.distoracle.base import DistStepResult
 
 TIER_SIMULATED = "simulated"
@@ -214,6 +215,14 @@ class SystemDistOracle:
         ``threaded`` by a real one-message-at-a-time inbox round-trip (see :meth:`_dispatch`).
         """
         name = action.name
+        if name in ("begin", "tget", "tput", "commit", "abort"):
+            # The transaction family (DS0 increment 2) is coordinator-local, deterministic
+            # bookkeeping — not a distributed-concurrency concern — so Tier-B computes it with the
+            # same shared OCC logic Tier-A uses (there is no delivery-order question to validate
+            # independently). The genuinely-distributed part — a committed write's async replication
+            # — flows through the in-flight medium and is delivered later by this oracle's own
+            # autonomous-actor ``_advance``, exactly where Tier-B's independence does its work.
+            return txn_step(state, action, self.config)
         ev = self._event(state, action)
         if name in ("put", "cas"):
             return self._write(state, action, ev)

@@ -110,6 +110,66 @@ def test_golden_linearizable_replicates_synchronously():
     }
 
 
+def test_golden_transaction_commit_applies_atomically_and_replicates():
+    # A multi-key OCC transaction (DS0 incr 2): begin, buffer two writes, commit -> both keys bump
+    # to version 1 at the coordinator and replicate async; advance converges every replica. The txn
+    # is removed on commit (no ``txns`` key in the canonical form).
+    final = _final(
+        ["begin n0 t0", "tput n0 t0 x a", "tput n0 t0 y b", "commit n0 t0", "advance 2"]
+    )
+    assert final == {
+        "replicas": [
+            _rep("x", "n0", 1, "a"), _rep("x", "n1", 1, "a"), _rep("x", "n2", 1, "a"),
+            _rep("y", "n0", 1, "b"), _rep("y", "n1", 1, "b"), _rep("y", "n2", 1, "b"),
+        ],
+        "log": [
+            {"id": 0, "node": "n0", "op": "begin n0 t0", "clock": 0, "happens_before": []},
+            {"id": 1, "node": "n0", "op": "tput n0 t0 x a", "clock": 0, "happens_before": [0]},
+            {"id": 2, "node": "n0", "op": "tput n0 t0 y b", "clock": 0, "happens_before": [0, 1]},
+            {"id": 3, "node": "n0", "op": "commit n0 t0", "clock": 0, "happens_before": [0, 1, 2]},
+        ],
+        "inflight": [],  # all four replication messages (x,y -> n1,n2) delivered on advance
+        "partitions": [["n0", "n1", "n2"]],
+        "down": [],
+        "clock": 2,
+        "next_event_id": 4,
+        "next_msg_id": 4,
+        "last_result": ["advanced", "4"],
+    }
+
+
+def test_golden_transaction_conflict_aborts_first_committer_wins():
+    # OCC first-committer-wins: t0 reads x (version 0), a concurrent ``put`` bumps x to version 1,
+    # then t0's commit validates its read-set, finds x changed, and ABORTS (``conflict``) — none of
+    # t0's writes apply, and the txn is discarded (no ``txns`` key). x holds the concurrent put's
+    # value; its replication is still in flight (no advance yet).
+    final = _final(["begin n0 t0", "tget n0 t0 x", "put n0 x c", "commit n0 t0"])
+    assert final == {
+        "replicas": [
+            _rep("x", "n0", 1, "c"), _rep("x", "n1", 0, "nil"), _rep("x", "n2", 0, "nil"),
+            *_boot_y(),
+        ],
+        "log": [
+            {"id": 0, "node": "n0", "op": "begin n0 t0", "clock": 0, "happens_before": []},
+            {"id": 1, "node": "n0", "op": "tget n0 t0 x", "clock": 0, "happens_before": [0]},
+            {"id": 2, "node": "n0", "op": "put n0 x c", "clock": 0, "happens_before": [0, 1]},
+            {"id": 3, "node": "n0", "op": "commit n0 t0", "clock": 0, "happens_before": [0, 1, 2]},
+        ],
+        "inflight": [
+            {"id": 0, "src": "n0", "dst": "n1", "object_id": "x", "version": 1, "value": "c",
+             "deliver_after": 1},
+            {"id": 1, "src": "n0", "dst": "n2", "object_id": "x", "version": 1, "value": "c",
+             "deliver_after": 1},
+        ],
+        "partitions": [["n0", "n1", "n2"]],
+        "down": [],
+        "clock": 0,
+        "next_event_id": 4,
+        "next_msg_id": 2,
+        "last_result": ["conflict", ""],
+    }
+
+
 def test_golden_linearizable_rejects_write_under_partition():
     # CP under partition: a synchronous write that cannot reach all replicas is rejected
     # (``unavailable``) rather than committed locally — so no replica is ever stale (vs the

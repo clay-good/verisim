@@ -77,6 +77,19 @@ is immediately consistency-visible and that slack collapses.
 If the coordinator node is **down**, a client op returns `("unavailable", "")` and makes no state
 change beyond logging the attempt; if the node holds no replica of the key, `("no_replica", "")`.
 
+### Transaction ops (DS0 increment 2 — multi-key OCC; append a causal-log event)
+
+| Action | Semantics |
+|---|---|
+| `begin <node> <txn>` | open a transaction `txn` at coordinator `node`. `("ok", "")`; `("exists", "")` if already open; `("unavailable", "")` if the node is down. |
+| `tget <node> <txn> <key>` | read `key`'s local replica within the txn; **pin its version** on first read (the read-set the commit validates), with read-your-writes for a value the txn has already buffered. `("ok", value)`. |
+| `tput <node> <txn> <key> <val>` | buffer a write to `key` in the txn (no replica changes yet). `("ok", val)`. |
+| `commit <node> <txn>` | **validate**: if any read key's local version changed since it was read → discard the txn, `("conflict", "")`; else apply every buffered write atomically (each an MVCC bump + replication, exactly as `put`) and end the txn, `("committed", "")`. |
+| `abort <node> <txn>` | discard the txn. `("aborted", "")`. |
+
+A `tget`/`tput`/`commit`/`abort` on an unknown txn (or one opened at a different node) returns
+`("no_txn", "")`. See §9 for the concurrency-control discipline.
+
 ### Fault / time ops (the medium — no causal-log event)
 
 | Action | Semantics |
@@ -183,3 +196,35 @@ across the exhaustive grammar battery and all three workload drivers (including 
 adversarial one) Tier-A and Tier-B agree **bit-for-bit (1.000, residual 0)**, the `H_ε(ρ)` curve is
 oracle-invariant (gap 0 at every ρ), the broken control is caught, and the real-OS-thread tier agrees
 too — the distributed W1 retirement.
+
+## 9. Transactions — optimistic concurrency control (DS0 increment 2, SPEC-7 §3.2)
+
+The transaction family (`begin`/`tget`/`tput`/`commit`/`abort`, §3) is a multi-key atomic unit over
+the replicated KV, implemented in [`verisim.dist.txn`](../src/verisim/dist/txn.py) and shared by
+both oracles. The coordinator buffers a transaction's reads and writes locally; the read-set pins
+the `(key, version)` each key was first read at, and the write-buffer holds the `(key, value)` pairs
+to apply atomically.
+
+**Concurrency control: OCC, first-committer-wins (design decision `DD-D3`).** On `commit`, the
+read-set is **validated** — for each read key, the coordinator's *current* local version must equal
+the version the txn read. If any changed (a concurrent transaction committed it first), the commit
+**aborts** (`conflict`) and applies nothing; otherwise every buffered write is applied atomically
+(an MVCC version bump per key) and replicated through the same in-flight medium as a plain `put`.
+*Rationale:* OCC is **deterministic and deadlock-free** — no lock table, no lock-acquisition order,
+no deadlock detection / victim selection (all of which would inject nondeterminism or require a
+scheduler) — so it is the discipline the deterministic core pins first, exactly as the KV core
+pinned async-replication LWW before consensus. Lock-based 2PL (and the serializable/snapshot
+isolation levels it enables) is a later refinement.
+
+**Composition.** A committed transaction's writes flow through the existing replication medium, so
+they inherit the consistency model unchanged: under `eventual` the peers converge on a later
+`advance`; under `linearizable` the commit replicates synchronously and is **rejected**
+(`unavailable`, the txn staying open for retry) if it cannot reach all replicas under partition. The
+transaction state is purely additive: an empty `txns` set is **omitted** from the canonical form
+(§6), so every DS0-increment-1 golden and content-addressed hash is unchanged, and Tier-B reproduces
+every transaction trajectory bit-for-bit (the commit replication is delivered by its autonomous
+actors on `advance`, where its independence does its work). The OCC commit/abort frontier is pinned
+by **ED8** ([`verisim.experiments.ed8`](../src/verisim/experiments/ed8.py),
+[`ed8.png`](../../figures/ed8.png)): at concurrency `K` over `M` objects the measured commit rate
+tracks the balls-in-bins occupancy law `M·(1−(1−1/M)^K)/K` (the semantics are exactly right, not
+merely plausible), with Tier-B agreeing on every scenario.
