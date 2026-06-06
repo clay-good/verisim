@@ -1,0 +1,7 @@
+panel,level,mode,inflight_rate,bit_h,cons_h,gap,gap_lo,gap_hi
+row,linearizable,gross,0.0000,4.3750,4.3750,0.0000,0.0000,0.0000
+row,linearizable,subtle,0.0000,40.0000,40.0000,0.0000,0.0000,0.0000
+row,eventual,gross,3.2063,2.1250,2.1250,0.0000,0.0000,0.0000
+row,eventual,subtle,3.2063,2.5000,13.0000,10.5000,3.7500,18.1250
+verdict,linearizable->eventual,gross,3.2063,,,0.0000,0.0000,
+verdict,linearizable->eventual,subtle,3.2063,,,0.0000,10.5000,

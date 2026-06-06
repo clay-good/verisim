@@ -85,7 +85,9 @@ class DistNoisyModel:
 
     _OUT_OF_VOCAB = "Q"  # deliberately not in any DistConfig.values
 
-    def __init__(self, oracle: DistOracle, *, noise: float, mode: str, rng: object) -> None:
+    def __init__(
+        self, oracle: DistOracle, *, noise: float, mode: str, rng: object, fallback: bool = True
+    ) -> None:
         import random as _random
 
         if mode not in ("gross", "subtle"):
@@ -93,6 +95,14 @@ class DistNoisyModel:
         self.oracle = oracle
         self.noise = noise
         self.mode = mode
+        # When ``fallback`` (the default), if the targeted edit class is absent this step the model
+        # still drifts by dropping a random edit -- keeps the proposer noisy on every step. Set
+        # ``fallback=False`` to make the error class *exact*: the model errs only when its targeted
+        # edit exists, and accepts the truth otherwise. This matters across consistency models
+        # (SPEC-7 H20): under ``linearizable`` there is no in-flight message, so a
+        # ``fallback=False`` ``subtle`` model makes *no* error -- the medium-targeting error class
+        # is structurally empty, which is exactly the point the consistency-level sweep measures.
+        self.fallback = fallback
         assert isinstance(rng, _random.Random)
         self.rng = rng
 
@@ -119,6 +129,9 @@ class DistNoisyModel:
                 delta[i] = MsgSend(m.msg_id, m.src, m.dst, m.object_id, m.version,
                                    self._OUT_OF_VOCAB, m.deliver_after)
                 return delta
-        # fallback (no targetable edit this step): drop one edit so the model still drifts
+        # no targetable edit of the chosen class this step
+        if not self.fallback:
+            return delta  # exact error class: accept the truth (the class is empty here)
+        # fallback: drop one edit so the model still drifts on every step
         delta.pop(self.rng.randrange(len(delta)))
         return delta

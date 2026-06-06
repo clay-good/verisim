@@ -14,11 +14,26 @@ from verisim.distoracle import ReferenceDistOracle
 CONFIG = DistConfig(name="golden", nodes=("n0", "n1", "n2"), objects=("x", "y"))
 ORACLE = ReferenceDistOracle(CONFIG)
 
+# The strong-consistency counterpart, pinning the linearizable (synchronous, CP-under-partition)
+# semantics added for the H20 consistency-level sweep (SPEC-7 §3.4, §5.1).
+LIN_CONFIG = DistConfig(
+    name="golden-lin", nodes=("n0", "n1", "n2"), objects=("x", "y"),
+    consistency_model="linearizable",
+)
+LIN_ORACLE = ReferenceDistOracle(LIN_CONFIG)
+
 
 def _final(cmds: list[str]) -> dict[str, object]:
     state = DistributedState.initial(CONFIG)
     for cmd in cmds:
         state = ORACLE.step(state, parse_dist_action(cmd)).state
+    return to_canonical(state)
+
+
+def _final_lin(cmds: list[str]) -> dict[str, object]:
+    state = DistributedState.initial(LIN_CONFIG)
+    for cmd in cmds:
+        state = LIN_ORACLE.step(state, parse_dist_action(cmd)).state
     return to_canonical(state)
 
 
@@ -73,4 +88,46 @@ def test_golden_partition_leaves_isolated_replica_stale():
         "next_event_id": 2,
         "next_msg_id": 4,
         "last_result": ["advanced", "1"],
+    }
+
+
+def test_golden_linearizable_replicates_synchronously():
+    # A single put commits to *every* replica in the same step — no in-flight, no advance needed,
+    # the strong-consistency counterpart of the eventual-consistency async-then-converge golden.
+    final = _final_lin(["put n0 x b"])
+    assert final == {
+        "replicas": [
+            _rep("x", "n0", 1, "b"), _rep("x", "n1", 1, "b"), _rep("x", "n2", 1, "b"), *_boot_y()
+        ],
+        "log": [{"id": 0, "node": "n0", "op": "put n0 x b", "clock": 0, "happens_before": []}],
+        "inflight": [],          # synchronous: nothing left in flight
+        "partitions": [["n0", "n1", "n2"]],
+        "down": [],
+        "clock": 0,              # no advance was needed to converge
+        "next_event_id": 1,
+        "next_msg_id": 0,        # no replication messages were ever sent
+        "last_result": ["ok", "b"],
+    }
+
+
+def test_golden_linearizable_rejects_write_under_partition():
+    # CP under partition: a synchronous write that cannot reach all replicas is rejected
+    # (``unavailable``) rather than committed locally — so no replica is ever stale (vs the
+    # eventual golden above, where the same script leaves n2 stale).
+    final = _final_lin(["put n0 x b", "partition n0 n1 | n2", "put n0 x c"])
+    assert final == {
+        "replicas": [
+            _rep("x", "n0", 1, "b"), _rep("x", "n1", 1, "b"), _rep("x", "n2", 1, "b"), *_boot_y()
+        ],
+        "log": [
+            {"id": 0, "node": "n0", "op": "put n0 x b", "clock": 0, "happens_before": []},
+            {"id": 1, "node": "n0", "op": "put n0 x c", "clock": 0, "happens_before": [0]},
+        ],
+        "inflight": [],          # the rejected write enqueued nothing
+        "partitions": [["n0", "n1"], ["n2"]],
+        "down": [],
+        "clock": 0,
+        "next_event_id": 2,
+        "next_msg_id": 0,
+        "last_result": ["unavailable", ""],  # partitioned write rejected, not stale-committed
     }

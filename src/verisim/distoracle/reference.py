@@ -82,13 +82,33 @@ class ReferenceDistOracle:
     def _write(
         self, state: DistributedState, action: DistAction
     ) -> tuple[DistDelta, str, str]:
-        """``put`` / ``cas``: write the coordinator's replica + enqueue async replication."""
+        """``put`` / ``cas``: write the coordinator's replica + replicate (async or synchronous).
+
+        Two declared consistency models share this entry (SPEC-7 §3.4, §5.1; H20):
+
+        - ``eventual`` (the default): write the coordinator's local replica immediately and enqueue
+          **async** replication messages; peers converge later on ``advance``, so reads are stale
+          under partition (the increment-1 dynamic).
+        - ``linearizable``: replicate **synchronously** to every replica in the same step (no
+          in-flight messages, so no replica is ever stale) — but, being a CP system, a write that
+          cannot reach all of an object's replicas (a partition or a crashed peer) is **rejected**
+          (``unavailable``) rather than committed locally. Strong consistency trades availability
+          under partition for the absence of divergence (the CAP choice, HW-5).
+        """
         node, key = action.args[0], action.args[1]
         ev = self._event(state, node, action.raw)
         replica = state.replicas.get((key, node))
         if not state.is_up(node) or replica is None:
             status = "unavailable" if not state.is_up(node) else "no_replica"
             return [ev, SetResult(status, "")], status, ""
+
+        linearizable = self.config.consistency_model == "linearizable"
+        if linearizable and any(
+            not (state.connected(node, peer) and state.is_up(peer))
+            for peer in self.config.replicas_of(key)
+        ):
+            # CP under partition: a synchronous write cannot commit without all replicas reachable.
+            return [ev, SetResult("unavailable", "")], "unavailable", ""
 
         if action.name == "cas":
             old, new = action.args[2], action.args[3]
@@ -99,7 +119,17 @@ class ReferenceDistOracle:
             value = action.args[2]
 
         new_version = replica.version + 1
-        edits: list[DistEdit] = [ev, ReplicaWrite(key, node, new_version, value)]
+        if linearizable:
+            # synchronous: every replica gets the new version now; no in-flight, no staleness.
+            edits: list[DistEdit] = [ev]
+            edits.extend(
+                ReplicaWrite(key, peer, new_version, value)
+                for peer in self.config.replicas_of(key)
+            )
+            edits.append(SetResult("ok", value))
+            return edits, "ok", value
+
+        edits = [ev, ReplicaWrite(key, node, new_version, value)]
         msg_id = state.next_msg_id
         for peer in self.config.replicas_of(key):
             if peer == node:

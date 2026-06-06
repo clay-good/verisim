@@ -45,6 +45,25 @@ ties broken deterministically by the value token*. This makes the store **eventu
 once every replication message is delivered, all replicas of an object hold the same `(version,
 value)`, regardless of the order messages arrived in.
 
+### 2.1 The declared consistency model (`DistConfig.consistency_model`)
+
+The `eventual` model above is the default. A second model, **`linearizable`**, ships for the H20
+consistency-level sweep (SPEC-7 §3.4, §10.2) — the same `put`/`cas` grammar with a different
+replication discipline:
+
+| | `eventual` (default) | `linearizable` |
+|---|---|---|
+| replication | **async**: write local replica now, enqueue `MsgSend`s; peers converge on `advance` | **synchronous**: write **every** replica in the same step — no `MsgSend`, no in-flight window |
+| staleness | a `get` may read a stale replica under partition | no replica is ever stale (all writes are all-replica) |
+| under partition | the write commits locally and propagates after `heal`+`advance` | the write is **rejected** `("unavailable","")` if any replica is unreachable/down — a **CP** system that trades availability for the absence of divergence (CAP, HW-5) |
+| in-flight medium | present (the hidden state a partial correction/cheap tier can miss) | **absent** |
+
+The two models are the strong/weak ends of the §3.4 consistency curriculum. The contrast is the H20
+mechanism made concrete: weak consistency adds a *consistency-invisible in-flight medium* (the source
+of stale reads, the `subtle` error class of ED1/ED3/ED5, and the slack that lets the consistency-
+faithful horizon outlast the bit-faithful one in H19); strong consistency removes it, so every error
+is immediately consistency-visible and that slack collapses.
+
 ## 3. Actions
 
 ### Client ops (append a causal-log event; set `last_result`)

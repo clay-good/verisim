@@ -1,0 +1,10 @@
+{
+  "name": "ed4-consistency",
+  "driver": "contention",
+  "eval_seeds": [100, 101, 102, 103, 104, 105, 106, 107],
+  "n_steps": 40,
+  "noise": 0.4,
+  "epsilon": 0.0,
+  "levels": ["linearizable", "eventual"],
+  "modes": ["gross", "subtle"]
+}
