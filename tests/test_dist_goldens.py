@@ -255,6 +255,45 @@ def test_golden_version_oracle_catches_split_brain_fork():
     assert report.anomaly == "incompatible-order"
 
 
+def test_golden_partial_observation_crash_equals_partition_from_one_vantage():
+    # The partial-observation golden (SPEC-7 §5.4): from a single external vantage, a crashed node
+    # and a node partitioned away project to byte-identical Observations — the failure-detector
+    # indistinguishability — yet a paired vantage that reaches the node's side separates them.
+    from verisim.dist.observe import observe
+
+    base = DistributedState.initial(CONFIG)
+    for cmd in ["put n0 x b", "advance 2"]:
+        base = ORACLE.step(base, parse_dist_action(cmd)).state
+    crashed = ORACLE.step(base, parse_dist_action("crash n2")).state
+    partitioned = ORACLE.step(base, parse_dist_action("partition n0 n1 | n2")).state
+
+    # the committed projection an external client at n0 obtains in *both* worlds (n2 dark)
+    expected = {
+        "vantage": ["n0"],
+        "reachable": ["n0", "n1"],
+        "unreachable": ["n2"],
+        "replicas": [_rep("x", "n0", 1, "b"), _rep("x", "n1", 1, "b"),
+                     _rep("y", "n0", 0, "nil"), _rep("y", "n1", 0, "nil")],
+        "clock": 2,
+    }
+
+    def _obs_dict(state: DistributedState, vantage: tuple[str, ...]) -> dict[str, object]:
+        o = observe(state, vantage)
+        return {
+            "vantage": sorted(o.vantage),
+            "reachable": sorted(o.reachable),
+            "unreachable": sorted(o.unreachable),
+            "replicas": [_rep(obj, node, ver, val) for obj, node, ver, val in sorted(o.replicas)],
+            "clock": o.clock,
+        }
+
+    assert _obs_dict(crashed, ("n0",)) == expected
+    assert _obs_dict(partitioned, ("n0",)) == expected  # indistinguishable from one vantage
+    # the paired vantage {n0, n2} sees n2's live replica only in the partition world
+    assert "n2" in observe(partitioned, ("n0", "n2")).reachable
+    assert "n2" in observe(crashed, ("n0", "n2")).unreachable
+
+
 def test_golden_linearizable_rejects_write_under_partition():
     # CP under partition: a synchronous write that cannot reach all replicas is rejected
     # (``unavailable``) rather than committed locally — so no replica is ever stale (vs the

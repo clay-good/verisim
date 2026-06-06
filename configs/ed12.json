@@ -1,0 +1,11 @@
+{
+  "name": "ed12-partial-observation",
+  "driver": "contention",
+  "eval_seeds": [200, 201, 202, 203, 204, 205, 206, 207],
+  "n_steps": 40,
+  "epsilon": 0.0,
+  "noise": 0.4,
+  "modes": ["gross", "subtle"],
+  "battery_seeds": [300, 301, 302, 303, 304, 305, 306, 307],
+  "battery_prefix": 6
+}

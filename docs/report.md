@@ -1452,6 +1452,41 @@ outside, trusting nothing it is handed.
 
 ![ED11: Elle's version oracle recovers the write-skew verdict from list-append values alone (sound against the store's exact versions) and catches the split-brain incompatible-order fork the integer-version mode cannot represent](../figures/ed11.png)
 
+## ED12 / partial observation — the probe-faithful horizon, and the crash/partition indistinguishability
+
+Every metric above compared the *full* cluster state. But W7 says there is no consistent global
+snapshot, and no real observer ever has one: a client, an SRE, or a monitoring probe sees only the
+part of the cluster it can *reach*. [`observe(state, vantage)`](../src/verisim/dist/observe.py) makes
+that epistemic limit deterministic — it projects a `DistributedState` onto the `Observation` an
+observer connected to a set of `vantage` nodes can obtain: replicas on **reachable** (up +
+co-partitioned) nodes only, **never the in-flight replication medium**, and every other node labelled
+`unreachable` *with no reason attached*. [`observable_divergence`](../src/verisim/distmetrics/observe.py)
+is the §5.4 **probe (cheap, localized)** oracle mode: identical to the bit-exact `divergence` when the
+vantage reaches the whole cluster, in-flight-forgiving under partition.
+
+ED12 ([`ed12.py`](../src/verisim/experiments/ed12.py), [`ed12.csv`](../figures/ed12.csv)) reports two
+findings, dependency-free. **The probe-faithful horizon outlasts the bit-faithful one, for in-flight
+errors.** Free-running, the observable horizon outlasts the bit horizon for `subtle` (in-flight)
+errors — **H=14.0 vs 5.0, gap +9.0 (disjoint CI [4.0, 16.1])** — because no probe, at any vantage,
+can read a corrupted message-in-transit until `advance` delivers it and writes a replica; for `gross`
+(durable-replica) errors the probe sees the corruption immediately and the two coincide (the control).
+This is the partial-observation form of ED5/H19, read through *physical observability* rather than the
+consistency-view abstraction, and it is **structurally guaranteed**: a bit-faithful step is
+necessarily observably faithful, so `H_ε^bit ≤ H_ε^observable` on every rollout (verified, not just
+asserted). The three projections nest — `H_ε^bit ≤ H_ε^observable ≤ H_ε^consistency` — bytes strictest,
+the probe dropping the unseeable medium, the consistency view additionally dropping node placement.
+**Crash and partition are indistinguishable from one vantage.** A `down` node and a partitioned-away
+node project to the *same* `unreachable` fact — the failure-detector limit behind FLP. Across the
+battery a single external vantage sees the crashed and partitioned worlds as byte-identical
+(indistinguishable rate **1.0** — one probe cannot localize the fault), while a paired vantage that
+reaches the node's side exposes the live isolated replica in the partition case but nothing in the
+crash case (rate **0.0**). One probe cannot tell a crash from a partition; a quorum can — the
+operational reason distributed failure detection needs more than one observer. The probe is the
+deterministic substrate the (deferred) RSSM belief (§6.2) must roll forward under partition: the
+belief's task is to predict the full state from the observable one, undefined until "observable" is.
+
+![ED12: the observable-faithful horizon outlasts the bit-faithful one for in-flight errors (no probe can read the replication medium), and a single vantage cannot tell a crash from a partition while a paired vantage can](../figures/ed12.png)
+
 ## What the distributed world adds, and what remains
 
 The fourth world generalizes the program's three load-bearing findings — the floor→cliff `H_ε(ρ)`
@@ -1470,11 +1505,16 @@ retiring W1 for the distributed world. The deterministic core also grows a **mul
 transaction** layer with two **isolation levels** — `serializable` and `snapshot` (ED8/ED9 above) —
 and a black-box **Elle-style serializability checker** that recovers the write-skew anomaly from the
 observable history with no oracle and certifies the serializable level reference-free (ED10 above).
+**Partial observation now ships** (ED12 above): `observe(state, vantage)` is the §5.4 probe oracle
+mode made a deterministic object — the substrate the structured `M_θ`'s RSSM belief must roll forward
+under partition — and it surfaces two findings unique to a world no observer fully sees (the
+probe-faithful horizon outlasting the bit-faithful one, and the crash/partition indistinguishability).
 **Open (the honest deferrals):** a wrapped **external**-binary real-DST runtime
 (madsim/Shadow/Antithesis-class, which need external sandboxes), the structured GNN/RSSM `M_θ` arm
-(where the smart-`π_c` lever the ED2-smart null localizes can be re-tested, tied to partial
-observation), the smart-`π_w` (which-tier) scheduler, the Raft-subset consensus group, lock-based
-2PL, and the `causal` read/replication consistency model (it needs cross-node vector-clock context).
+(where the smart-`π_c` lever the ED2-smart null localizes can be re-tested, now that partial
+observation is defined), the smart-`π_w` (which-tier) scheduler, the Raft-subset consensus group,
+lock-based 2PL, and the `causal` read/replication consistency model (it needs cross-node vector-clock
+context).
 
 # Scale (SPEC-10): the floor+cliff was largely an under-resourcing artifact (H26)
 
@@ -1948,6 +1988,8 @@ python -m verisim.experiments.ed9 --config configs/ed9.json \
     --out figures/ed9.csv --plot figures/ed9.png    # txn isolation: write-skew + price of serializability
 python -m verisim.experiments.ed10 --config configs/ed10.json \
     --out figures/ed10.csv --plot figures/ed10.png  # Elle: write-skew recovered black-box (DS3 incr 2)
+python -m verisim.experiments.ed12 --config configs/ed12.json \
+    --out figures/ed12.csv --plot figures/ed12.png  # partial observation: probe horizon + FLP (DS3 incr 4)
 ```
 
 The run-records are git-ignored (regenerable); the figures and their CSVs are

@@ -298,3 +298,54 @@ ED10 supplies the store's MVCC version order to Elle (its *version-oracle* mode)
 version order from observed values alone (Elle's list-append / unique-write recoverability) is
 deferred. Pure standard library, dependency-free, GPU-free.
 
+## 10. Partial observation — the probe projection (DS3 increment 4, SPEC-7 §5.4)
+
+Every section above describes the *full* cluster state — what the oracle computes and what a
+bit-exact divergence compares. But **W7 says there is no consistent global snapshot**, and no real
+observer ever has one: a client, an SRE, or a monitoring probe sees only the part of the cluster it
+can *reach*. [`verisim.dist.observe`](../src/verisim/dist/observe.py) makes that epistemic limit a
+deterministic object. `observe(state, vantage)` projects a `DistributedState` onto the `Observation`
+an observer connected to a set of `vantage` nodes can obtain:
+
+| `Observation` field | Meaning |
+|---|---|
+| `vantage` | the nodes the observer can query directly (a client's connections, an SRE's hosts) |
+| `reachable` | the **up** nodes the observer can talk to: up vantage nodes plus their co-partitioned up peers |
+| `unreachable` | every other node, **with no reason attached** — crashed and partitioned-away are not distinguished |
+| `replicas` | the `(object, node, version, value)` tuples on reachable nodes only — the rest of the cluster is dark |
+| `clock` | observable via any reachable node; `None` if the whole vantage is dark |
+
+There is deliberately **no in-flight field**. Three properties follow, all pinned by tests
+([`test_dist_observe.py`](../tests/test_dist_observe.py)) and a golden
+([`test_dist_goldens.py`](../tests/test_dist_goldens.py)):
+
+1. **The in-flight medium is unobservable.** The replication messages are in the network, not in any
+   node's memory, so no probe — even the maximal whole-cluster vantage — can read them. A model that
+   mispredicts only a message-in-transit is *observably faithful* until `advance` delivers it and
+   writes a replica. This is the partial-observation form of H19/ED5: where the consistency view
+   forgives the in-flight medium by *abstraction*, the probe forgives it by *physical
+   unobservability*.
+2. **Crash and partition are indistinguishable from one vantage.** A `down` node and a
+   partitioned-away node both project to the same `unreachable` fact — the failure-detector limit
+   behind FLP. `observe(crashed, ("n0",)) == observe(partitioned, ("n0",))` exactly. A **second**
+   vantage that reaches the node's side of the split separates them (the partition case exposes the
+   live isolated replica; the crash case does not). One probe cannot localize a fault to
+   crash-vs-partition; a quorum of probes can.
+3. **A probe is the §5.4 cheap-localized oracle mode.**
+   [`observable_divergence(truth, pred, vantage)`](../src/verisim/distmetrics/observe.py) is the
+   probe-mode divergence: identical to the bit-exact `divergence` when the vantage reaches the whole
+   cluster, smaller (and in-flight-forgiving) under partition. Because a bit-faithful step is
+   necessarily observably faithful, the **observable-faithful horizon dominates the bit-faithful
+   horizon** — `H_ε^bit ≤ H_ε^observable`, structurally.
+
+**ED12** ([`verisim.experiments.ed12`](../src/verisim/experiments/ed12.py),
+[`ed12.png`](../../figures/ed12.png)) measures both, dependency-free: free-running, the observable
+horizon outlasts the bit horizon for `subtle` (in-flight) errors (**probe gap +9.0 steps**, disjoint
+CI) and coincides for `gross` (durable-replica) errors (the control); and across a battery a single
+external vantage cannot tell a crash from a partition (**indistinguishable rate 1.0**) while a paired
+vantage always can (**0.0**). The `Observation` is canonical by construction (frozensets), so the
+indistinguishability is a testable byte-equality. This is the deterministic substrate the (deferred)
+RSSM belief (§6.2) must roll forward under partition — the belief's task is to predict the full state
+from the observable one, and that task is undefined until "observable" is. Pure standard library,
+dependency-free, GPU-free.
+

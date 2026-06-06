@@ -1,0 +1,4 @@
+panel,mode,bit_h,obs_h,cons_h,gap,gap_lo,gap_hi,single_indist,paired_indist
+horizon,gross,2.5000,3.1250,3.5000,0.6250,0.0000,1.6250,,
+horizon,subtle,5.0000,14.0000,15.2500,9.0000,4.0000,16.1250,,
+indist,,,,,,,,1.0000,0.0000

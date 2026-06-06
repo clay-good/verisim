@@ -17,6 +17,11 @@ from verisim.distmetrics.divergence import (
     divergence,
     object_consistency_view,
 )
+from verisim.distmetrics.observe import (
+    observable_divergence,
+    observably_indistinguishable,
+    observation_facts,
+)
 
 __all__ = [
     "bits_to_correct",
@@ -27,4 +32,7 @@ __all__ = [
     "dist_facts",
     "divergence",
     "object_consistency_view",
+    "observable_divergence",
+    "observably_indistinguishable",
+    "observation_facts",
 ]

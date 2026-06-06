@@ -9,6 +9,7 @@ canonical serialization (:mod:`verisim.dist.serialize`), and the curriculum conf
 from verisim.dist.action import DistAction, DistParseError, parse_dist_action
 from verisim.dist.config import DEFAULT_DIST_CONFIG, DistConfig, scaled_dist_config
 from verisim.dist.delta import DistDelta, DistEdit, apply
+from verisim.dist.observe import Observation, observe
 from verisim.dist.state import DistributedState, TxnState
 
 __all__ = [
@@ -19,8 +20,10 @@ __all__ = [
     "DistEdit",
     "DistParseError",
     "DistributedState",
+    "Observation",
     "TxnState",
     "apply",
+    "observe",
     "parse_dist_action",
     "scaled_dist_config",
 ]
