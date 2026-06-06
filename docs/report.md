@@ -1196,6 +1196,35 @@ consistency buys the model no forgiveness because there is no hidden state to fo
 
 ![ED4 / H20: the consistency-vs-bit horizon gap is present under eventual consistency, zero under linearizable](../figures/ed4_consistency.png)
 
+That synthetic sweep can only report the *gap*: at equal noise the *absolute* free-running horizon
+is confounded by delta composition (a `put` is one local write + N async messages under `eventual`
+but N synchronous writes under `linearizable`, so "equal noise" is not equal difficulty). The
+**absolute-predictability** form of H20 needs a *learned* model trained on each level's own dynamics,
+so each is asked to predict the world it saw. ED4-consistency-learned
+([`ed4_consistency_learned.py`](../src/verisim/experiments/ed4_consistency_learned.py),
+[`ed4_consistency_learned.csv`](../figures/ed4_consistency_learned.csv)) trains one flat `M_θ` per
+level (same init seed; only the world differs) and measures its free-running (ρ=0) horizon.
+
+| consistency model | free-running bit `H_ε` [95% CI] | H19 gap (cons_h − bit_h) [95% CI] |
+|---|---|---|
+| **linearizable** (strong) | **1.42** [0.25, 2.92] | +1.33 [0.00, 3.17] |
+| **eventual** (weak) | **0.58** [0.00, 1.25] | +0.42 [0.17, 0.67] |
+
+**H20 confirmed in direction:** the learned model free-runs **~2.4× further under `linearizable`**
+than under `eventual` — strong consistency *is* more predictable, because there is less hidden state
+to track. Honest caveat: the absolute horizons are small (a weak flat free-runner, consistent with
+ED1-learned's low ρ=0 floor), so the CIs overlap — the lift is directional, not disjoint; the clean
+separation awaits a stronger free-runner (the structured GNN/RSSM arm, still deferred). **And the
+honest difference from the synthetic arm:** the H19 gap on the *real* model is **positive at both
+levels** (not the synthetic's clean *eventual-only* gap), because a real model's errors land on
+consistency-invisible **bookkeeping** — clocks, the causal log, the partition structure — present at
+both levels, not only the in-flight medium the dialed synthetic error targets. So the consistency
+oracle forgives *more* of a real model's errors than the "weak-consistency-only" reading predicts:
+the synthetic arm's clean attribution to the in-flight medium is a property of the dialed error
+distribution, not of every model.
+
+![ED4 / H20 (learned): the model free-runs ~2.4× further under linearizable; the H19 gap is positive at both levels on the real model](../figures/ed4_consistency_learned.png)
+
 ## ED5 / H19 + H18 — consistency-faithful horizon *outlasts* bit-faithful, and the loop is learning-augmented
 
 ED5 ([`ed5.py`](../src/verisim/experiments/ed5.py), [`ed5.csv`](../figures/ed5.csv)) is the §9.1
@@ -1744,6 +1773,8 @@ python -m verisim.experiments.ed4_fault --config configs/ed4_fault.json \
     --out figures/ed4_fault.csv --plot figures/ed4_fault.png        # H21 (DST data factory)
 python -m verisim.experiments.ed4_consistency --config configs/ed4_consistency.json \
     --out figures/ed4_consistency.csv --plot figures/ed4_consistency.png  # H20 (consistency level)
+python -m verisim.experiments.ed4_consistency_learned --config configs/ed4_consistency_learned.json \
+    --out figures/ed4_consistency_learned.csv --plot figures/ed4_consistency_learned.png  # H20 absolute (real M_θ)
 python -m verisim.experiments.ed5 --config configs/ed5.json \
     --out figures/ed5.csv --plot figures/ed5.png                    # H19 + H18
 python -m verisim.experiments.ed6 --config configs/ed6.json \

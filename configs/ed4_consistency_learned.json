@@ -1,0 +1,19 @@
+{
+  "name": "ed4-consistency-learned",
+  "train_driver": "contention",
+  "train_seeds": [0, 1, 2, 3],
+  "train_steps_per_traj": 40,
+  "n_layer": 2,
+  "n_head": 2,
+  "n_embd": 64,
+  "block_size": 512,
+  "train_iters": 700,
+  "lr": 0.003,
+  "model_seed": 0,
+  "max_int": 256,
+  "eval_driver": "contention",
+  "eval_seeds": [100, 101, 102, 103, 104, 105, 106, 107, 108, 109, 110, 111],
+  "n_steps": 40,
+  "epsilon": 0.0,
+  "levels": ["linearizable", "eventual"]
+}

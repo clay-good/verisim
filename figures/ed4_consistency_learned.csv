@@ -1,0 +1,4 @@
+panel,level,bit_h,bit_lo,bit_hi,cons_h,gap,gap_lo,gap_hi
+row,linearizable,1.4167,0.2500,2.9167,2.7500,1.3333,0.0000,3.1667
+row,eventual,0.5833,0.0000,1.2500,1.0000,0.4167,0.1667,0.6667
+verdict,linearizable->eventual,1.4167,,,0.5833,1.3333,0.4167,
