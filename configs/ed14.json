@@ -1,0 +1,5 @@
+{
+  "name": "ed14-quorum",
+  "n_nodes": 5,
+  "minority_sizes": [1, 2, 3, 4]
+}

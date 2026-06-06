@@ -270,11 +270,15 @@ class SystemDistOracle:
             status = "unavailable" if not state.is_up(node) else "no_replica"
             return [ev, SetResult(status, "")], status, ""
 
-        linearizable = self.config.consistency_model == "linearizable"
-        if linearizable and any(
-            not (state.connected(node, peer) and state.is_up(peer))
-            for peer in self.config.replicas_of(key)
-        ):
+        model = self.config.consistency_model
+        peers = self.config.replicas_of(key)
+        reachable = [p for p in peers if state.connected(node, p) and state.is_up(p)]
+        # CP write-rejection (same gates as Tier-A): linearizable needs all replicas, quorum a
+        # strict majority. The reachability is read from the medium (partition/down) — the
+        # coordinator's decision, not an actor's local view, exactly as Tier-A computes it.
+        if model == "linearizable" and len(reachable) < len(peers):
+            return [ev, SetResult("unavailable", "")], "unavailable", ""
+        if model == "quorum" and len(reachable) < len(peers) // 2 + 1:
             return [ev, SetResult("unavailable", "")], "unavailable", ""
 
         if action.name == "cas":
@@ -292,21 +296,31 @@ class SystemDistOracle:
         coordinator = self._actor_for(state, node)
         self._dispatch(coordinator, ("write", key, new_version, value))  # local write at the actor
 
-        if linearizable:
+        if model == "linearizable":
             edits: list[DistEdit] = [ev]
-            edits.extend(
-                ReplicaWrite(key, peer, new_version, value)
-                for peer in self.config.replicas_of(key)
-            )
+            edits.extend(ReplicaWrite(key, peer, new_version, value) for peer in peers)
+            edits.append(SetResult("ok", value))
+            return edits, "ok", value
+
+        if model == "quorum":
+            # synchronous to the reachable majority; async catch-up to the unreachable minority.
+            edits = [ev]
+            edits.extend(ReplicaWrite(key, peer, new_version, value) for peer in reachable)
+            msg_id = state.next_msg_id
+            for peer in peers:
+                if peer in reachable:
+                    continue
+                edits.append(MsgSend(msg_id, node, peer, key, new_version, value, state.clock + 1))
+                msg_id += 1
             edits.append(SetResult("ok", value))
             return edits, "ok", value
 
         edits = [ev, ReplicaWrite(key, node, new_version, value)]
         # The causal context the replication carries — the *shared* helper, so Tier-A and Tier-B
         # attach byte-identical deps; empty under eventual (which does not order delivery).
-        deps = causal_deps(state, node, key) if self.config.consistency_model == "causal" else ()
+        deps = causal_deps(state, node, key) if model == "causal" else ()
         msg_id = state.next_msg_id
-        for peer in self.config.replicas_of(key):
+        for peer in peers:
             if peer == node:
                 continue
             edits.append(

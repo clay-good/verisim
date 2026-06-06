@@ -1531,6 +1531,35 @@ graded against a genuine message-passing execution, not only the analytic DES.
 
 ![ED13: under eventual the observer sees the effect before its cause (anomaly rate 1.0); under causal the dependent message is held (0.0), the independent message is delivered freely, the cluster still converges, and the autonomous-actor Tier-B reproduces causal delivery bit-for-bit](../figures/ed13.png)
 
+## ED14 / quorum consensus — the availability frontier, and split-brain prevention
+
+The consistency curriculum closes its CP corner with **`quorum`**, the Raft-subset consensus model —
+the realistic middle real systems (Raft, Paxos) occupy. A `quorum` write commits **synchronously to a
+reachable majority** of an object's replicas and is **rejected** (`unavailable`) only when a majority
+is *not* reachable; the unreachable minority catches up asynchronously. This is strictly more available
+than `linearizable` (which the prior increments implemented as *all*-replica synchrony) while remaining
+divergence-free — and ED14 ([`ed14.py`](../src/verisim/experiments/ed14.py),
+[`ed14.csv`](../figures/ed14.csv)) measures both halves on a 5-node cluster (majority = 3).
+
+**The availability frontier.** Partition the cluster into a ``k``-node side and a ``5-k``-node side and
+issue a write from the ``k``-side coordinator. **eventual** commits at every ``k`` (it never
+coordinates); **quorum** commits iff ``k >= 3`` (a step exactly at the majority threshold); and
+**linearizable** commits at no ``k < 5`` at all — under *any* partition it goes dark, because it needs
+every replica. So quorum stays available on the majority side precisely where linearizable cannot — the
+operational reason consensus protocols commit on quorums rather than the whole replica set.
+
+**Split-brain prevention.** Under the same partition, have *both* sides write the same key, then ask
+whether the object **forks** (two replicas hold the same version with different values — the divergent
+committed write ED11's version oracle catches black-box). **eventual** forks every time (rate **1.0** —
+both sides commit, the object diverges); **quorum** and **linearizable** never fork (**0.0**). But only
+**quorum** is in the available-*and*-fork-free corner of the availability×safety plane: linearizable buys
+safety with total unavailability, eventual buys availability with divergence, quorum gets both (on the
+majority side). The ``quorum`` value is purely additive (no new state), so every prior golden and hash
+is unchanged, and the autonomous-actor **Tier-B reproduces the quorum decision bit-for-bit** (the W1
+retirement) — the availability/safety behavior is a property of a real message-passing execution.
+
+![ED14: the quorum availability frontier steps at the majority threshold (eventual flat-available, linearizable flat-unavailable), and only quorum is both available on the majority side and split-brain-free](../figures/ed14.png)
+
 ## What the distributed world adds, and what remains
 
 The fourth world generalizes the program's three load-bearing findings — the floor→cliff `H_ε(ρ)`
@@ -1553,17 +1582,19 @@ observable history with no oracle and certifies the serializable level reference
 mode made a deterministic object — the substrate the structured `M_θ`'s RSSM belief must roll forward
 under partition — and it surfaces two findings unique to a world no observer fully sees (the
 probe-faithful horizon outlasting the bit-faithful one, and the crash/partition indistinguishability).
-**The consistency curriculum is now three-ended** (ED13 above): `causal` fills the middle between
-`eventual` and `linearizable` — async, partition-available delivery that nonetheless forbids
-effect-before-cause, a purely additive `deps` (version-vector slice) field that leaves every prior
-golden and the Tier-B differential untouched — and the **causal Tier-B** (DS0 incr 6) then extends the
-W1 retirement to it: the autonomous-actor system oracle reproduces causal delivery bit-for-bit under
-the seed-shuffled scheduler (a fixed-point that delivers exactly the causally-ready closure).
+**The replication-consistency curriculum is now four-ended** (ED13/ED14 above): `causal` and `quorum`
+fill the span between `eventual` and `linearizable` — `causal` adds happens-before delivery ordering
+(a purely additive `deps` version-vector slice), `quorum` adds majority-commit consensus (an enum value
++ a reachability check, available on the majority side and divergence-free). Each leaves every prior
+golden and the Tier-B differential untouched and is validated bit-for-bit against the autonomous-actor
+execution — the distributed world now spans the CAP design space from AP (`eventual`) to CP
+(`linearizable`), with the realistic consensus middle (`quorum`) measured.
 **Open (the honest deferrals):** a wrapped **external**-binary real-DST runtime
 (madsim/Shadow/Antithesis-class, which need external sandboxes), the structured GNN/RSSM `M_θ` arm
 (where the smart-`π_c` lever the ED2-smart null localizes can be re-tested, now that partial
-observation is defined), the smart-`π_w` (which-tier) scheduler, the Raft-subset consensus group,
-lock-based 2PL, and the embedded SPEC-6 host / SPEC-5 net inside each node.
+observation is defined), the smart-`π_w` (which-tier) scheduler, full Raft leader-election + log-matching
+(the `quorum` model captures the consensus availability/safety without the leader machinery), lock-based
+2PL, and the embedded SPEC-6 host / SPEC-5 net inside each node.
 
 # Scale (SPEC-10): the floor+cliff was largely an under-resourcing artifact (H26)
 
@@ -2041,6 +2072,8 @@ python -m verisim.experiments.ed12 --config configs/ed12.json \
     --out figures/ed12.csv --plot figures/ed12.png  # partial observation: probe horizon + FLP (DS3 incr 4)
 python -m verisim.experiments.ed13 --config configs/ed13.json \
     --out figures/ed13.csv --plot figures/ed13.png  # causal consistency: effect-before-cause anomaly (DS0 incr 5)
+python -m verisim.experiments.ed14 --config configs/ed14.json \
+    --out figures/ed14.csv --plot figures/ed14.png  # quorum consensus: availability frontier + split-brain (DS0 incr 7)
 ```
 
 The run-records are git-ignored (regenerable); the figures and their CSVs are

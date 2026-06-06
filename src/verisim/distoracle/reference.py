@@ -110,16 +110,24 @@ class ReferenceDistOracle:
     ) -> tuple[DistDelta, str, str]:
         """``put`` / ``cas``: write the coordinator's replica + replicate (async or synchronous).
 
-        Two declared consistency models share this entry (SPEC-7 §3.4, §5.1; H20):
+        Four declared consistency models share this entry (SPEC-7 §3.4, §5.1; H20):
 
-        - ``eventual`` (the default): write the coordinator's local replica immediately and enqueue
-          **async** replication messages; peers converge later on ``advance``, so reads are stale
-          under partition (the increment-1 dynamic).
-        - ``linearizable``: replicate **synchronously** to every replica in the same step (no
+        - ``eventual`` / ``causal`` (the default family): write the coordinator's local replica now
+          and enqueue **async** replication messages; peers converge later on ``advance``, so reads
+          are stale under partition. ``causal`` additionally tags each message with the writer's
+          observed versions (``deps``) so delivery respects happens-before (§3.4, ED13).
+        - ``linearizable``: replicate **synchronously** to **every** replica in the same step (no
           in-flight messages, so no replica is ever stale) — but, being a CP system, a write that
-          cannot reach all of an object's replicas (a partition or a crashed peer) is **rejected**
-          (``unavailable``) rather than committed locally. Strong consistency trades availability
-          under partition for the absence of divergence (the CAP choice, HW-5).
+          cannot reach all of an object's replicas is **rejected** (``unavailable``). Strong
+          consistency trades availability under *any* partition for the absence of divergence (CAP).
+        - ``quorum`` (the Raft-subset consensus model, DS0 increment 7): replicate **synchronously**
+          to the reachable majority and reject only when a majority is *not* reachable. So a write
+          commits iff the coordinator's side holds a strict majority of the object's replicas — the
+          realistic consensus availability: available under a *minority* partition (the majority
+          side keeps working) where ``linearizable`` is not, yet still CP (only one side can ever
+          hold the majority, so the object never forks — no split-brain). The unreachable minority
+          catches up **asynchronously** (one ``MsgSend`` each, delivered on ``heal``+``advance``):
+          a minority replica is stale until it rejoins but never divergent.
         """
         node, key = action.args[0], action.args[1]
         ev = self._event(state, node, action.raw)
@@ -128,12 +136,15 @@ class ReferenceDistOracle:
             status = "unavailable" if not state.is_up(node) else "no_replica"
             return [ev, SetResult(status, "")], status, ""
 
-        linearizable = self.config.consistency_model == "linearizable"
-        if linearizable and any(
-            not (state.connected(node, peer) and state.is_up(peer))
-            for peer in self.config.replicas_of(key)
-        ):
-            # CP under partition: a synchronous write cannot commit without all replicas reachable.
+        model = self.config.consistency_model
+        peers = self.config.replicas_of(key)
+        # The replicas the coordinator can synchronously reach (itself + co-partitioned, up peers).
+        reachable = [p for p in peers if state.connected(node, p) and state.is_up(p)]
+
+        # CP write-rejection: ``linearizable`` needs *all* replicas, ``quorum`` a strict majority.
+        if model == "linearizable" and len(reachable) < len(peers):
+            return [ev, SetResult("unavailable", "")], "unavailable", ""
+        if model == "quorum" and len(reachable) < len(peers) // 2 + 1:
             return [ev, SetResult("unavailable", "")], "unavailable", ""
 
         if action.name == "cas":
@@ -145,20 +156,32 @@ class ReferenceDistOracle:
             value = action.args[2]
 
         new_version = replica.version + 1
-        if linearizable:
+        if model == "linearizable":
             # synchronous: every replica gets the new version now; no in-flight, no staleness.
             edits: list[DistEdit] = [ev]
-            edits.extend(
-                ReplicaWrite(key, peer, new_version, value)
-                for peer in self.config.replicas_of(key)
-            )
+            edits.extend(ReplicaWrite(key, peer, new_version, value) for peer in peers)
             edits.append(SetResult("ok", value))
             return edits, "ok", value
 
+        if model == "quorum":
+            # synchronous to the reachable majority; async catch-up (MsgSend) to the unreachable
+            # minority, so the object commits once but never forks (only a majority side can write).
+            edits = [ev]
+            edits.extend(ReplicaWrite(key, peer, new_version, value) for peer in reachable)
+            msg_id = state.next_msg_id
+            for peer in peers:
+                if peer in reachable:
+                    continue
+                edits.append(MsgSend(msg_id, node, peer, key, new_version, value, state.clock + 1))
+                msg_id += 1
+            edits.append(SetResult("ok", value))
+            return edits, "ok", value
+
+        # eventual / causal: local write now + async replication to every other replica.
         edits = [ev, ReplicaWrite(key, node, new_version, value)]
-        deps = causal_deps(state, node, key) if self.config.consistency_model == "causal" else ()
+        deps = causal_deps(state, node, key) if model == "causal" else ()
         msg_id = state.next_msg_id
-        for peer in self.config.replicas_of(key):
+        for peer in peers:
             if peer == node:
                 continue
             edits.append(

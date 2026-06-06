@@ -1,0 +1,17 @@
+panel,model,k,value,detail
+availability,eventual,1,1,commit_from_1_node_side
+availability,eventual,2,1,commit_from_2_node_side
+availability,eventual,3,1,commit_from_3_node_side
+availability,eventual,4,1,commit_from_4_node_side
+availability,quorum,1,0,commit_from_1_node_side
+availability,quorum,2,0,commit_from_2_node_side
+availability,quorum,3,1,commit_from_3_node_side
+availability,quorum,4,1,commit_from_4_node_side
+availability,linearizable,1,0,commit_from_1_node_side
+availability,linearizable,2,0,commit_from_2_node_side
+availability,linearizable,3,0,commit_from_3_node_side
+availability,linearizable,4,0,commit_from_4_node_side
+split_brain,eventual,,1.0000,forks=4/4
+split_brain,quorum,,0.0000,forks=0/4
+split_brain,linearizable,,0.0000,forks=0/4
+tier_b,all,,1.0000,steps=60;majority=3

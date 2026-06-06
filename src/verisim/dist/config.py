@@ -25,9 +25,13 @@ from dataclasses import dataclass
 # histories are legal, SPEC-7 §3.4). DS0 increment 1 implements the asynchronous-replication
 # dynamics directly; the model is the label the consistency-cycle tier (a later DS increment) checks
 # a history against. ``eventual`` is the increment-1 default: writes return locally and replicas
-# converge only when replication messages are delivered by ``advance``.
+# converge only when replication messages are delivered by ``advance``. ``quorum`` (the Raft-subset
+# consensus model, DS0 increment 7) commits synchronously to a reachable **majority** and rejects a
+# write that cannot reach one — strictly more available than ``linearizable`` (which needs *every*
+# replica) while still CP (no split-brain), the realistic middle real consensus protocols occupy.
 CONSISTENCY_MODELS: tuple[str, ...] = (
     "linearizable",
+    "quorum",
     "serializable",
     "snapshot",
     "causal",

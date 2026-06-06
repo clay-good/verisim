@@ -112,6 +112,37 @@ reaches. ED13 ([`ed13.py`](../src/verisim/experiments/ed13.py),
 writes), and that convergence is preserved (eventual ≡ causal final state, in-flight drains to 0).
 **Tier-B (the autonomous-actor system oracle, §8) reproduces causal delivery bit-for-bit** — see §8.1.
 
+### 2.3 Consensus: `quorum` (the Raft-subset model, DS0 increment 7)
+
+A fourth replication model, **`quorum`**, is the realistic CP middle real consensus protocols (Raft,
+Paxos) occupy — strictly more available than `linearizable` while still divergence-free. A `quorum`
+write commits **synchronously to the reachable majority** of an object's replicas and **rejects**
+(`unavailable`) only when a *majority is not reachable*; the unreachable minority catches up
+**asynchronously** (one `MsgSend` each, delivered on `heal`+`advance`). Concretely, with a coordinator
+on a partition side that can reach `m` of the `n` replicas, the write commits iff `m >= n//2 + 1`.
+
+The contrast with the other CP model is the whole point:
+
+| | `eventual` | `quorum` (Raft-subset) | `linearizable` |
+|---|---|---|---|
+| commit needs | the local node only | a reachable **majority** | **every** replica |
+| under a *minority* partition | commits (locally) | **rejected** (CP) | rejected |
+| under a *majority* partition (coordinator on the majority side) | commits | **commits** (available!) | **rejected** |
+| split-brain (both sides write) | **forks** (diverges) | **never** (only the majority commits) | never (neither commits) |
+| stale replicas | yes (until `advance`) | only the minority (until it rejoins) | none |
+
+So `quorum` is the only model that is **both available on the majority side and divergence-free** —
+the reason real systems use majority quorums rather than all-replica synchrony. Where `linearizable`
+goes completely dark under *any* partition (it needs all `n`), `quorum` keeps serving the side that
+holds a majority, and because only one side can ever hold the majority, the object never forks (the
+split-brain ED11's version oracle catches in the `eventual` case). **ED14**
+([`ed14.py`](../src/verisim/experiments/ed14.py), [`ed14.png`](../../figures/ed14.png)) plots the
+availability frontier (the quorum step at the majority threshold) and the split-brain rates
+(`eventual` 1.0, `quorum`/`linearizable` 0.0). The `quorum` enum value is purely additive (no new
+state), so every prior golden/hash is unchanged, and the autonomous-actor **Tier-B reproduces the
+quorum decision bit-for-bit** (the W1 retirement, §8) — the availability/safety behavior is a property
+of a real message-passing execution, not just the analytic DES.
+
 ## 3. Actions
 
 ### Client ops (append a causal-log event; set `last_result`)

@@ -22,6 +22,15 @@ LIN_CONFIG = DistConfig(
 )
 LIN_ORACLE = ReferenceDistOracle(LIN_CONFIG)
 
+# The Raft-subset consensus counterpart (DS0 increment 7): a 3-node cluster, so a strict majority is
+# 2 — a write from the 2-node side commits (sync to the majority, async to the stale minority) where
+# the same partition makes linearizable reject.
+QUORUM_CONFIG = DistConfig(
+    name="golden-quorum", nodes=("n0", "n1", "n2"), objects=("x", "y"),
+    consistency_model="quorum",
+)
+QUORUM_ORACLE = ReferenceDistOracle(QUORUM_CONFIG)
+
 
 def _final(cmds: list[str]) -> dict[str, object]:
     state = DistributedState.initial(CONFIG)
@@ -34,6 +43,13 @@ def _final_lin(cmds: list[str]) -> dict[str, object]:
     state = DistributedState.initial(LIN_CONFIG)
     for cmd in cmds:
         state = LIN_ORACLE.step(state, parse_dist_action(cmd)).state
+    return to_canonical(state)
+
+
+def _final_quorum(cmds: list[str]) -> dict[str, object]:
+    state = DistributedState.initial(QUORUM_CONFIG)
+    for cmd in cmds:
+        state = QUORUM_ORACLE.step(state, parse_dist_action(cmd)).state
     return to_canonical(state)
 
 
@@ -343,3 +359,38 @@ def test_golden_linearizable_rejects_write_under_partition():
         "next_msg_id": 0,
         "last_result": ["unavailable", ""],  # partitioned write rejected, not stale-committed
     }
+
+
+def test_golden_quorum_commits_on_majority_side_rejects_on_minority():
+    # The Raft-subset consensus golden (SPEC-7 §3.4, DS0 incr 7): with a strict majority of 2 (of
+    # 3), a write from the 2-node side commits synchronously to that majority and enqueues an async
+    # catch-up to the stale minority — where linearizable (above) rejects the partitioned write.
+    final = _final_quorum(["put n0 x b", "partition n0 n1 | n2", "put n0 x c"])
+    assert final == {
+        "replicas": [
+            _rep("x", "n0", 2, "c"),   # majority side: synchronously committed at version 2
+            _rep("x", "n1", 2, "c"),   # majority side: synchronously committed
+            _rep("x", "n2", 1, "b"),   # minority: stale at the pre-partition value (catch-up due)
+            *_boot_y(),
+        ],
+        "log": [
+            {"id": 0, "node": "n0", "op": "put n0 x b", "clock": 0, "happens_before": []},
+            {"id": 1, "node": "n0", "op": "put n0 x c", "clock": 0, "happens_before": [0]},
+        ],
+        # the catch-up to the partitioned n2 is in flight (no `deps`: quorum is unordered delivery)
+        "inflight": [
+            {"id": 0, "src": "n0", "dst": "n2", "object_id": "x", "version": 2, "value": "c",
+             "deliver_after": 1}
+        ],
+        "partitions": [["n0", "n1"], ["n2"]],
+        "down": [],
+        "clock": 0,
+        "next_event_id": 2,
+        "next_msg_id": 1,
+        "last_result": ["ok", "c"],  # committed on the majority side (vs linearizable's reject)
+    }
+    # and a write from the 1-node minority side IS rejected (no majority reachable)
+    rejected = QUORUM_ORACLE.step(
+        DistributedState.initial(QUORUM_CONFIG), parse_dist_action("partition n0 n1 | n2")
+    ).state
+    assert QUORUM_ORACLE.step(rejected, parse_dist_action("put n2 x z")).status == "unavailable"
