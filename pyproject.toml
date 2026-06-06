@@ -77,7 +77,7 @@ warn_return_any = false
 # types are absent unless the ``[eval]`` extra is installed, so relax strict
 # typing for that one module. The benchmark *core* stays strict.
 [[tool.mypy.overrides]]
-module = ["verisim.eval.inspect_task", "verisim.hosteval.inspect_task"]
+module = ["verisim.eval.inspect_task", "verisim.hosteval.inspect_task", "verisim.disteval.inspect_task"]
 disallow_untyped_decorators = false
 disallow_untyped_calls = false
 warn_return_any = false
