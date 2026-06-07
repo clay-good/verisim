@@ -1,0 +1,6 @@
+panel,regime,value,detail
+convergence,partition,1.0000,converged=2/2
+convergence,drop,0.0000,converged=0/2
+recovery,heal_only,0.0000,newer_write_required
+recovery,overwrite,1.0000,lost_value_never_observed=True
+tier_b,all,1.0000,steps=44;peers=2

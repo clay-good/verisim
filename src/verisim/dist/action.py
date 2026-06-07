@@ -12,11 +12,16 @@ workload and the fault/time medium (the consensus/admin family arrives with the 
     heal                            # fault: remove all partitions (one fully-connected group)
     crash <node>                    # fault: <node> goes down (stops delivering/applying)
     restart <node>                  # fault: <node> comes back up
+    drop <src> <dst>                # fault: lose every in-flight message from <src> to <dst>
 
 The fault/time family is the source of all interesting dynamics (stale reads under partition,
 convergence after heal+advance) -- the distributed analogue of SPEC-5's ``advance Δt`` and SPEC-6's
-scheduler, and the ``BUGGIFY`` of deterministic simulation testing (SPEC-7 §2.1). Transactions,
-``propose``/leader ops, and message-level ``drop``/``delay``/``reorder`` are later increments.
+scheduler, and the ``BUGGIFY`` of deterministic simulation testing (SPEC-7 §2.1). ``drop`` (DS0
+increment 11) is the unreliable-network fault: where ``partition`` *holds* a message (delivered once
+the link ``heal``s), ``drop`` **destroys** it, so the destination replica permanently misses that
+write -- the lost-message anomaly that breaks the eventual-consistency convergence guarantee until a
+*newer* write overwrites it (ED18). Transactions and ``propose``/leader ops are later increments,
+and so are message-level ``delay``/``reorder``.
 """
 
 from __future__ import annotations
@@ -34,6 +39,7 @@ _ARITY: dict[str, int | None] = {
     "heal": 0,
     "crash": 1,  # node
     "restart": 1,  # node
+    "drop": 2,  # src dst  -- lose every in-flight message from <src> to <dst> (DS0 incr 11)
     # Transaction family (DS0 increment 2): a multi-key OCC transaction at a coordinator node.
     "begin": 2,  # node txn  -- open a transaction
     "tget": 3,  # node txn key  -- read <key> within the txn (pins the read version for validation)
@@ -45,7 +51,7 @@ _ARITY: dict[str, int | None] = {
 # ``begin``/``commit``/``abort`` + the txn-scoped ``tget``/``tput`` are client ops (the workload).
 CLIENT_OPS = frozenset({"put", "get", "cas", "begin", "tget", "tput", "commit", "abort"})
 TXN_OPS = frozenset({"begin", "tget", "tput", "commit", "abort"})
-FAULT_OPS = frozenset({"advance", "partition", "heal", "crash", "restart"})
+FAULT_OPS = frozenset({"advance", "partition", "heal", "crash", "restart", "drop"})
 
 
 class DistParseError(ValueError):

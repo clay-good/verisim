@@ -115,6 +115,36 @@ def test_golden_partition_leaves_isolated_replica_stale():
     }
 
 
+def test_golden_drop_loses_the_write_and_heal_cannot_recover_it():
+    # The message-loss golden (SPEC-7 §3.2, DS0 incr 11): a write, then drop the n0->n1 replication
+    # message, then advance + heal + advance. Unlike the partition golden above (whose held message
+    # is delivered on heal), the *dropped* message is gone, so n1 stays permanently stale at the
+    # boot value — the eventual-consistency convergence guarantee broken by an unreliable network.
+    final = _final(["put n0 x b", "drop n0 n1", "advance 2", "heal", "advance 2"])
+    assert final == {
+        "replicas": [
+            _rep("x", "n0", 1, "b"),   # writer
+            _rep("x", "n1", 0, "nil"),  # dropped: never received the write, heal cannot repair it
+            _rep("x", "n2", 1, "b"),   # the surviving message was delivered
+            *_boot_y(),
+        ],
+        "log": [{"id": 0, "node": "n0", "op": "put n0 x b", "clock": 0, "happens_before": []}],
+        "inflight": [],  # the dropped message left nothing in flight (destroyed, not held)
+        "partitions": [["n0", "n1", "n2"]],
+        "down": [],
+        "clock": 4,
+        "next_event_id": 1,
+        "next_msg_id": 2,  # the dropped message id was still allocated (the write enqueued two)
+        "last_result": ["advanced", "0"],  # the final advance delivered nothing — nothing remained
+    }
+    # contrast: a *newer* write reaches n1 where heal could not — the only repair for a lost write.
+    state = DistributedState.initial(CONFIG)
+    for cmd in ["put n0 x b", "drop n0 n1", "advance 2", "put n0 x c", "advance 2"]:
+        state = ORACLE.step(state, parse_dist_action(cmd)).state
+    r = state.replicas[("x", "n1")]
+    assert (r.version, r.value) == (2, "c")  # the overwrite reached n1; the lost "b" never did
+
+
 def test_golden_linearizable_replicates_synchronously():
     # A single put commits to *every* replica in the same step — no in-flight, no advance needed,
     # the strong-consistency counterpart of the eventual-consistency async-then-converge golden.

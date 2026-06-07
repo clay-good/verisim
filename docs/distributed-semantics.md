@@ -178,11 +178,39 @@ A `tget`/`tput`/`commit`/`abort` on an unknown txn (or one opened at a different
 | `heal` | one all-nodes group (fully connected). `("ok", "")`. |
 | `crash <node>` | `node` goes down: it stops delivering/applying messages until restarted. `("ok", "")`. |
 | `restart <node>` | `node` comes back up (its replicas are whatever they were when it crashed; pending messages can now deliver). `("ok", "")`. |
+| `drop <src> <dst>` (DS0 increment 11) | **lose** every in-flight message from `src` to `dst` (a `MsgDrop` per lost message). Unconditional — the drop does not require the link to be currently connected (a message can be lost whether or not it would have been delivered). `("dropped", str(num_dropped))`; a channel with no in-flight message is a no-op `("dropped", "0")`. |
 
 `advance` is the engine of the distributed dynamics — it is where replication actually happens and
 where partition/crash make their effect felt. Delivery is simulated **sequentially within one
 `advance`**, so a later message's last-writer-wins comparison sees the effect of earlier deliveries in
 the same step.
+
+### 3.1 `drop` vs `partition` — lost vs delayed (DS0 increment 11)
+
+`drop` is the unreliable-network fault (the `BUGGIFY` message-loss primitive of deterministic
+simulation testing, SPEC-7 §2.1). It is the mirror of `partition`, and the contrast is the whole
+point: `partition` **holds** a replication message (it stays in-flight, blocked, and is delivered once
+the link `heal`s and time `advance`s), whereas `drop` **destroys** it (the message is gone, and
+`heal`+`advance` has nothing to deliver). So the two media produce the *same* symptom — a stale
+replica — for opposite reasons: a **recoverable delay** versus an **unrecoverable loss**. Concretely,
+`drop` breaks the eventual-consistency convergence guarantee, which silently assumes delivery is
+*reliable, if delayed*:
+
+```
+put n0 x b               # n0.x = (1,b); enqueue MsgSend n0->n1 and n0->n2
+drop n0 n1               # destroy the n0->n1 message  →  ("dropped","1")
+advance 2                # only the surviving n0->n2 message delivers  →  ("advanced","1")
+heal                     # restore the network — but there is nothing left to deliver
+advance 2                # n1 stays at the boot value (0,nil): the write is lost, not delayed
+put n0 x c               # a *newer* write (version 2) — its fresh message DOES reach n1
+advance 2                # n1.x = (2,c): the only repair for a dropped write is being superseded
+```
+
+The dropped value (`b`) is **never observed** by `n1` — its replica goes boot → `c`, skipping the
+lost write entirely (a lost update at the network layer). `drop` adds no state field (it only removes
+in-flight messages), so it composes with every consistency model and leaves every prior golden, hash,
+and tokenization unchanged. ED18 ([`experiments/ed18.py`](../src/verisim/experiments/ed18.py)) pins
+both findings; Tier-B reproduces the drop and the broken/repaired convergence bit-for-bit.
 
 ## 4. The delta and the `apply == oracle` invariant
 

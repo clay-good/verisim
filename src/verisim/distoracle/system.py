@@ -56,6 +56,7 @@ from verisim.dist.delta import (
     DistEdit,
     EventAppend,
     MsgDeliver,
+    MsgDrop,
     MsgSend,
     NodeDown,
     NodeUp,
@@ -238,6 +239,8 @@ class SystemDistOracle:
         if name in ("crash", "restart"):
             edit: DistEdit = NodeDown(action.args[0]) if name == "crash" else NodeUp(action.args[0])
             return [edit, SetResult("ok", "")], "ok", ""
+        if name == "drop":
+            return self._drop(state, action)
         raise ValueError(f"unhandled action {name!r}")  # pragma: no cover - grammar is closed
 
     def _event(self, state: DistributedState, action: DistAction) -> EventAppend:
@@ -439,6 +442,28 @@ class SystemDistOracle:
         if unmentioned:
             groups.append(unmentioned)
         return [PartitionSet(tuple(groups)), SetResult("ok", "")], "ok", ""
+
+    def _drop(
+        self, state: DistributedState, action: DistAction
+    ) -> tuple[DistDelta, str, str]:
+        """``drop src dst``: lose every in-flight message from ``src`` to ``dst`` (DS0 incr 11).
+
+        Message loss is a *medium* change (the message simply never arrives), so — exactly like
+        ``partition``/``crash`` — there is no actor work to do independently: the lost messages are
+        removed from the in-flight set. Tier-A and Tier-B therefore compute byte-identical
+        drop deltas (the in-flight medium is global, not an actor's local view), and the genuinely
+        distributed signal Tier-B independently reproduces is what happens *afterward* — that the
+        dropped write never reconverges on ``heal``+``advance`` (its autonomous-actor delivery has
+        nothing to deliver), only an overwriting write does (ED18, the broken-convergence anomaly).
+        """
+        src, dst = action.args[0], action.args[1]
+        dropped = sorted(
+            mid for mid, m in state.inflight.items() if m.src == src and m.dst == dst
+        )
+        edits: list[DistEdit] = [MsgDrop(mid) for mid in dropped]
+        value = str(len(dropped))
+        edits.append(SetResult("dropped", value))
+        return edits, "dropped", value
 
     # -- dispatch: the simulated/threaded split ---------------------------------------------------
 

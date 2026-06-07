@@ -32,6 +32,7 @@ from verisim.dist.delta import (
     DistEdit,
     EventAppend,
     MsgDeliver,
+    MsgDrop,
     MsgSend,
     NodeDown,
     NodeUp,
@@ -98,6 +99,8 @@ class ReferenceDistOracle:
             return self._heal(state, action)
         if name in ("crash", "restart"):
             return self._node_status(state, action)
+        if name == "drop":
+            return self._drop(state, action)
         raise ValueError(f"unhandled action {name!r}")  # pragma: no cover - grammar is closed
 
     def _event(self, state: DistributedState, node: str, raw: str) -> EventAppend:
@@ -271,3 +274,26 @@ class ReferenceDistOracle:
         node = action.args[0]
         edit: DistEdit = NodeDown(node) if action.name == "crash" else NodeUp(node)
         return [edit, SetResult("ok", "")], "ok", ""
+
+    def _drop(
+        self, state: DistributedState, action: DistAction
+    ) -> tuple[DistDelta, str, str]:
+        """``drop src dst``: lose every in-flight message from ``src`` to ``dst`` (DS0 incr 11).
+
+        The unreliable-network fault, the distributed analogue of SPEC-5's packet loss and the
+        ``BUGGIFY`` of message drop (SPEC-7 §2.1, §3.2). Unlike ``partition`` (which *holds* a
+        message until the link heals), ``drop`` **destroys** it: the destination replica permanently
+        misses that write, so the cluster does **not** reconverge on ``heal``+``advance`` — only a
+        *newer* write to the same key can overwrite the stale replica (ED18). The drop is
+        unconditional (it does not need the link to be currently connected — a message can be lost
+        whether or not it would have been delivered) and reports the number lost, mirroring
+        ``advance``'s delivered count. Dropping a channel with no in-flight messages is a no-op.
+        """
+        src, dst = action.args[0], action.args[1]
+        dropped = sorted(
+            mid for mid, m in state.inflight.items() if m.src == src and m.dst == dst
+        )
+        edits: list[DistEdit] = [MsgDrop(mid) for mid in dropped]
+        value = str(len(dropped))
+        edits.append(SetResult("dropped", value))
+        return edits, "dropped", value

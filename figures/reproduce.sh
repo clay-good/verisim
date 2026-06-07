@@ -295,6 +295,22 @@ echo "   (torch; trains one flat M_θ per level — does linearizable free-run f
 python -m verisim.experiments.ed4_consistency_learned --config configs/ed4_consistency_learned.json \
     --out figures/ed4_consistency_learned.csv --plot figures/ed4_consistency_learned.png
 
+echo "== ED DS0/DS3 increment experiments — the deterministic-core anomaly demos (dependency-free, GPU-free) =="
+echo "   ED7 Tier-B W1 retirement; ED8 OCC frontier; ED9 write skew; ED10/ED11 Elle; ED12 partial observation;"
+echo "   ED13 causal; ED14 quorum; ED15 2PL; ED16 lost update; ED17 dirty read; ED18 message loss (drop)."
+python -m verisim.experiments.ed7 --config configs/ed7.json --out figures/ed7.csv --plot figures/ed7.png
+python -m verisim.experiments.ed8 --config configs/ed8.json --out figures/ed8.csv --plot figures/ed8.png
+python -m verisim.experiments.ed9 --config configs/ed9.json --out figures/ed9.csv --plot figures/ed9.png
+python -m verisim.experiments.ed10 --config configs/ed10.json --out figures/ed10.csv --plot figures/ed10.png
+python -m verisim.experiments.ed11 --out figures/ed11.csv --plot figures/ed11.png
+python -m verisim.experiments.ed12 --config configs/ed12.json --out figures/ed12.csv --plot figures/ed12.png
+python -m verisim.experiments.ed13 --config configs/ed13.json --out figures/ed13.csv --plot figures/ed13.png
+python -m verisim.experiments.ed14 --config configs/ed14.json --out figures/ed14.csv --plot figures/ed14.png
+python -m verisim.experiments.ed15 --config configs/ed15.json --out figures/ed15.csv --plot figures/ed15.png
+python -m verisim.experiments.ed16 --config configs/ed16.json --out figures/ed16.csv --plot figures/ed16.png
+python -m verisim.experiments.ed17 --config configs/ed17.json --out figures/ed17.csv --plot figures/ed17.png
+python -m verisim.experiments.ed18 --config configs/ed18.json --out figures/ed18.csv --plot figures/ed18.png
+
 echo "== SY: the SYSTEM ORACLE — validating the reference oracle against a REAL /bin/sh (SPEC-11) =="
 echo "   (seconds on CPU, no torch; macOS-first per SPEC-11 §2.5 — the same cross-POSIX code runs on Linux CI)"
 echo "   Gate order is strict: SY3 (safe) -> SY4 (deterministic) -> SY1 (agreement) -> SY2 (debug)."
@@ -314,4 +330,4 @@ python -m verisim.experiments.sy1 --config configs/sy1.json --out runs/sy1/recor
 echo "== SY2: the differential debugger — the localized divergence atlas + the teeth control (SPEC-11 SO4, H28) =="
 python -m verisim.experiments.sy2 --out runs/sy2/records.jsonl --csv figures/sy2_disagreements.csv
 
-echo "== done: figures/{e1_curve,e2_policies,e3_operators,calibration,e4_ablation,objective,representation,auto_search,en1_curve,en2_policies,en3_operators,en4_graph_vs_flat,en8_grounding,en9_contrastive,en8_scale,en9_scale,en8_capacity,en9_negatives,en7_invariance,en5_selfheal,en6_counterfactual,en8_ls3_hero,en10_two_oracle,eh1_curve,eh1_composition,eh2_policies,eh3_operators,eh4_factored_vs_flat,eh4_drift,eh5_subsystem_policy,eh5_heads,eh_h14_interleaving,eh_h14_scale,eh7_invariance,eh8_privilege,eh6_two_oracle,eh_h13_scale,eh9_denial_weighted,eh6_counterfactual,eh_stream,synthesis_floor_cliff,horizon_scaling,horizon_scaling_xl,horizon_data_scaling,horizon_joint_scaling,horizon_host_scaling,horizon_graph_scaling,horizon_graph_data_scaling,horizon_graph_world_scaling,horizon_graph_joint_scaling,horizon_graph_schedule,horizon_synthesis,ed1_dist,ed1_learned,ed2,ed2_learned,ed2_smart,ed3,ed4_fault,ed4_consistency,ed5,ed6,ed6_two_oracle,ed6_two_oracle_learned,ed4_consistency,ed4_consistency_learned,sy1_agreement,sy2_disagreements,sy3_hermeticity,sy4_determinism}.{png,csv} =="
+echo "== done: figures/{e1_curve,e2_policies,e3_operators,calibration,e4_ablation,objective,representation,auto_search,en1_curve,en2_policies,en3_operators,en4_graph_vs_flat,en8_grounding,en9_contrastive,en8_scale,en9_scale,en8_capacity,en9_negatives,en7_invariance,en5_selfheal,en6_counterfactual,en8_ls3_hero,en10_two_oracle,eh1_curve,eh1_composition,eh2_policies,eh3_operators,eh4_factored_vs_flat,eh4_drift,eh5_subsystem_policy,eh5_heads,eh_h14_interleaving,eh_h14_scale,eh7_invariance,eh8_privilege,eh6_two_oracle,eh_h13_scale,eh9_denial_weighted,eh6_counterfactual,eh_stream,synthesis_floor_cliff,horizon_scaling,horizon_scaling_xl,horizon_data_scaling,horizon_joint_scaling,horizon_host_scaling,horizon_graph_scaling,horizon_graph_data_scaling,horizon_graph_world_scaling,horizon_graph_joint_scaling,horizon_graph_schedule,horizon_synthesis,ed1_dist,ed1_learned,ed2,ed2_learned,ed2_smart,ed3,ed4_fault,ed4_consistency,ed5,ed6,ed6_two_oracle,ed6_two_oracle_learned,ed4_consistency,ed4_consistency_learned,ed7,ed8,ed9,ed10,ed11,ed12,ed13,ed14,ed15,ed16,ed17,ed18,sy1_agreement,sy2_disagreements,sy3_hermeticity,sy4_determinism}.{png,csv} =="
