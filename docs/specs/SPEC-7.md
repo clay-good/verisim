@@ -1127,7 +1127,18 @@ first-class** (the repo norm).
   cheap-localized oracle mode and the deterministic substrate the deferred RSSM belief (§6.2) must
   roll forward under partition ([`ed12.py`](../../src/verisim/experiments/ed12.py),
   [`ed12.png`](../../figures/ed12.png), [`test_ed12`](../../tests/test_ed12.py),
-  [`test_dist_observe`](../../tests/test_dist_observe.py)).
+  [`test_dist_observe`](../../tests/test_dist_observe.py)). **◐ the learned arm ships** (what
+  ED1-learned is to ED1): the flat DS4 `M_θ` (trained exactly as ED2-learned) re-points ED12 onto a
+  *real* error distribution ([`ed12_learned.py`](../../src/verisim/experiments/ed12_learned.py),
+  [`ed12_learned.png`](../../figures/ed12_learned.png), [`test_ed12_learned`](../../tests/test_ed12_learned.py),
+  torch extra). Free-running, the structural `bit ≤ observable` dominance holds on every rollout but
+  the absolute horizons are small (the flat free-runner's low floor — bit 0.50, observable 0.50,
+  consistency 0.62, directional). The clean signal is the **teacher-forced per-step accuracy**, free
+  of derailing: the model predicts each delta from the *true* state and its correct-rate rises across
+  the projections — **bit 0.15 ≤ observable 0.20 ≤ consistency 0.37** — quantifying which of a real
+  model's per-step errors each projection forgives (the probe forgives the unobservable in-flight
+  medium; consistency additionally forgives node placement). The partial-observation analogue of
+  ED6-two-oracle's teacher-forced decision-sufficiency, on the same flat `M_θ`.
 - **ED13 — causal consistency: the effect-before-cause anomaly** (the DS0-increment-5 experiment for
   §3.4). The third `CONSISTENCY_MODELS` end, **`causal`**, between `eventual` (weakest) and
   `linearizable` (strongest): `eventual`'s async replication plus the guarantee that *no replica

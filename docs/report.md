@@ -1487,6 +1487,24 @@ belief's task is to predict the full state from the observable one, undefined un
 
 ![ED12: the observable-faithful horizon outlasts the bit-faithful one for in-flight errors (no probe can read the replication medium), and a single vantage cannot tell a crash from a partition while a paired vantage can](../figures/ed12.png)
 
+**The learned arm (ED12-learned).** ED12 proved the structural claim on the *synthetic* tunable-noise
+proposer; ED12-learned ([`ed12_learned.py`](../src/verisim/experiments/ed12_learned.py),
+[`ed12_learned.csv`](../figures/ed12_learned.csv)) re-points it onto the *real* flat DS4 `M_θ`
+(trained exactly as ED2-learned) — what ED1-learned is to ED1. Free-running, the structural
+`bit ≤ observable` dominance holds on every rollout, but the flat free-runner's absolute horizons are
+small (bit 0.50, observable 0.50, consistency 0.62 — directional, the low floor inherited from
+ED1-learned). The clean signal is the **teacher-forced per-step accuracy**, free of the derailing the
+free-running horizon conflates: the model predicts each delta from the *true* current state, and its
+correct-rate rises across the projections — **bit 0.15 ≤ observable 0.20 ≤ consistency 0.37**. A
+bit-correct step is correct under both other views (so the bit rate lower-bounds them); the gaps are
+exactly which of the real model's per-step errors each projection forgives — the **probe** forgives
+the errors hidden in the unobservable in-flight medium (+5 pts), and **consistency** additionally
+forgives node placement (+22 pts total). The partial-observation analogue of ED6-two-oracle's
+teacher-forced decision-sufficiency, on the same model: a defender watching the cluster is right about
+its *observable consistency behavior* far more often than about its exact bytes.
+
+![ED12-learned: on the real flat M_θ the structural bit-≤-observable dominance holds (small free-running horizons), and the teacher-forced per-step correct-rate rises bit 0.15 ≤ observable 0.20 ≤ consistency 0.37 — the probe forgives in-flight errors, consistency forgives placement](../figures/ed12_learned.png)
+
 ## ED13 / causal consistency — the effect-before-cause anomaly, forbidden without losing concurrency
 
 The consistency curriculum (§3.4) had two ends: `eventual` (the weak default, an in-flight medium and
@@ -2100,6 +2118,8 @@ python -m verisim.experiments.ed10 --config configs/ed10.json \
     --out figures/ed10.csv --plot figures/ed10.png  # Elle: write-skew recovered black-box (DS3 incr 2)
 python -m verisim.experiments.ed12 --config configs/ed12.json \
     --out figures/ed12.csv --plot figures/ed12.png  # partial observation: probe horizon + FLP (DS3 incr 4)
+python -m verisim.experiments.ed12_learned --config configs/ed12_learned.json \
+    --out figures/ed12_learned.csv --plot figures/ed12_learned.png  # partial-obs projections on the real M_θ (torch)
 python -m verisim.experiments.ed13 --config configs/ed13.json \
     --out figures/ed13.csv --plot figures/ed13.png  # causal consistency: effect-before-cause anomaly (DS0 incr 5)
 python -m verisim.experiments.ed14 --config configs/ed14.json \

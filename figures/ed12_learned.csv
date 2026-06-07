@@ -1,0 +1,7 @@
+panel,metric,value,lo,hi
+horizon,bit_h,0.5000,0.0000,1.2500
+horizon,obs_h,0.5000,0.0000,1.2500
+horizon,cons_h,0.6250,0.0000,1.2500
+accuracy,bit,0.1500,,
+accuracy,observable,0.1969,,
+accuracy,consistency,0.3656,,
