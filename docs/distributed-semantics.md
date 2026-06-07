@@ -330,16 +330,19 @@ by **ED8** ([`verisim.experiments.ed8`](../src/verisim/experiments/ed8.py),
 tracks the balls-in-bins occupancy law `M·(1−(1−1/M)^K)/K` (the semantics are exactly right, not
 merely plausible), with Tier-B agreeing on every scenario.
 
-### 9.1 Isolation levels — `serializable` / `snapshot` / `read_committed` (DS0 increments 3, 9)
+### 9.1 Isolation levels — `serializable` / `snapshot` / `read_committed` / `read_uncommitted` (DS0 increments 3, 9, 10)
 
-The `txn_isolation` config dial selects *which set* `commit` validates (design decision `DD-D4`).
-Ordered strong → weak (weaker admits more anomalies and so is *harder to predict*, SPEC-7 §3.4):
+The `txn_isolation` config dial selects *what a read sees* and *which set* `commit` validates (design
+decision `DD-D4`). The four are the standard SQL isolation hierarchy, ordered strong → weak (weaker
+admits more anomalies and so is *harder to predict*, SPEC-7 §3.4 — `read_uncommitted ⊂ read_committed
+⊂ snapshot ⊂ serializable`):
 
-| Level | Validates at commit | Forbids write skew? | Forbids lost update? |
-|---|---|---|---|
-| `serializable` (default) | the **read-set** — every read key's local version must be unchanged since it was read (OCC backward validation, Kung–Robinson) | **yes** — a read another txn wrote is caught | **yes** |
-| `snapshot` | only the **write-set** — every written key's version must be unchanged since the txn first wrote it (write-write conflict, first-committer-wins) | **no** — disjoint write-sets both commit | **yes** — a same-key write-write conflict still aborts |
-| `read_committed` | **nothing** — no concurrency validation at all (reads still see only committed data via the MVCC `tget`, so no dirty reads) | **no** | **no** — two same-key RMW txns both commit, the later overwrites the earlier |
+| Level | Validates at commit | Reads see | Forbids write skew? | Forbids lost update? | Forbids dirty read? |
+|---|---|---|---|---|---|
+| `serializable` (default) | the **read-set** — every read key's local version must be unchanged since it was read (OCC backward validation, Kung–Robinson) | committed data (MVCC) | **yes** | **yes** | **yes** |
+| `snapshot` | only the **write-set** — every written key's version must be unchanged since the txn first wrote it (write-write conflict, first-committer-wins) | committed data (MVCC) | **no** — disjoint write-sets both commit | **yes** — a same-key write-write conflict still aborts | **yes** |
+| `read_committed` | **nothing** — no concurrency validation at all | committed data (MVCC) | **no** | **no** — two same-key RMW txns both commit, the later overwrites the earlier | **yes** — the MVCC `tget` gives no dirty reads |
+| `read_uncommitted` | **nothing** (the weakest level) | **uncommitted** data — a `tget` may observe another active txn's buffered write | **no** | **no** | **no** — if the observed writer aborts, the reader saw a value that never committed |
 
 The `serializable`/`snapshot` distinction is the classic **write-skew** anomaly (two transactions
 both read `{x, y}`, then `A` writes `x` and `B` writes `y`): under `snapshot` the disjoint write-sets
@@ -365,8 +368,25 @@ price are pinned by **ED16** ([`verisim.experiments.ed16`](../src/verisim/experi
 [`ed16.png`](../../figures/ed16.png)): the lost-update anomaly rate is **1.0 under `read_committed`,
 0.0 under `snapshot` and `serializable`**, and under read-modify-write contention `read_committed`
 **never aborts** (`0.00` vs `~0.53`) — the apparent throughput it buys by selling the correctness of
-the first panel. All three levels compose with Tier-B (the autonomous-actor system oracle agrees on
+the first panel. All these levels compose with Tier-B (the autonomous-actor system oracle agrees on
 every scenario, transaction bookkeeping being coordinator-local).
+
+The `read_committed`/`read_uncommitted` distinction is the last rung — the classic **dirty-read**
+anomaly (Adya G1a). `read_committed` keeps one guarantee `read_uncommitted` drops: that a read sees
+only *committed* data. `read_uncommitted`'s `tget` may instead observe another active transaction's
+**uncommitted** buffered write (when several have, the lexicographically-greatest txn id wins — a
+deterministic stand-in for "the latest uncommitted writer"; the canonical two-transaction scenario
+has exactly one other writer). So if `A` writes `x` (uncommitted), `B` reads `x`, and then `A`
+**aborts**, under `read_uncommitted` `B` saw a value that never committed; under every stronger level
+the MVCC `tget` gave `B` only the committed boot value. The dirty read applies **only under OCC** —
+2PL's exclusive lock blocks any reader from ever seeing an uncommitted write (locking gives
+serializability regardless of the declared level, as in real systems). Read-uncommitted is purely
+additive (a new `txn_isolation` value; the commit path is identical to `read_committed`), so every
+prior golden/hash is unchanged. Pinned by **ED17**
+([`verisim.experiments.ed17`](../src/verisim/experiments/ed17.py), [`ed17.png`](../../figures/ed17.png)):
+the dirty-read anomaly rate is **1.0 under `read_uncommitted`, 0.0 under the three stronger levels**,
+Tier-B agrees on every scenario, and Elle's value oracle (§9.2) recovers the dirty read black-box at
+exactly the oracle's rate — a `dirty-read` recovery anomaly from the client history alone.
 
 ### 9.1.1 Concurrency control: `occ` vs `2pl` (DS0 increment 8)
 
@@ -438,9 +458,16 @@ versions and hands that history to Elle:
   and **0.0** of `serializable` histories (the guarantee that level enforces — certified
   independently of the oracle that enforces it).
 
-ED10 supplies the store's MVCC version order to Elle (its *version-oracle* mode); recovering the
-version order from observed values alone (Elle's list-append / unique-write recoverability) is
-deferred. Pure standard library, dependency-free, GPU-free.
+ED10 supplies the store's MVCC version order to Elle (its *version-oracle* mode). Recovering the
+version order from observed **values alone** (Elle's list-append / unique-write recoverability,
+Kingsbury & Alvaro 2020) shipped in **ED11** ([`recover_versions`](../src/verisim/distoracle/elle.py)):
+over a list-append register a read of `[x, y, z]` is direct testimony that `x` preceded `y` preceded
+`z`, so the per-key order is recovered with **zero** store cooperation, soundly reproducing the
+store's exact versions. The value mode also surfaces anomalies the integer-version mode cannot even
+represent, *before* any cycle search: **`incompatible-order`** (two reads fork on order — the
+black-box split-brain signature), **`dirty-read`** (Adya G1a — a read of a value no committed
+transaction installed; the **ED17** read-uncommitted recovery, §9.1), and **`duplicate-write`**.
+Pure standard library, dependency-free, GPU-free.
 
 ## 10. Partial observation — the probe projection (DS3 increment 4, SPEC-7 §5.4)
 

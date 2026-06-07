@@ -274,6 +274,61 @@ def test_golden_elle_recovers_lost_update_as_a_cycle_black_box():
     assert check_serializable(serializable_history).serializable
 
 
+def test_golden_dirty_read_admitted_under_read_uncommitted_forbidden_under_read_committed():
+    # The canonical dirty-read scenario (DS0 increment 10): A writes x (uncommitted), B reads x,
+    # then A aborts. Under read_uncommitted B observes A's uncommitted value (the dirty read) — a
+    # value that, after A's rollback, never committed. Under read_committed (and every stronger
+    # level) the MVCC tget gives B only the committed boot value: no dirty read.
+    script = ["begin n0 A", "begin n0 B", "tput n0 A x b", "tget n0 B x",
+              "abort n0 A", "commit n0 B"]
+
+    def b_read(isolation: str) -> tuple[str, str]:
+        config = DistConfig(name="golden-ru", nodes=("n0", "n1", "n2"), objects=("x", "y"),
+                            txn_isolation=isolation)
+        oracle = ReferenceDistOracle(config)
+        state = DistributedState.initial(config)
+        observed = ""
+        for cmd in script:
+            r = oracle.step(state, parse_dist_action(cmd))
+            if cmd == "tget n0 B x":
+                observed = r.value
+            state = r.state
+        return observed, state.replicas[("x", "n0")].value
+
+    ru_read, ru_final = b_read("read_uncommitted")
+    assert ru_read == "b"  # B observed A's uncommitted write — the dirty read
+    assert ru_final == "nil"  # ...but A aborted, so the read value never committed (the anomaly)
+
+    rc_read, rc_final = b_read("read_committed")
+    assert rc_read == "nil"  # committed data only — no dirty read
+    assert rc_final == "nil"
+
+
+def test_golden_elle_recovers_dirty_read_from_values_alone():
+    # The value-oracle (DS3 incr 3) counterpart of the dirty-read golden: from the client-visible
+    # list-append history alone — no oracle, no cluster state — Elle reports the dirty read. The
+    # aborted writer A contributes NO committed append; B's observed read of A's value becomes a
+    # list-read of a value no committed txn appended, which recover_versions flags as `dirty-read`
+    # (Adya G1a) before any DSG cycle search.
+    from verisim.distoracle.elle import AppendObservation, check_serializable_appends
+
+    # read_uncommitted: B read "b" (A's uncommitted value); A aborted so it appended nothing.
+    dirty = [
+        AppendObservation("A", appends=(), list_reads=()),
+        AppendObservation("B", appends=(), list_reads=(("x", ("b",)),)),
+    ]
+    report = check_serializable_appends(dirty)
+    assert not report.serializable
+    assert report.anomaly == "dirty-read"
+
+    # read_committed: B read the committed empty log; no uncommitted value observed — serializable.
+    clean = [
+        AppendObservation("A", appends=(), list_reads=()),
+        AppendObservation("B", appends=(), list_reads=(("x", ()),)),
+    ]
+    assert check_serializable_appends(clean).serializable
+
+
 def test_golden_elle_recovers_write_skew_as_a_g2_cycle_black_box():
     # The Elle (DS3 incr 2) counterpart of the write-skew golden: a checker that sees only the
     # observable transaction history reconstructs Adya's DSG and reports the anomaly the oracle

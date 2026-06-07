@@ -38,7 +38,8 @@ CONSISTENCY_MODELS: tuple[str, ...] = (
     "eventual",
 )
 
-# Transaction isolation levels (DS0 increment 3, SPEC-7 §3.2). ``serializable`` is OCC backward
+# Transaction isolation levels (DS0 increment 3, SPEC-7 §3.2), ordered strong -> weak (weaker is
+# *harder* to predict, more histories legal, SPEC-7 §3.4). ``serializable`` is OCC backward
 # validation of the **read-set** (a committed txn's read versions must be unchanged) — it prevents
 # write skew; ``snapshot`` validates only **write-write** conflicts (the write-set versions,
 # first-committer-wins) — it permits write skew, the classic SI anomaly the experiment exhibits.
@@ -46,9 +47,18 @@ CONSISTENCY_MODELS: tuple[str, ...] = (
 # **no** commit-time concurrency validation: reads still see only committed data (no dirty reads,
 # guaranteed by the MVCC ``tget``), but the absence of write-write validation means two read-modify-
 # write txns both commit and the later silently overwrites the earlier — the classic **lost-update**
-# anomaly snapshot's first-committer-wins prevents. It is the *weakest* level (weaker is harder to
-# predict, SPEC-7 §3.4), ordered last.
-TXN_ISOLATION_LEVELS: tuple[str, ...] = ("serializable", "snapshot", "read_committed")
+# anomaly snapshot's first-committer-wins prevents. ``read_uncommitted`` (DS0 increment 10) is the
+# *weakest* level — it drops even read-committed's last guarantee: an OCC ``tget`` may observe
+# another active transaction's **uncommitted** buffered write, so if that writer later aborts the
+# reader saw a value that never committed — the classic **dirty-read** anomaly (Adya G1a). It is
+# ordered last (the bottom of the standard SQL hierarchy: read_uncommitted ⊂ read_committed ⊂
+# snapshot ⊂ serializable).
+TXN_ISOLATION_LEVELS: tuple[str, ...] = (
+    "serializable",
+    "snapshot",
+    "read_committed",
+    "read_uncommitted",
+)
 
 # Concurrency-control mechanisms (DS0 increment 8, SPEC-7 §3.2; the DD-D3 alternative). ``occ`` is the
 # optimistic default (buffer, validate at commit, first-committer-wins). ``2pl`` is **pessimistic

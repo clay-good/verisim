@@ -25,6 +25,13 @@ exactly as the KV core pinned async-replication LWW before consensus. The semant
                                     end the txn (``committed``). First-committer-wins.
   - ``abort node txn``           -- discard the txn (``aborted``).
 
+The isolation level decides what a read sees and what a commit validates (SPEC-7 §3.2): under
+``read_uncommitted`` (the weakest level, DS0 increment 10) a ``tget`` may observe another active
+transaction's *uncommitted* buffered write — the **dirty read** (Adya G1a) — where every stronger
+level's MVCC ``tget`` sees only committed data; the validation set the commit checks narrows from
+the read-set (``serializable``) to the write-set (``snapshot``) to empty (``read_committed`` /
+``read_uncommitted``).
+
 The commit's replication obeys the declared consistency model exactly as ``put`` does: ``eventual``
 enqueues async messages (peers converge on ``advance``); ``linearizable`` writes every replica
 synchronously and **rejects** (``unavailable``) a commit it cannot fully replicate (the CP choice).
@@ -79,9 +86,13 @@ def txn_step(
         return [ev, SetResult("unavailable", "")], "unavailable", ""
 
     two_pl = config.concurrency_control == "2pl"
+    # read_uncommitted dirty reads apply only under OCC: 2PL's shared/exclusive locks already
+    # serialize, so a writer's X lock blocks any reader from ever seeing its uncommitted write
+    # (2PL gives serializability regardless of the declared level — real-world behavior too).
+    dirty_reads = config.txn_isolation == "read_uncommitted" and not two_pl
     if name == "tget":
         return _tget_2pl(state, ev, txn, action.args[2]) if two_pl \
-            else _tget(state, ev, txn, action.args[2])
+            else _tget(state, ev, txn, action.args[2], dirty_reads)
     if name == "tput":
         return _tput_2pl(state, ev, txn, action.args[2], action.args[3]) if two_pl \
             else _tput(state, ev, txn, action.args[2], action.args[3])
@@ -94,12 +105,36 @@ def txn_step(
     raise ValueError(f"not a transaction action: {name!r}")  # pragma: no cover - grammar is closed
 
 
+def _dirty_value(state: DistributedState, txn: TxnState, key: str) -> str | None:
+    """The latest *uncommitted* buffered write to ``key`` by another active txn, or ``None``.
+
+    The read_uncommitted dirty read (DS0 increment 10): an active transaction's ``tput`` buffers a
+    write that has not committed; under ``read_uncommitted`` another transaction's ``tget`` may
+    observe it (and if that writer later aborts, the reader saw a value that never committed — Adya
+    G1a). Determinism: when several active txns have buffered a write to the same key, the one with
+    the lexicographically-greatest txn id wins — a deterministic stand-in for "the latest
+    uncommitted writer"; the canonical two-transaction dirty-read scenario has exactly one other
+    writer, so the choice is unambiguous. Reads only ``state.txns`` (coordinator-local bookkeeping),
+    so Tier-A and Tier-B compute it identically.
+    """
+    candidates = [
+        (other_id, buffered)
+        for other_id, other in state.txns.items()
+        if other_id != txn.txn_id and (buffered := other.buffered_write(key)) is not None
+    ]
+    return max(candidates)[1] if candidates else None
+
+
 def _tget(
-    state: DistributedState, ev: EventAppend, txn: TxnState, key: str
+    state: DistributedState, ev: EventAppend, txn: TxnState, key: str, dirty_reads: bool = False
 ) -> tuple[DistDelta, str, str]:
     buffered = txn.buffered_write(key)
     if buffered is not None:  # read-your-writes: the txn's own buffered value, not the snapshot
         return [ev, SetResult("ok", buffered)], "ok", buffered
+    if dirty_reads:  # read_uncommitted: observe another active txn's uncommitted write, if any
+        dirty = _dirty_value(state, txn, key)
+        if dirty is not None:  # pins no read version (no committed version, and RU validates none)
+            return [ev, SetResult("ok", dirty)], "ok", dirty
     replica = state.replicas.get((key, txn.node))
     if replica is None:
         return [ev, SetResult("no_replica", "")], "no_replica", ""
@@ -234,6 +269,9 @@ def _commit(
         #                    only committed data (the MVCC ``tget``), but two read-modify-write txns on
         #                    the same key both commit and the later overwrites the earlier -> the
         #                    classic **lost-update** anomaly snapshot prevents (DS0 increment 9).
+        #   read_uncommitted: also no validation (the weakest level); additionally its ``tget`` may
+        #                    have observed another txn's *uncommitted* write (the dirty read, DS0
+        #                    increment 10) — the commit path is identical to read_committed here.
         # Under 2PL there is nothing to validate: the txn held its locks to here, so no concurrent
         # txn could have written a key it read or wrote (the locks already guaranteed serializability).
         validation_set: tuple[tuple[str, int], ...]
@@ -241,7 +279,7 @@ def _commit(
             validation_set = txn.reads
         elif config.txn_isolation == "snapshot":
             validation_set = txn.write_versions
-        else:  # read_committed: last-committer-wins, lost update admitted
+        else:  # read_committed / read_uncommitted: last-committer-wins, lost update admitted
             validation_set = ()
         for key, pinned_version in validation_set:
             replica = state.replicas.get((key, txn.node))

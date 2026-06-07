@@ -1,0 +1,9 @@
+panel,isolation,metric,value,detail
+dirty_read,serializable,anomaly_rate,0.0000,anomalies=0/3;tier_b_agrees=True
+dirty_read,snapshot,anomaly_rate,0.0000,anomalies=0/3;tier_b_agrees=True
+dirty_read,read_committed,anomaly_rate,0.0000,anomalies=0/3;tier_b_agrees=True
+dirty_read,read_uncommitted,anomaly_rate,1.0000,anomalies=3/3;tier_b_agrees=True
+recovery,serializable,recovery_rate,0.0000,elle=0/3;matches_oracle=True
+recovery,snapshot,recovery_rate,0.0000,elle=0/3;matches_oracle=True
+recovery,read_committed,recovery_rate,0.0000,elle=0/3;matches_oracle=True
+recovery,read_uncommitted,recovery_rate,1.0000,elle=3/3;matches_oracle=True

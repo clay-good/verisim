@@ -1634,6 +1634,33 @@ legalizes the most histories, so a model must reproduce an anomaly the stronger 
 
 ![ED16: read_committed admits the lost-update anomaly (rate 1.0) that snapshot and serializable forbid (0.0); the price it sells correctness for is that it never aborts under contention (0.00 vs ~0.53); Tier-B reproduces all three levels bit-for-bit](../figures/ed16.png)
 
+## ED17 / read-uncommitted isolation — the dirty-read anomaly, recovered black-box
+
+ED17 closes the standard SQL isolation hierarchy (`read_uncommitted ⊂ read_committed ⊂ snapshot ⊂
+serializable`) by adding its **bottom rung** — **`read_uncommitted`**, the level that drops even
+read-committed's last guarantee. Where every stronger level's MVCC `tget` returns only committed data,
+`read_uncommitted`'s `tget` may observe another active transaction's **uncommitted** buffered write —
+the classic **dirty read** (Adya G1a). The commit path is identical to `read_committed`
+(`validation_set = ()`); only the read path changes, and **only under OCC** (2PL's exclusive lock
+blocks any reader from ever seeing an uncommitted write — locking gives serializability regardless of
+the declared level). The new level is purely additive, so every prior golden and hash is unchanged.
+
+ED17 ([`ed17.py`](../src/verisim/experiments/ed17.py), [`ed17.csv`](../figures/ed17.csv)) reads two
+findings off the dependency-free reference oracle. **The dirty-read anomaly (oracle side):** `A` writes
+`x` (uncommitted), `B` reads `x`, then `A` **aborts** — so `B` saw a value that never committed. The
+anomaly rate is **1.0 under `read_uncommitted`, 0.0 under the three stronger levels**, and Tier-B
+reproduces every scenario bit-for-bit (transaction bookkeeping being coordinator-local). **Elle
+recovers it black-box (reference-free side):** encoding the run as a list-append history (the aborted
+writer contributes no committed append; `B`'s observed read becomes its list-read), the §5.3 value
+oracle sees `B` read a value no committed transaction installed and reports a **`dirty-read`** recovery
+anomaly — at exactly the oracle's rate, matching it on every scenario. The cheap reference-free checker
+agrees with the expensive oracle on the question it answers, the dirty-read echo of ED10's write-skew
+and ED16's lost-update recovery. Read-uncommitted is the sharpest statement of the §3.4 curriculum
+thesis (*weaker is harder to predict*): the weakest level legalizes a history — a read of data that is
+later rolled back — that every stronger level makes structurally impossible.
+
+![ED17: read_uncommitted admits the dirty-read anomaly (rate 1.0) that the three stronger levels forbid (0.0); Elle's value oracle recovers the same dirty read black-box from the client history alone, matching the oracle on every scenario; Tier-B agrees bit-for-bit](../figures/ed17.png)
+
 ## What the distributed world adds, and what remains
 
 The fourth world generalizes the program's three load-bearing findings — the floor→cliff `H_ε(ρ)`
@@ -1649,11 +1676,12 @@ genuinely off-policy. The distributed world is **packaged for reuse** on all fou
 ([`distcontrib/`](../src/verisim/distcontrib/)). The **Tier-B system oracle now ships** (ED7 above): an
 in-repo autonomous-actor DST runtime that reproduces Tier-A bit-for-bit under shuffled delivery order,
 retiring W1 for the distributed world. The deterministic core also grows a **multi-key OCC
-transaction** layer with three **isolation levels** — `serializable`, `snapshot`, and the
-real-world-default `read_committed` (ED8/ED9/ED16 above) — spanning the curriculum from the level that
-forbids write skew to the one that admits even lost update, and a black-box **Elle-style
-serializability checker** that recovers both the write-skew and the lost-update anomaly from the
-observable history with no oracle and certifies the serializable level reference-free (ED10/ED16 above).
+transaction** layer with the **four standard SQL isolation levels** — `serializable`, `snapshot`, the
+real-world-default `read_committed`, and the weakest `read_uncommitted` (ED8/ED9/ED16/ED17 above) —
+spanning the curriculum from the level that forbids write skew to the one that admits even the dirty
+read, and a black-box **Elle-style serializability checker** that recovers the write-skew, lost-update,
+and dirty-read anomalies from the observable history with no oracle and certifies the serializable level
+reference-free (ED10/ED16/ED17 above).
 **Partial observation now ships** (ED12 above): `observe(state, vantage)` is the §5.4 probe oracle
 mode made a deterministic object — the substrate the structured `M_θ`'s RSSM belief must roll forward
 under partition — and it surfaces two findings unique to a world no observer fully sees (the
@@ -2161,6 +2189,8 @@ python -m verisim.experiments.ed15 --config configs/ed15.json \
     --out figures/ed15.csv --plot figures/ed15.png  # concurrency control: OCC vs 2PL, the cost of aborting (DS0 incr 8)
 python -m verisim.experiments.ed16 --config configs/ed16.json \
     --out figures/ed16.csv --plot figures/ed16.png  # read-committed isolation: lost update + its price (DS0 incr 9)
+python -m verisim.experiments.ed17 --config configs/ed17.json \
+    --out figures/ed17.csv --plot figures/ed17.png  # read-uncommitted isolation: dirty read + black-box recovery (DS0 incr 10)
 ```
 
 The run-records are git-ignored (regenerable); the figures and their CSVs are

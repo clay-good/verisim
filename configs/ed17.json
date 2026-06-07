@@ -1,0 +1,7 @@
+{
+  "name": "ed17-read-uncommitted",
+  "n_nodes": 3,
+  "dirty_objects": [0, 1, 2],
+  "n_objects": 4,
+  "values": ["a", "b", "c", "d"]
+}
