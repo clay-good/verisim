@@ -241,6 +241,8 @@ class SystemDistOracle:
             return [edit, SetResult("ok", "")], "ok", ""
         if name == "drop":
             return self._drop(state, action)
+        if name == "anti_entropy":
+            return self._anti_entropy(state, action)
         raise ValueError(f"unhandled action {name!r}")  # pragma: no cover - grammar is closed
 
     def _event(self, state: DistributedState, action: DistAction) -> EventAppend:
@@ -464,6 +466,43 @@ class SystemDistOracle:
         value = str(len(dropped))
         edits.append(SetResult("dropped", value))
         return edits, "dropped", value
+
+    def _anti_entropy(
+        self, state: DistributedState, action: DistAction
+    ) -> tuple[DistDelta, str, str]:
+        """``anti_entropy node``: read-repair ``node`` to the latest reachable replica (DS0 inc 12).
+
+        The read-repair the node performs is a *pull from its reachable peers* — a coordinator-level
+        reconciliation whose reachable set is read from the medium (partition/down), exactly as
+        ``_write``'s quorum/linearizable reachability is the coordinator's decision rather than an
+        actor's local view. The winner per object is last-writer-wins by ``(version, value)``, the
+        same commutative join the delivery actors apply, so Tier-A and Tier-B compute byte-identical
+        repair deltas — and the genuinely-distributed property Tier-B then reproduces is that the
+        repaired cluster converges only over what was reachable (ED19, anti-entropy bounded by the
+        partition), independent of the delivery shuffle.
+        """
+        node = action.args[0]
+        if not state.is_up(node):
+            return [SetResult("unavailable", "")], "unavailable", ""
+        edits: list[DistEdit] = []
+        repaired = 0
+        for obj in self.config.objects:
+            local = state.replicas.get((obj, node))
+            if local is None:
+                continue
+            best_version, best_value = local.version, local.value
+            for peer in self.config.replicas_of(obj):
+                if peer == node or not (state.connected(node, peer) and state.is_up(peer)):
+                    continue
+                r = state.replicas.get((obj, peer))
+                if r is not None and (r.version, r.value) > (best_version, best_value):
+                    best_version, best_value = r.version, r.value
+            if (best_version, best_value) != (local.version, local.value):
+                edits.append(ReplicaWrite(obj, node, best_version, best_value))
+                repaired += 1
+        value = str(repaired)
+        edits.append(SetResult("repaired", value))
+        return edits, "repaired", value
 
     # -- dispatch: the simulated/threaded split ---------------------------------------------------
 

@@ -1,0 +1,6 @@
+{
+  "name": "ed19-anti-entropy",
+  "nodes": ["n0", "n1", "n2"],
+  "key": "x",
+  "v1": "b"
+}

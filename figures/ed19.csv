@@ -1,0 +1,6 @@
+panel,regime,value,detail
+convergence,advance_only,0.0000,converged=0/2
+convergence,anti_entropy,1.0000,converged=2/2
+reachability,partitioned,0.0000,anti_entropy_cannot_cross
+reachability,healed,1.0000,anti_entropy_reaches_all
+tier_b,all,1.0000,steps=40;peers=2

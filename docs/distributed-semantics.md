@@ -180,6 +180,12 @@ A `tget`/`tput`/`commit`/`abort` on an unknown txn (or one opened at a different
 | `restart <node>` | `node` comes back up (its replicas are whatever they were when it crashed; pending messages can now deliver). `("ok", "")`. |
 | `drop <src> <dst>` (DS0 increment 11) | **lose** every in-flight message from `src` to `dst` (a `MsgDrop` per lost message). Unconditional — the drop does not require the link to be currently connected (a message can be lost whether or not it would have been delivered). `("dropped", str(num_dropped))`; a channel with no in-flight message is a no-op `("dropped", "0")`. |
 
+### Protocol ops (the convergence machinery — no causal-log event)
+
+| Action | Semantics |
+|---|---|
+| `anti_entropy <node>` (DS0 increment 12) | **read-repair** `node`: for every object it replicates, adopt the winning `(version, value)` (last-writer-wins) among its **reachable** replicas (itself + co-partitioned, up peers), emitting a `ReplicaWrite` per object that moves. A crashed node is `("unavailable", "")`. `("repaired", str(num_repaired))`; nothing to repair is `("repaired", "0")`. |
+
 `advance` is the engine of the distributed dynamics — it is where replication actually happens and
 where partition/crash make their effect felt. Delivery is simulated **sequentially within one
 `advance`**, so a later message's last-writer-wins comparison sees the effect of earlier deliveries in
@@ -211,6 +217,33 @@ lost write entirely (a lost update at the network layer). `drop` adds no state f
 in-flight messages), so it composes with every consistency model and leaves every prior golden, hash,
 and tokenization unchanged. ED18 ([`experiments/ed18.py`](../src/verisim/experiments/ed18.py)) pins
 both findings; Tier-B reproduces the drop and the broken/repaired convergence bit-for-bit.
+
+### 3.2 `anti_entropy` — read-repair, the convergence `drop` broke (DS0 increment 12)
+
+`anti_entropy` is the first **protocol** op (SPEC-7 §3.2) and the §4 `ReplicaConverge` the spec named:
+the **read-repair / anti-entropy** mechanism real eventually-consistent stores (Dynamo, Cassandra) use
+to converge *despite* lost messages. Where `drop` *breaks* the convergence guarantee, anti-entropy
+*restores* it — and, crucially, it needs **no in-flight message**: `anti_entropy node` reads the
+*current* replicas of `node`'s reachable peers and pulls each object to the winning `(version, value)`,
+so it repairs a write `advance` can never deliver because the message is gone. Continuing the `drop`
+example above (after `heal`, `n1` permanently stale at the boot value):
+
+```
+anti_entropy n1          # n1 pulls x from its reachable peers (n0, n2 hold the latest)
+                         #   → n1.x = (1,b), ("repaired","1") — read-repair, with no new write
+```
+
+Two properties make it faithful to real gossip rather than magic. First, it **adopts the latest
+reachable version, skipping intermediates** — a replica stuck at `v0` that missed `v1` and `v2`
+read-repairs straight to `v2` (it never saw `v1`), so a single step can jump a version by more than
+one (the reason the cheap `cycle`/`symbolic` oracle tiers defer `anti_entropy` to bit-exact rather
+than applying the per-step "version moves by ≤1" rule). Second, it is **bounded by reachability** —
+under partition it reconciles only within `node`'s group, so it cannot pull a value held across the
+split; full convergence still needs `heal`. A crashed node is `("unavailable","")`. `anti_entropy`
+reuses the `ReplicaWrite` edit and adds no state field, so it composes with every consistency model
+and leaves every prior golden, hash, and tokenization unchanged. ED19
+([`experiments/ed19.py`](../src/verisim/experiments/ed19.py)) pins both findings; Tier-B reproduces the
+read-repair bit-for-bit.
 
 ## 4. The delta and the `apply == oracle` invariant
 

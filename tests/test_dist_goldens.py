@@ -145,6 +145,36 @@ def test_golden_drop_loses_the_write_and_heal_cannot_recover_it():
     assert (r.version, r.value) == (2, "c")  # the overwrite reached n1; the lost "b" never did
 
 
+def test_golden_anti_entropy_repairs_a_dropped_write_without_a_new_write():
+    # The read-repair golden (SPEC-7 §5.1, DS0 incr 12): drop the write to n1, advance, heal — n1 is
+    # stale (the ED18 leftover) — then `anti_entropy n1` pulls the latest from its reachable peers
+    # and repairs it WITHOUT a fresh write, where `advance` never could. The repair is a
+    # ReplicaWrite (no new edit type), so the canonical form is unchanged in shape.
+    final = _final(["put n0 x b", "drop n0 n1", "advance 2", "heal", "anti_entropy n1"])
+    assert final == {
+        "replicas": [
+            _rep("x", "n0", 1, "b"),
+            _rep("x", "n1", 1, "b"),   # read-repaired from a reachable peer (was 0/nil post-drop)
+            _rep("x", "n2", 1, "b"),
+            *_boot_y(),
+        ],
+        "log": [{"id": 0, "node": "n0", "op": "put n0 x b", "clock": 0, "happens_before": []}],
+        "inflight": [],
+        "partitions": [["n0", "n1", "n2"]],
+        "down": [],
+        "clock": 2,  # the single advance; anti_entropy does not move the clock (no event, no time)
+        "next_event_id": 1,
+        "next_msg_id": 2,
+        "last_result": ["repaired", "1"],  # one replica reconciled
+    }
+    # bounded by reachability: while n1 is partitioned away, the same op repairs nothing.
+    state = DistributedState.initial(CONFIG)
+    for cmd in ["put n0 x b", "drop n0 n1", "advance 2", "partition n1 | n0 n2", "anti_entropy n1"]:
+        state = ORACLE.step(state, parse_dist_action(cmd)).state
+    r = state.replicas[("x", "n1")]
+    assert (r.version, r.value) == (0, "nil")  # nothing reachable held the new value
+
+
 def test_golden_linearizable_replicates_synchronously():
     # A single put commits to *every* replica in the same step — no in-flight, no advance needed,
     # the strong-consistency counterpart of the eventual-consistency async-then-converge golden.

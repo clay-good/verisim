@@ -101,6 +101,8 @@ class ReferenceDistOracle:
             return self._node_status(state, action)
         if name == "drop":
             return self._drop(state, action)
+        if name == "anti_entropy":
+            return self._anti_entropy(state, action)
         raise ValueError(f"unhandled action {name!r}")  # pragma: no cover - grammar is closed
 
     def _event(self, state: DistributedState, node: str, raw: str) -> EventAppend:
@@ -297,3 +299,43 @@ class ReferenceDistOracle:
         value = str(len(dropped))
         edits.append(SetResult("dropped", value))
         return edits, "dropped", value
+
+    def _anti_entropy(
+        self, state: DistributedState, action: DistAction
+    ) -> tuple[DistDelta, str, str]:
+        """``anti_entropy node``: read-repair ``node`` to its latest reachable replica (DS0 inc 12).
+
+        The **anti-entropy / read-repair** mechanism real eventually-consistent stores (Dynamo,
+        Cassandra) use to converge *despite* lost messages — the SPEC-7 §4 ``ReplicaConverge`` op,
+        the first **protocol** op (§3.2). For every object ``node`` holds, it adopts the winning
+        ``(version, value)`` among its **reachable** replicas (itself + co-partitioned, up peers) by
+        the same last-writer-wins rule ``advance`` uses, emitting a ``ReplicaWrite`` per object that
+        moves. Unlike ``advance`` (which needs an in-flight message), anti-entropy reads the peers'
+        *current* replicas directly, so it repairs a **dropped** write ``advance`` never can
+        (ED18 → ED19) — but it is **bounded by reachability**: under partition it reconciles only
+        within ``node``'s group, so full convergence still needs ``heal``. A crashed node is
+        ``unavailable``; reachability never includes a partitioned-away or down peer, so this
+        composes with the fault medium unchanged. Reports the number of replicas repaired.
+        """
+        node = action.args[0]
+        if not state.is_up(node):
+            return [SetResult("unavailable", "")], "unavailable", ""
+        edits: list[DistEdit] = []
+        repaired = 0
+        for obj in self.config.objects:
+            local = state.replicas.get((obj, node))
+            if local is None:
+                continue  # node does not replicate this object
+            best_version, best_value = local.version, local.value
+            for peer in self.config.replicas_of(obj):
+                if peer == node or not (state.connected(node, peer) and state.is_up(peer)):
+                    continue
+                r = state.replicas.get((obj, peer))
+                if r is not None and (r.version, r.value) > (best_version, best_value):
+                    best_version, best_value = r.version, r.value
+            if (best_version, best_value) != (local.version, local.value):
+                edits.append(ReplicaWrite(obj, node, best_version, best_value))
+                repaired += 1
+        value = str(repaired)
+        edits.append(SetResult("repaired", value))
+        return edits, "repaired", value

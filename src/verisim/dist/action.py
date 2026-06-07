@@ -13,6 +13,7 @@ workload and the fault/time medium (the consensus/admin family arrives with the 
     crash <node>                    # fault: <node> goes down (stops delivering/applying)
     restart <node>                  # fault: <node> comes back up
     drop <src> <dst>                # fault: lose every in-flight message from <src> to <dst>
+    anti_entropy <node>             # protocol: read-repair <node> to the latest reachable replica
 
 The fault/time family is the source of all interesting dynamics (stale reads under partition,
 convergence after heal+advance) -- the distributed analogue of SPEC-5's ``advance Δt`` and SPEC-6's
@@ -20,8 +21,12 @@ scheduler, and the ``BUGGIFY`` of deterministic simulation testing (SPEC-7 §2.1
 increment 11) is the unreliable-network fault: where ``partition`` *holds* a message (delivered once
 the link ``heal``s), ``drop`` **destroys** it, so the destination replica permanently misses that
 write -- the lost-message anomaly that breaks the eventual-consistency convergence guarantee until a
-*newer* write overwrites it (ED18). Transactions and ``propose``/leader ops are later increments,
-and so are message-level ``delay``/``reorder``.
+*newer* write overwrites it (ED18). ``anti_entropy`` (DS0 increment 12) is the first **protocol**
+op: the **read-repair / anti-entropy** mechanism real eventually-consistent stores (Dynamo,
+Cassandra) use to converge *despite* lost messages -- a node pulls each object to the latest
+``(version, value)`` among its reachable replicas, so it repairs a dropped write that ``advance``
+never can, bounded only by what is currently reachable (ED19). Transactions and ``propose``/leader
+ops are later increments, and so are message-level ``delay``/``reorder``.
 """
 
 from __future__ import annotations
@@ -40,6 +45,7 @@ _ARITY: dict[str, int | None] = {
     "crash": 1,  # node
     "restart": 1,  # node
     "drop": 2,  # src dst  -- lose every in-flight message from <src> to <dst> (DS0 incr 11)
+    "anti_entropy": 1,  # node  -- read-repair <node> to the latest reachable replica (DS0 incr 12)
     # Transaction family (DS0 increment 2): a multi-key OCC transaction at a coordinator node.
     "begin": 2,  # node txn  -- open a transaction
     "tget": 3,  # node txn key  -- read <key> within the txn (pins the read version for validation)
@@ -52,6 +58,9 @@ _ARITY: dict[str, int | None] = {
 CLIENT_OPS = frozenset({"put", "get", "cas", "begin", "tget", "tput", "commit", "abort"})
 TXN_OPS = frozenset({"begin", "tget", "tput", "commit", "abort"})
 FAULT_OPS = frozenset({"advance", "partition", "heal", "crash", "restart", "drop"})
+# Protocol/admin ops (SPEC-7 §3.2, the third action family). ``anti_entropy`` (the read-repair
+# convergence mechanism, DS0 increment 12) is the first; ``propose``/leader ops are later increments.
+PROTOCOL_OPS = frozenset({"anti_entropy"})
 
 
 class DistParseError(ValueError):

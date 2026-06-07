@@ -126,6 +126,11 @@ class TieredOracle:
         """History admissibility: a read never mutates state; versions jump by <=1 per step."""
         if action.name == "get" and predicted.replicas != state.replicas:
             return True, "a read (get) mutated a replica -- inadmissible history"
+        if action.name == "anti_entropy":
+            # read-repair (DS0 incr 12) legitimately jumps a stale replica *several* versions at
+            # once (it adopts the latest reachable, skipping the versions it never received), so the
+            # per-step "jump by <=1" admissibility does not apply -- defer to bit-exact.
+            return False, ""
         for (obj, node), r in predicted.replicas.items():
             prior = state.replicas.get((obj, node))
             base = prior.version if prior is not None else 0
@@ -142,15 +147,21 @@ class TieredOracle:
         canonical next-state, but catches the action-specific structural errors bit-exact would.
         """
         name = action.name
-        no_write = ("get", "partition", "heal", "crash", "restart",
+        no_write = ("get", "partition", "heal", "crash", "restart", "drop",
                     "begin", "tget", "tput", "abort")
         if name in no_write:
-            # none of these write replicas; the replica map must be unchanged. The txn ops
-            # begin/tget/tput/abort only touch the (consistency-invisible) txn buffer — a committed
-            # write reaches replicas only via ``commit`` (handled below); a read/buffer/abort that
-            # mutated a replica is an inadmissible transition the cheap symbolic tier can refute.
+            # none of these write replicas; the replica map must be unchanged. ``drop`` (DS0 inc 11)
+            # only removes in-flight messages; the txn ops begin/tget/tput/abort only touch the
+            # (consistency-invisible) txn buffer — a committed write reaches replicas only via
+            # ``commit`` (handled below); a read/drop/buffer/abort that mutated a replica is an
+            # inadmissible transition the cheap symbolic tier can refute.
             if predicted.replicas != state.replicas:
                 return True, f"{name} must not change any replica"
+            return False, ""
+        if name == "anti_entropy":
+            # read-repair (DS0 incr 12) reconciles a node to the winning ``(version, value)`` among
+            # its reachable replicas; the exact post-state depends on which peers are reachable (the
+            # medium), which the cheap symbolic tier does not recompute — defer to bit-exact.
             return False, ""
         if name == "commit":
             # ``commit`` applies the txn's buffered writes (an MVCC bump per key) or aborts on a
