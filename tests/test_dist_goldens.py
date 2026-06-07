@@ -222,6 +222,58 @@ def test_golden_write_skew_admitted_under_snapshot_forbidden_under_serializable(
     assert (ser_x, ser_y) == ("a", "nil")  # only A's write landed
 
 
+def test_golden_lost_update_admitted_under_read_committed_forbidden_under_snapshot():
+    # The canonical lost-update scenario (DS0 increment 9): A and B both read x at version 0, then
+    # both write x (a read-modify-write). Under read_committed (no commit-time validation) both
+    # commit and B's write overwrites A's — A's update is silently lost. Under snapshot (and
+    # serializable) B's write-write validation sees x bumped by A, so B aborts — no update lost.
+    lost = ["begin n0 A", "begin n0 B", "tget n0 A x", "tget n0 B x",
+            "tput n0 A x a", "tput n0 B x b", "commit n0 A", "commit n0 B"]
+
+    def outcomes(isolation: str) -> tuple[list[str], str]:
+        config = DistConfig(name="golden-iso", nodes=("n0", "n1", "n2"), objects=("x", "y"),
+                            txn_isolation=isolation)
+        oracle = ReferenceDistOracle(config)
+        state = DistributedState.initial(config)
+        statuses: list[str] = []
+        for cmd in lost:
+            r = oracle.step(state, parse_dist_action(cmd))
+            statuses.append(r.status)
+            state = r.state
+        return statuses[-2:], state.replicas[("x", "n0")].value
+
+    rc_commits, rc_x = outcomes("read_committed")
+    assert rc_commits == ["committed", "committed"]  # both commit — lost update
+    assert rc_x == "b"  # only B's (later) write survives; A's "a" is lost
+
+    snap_commits, snap_x = outcomes("snapshot")
+    assert snap_commits == ["committed", "conflict"]  # B aborts on the write-write conflict
+    assert snap_x == "a"  # A's write preserved — no update lost
+
+
+def test_golden_elle_recovers_lost_update_as_a_cycle_black_box():
+    # The Elle (DS3 incr 2) counterpart of the lost-update golden: from the observable history alone
+    # (no oracle, no cluster state) the checker reconstructs Adya's DSG and reports the cycle the
+    # read_committed level admits. Lost update's cycle carries both a ww edge (same-key overwrite)
+    # and an rw anti-dependency, distinguishing it from write skew's pure rw cycle.
+    from verisim.distoracle.elle import TxnObservation, check_serializable
+
+    # Both txns read x@0; A installs x@1, B installs x@2 (both committed — the anomaly).
+    lost_update_history = [
+        TxnObservation("A", reads=(("x", 0),), writes=(("x", 1),)),
+        TxnObservation("B", reads=(("x", 0),), writes=(("x", 2),)),
+    ]
+    report = check_serializable(lost_update_history)
+    assert not report.serializable
+    assert report.anomaly == "G2"
+    assert set(report.cycle) == {"A", "B"}
+    assert set(report.cycle_kinds) == {"rw", "ww"}  # overwrite (ww) + stale read (rw)
+
+    # Under snapshot, B aborts, so the history is the single committed txn A — acyclic.
+    serializable_history = [TxnObservation("A", reads=(("x", 0),), writes=(("x", 1),))]
+    assert check_serializable(serializable_history).serializable
+
+
 def test_golden_elle_recovers_write_skew_as_a_g2_cycle_black_box():
     # The Elle (DS3 incr 2) counterpart of the write-skew golden: a checker that sees only the
     # observable transaction history reconstructs Adya's DSG and reports the anomaly the oracle

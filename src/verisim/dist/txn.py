@@ -222,16 +222,27 @@ def _commit(
 ) -> tuple[DistDelta, str, str]:
     two_pl = config.concurrency_control == "2pl"
     if not two_pl:
-        # OCC validation — the isolation level decides *which* set is checked (SPEC-7 §3.2, incr 3):
-        #   serializable: every **read** key's version must be unchanged since it was read (backward
-        #                 validation). This catches the read another txn's write invalidated, so it
-        #                 forbids write skew (A reads y, B writes y -> A aborts).
-        #   snapshot:     only every **written** key's version must be unchanged since it was first
-        #                 written (write-write conflict, first-committer-wins). A read another txn
-        #                 wrote is *not* checked, so disjoint-write-set txns both commit -> write skew.
+        # OCC validation — the isolation level decides *which* set is checked (SPEC-7 §3.2, incr 3/9):
+        #   serializable:    every **read** key's version must be unchanged since it was read (backward
+        #                    validation). This catches the read another txn's write invalidated, so it
+        #                    forbids write skew (A reads y, B writes y -> A aborts).
+        #   snapshot:        only every **written** key's version must be unchanged since it was first
+        #                    written (write-write conflict, first-committer-wins). A read another txn
+        #                    wrote is *not* checked, so disjoint-write-set txns both commit -> write
+        #                    skew, but a *same*-key write-write conflict still aborts (no lost update).
+        #   read_committed:  **no** validation at all (the validation set is empty). Reads still saw
+        #                    only committed data (the MVCC ``tget``), but two read-modify-write txns on
+        #                    the same key both commit and the later overwrites the earlier -> the
+        #                    classic **lost-update** anomaly snapshot prevents (DS0 increment 9).
         # Under 2PL there is nothing to validate: the txn held its locks to here, so no concurrent
         # txn could have written a key it read or wrote (the locks already guaranteed serializability).
-        validation_set = txn.reads if config.txn_isolation == "serializable" else txn.write_versions
+        validation_set: tuple[tuple[str, int], ...]
+        if config.txn_isolation == "serializable":
+            validation_set = txn.reads
+        elif config.txn_isolation == "snapshot":
+            validation_set = txn.write_versions
+        else:  # read_committed: last-committer-wins, lost update admitted
+            validation_set = ()
         for key, pinned_version in validation_set:
             replica = state.replicas.get((key, txn.node))
             current = replica.version if replica is not None else 0

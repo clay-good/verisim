@@ -1606,6 +1606,34 @@ replicates under the same discipline as a plain `put` across all four consistenc
 
 ![ED15: OCC wastes more work per abort (3.0 ops, validates at commit) than 2PL (2.0 ops, fails fast at the lock); both forbid write skew (serializable), and Tier-B reproduces both bit-for-bit](../figures/ed15.png)
 
+## ED16 / read-committed isolation — the lost-update anomaly, and the throughput it sells correctness for
+
+The isolation curriculum had its two strong ends (ED9): `serializable` (read-set validation, forbids
+write skew) and `snapshot` (write-write validation, admits write skew but forbids lost update). ED16
+adds the **weak end real systems actually default to** — **`read_committed`**, the default of
+Postgres, Oracle, and SQL-Server. It does **no** commit-time concurrency validation at all
+(`validation_set = ()`): reads still see only committed data (the MVCC `tget` gives no dirty reads, the
+one guarantee the level keeps), but with no write-write check two same-key read-modify-write
+transactions both commit and the later silently overwrites the earlier — the classic **lost-update**
+anomaly. The new level is purely additive (the default config still serializes
+`txn_isolation="serializable"`), so every prior golden and hash is unchanged.
+
+ED16 ([`ed16.py`](../src/verisim/experiments/ed16.py), [`ed16.csv`](../figures/ed16.csv)) reads two
+findings off the dependency-free reference oracle. **The lost-update anomaly:** two transactions both
+read `x` at the same version, then both write it back; the anomaly rate (both commit, the earlier write
+lost) is **1.0 under `read_committed`, 0.0 under `snapshot` and `serializable`** (the stronger levels'
+write-set validation aborts the second committer on the same-key conflict). **The price it sells
+correctness for:** under read-modify-write contention `read_committed` **never aborts** (`0.00` vs
+`~0.53` for both validating levels) — the apparent throughput it buys by admitting the lost updates of
+the first finding. Transaction bookkeeping is coordinator-local, so **Tier-B reproduces it bit-for-bit**
+on every scenario. And the black-box **Elle** checker (ED10) recovers lost update with no oracle as a
+`{ww, rw}` G2 cycle — the same-key overwrite (`ww`) plus the stale read (`rw`), structurally distinct
+from write skew's pure `{rw}` anti-dependency cycle — pinned by a lost-update golden. Read-committed is
+the cleanest statement of the §3.4 curriculum thesis (*weaker is harder to predict*): the weakest level
+legalizes the most histories, so a model must reproduce an anomaly the stronger levels make impossible.
+
+![ED16: read_committed admits the lost-update anomaly (rate 1.0) that snapshot and serializable forbid (0.0); the price it sells correctness for is that it never aborts under contention (0.00 vs ~0.53); Tier-B reproduces all three levels bit-for-bit](../figures/ed16.png)
+
 ## What the distributed world adds, and what remains
 
 The fourth world generalizes the program's three load-bearing findings — the floor→cliff `H_ε(ρ)`
@@ -1621,9 +1649,11 @@ genuinely off-policy. The distributed world is **packaged for reuse** on all fou
 ([`distcontrib/`](../src/verisim/distcontrib/)). The **Tier-B system oracle now ships** (ED7 above): an
 in-repo autonomous-actor DST runtime that reproduces Tier-A bit-for-bit under shuffled delivery order,
 retiring W1 for the distributed world. The deterministic core also grows a **multi-key OCC
-transaction** layer with two **isolation levels** — `serializable` and `snapshot` (ED8/ED9 above) —
-and a black-box **Elle-style serializability checker** that recovers the write-skew anomaly from the
-observable history with no oracle and certifies the serializable level reference-free (ED10 above).
+transaction** layer with three **isolation levels** — `serializable`, `snapshot`, and the
+real-world-default `read_committed` (ED8/ED9/ED16 above) — spanning the curriculum from the level that
+forbids write skew to the one that admits even lost update, and a black-box **Elle-style
+serializability checker** that recovers both the write-skew and the lost-update anomaly from the
+observable history with no oracle and certifies the serializable level reference-free (ED10/ED16 above).
 **Partial observation now ships** (ED12 above): `observe(state, vantage)` is the §5.4 probe oracle
 mode made a deterministic object — the substrate the structured `M_θ`'s RSSM belief must roll forward
 under partition — and it surfaces two findings unique to a world no observer fully sees (the
@@ -1986,10 +2016,13 @@ expose.
   delivery order — but Tier-B is itself an *in-repo, dependency-free* DST runtime, not a
   wrapped external real-binary runtime (madsim/Shadow/Antithesis, still deferred — they
   need external sandboxes), so it tests implementation- and order-independence, not yet
-  fidelity to a third-party production KV. The consistency semantics pinned
-  so far are the two ends (`eventual`, `linearizable`); the intermediate models
-  (serializable/snapshot/causal), consensus, and transactions are not yet pinned, so
-  the H19/H20 gap is measured at the extremes, not across the full hierarchy. And the
+  fidelity to a third-party production KV. The replication-consistency hierarchy is now
+  four-ended (`eventual`/`causal`/`quorum`/`linearizable`, ED13/ED14) and the transaction
+  layer carries three isolation levels (`serializable`/`snapshot`/`read_committed`,
+  ED9/ED16) plus two concurrency-control disciplines (OCC/2PL, ED15) — all Tier-B-pinned;
+  what remains unpinned is full Raft leader-election + log-matching and the embedded
+  SPEC-6 host / SPEC-5 net inside each node. The H19/H20 horizon gap is still measured
+  at the consistency extremes, not yet swept across every intermediate model. And the
   ED5/ED1/ED2/ED3 synthetic-proposer arms use a tunable-noise model whose error *mode*
   is dialed (`gross`/`subtle`); the learned-`M_θ` arms (ED1/ED2-learned, ED6,
   ED6-two-oracle-learned) confirm the direction on a *real* error distribution, which
@@ -2126,6 +2159,8 @@ python -m verisim.experiments.ed14 --config configs/ed14.json \
     --out figures/ed14.csv --plot figures/ed14.png  # quorum consensus: availability frontier + split-brain (DS0 incr 7)
 python -m verisim.experiments.ed15 --config configs/ed15.json \
     --out figures/ed15.csv --plot figures/ed15.png  # concurrency control: OCC vs 2PL, the cost of aborting (DS0 incr 8)
+python -m verisim.experiments.ed16 --config configs/ed16.json \
+    --out figures/ed16.csv --plot figures/ed16.png  # read-committed isolation: lost update + its price (DS0 incr 9)
 ```
 
 The run-records are git-ignored (regenerable); the figures and their CSVs are

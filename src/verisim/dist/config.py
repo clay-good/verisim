@@ -42,7 +42,13 @@ CONSISTENCY_MODELS: tuple[str, ...] = (
 # validation of the **read-set** (a committed txn's read versions must be unchanged) — it prevents
 # write skew; ``snapshot`` validates only **write-write** conflicts (the write-set versions,
 # first-committer-wins) — it permits write skew, the classic SI anomaly the experiment exhibits.
-TXN_ISOLATION_LEVELS: tuple[str, ...] = ("serializable", "snapshot")
+# ``read_committed`` (DS0 increment 9, the real-world default of Postgres/Oracle/SQL-Server) does
+# **no** commit-time concurrency validation: reads still see only committed data (no dirty reads,
+# guaranteed by the MVCC ``tget``), but the absence of write-write validation means two read-modify-
+# write txns both commit and the later silently overwrites the earlier — the classic **lost-update**
+# anomaly snapshot's first-committer-wins prevents. It is the *weakest* level (weaker is harder to
+# predict, SPEC-7 §3.4), ordered last.
+TXN_ISOLATION_LEVELS: tuple[str, ...] = ("serializable", "snapshot", "read_committed")
 
 # Concurrency-control mechanisms (DS0 increment 8, SPEC-7 §3.2; the DD-D3 alternative). ``occ`` is the
 # optimistic default (buffer, validate at commit, first-committer-wins). ``2pl`` is **pessimistic

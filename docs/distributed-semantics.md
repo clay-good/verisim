@@ -330,32 +330,43 @@ by **ED8** ([`verisim.experiments.ed8`](../src/verisim/experiments/ed8.py),
 tracks the balls-in-bins occupancy law `M·(1−(1−1/M)^K)/K` (the semantics are exactly right, not
 merely plausible), with Tier-B agreeing on every scenario.
 
-### 9.1 Isolation levels — `serializable` vs `snapshot` (DS0 increment 3)
+### 9.1 Isolation levels — `serializable` / `snapshot` / `read_committed` (DS0 increments 3, 9)
 
-The `txn_isolation` config dial selects *which set* `commit` validates (design decision `DD-D4`):
+The `txn_isolation` config dial selects *which set* `commit` validates (design decision `DD-D4`).
+Ordered strong → weak (weaker admits more anomalies and so is *harder to predict*, SPEC-7 §3.4):
 
-| Level | Validates at commit | Forbids write skew? |
-|---|---|---|
-| `serializable` (default) | the **read-set** — every read key's local version must be unchanged since it was read (OCC backward validation, Kung–Robinson) | **yes** — a read another txn wrote is caught |
-| `snapshot` | only the **write-set** — every written key's version must be unchanged since the txn first wrote it (write-write conflict, first-committer-wins) | **no** — disjoint write-sets both commit |
+| Level | Validates at commit | Forbids write skew? | Forbids lost update? |
+|---|---|---|---|
+| `serializable` (default) | the **read-set** — every read key's local version must be unchanged since it was read (OCC backward validation, Kung–Robinson) | **yes** — a read another txn wrote is caught | **yes** |
+| `snapshot` | only the **write-set** — every written key's version must be unchanged since the txn first wrote it (write-write conflict, first-committer-wins) | **no** — disjoint write-sets both commit | **yes** — a same-key write-write conflict still aborts |
+| `read_committed` | **nothing** — no concurrency validation at all (reads still see only committed data via the MVCC `tget`, so no dirty reads) | **no** | **no** — two same-key RMW txns both commit, the later overwrites the earlier |
 
-The distinction is the classic **write-skew** anomaly. Two transactions both read `{x, y}`, then
-`A` writes `x` and `B` writes `y`:
+The `serializable`/`snapshot` distinction is the classic **write-skew** anomaly (two transactions
+both read `{x, y}`, then `A` writes `x` and `B` writes `y`): under `snapshot` the disjoint write-sets
+both pass write-write validation and **both commit** — a pair of outcomes no serial schedule
+produces; under `serializable`, `A`'s commit bumps `x`, so `B`'s pinned read of `x` is stale and `B`
+**aborts**. Pinned by **ED9** ([`ed9.png`](../../figures/ed9.png)): write-skew rate **1.0 under
+`snapshot`, 0.0 under `serializable`**, and under read-heavy contention `serializable` aborts
+strictly more (`0.70` vs `0.55`, disjoint CIs) — the price of the stronger guarantee.
 
-- under `snapshot`, `A`'s write-set `{x}` and `B`'s write-set `{y}` are disjoint, so neither write-write
-  check fails and **both commit** — a pair of outcomes no serial schedule produces, silently breaking
-  any cross-object invariant they each verified;
-- under `serializable`, when `A` commits (bumping `x`), `B`'s pinned read of `x` is now stale, so `B`'s
-  read-set validation fails and it **aborts** — the anomaly cannot occur.
+The `snapshot`/`read_committed` distinction is the classic **lost-update** anomaly — the real-world
+default of Postgres/Oracle/SQL-Server made measurable. Two transactions both read `x` at the same
+version and both write it back (a read-modify-write):
 
-Both levels remain OCC (deterministic, deadlock-free) and share every other rule above; only the
+- under `read_committed`, the commit validates *nothing*, so **both commit** and only the later
+  write survives — the earlier transaction's update is silently lost despite committing successfully;
+- under `snapshot` (and `serializable`), the second committer's write-set validation sees `x`'s
+  version bumped by the first, so it **aborts** — the update is preserved.
+
+All three levels remain OCC (deterministic, deadlock-free) and share every other rule above; only the
 validation set differs, so the write version is pinned at first `tput` (the `write_versions` field on
-`TxnState`) exactly as the read version is pinned at first `tget`. The anomaly and the cost of
-forbidding it are pinned by **ED9** ([`verisim.experiments.ed9`](../src/verisim/experiments/ed9.py),
-[`ed9.png`](../../figures/ed9.png)): the write-skew anomaly rate is **1.0 under `snapshot`, 0.0 under
-`serializable`**, and under a read-heavy contended workload `serializable` aborts strictly more
-(`0.70` vs `0.55`, disjoint CIs) — the extra aborts are precisely the price of the stronger
-guarantee. Both compose with Tier-B (the autonomous-actor system oracle agrees on every scenario).
+`TxnState`) exactly as the read version is pinned at first `tget`. The lost-update anomaly and its
+price are pinned by **ED16** ([`verisim.experiments.ed16`](../src/verisim/experiments/ed16.py),
+[`ed16.png`](../../figures/ed16.png)): the lost-update anomaly rate is **1.0 under `read_committed`,
+0.0 under `snapshot` and `serializable`**, and under read-modify-write contention `read_committed`
+**never aborts** (`0.00` vs `~0.53`) — the apparent throughput it buys by selling the correctness of
+the first panel. All three levels compose with Tier-B (the autonomous-actor system oracle agrees on
+every scenario, transaction bookkeeping being coordinator-local).
 
 ### 9.1.1 Concurrency control: `occ` vs `2pl` (DS0 increment 8)
 
@@ -408,6 +419,11 @@ A cycle is classified by Adya's G-hierarchy: **G0** (a `ww`-only cycle, dirty wr
 non-serializable form). **Write skew is the canonical G2**: `A` reads `{x@0, y@0}` and installs
 `x@1`; `B` reads `{x@0, y@0}` and installs `y@1`; `B` read `x@0` that `A` overwrote (`rw B→A` on `x`)
 and `A` read `y@0` that `B` overwrote (`rw A→B` on `y`) — a two-cycle of anti-dependency edges.
+**Lost update (the `read_committed` anomaly, §9.1) is a G2 of a different shape**: both write the
+*same* key `x`, so the cycle carries a `ww` edge (`A` installs `x@1` before `B` installs `x@2`)
+*and* an `rw` anti-dependency (`B` read `x@0`, which `A` overwrote) — a `{ww, rw}` cycle, whereas
+write skew is `{rw}`-only. Both are recovered black-box (a lost-update golden pins it in
+[`test_dist_goldens`](../../tests/test_dist_goldens.py)).
 
 **ED10** ([`verisim.experiments.ed10`](../src/verisim/experiments/ed10.py),
 [`ed10.png`](../../figures/ed10.png)) records only each committed transaction's read/installed
