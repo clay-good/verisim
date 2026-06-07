@@ -156,6 +156,10 @@ class DistributedState:
     next_msg_id: int = 0
     last_result: tuple[str, str] | None = None  # (status, value_token) of the last client op
     txns: dict[str, TxnState] = field(default_factory=dict)  # active transactions, keyed by txn_id
+    # The 2PL lock table (DS0 increment 8), keyed by object: the sorted ``(txn_id, mode)`` holders,
+    # ``mode ∈ {"S", "X"}``. Held from acquisition (``tget``/``tput``) to ``commit``/``abort``. Empty
+    # (and omitted from the canonical form) under the ``occ`` default, so prior hashes are unchanged.
+    locks: dict[str, tuple[tuple[str, str], ...]] = field(default_factory=dict)
 
     def __post_init__(self) -> None:
         # ``partitions`` is conceptually a *set* of disjoint groups, but stored as a tuple; keep it
@@ -191,6 +195,7 @@ class DistributedState:
             next_msg_id=self.next_msg_id,
             last_result=self.last_result,
             txns=dict(self.txns),
+            locks=dict(self.locks),
         )
 
     def connected(self, a: str, b: str) -> bool:

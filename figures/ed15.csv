@@ -1,0 +1,6 @@
+panel,cc,metric,value,detail
+wasted,occ,wasted_ops_per_abort,3.0000,commits=28;aborts=52
+wasted,2pl,wasted_ops_per_abort,2.0000,commits=23;aborts=57
+write_skew,occ,anomaly_rate,0.0000,anomalies=0/3
+write_skew,2pl,anomaly_rate,0.0000,anomalies=0/3
+tier_b,both,agrees,1.0000,steps=800

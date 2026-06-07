@@ -1560,6 +1560,34 @@ retirement) — the availability/safety behavior is a property of a real message
 
 ![ED14: the quorum availability frontier steps at the majority threshold (eventual flat-available, linearizable flat-unavailable), and only quorum is both available on the majority side and split-brain-free](../figures/ed14.png)
 
+## ED15 / concurrency control — optimistic (OCC) vs pessimistic (2PL), the cost of aborting
+
+The transaction layer had one concurrency-control discipline, OCC, chosen (DD-D3) because the *blocking*
+form of two-phase locking injects nondeterminism (lock-acquisition order, deadlock detection, victim
+selection — all need a scheduler). The `concurrency_control` dial adds the alternative the core *can*
+pin: **`2pl`**, strict two-phase locking with **deterministic wound-wait**. `tget`/`tput` acquire
+shared/exclusive locks held to commit; a conflict is resolved by wound-wait — the **older** transaction
+(lexicographically smaller id, a deterministic proxy for start order) preempts the younger, and a
+younger requester aborts rather than waiting. Because the older always wins and no one blocks, it is
+deadlock-free and deterministic *without a scheduler*. The lock table is purely additive
+(`DistributedState.locks`, omitted from the canonical form under the `occ` default), so every prior
+golden and hash is unchanged.
+
+Both mechanisms reach the *same* serializable guarantee by opposite routes — OCC validates the read-set
+late, 2PL locks it early — so ED15 ([`ed15.py`](../src/verisim/experiments/ed15.py),
+[`ed15.csv`](../figures/ed15.csv)) measures *when each pays for a conflict*. **Both forbid write skew**
+(the ED9 anomaly: rate 0.0). But their **wasted work** differs: under OCC an aborted transaction failed
+at commit, having completed *all* **3.0** of its data operations (maximal waste); under 2PL it failed
+fast at the conflicting lock-acquisition, at **2.0** operations — the classic optimistic/pessimistic
+tradeoff, made measurable (the optimist wastes work under contention; the pessimist pays upfront).
+Transaction bookkeeping — including the lock table and wound-wait — is coordinator-local, so **Tier-B
+reproduces 2PL bit-for-bit** by delegating to the same `txn_step` (the W1 retirement covers it for
+free). *Fixed in the build:* the transaction commit's replication handled only `eventual`/`linearizable`,
+so a `quorum` txn commit (incr 7) silently fell through to eventual-style async; the commit now
+replicates under the same discipline as a plain `put` across all four consistency models.
+
+![ED15: OCC wastes more work per abort (3.0 ops, validates at commit) than 2PL (2.0 ops, fails fast at the lock); both forbid write skew (serializable), and Tier-B reproduces both bit-for-bit](../figures/ed15.png)
+
 ## What the distributed world adds, and what remains
 
 The fourth world generalizes the program's three load-bearing findings — the floor→cliff `H_ε(ρ)`
@@ -1588,13 +1616,15 @@ fill the span between `eventual` and `linearizable` — `causal` adds happens-be
 + a reachability check, available on the majority side and divergence-free). Each leaves every prior
 golden and the Tier-B differential untouched and is validated bit-for-bit against the autonomous-actor
 execution — the distributed world now spans the CAP design space from AP (`eventual`) to CP
-(`linearizable`), with the realistic consensus middle (`quorum`) measured.
+(`linearizable`), with the realistic consensus middle (`quorum`) measured. **The transaction layer is
+now two-disciplined** (ED15 above): OCC and **2PL** (deterministic wound-wait) reach serializability by
+opposite routes and differ only in *when* they pay for a conflict (OCC wastes work late, 2PL fails fast).
 **Open (the honest deferrals):** a wrapped **external**-binary real-DST runtime
 (madsim/Shadow/Antithesis-class, which need external sandboxes), the structured GNN/RSSM `M_θ` arm
 (where the smart-`π_c` lever the ED2-smart null localizes can be re-tested, now that partial
 observation is defined), the smart-`π_w` (which-tier) scheduler, full Raft leader-election + log-matching
-(the `quorum` model captures the consensus availability/safety without the leader machinery), lock-based
-2PL, and the embedded SPEC-6 host / SPEC-5 net inside each node.
+(the `quorum` model captures the consensus availability/safety without the leader machinery), and the
+embedded SPEC-6 host / SPEC-5 net inside each node.
 
 # Scale (SPEC-10): the floor+cliff was largely an under-resourcing artifact (H26)
 
@@ -2074,6 +2104,8 @@ python -m verisim.experiments.ed13 --config configs/ed13.json \
     --out figures/ed13.csv --plot figures/ed13.png  # causal consistency: effect-before-cause anomaly (DS0 incr 5)
 python -m verisim.experiments.ed14 --config configs/ed14.json \
     --out figures/ed14.csv --plot figures/ed14.png  # quorum consensus: availability frontier + split-brain (DS0 incr 7)
+python -m verisim.experiments.ed15 --config configs/ed15.json \
+    --out figures/ed15.csv --plot figures/ed15.png  # concurrency control: OCC vs 2PL, the cost of aborting (DS0 incr 8)
 ```
 
 The run-records are git-ignored (regenerable); the figures and their CSVs are

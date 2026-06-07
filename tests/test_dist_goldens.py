@@ -53,6 +53,14 @@ def _final_quorum(cmds: list[str]) -> dict[str, object]:
     return to_canonical(state)
 
 
+# The pessimistic concurrency-control counterpart (DS0 increment 8): lock-based 2PL with wound-wait.
+TPL_CONFIG = DistConfig(
+    name="golden-2pl", nodes=("n0", "n1", "n2"), objects=("x", "y"),
+    concurrency_control="2pl",
+)
+TPL_ORACLE = ReferenceDistOracle(TPL_CONFIG)
+
+
 def _rep(obj: str, node: str, version: int, value: str) -> dict[str, object]:
     return {"object_id": obj, "node_id": node, "version": version, "value": value}
 
@@ -394,3 +402,31 @@ def test_golden_quorum_commits_on_majority_side_rejects_on_minority():
         DistributedState.initial(QUORUM_CONFIG), parse_dist_action("partition n0 n1 | n2")
     ).state
     assert QUORUM_ORACLE.step(rejected, parse_dist_action("put n2 x z")).status == "unavailable"
+
+
+def test_golden_2pl_wound_wait_older_txn_wins():
+    # The 2PL concurrency-control golden (SPEC-7 §3.2, DS0 incr 8): A (older) and B (younger) both
+    # write x. B holds the X lock first, then A requests it — wound-wait lets the *older* A preempt
+    # (wound) B, so A commits its value and B is gone. The lock table is held mid-txn, then freed.
+    state = DistributedState.initial(TPL_CONFIG)
+    statuses = []
+    for cmd in ["begin n0 A", "begin n0 B", "tput n0 B x b", "tput n0 A x a",
+                "commit n0 B", "commit n0 A"]:
+        r = TPL_ORACLE.step(state, parse_dist_action(cmd))
+        statuses.append(r.status)
+        state = r.state
+    # B holds X first (ok), A (older) wounds B and acquires (ok), B's commit finds it gone (no_txn),
+    # A commits — the older transaction wins the wound-wait race deterministically.
+    assert statuses == ["ok", "ok", "ok", "ok", "no_txn", "committed"]
+
+    final = to_canonical(state)
+    assert final["replicas"][0] == _rep("x", "n0", 1, "a")  # A's value committed
+    assert "locks" not in final  # every lock released after the commit (the shrinking phase)
+    assert "txns" not in final   # no open transactions
+    assert final["last_result"] == ["committed", ""]
+
+    # Mid-transaction, the X lock IS held (additive lock-table state, omitted only when empty).
+    held = DistributedState.initial(TPL_CONFIG)
+    for cmd in ["begin n0 A", "tput n0 A x a"]:
+        held = TPL_ORACLE.step(held, parse_dist_action(cmd)).state
+    assert to_canonical(held)["locks"] == {"x": [["A", "X"]]}

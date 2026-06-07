@@ -116,6 +116,18 @@ class TxnDel:
 
 
 @dataclass(frozen=True)
+class LockSet:
+    """Set the 2PL lock holders for ``object_id`` (DS0 increment 8); empty ``holders`` removes the key.
+
+    ``holders`` is the sorted tuple of ``(txn_id, mode)`` with ``mode ∈ {"S", "X"}``. Replacing the
+    whole holder set per key keeps ``apply`` a pure function and the delta round-trippable.
+    """
+
+    object_id: str
+    holders: tuple[tuple[str, str], ...]
+
+
+@dataclass(frozen=True)
 class SetResult:
     """The client-visible result of the step: ``(status, value_token)``."""
 
@@ -135,6 +147,7 @@ DistEdit = (
     | ClockSet
     | TxnSet
     | TxnDel
+    | LockSet
     | SetResult
 )
 DistDelta = list[DistEdit]
@@ -174,6 +187,11 @@ def apply(state: DistributedState, delta: DistDelta) -> DistributedState:
             s.txns[edit.txn.txn_id] = edit.txn
         elif isinstance(edit, TxnDel):
             s.txns.pop(edit.txn_id, None)
+        elif isinstance(edit, LockSet):
+            if edit.holders:
+                s.locks[edit.object_id] = edit.holders
+            else:
+                s.locks.pop(edit.object_id, None)
         else:
             assert isinstance(edit, SetResult)
             s.last_result = (edit.status, edit.value)
@@ -216,6 +234,9 @@ def edit_to_dict(edit: DistEdit) -> dict[str, Any]:
                 "write_versions": [list(w) for w in edit.txn.write_versions]}
     if isinstance(edit, TxnDel):
         return {"op": "TxnDel", "txn_id": edit.txn_id}
+    if isinstance(edit, LockSet):
+        return {"op": "LockSet", "object_id": edit.object_id,
+                "holders": [list(h) for h in edit.holders]}
     assert isinstance(edit, SetResult)
     return {"op": "SetResult", "status": edit.status, "value": edit.value}
 
@@ -253,6 +274,8 @@ def edit_from_dict(d: dict[str, Any]) -> DistEdit:
         ))
     if op == "TxnDel":
         return TxnDel(d["txn_id"])
+    if op == "LockSet":
+        return LockSet(d["object_id"], tuple((t, m) for t, m in d["holders"]))
     if op == "SetResult":
         return SetResult(d["status"], d["value"])
     raise ValueError(f"unknown edit op {op!r}")

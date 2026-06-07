@@ -311,13 +311,16 @@ the version the txn read. If any changed (a concurrent transaction committed it 
 *Rationale:* OCC is **deterministic and deadlock-free** — no lock table, no lock-acquisition order,
 no deadlock detection / victim selection (all of which would inject nondeterminism or require a
 scheduler) — so it is the discipline the deterministic core pins first, exactly as the KV core
-pinned async-replication LWW before consensus. *Lock-based 2PL is a later refinement; the two OCC
-isolation levels (`serializable`/`snapshot`) ship now — see §9.1.*
+pinned async-replication LWW before consensus. *The two OCC isolation levels
+(`serializable`/`snapshot`) ship in §9.1; the pessimistic **2PL** alternative — deterministic via
+wound-wait — ships in §9.1.1.*
 
 **Composition.** A committed transaction's writes flow through the existing replication medium, so
-they inherit the consistency model unchanged: under `eventual` the peers converge on a later
-`advance`; under `linearizable` the commit replicates synchronously and is **rejected**
-(`unavailable`, the txn staying open for retry) if it cannot reach all replicas under partition. The
+they inherit the consistency model unchanged, **exactly as a plain `put` does** (§2.1–2.3): under
+`eventual`/`causal` the peers converge on a later `advance`; under `quorum` the commit replicates
+synchronously to a reachable majority (async catch-up to the minority) and is rejected if no majority
+is reachable; under `linearizable` it replicates to *every* replica synchronously and is **rejected**
+(`unavailable`, the txn staying open for retry) if it cannot reach all under partition. The
 transaction state is purely additive: an empty `txns` set is **omitted** from the canonical form
 (§6), so every DS0-increment-1 golden and content-addressed hash is unchanged, and Tier-B reproduces
 every transaction trajectory bit-for-bit (the commit replication is delivered by its autonomous
@@ -353,6 +356,33 @@ forbidding it are pinned by **ED9** ([`verisim.experiments.ed9`](../src/verisim/
 `serializable`**, and under a read-heavy contended workload `serializable` aborts strictly more
 (`0.70` vs `0.55`, disjoint CIs) — the extra aborts are precisely the price of the stronger
 guarantee. Both compose with Tier-B (the autonomous-actor system oracle agrees on every scenario).
+
+### 9.1.1 Concurrency control: `occ` vs `2pl` (DS0 increment 8)
+
+`DD-D3` chose **OCC** (optimistic) for the deterministic core because the *blocking* form of two-phase
+locking injects nondeterminism (lock-acquisition order, deadlock detection, victim selection — all
+need a scheduler). The `concurrency_control` dial adds the alternative the core *can* pin: **`2pl`**,
+**strict two-phase locking with deterministic wound-wait**. `tget` acquires a **shared (S)** lock and
+`tput` an **exclusive (X)** lock on the key; locks are held to `commit`/`abort` (the two phases:
+growing, then shrinking). A conflict (S vs X, or X vs anything, held by another txn) is resolved by
+**wound-wait**: the **older** transaction — the lexicographically smaller id, a deterministic proxy
+for start order — preempts (wounds → aborts) the younger holder it conflicts with, and a requester
+that is *younger* than any conflicting holder aborts itself rather than waiting. Because the older
+always wins and no one ever blocks, it is **deterministic and deadlock-free without a scheduler** —
+the deterministic 2PL the core pins. The lock table lives in `DistributedState.locks` (keyed by
+object, the sorted `(txn_id, mode)` holders); it is empty and **omitted from the canonical form**
+under the `occ` default, so the field is purely additive and every prior golden/hash is unchanged.
+Under `2pl` the commit performs **no validation** — the locks already guaranteed serializability — it
+just applies the buffered writes and releases the locks.
+
+The two mechanisms reach the *same* serializable guarantee by opposite routes, so **ED15**
+([`verisim.experiments.ed15`](../src/verisim/experiments/ed15.py), [`ed15.png`](../../figures/ed15.png))
+measures *when each pays for a conflict*. Both forbid write skew (anomaly rate 0.0), but their **wasted
+work** differs: OCC validates at commit, so an aborted txn completed *all* its operations (**3.0**
+data ops wasted per abort), while 2PL fails at the conflicting lock-acquisition (**2.0** ops) — the
+classic optimistic/pessimistic tradeoff, made measurable. Transaction bookkeeping (including the lock
+table and wound-wait) is coordinator-local, so **Tier-B reproduces 2PL bit-for-bit** by delegating to
+the same `txn_step` — the W1 retirement covers it for free.
 
 ### 9.2 Elle-style serializability checking — the black-box history verifier (DS3 increment 2)
 

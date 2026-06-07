@@ -44,6 +44,15 @@ CONSISTENCY_MODELS: tuple[str, ...] = (
 # first-committer-wins) — it permits write skew, the classic SI anomaly the experiment exhibits.
 TXN_ISOLATION_LEVELS: tuple[str, ...] = ("serializable", "snapshot")
 
+# Concurrency-control mechanisms (DS0 increment 8, SPEC-7 §3.2; the DD-D3 alternative). ``occ`` is the
+# optimistic default (buffer, validate at commit, first-committer-wins). ``2pl`` is **pessimistic
+# strict two-phase locking**: ``tget``/``tput`` acquire shared/exclusive locks held to commit, and a
+# conflict is resolved **deterministically by wound-wait** (the older txn — lexicographically smaller
+# id — preempts the younger; the younger aborts rather than waiting), so it is deadlock-free and
+# deterministic *without* a scheduler — the deterministic 2PL the core can pin (DD-D3 deferred the
+# *blocking* 2PL, whose victim selection injects nondeterminism). ``2pl`` always gives serializability.
+CONCURRENCY_CONTROL: tuple[str, ...] = ("occ", "2pl")
+
 
 @dataclass(frozen=True)
 class DistConfig:
@@ -57,6 +66,7 @@ class DistConfig:
     consistency_model: str = "eventual"
     default_value: str = "nil"  # the boot value of every replica (version 0)
     txn_isolation: str = "serializable"  # DS0 incr 3: serializable (read-set OCC) | snapshot (SI)
+    concurrency_control: str = "occ"  # DS0 incr 8: occ (optimistic) | 2pl (pessimistic wound-wait)
 
     def __post_init__(self) -> None:
         if self.consistency_model not in CONSISTENCY_MODELS:
@@ -68,6 +78,11 @@ class DistConfig:
             raise ValueError(
                 f"unknown txn_isolation {self.txn_isolation!r}; "
                 f"choose from {list(TXN_ISOLATION_LEVELS)}"
+            )
+        if self.concurrency_control not in CONCURRENCY_CONTROL:
+            raise ValueError(
+                f"unknown concurrency_control {self.concurrency_control!r}; "
+                f"choose from {list(CONCURRENCY_CONTROL)}"
             )
         if not 1 <= self.replication_factor <= len(self.nodes):
             raise ValueError(
@@ -86,7 +101,7 @@ class DistConfig:
         return self.nodes[: self.replication_factor]
 
     def to_dict(self) -> dict[str, object]:
-        return {
+        out: dict[str, object] = {
             "name": self.name,
             "nodes": list(self.nodes),
             "objects": list(self.objects),
@@ -96,6 +111,10 @@ class DistConfig:
             "default_value": self.default_value,
             "txn_isolation": self.txn_isolation,
         }
+        # Omit the default so an ``occ`` config's hash is unchanged from before DS0 increment 8.
+        if self.concurrency_control != "occ":
+            out["concurrency_control"] = self.concurrency_control
+        return out
 
     def config_hash(self) -> str:
         """Stable hash identifying this config; embedded in dataset manifests (SPEC-7 §3.1)."""
@@ -113,6 +132,7 @@ def scaled_dist_config(
     replication_factor: int | None = None,
     consistency_model: str = "eventual",
     txn_isolation: str = "serializable",
+    concurrency_control: str = "occ",
     name: str | None = None,
 ) -> DistConfig:
     """A :class:`DistConfig` of ``n_nodes`` nodes and ``n_objects`` objects (SPEC-7 §3.4).
@@ -135,4 +155,5 @@ def scaled_dist_config(
         replication_factor=rf,
         consistency_model=consistency_model,
         txn_isolation=txn_isolation,
+        concurrency_control=concurrency_control,
     )

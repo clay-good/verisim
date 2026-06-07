@@ -65,6 +65,12 @@ def to_canonical(state: DistributedState) -> dict[str, Any]:
              "write_versions": [list(w) for w in t.write_versions]}
             for t in sorted(state.txns.values(), key=lambda t: t.txn_id)
         ]
+    # ``locks`` is included only when non-empty, so an ``occ`` (lock-free) cluster serializes to the
+    # exact pre-DS0-incr-8 normal form (the 2PL lock table is purely additive, like ``txns``).
+    if state.locks:
+        out["locks"] = {
+            obj: [list(h) for h in holders] for obj, holders in sorted(state.locks.items())
+        }
     return out
 
 
@@ -97,6 +103,10 @@ def from_canonical(d: dict[str, Any]) -> DistributedState:
         )
         for t in d.get("txns", [])
     }
+    locks = {
+        obj: tuple((t, m) for t, m in holders)
+        for obj, holders in d.get("locks", {}).items()
+    }
     return DistributedState(
         replicas=replicas,
         partitions=partitions,
@@ -108,6 +118,7 @@ def from_canonical(d: dict[str, Any]) -> DistributedState:
         next_msg_id=d["next_msg_id"],
         last_result=(last[0], last[1]) if last is not None else None,
         txns=txns,
+        locks=locks,
     )
 
 
