@@ -7,6 +7,8 @@ discipline, SPEC-5 §13).
 
 from __future__ import annotations
 
+from typing import cast
+
 from verisim.landmark.graph import LandmarkGraph
 from verisim.landmark.placement import (
     betweenness_centrality,
@@ -14,6 +16,7 @@ from verisim.landmark.placement import (
     random_scores,
     select_top,
 )
+from verisim.net.state import NetworkState
 
 
 def _graph(num_nodes: int, edges: set[tuple[int, int]]) -> LandmarkGraph:
@@ -22,8 +25,9 @@ def _graph(num_nodes: int, edges: set[tuple[int, int]]) -> LandmarkGraph:
     Betweenness uses ``num_nodes`` (= ``len(nodes)``) and ``neighbors`` only, so the node
     representatives are immaterial here; we pass placeholder strings for the count.
     """
+    placeholder_nodes = cast("tuple[NetworkState, ...]", tuple(f"n{i}" for i in range(num_nodes)))
     return LandmarkGraph(
-        nodes=tuple(f"n{i}" for i in range(num_nodes)),  # type: ignore[arg-type]
+        nodes=placeholder_nodes,
         signatures=tuple(),
         edges=frozenset(edges),
     )
