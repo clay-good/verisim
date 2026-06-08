@@ -22,6 +22,7 @@ from .geometry import (
     spearman,
 )
 from .graph import LandmarkGraph, ReachSig, reach_signature
+from .placement import betweenness_centrality, normalize, random_scores, select_top
 from .plan import Hop, RolloutTrace, execute_plan, shortest_landmark_path
 from .verify import EdgeVerdict, verify_edge
 
@@ -33,14 +34,18 @@ __all__ = [
     "LandmarkTransition",
     "ReachSig",
     "RolloutTrace",
+    "betweenness_centrality",
     "bfs_geodesics",
     "canon_key",
     "enumerate_actions",
     "execute_plan",
+    "normalize",
     "pearson",
+    "random_scores",
     "ranks",
     "reach_signature",
     "sample_landmarks",
+    "select_top",
     "shortest_landmark_path",
     "spearman",
     "verify_edge",

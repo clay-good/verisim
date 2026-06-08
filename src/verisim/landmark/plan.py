@@ -109,6 +109,33 @@ class RolloutTrace:
         return h
 
     @property
+    def full_horizon(self) -> int:
+        """Longest leading run of *exact-state*-correct steps (the HS3-pinned ``H_ε``).
+
+        The exact-state analogue of :attr:`reach_horizon`. The gap between them is the EN10-vs-HS3
+        distinction at planning altitude (LP4/H34): the model sustains the *reachability* projection
+        for more steps than it sustains the *exact state*, so an edge wired on reachability outlives
+        one wired on exact state.
+        """
+        h = 0
+        for ok in self.full_correct:
+            if not ok:
+                break
+            h += 1
+        return h
+
+    @property
+    def goal_reached_exact(self) -> bool:
+        """Goal reached under the *exact-state* edge projection (the LP4 exact arm).
+
+        The HS3-pinned counterpart of :attr:`goal_reached` (which is the reachability projection):
+        True iff the coupled state's *full* state -- not just its reachability signature -- matches
+        the truth at the final, model-predicted step. That final step is never a re-ground, so this
+        is the model's own exact prediction at the goal, the projection HS3 pinned at zero.
+        """
+        return bool(self.full_correct[-1]) if self.full_correct else False
+
+    @property
     def rho(self) -> int:
         """Consults spent; divide by :attr:`n_steps` for the oracle budget ``ρ``."""
         return self.n_consults

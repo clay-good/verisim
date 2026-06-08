@@ -352,4 +352,28 @@ echo "   far-goal gap that widens with distance and is monotone in the re-ground
 python -m verisim.experiments.lp3 --config configs/lp3.json --out figures/lp3_goal_reach.csv \
     --plot figures/lp3_goal_reach.png
 
-echo "== done: figures/{e1_curve,e2_policies,e3_operators,calibration,e4_ablation,objective,representation,auto_search,en1_curve,en2_policies,en3_operators,en4_graph_vs_flat,en8_grounding,en9_contrastive,en8_scale,en9_scale,en8_capacity,en9_negatives,en7_invariance,en5_selfheal,en6_counterfactual,en8_ls3_hero,en10_two_oracle,eh1_curve,eh1_composition,eh2_policies,eh3_operators,eh4_factored_vs_flat,eh4_drift,eh5_subsystem_policy,eh5_heads,eh_h14_interleaving,eh_h14_scale,eh7_invariance,eh8_privilege,eh6_two_oracle,eh_h13_scale,eh9_denial_weighted,eh6_counterfactual,eh_stream,synthesis_floor_cliff,horizon_scaling,horizon_scaling_xl,horizon_data_scaling,horizon_joint_scaling,horizon_host_scaling,horizon_graph_scaling,horizon_graph_data_scaling,horizon_graph_world_scaling,horizon_graph_joint_scaling,horizon_graph_schedule,horizon_synthesis,ed1_dist,ed1_learned,ed2,ed2_learned,ed2_smart,ed3,ed4_fault,ed4_consistency,ed5,ed6,ed6_two_oracle,ed6_two_oracle_learned,ed4_consistency,ed4_consistency_learned,ed7,ed8,ed9,ed10,ed11,ed12,ed13,ed14,ed15,ed16,ed17,ed18,ed19,sy1_agreement,sy2_disagreements,sy3_hermeticity,sy4_determinism,lp1_latent_geometry,lp2_faithful_graph,lp3_goal_reach}.{png,csv} =="
+echo "== LP4: edge-metric ablation — reachability vs exact-state edges (SPEC-12 H34) =="
+echo "   RESULT: H34 supported. Reachability edges sustain goal reach (0.50->0.83); exact-state edges"
+echo "   collapse (~0). Exact-state free-run horizon pinned at 0 (HS3); reachability horizon ~7 (EN10)."
+python -m verisim.experiments.lp4 --config configs/lp4.json --out figures/lp4_edge_metric.csv \
+    --plot figures/lp4_edge_metric.png
+
+echo "== LP5: landmark placement policy (SPEC-12 H35) =="
+echo "   RESULT: H35 split. Belief-variance (uncertainty) buys reach at lower budget (adv +0.10);"
+echo "   betweenness underperforms random (adv -0.20). CIs overlap -> leaning supported for uncertainty."
+python -m verisim.experiments.lp5 --config configs/lp5.json --out figures/lp5_placement.csv \
+    --plot figures/lp5_placement.png
+
+echo "== LP6: replanning policy at equal oracle budget (SPEC-12 H36) =="
+echo "   RESULT: H36 supported for the reachability trigger (adv +0.13 over fixed-interval, critical"
+echo "   re-ground at B=1); belief-variance trigger miscalibrated (adv -0.20) — the mirror of LP5."
+python -m verisim.experiments.lp6 --config configs/lp6.json --out figures/lp6_replanning.csv \
+    --plot figures/lp6_replanning.png
+
+echo "== LP7: the LLM-at-the-leaves boundary — search vs myopic walk (SPEC-12 H37) =="
+echo "   RESULT: H37 core supported. Search exact at every depth/degree (validity 1.0); myopic walk"
+echo "   decays with depth (1.00->0.39) and degree (1.00->0.68). LLM arm deferred (never counted, §9)."
+python -m verisim.experiments.lp7 --config configs/lp7.json --out figures/lp7_traversal.csv \
+    --plot figures/lp7_traversal.png
+
+echo "== done: figures/{e1_curve,e2_policies,e3_operators,calibration,e4_ablation,objective,representation,auto_search,en1_curve,en2_policies,en3_operators,en4_graph_vs_flat,en8_grounding,en9_contrastive,en8_scale,en9_scale,en8_capacity,en9_negatives,en7_invariance,en5_selfheal,en6_counterfactual,en8_ls3_hero,en10_two_oracle,eh1_curve,eh1_composition,eh2_policies,eh3_operators,eh4_factored_vs_flat,eh4_drift,eh5_subsystem_policy,eh5_heads,eh_h14_interleaving,eh_h14_scale,eh7_invariance,eh8_privilege,eh6_two_oracle,eh_h13_scale,eh9_denial_weighted,eh6_counterfactual,eh_stream,synthesis_floor_cliff,horizon_scaling,horizon_scaling_xl,horizon_data_scaling,horizon_joint_scaling,horizon_host_scaling,horizon_graph_scaling,horizon_graph_data_scaling,horizon_graph_world_scaling,horizon_graph_joint_scaling,horizon_graph_schedule,horizon_synthesis,ed1_dist,ed1_learned,ed2,ed2_learned,ed2_smart,ed3,ed4_fault,ed4_consistency,ed5,ed6,ed6_two_oracle,ed6_two_oracle_learned,ed4_consistency,ed4_consistency_learned,ed7,ed8,ed9,ed10,ed11,ed12,ed13,ed14,ed15,ed16,ed17,ed18,ed19,sy1_agreement,sy2_disagreements,sy3_hermeticity,sy4_determinism,lp1_latent_geometry,lp2_faithful_graph,lp3_goal_reach,lp4_edge_metric,lp5_placement,lp6_replanning,lp7_traversal}.{png,csv} =="

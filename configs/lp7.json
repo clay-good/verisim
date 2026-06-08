@@ -1,0 +1,11 @@
+{
+  "n_hosts": 7,
+  "n_ports": 3,
+  "build_driver": "adversarial",
+  "build_seeds": [0, 1, 2, 3, 4, 5, 6, 7],
+  "build_steps": 96,
+  "max_path_length": 8,
+  "pairs_per_bucket": 60,
+  "greedy_step_cap": 96,
+  "pair_seed": 0
+}
