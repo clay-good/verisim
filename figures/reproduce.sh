@@ -333,7 +333,7 @@ echo "== SY2: the differential debugger — the localized divergence atlas + the
 python -m verisim.experiments.sy2 --out runs/sy2/records.jsonl --csv figures/sy2_disagreements.csv
 
 echo "== LP: the LANDMARK GRAPH — the planning altitude above the loop (SPEC-12) =="
-echo "   (minutes on CPU; LP1 is the gate that decides the metric space, LP2 ships the faithful graph)"
+echo "   (minutes on CPU; LP1 gates the metric space, LP2 ships the faithful graph, LP3 is the headline)"
 
 echo "== LP1: does the embed() latent encode planning geometry? (SPEC-12 H31) — the metric-space gate =="
 echo "   RESULT: H31 refuted (Spearman 0.27 < 0.6) -> build the graph in reachability space (§4 fallback)."
@@ -345,4 +345,11 @@ echo "   RESULT: hoped graph 77% false edges; control-plane verification prunes 
 python -m verisim.experiments.lp2 --config configs/lp2.json --out figures/lp2_faithful_graph.csv \
     --plot figures/lp2_faithful_graph.png
 
-echo "== done: figures/{e1_curve,e2_policies,e3_operators,calibration,e4_ablation,objective,representation,auto_search,en1_curve,en2_policies,en3_operators,en4_graph_vs_flat,en8_grounding,en9_contrastive,en8_scale,en9_scale,en8_capacity,en9_negatives,en7_invariance,en5_selfheal,en6_counterfactual,en8_ls3_hero,en10_two_oracle,eh1_curve,eh1_composition,eh2_policies,eh3_operators,eh4_factored_vs_flat,eh4_drift,eh5_subsystem_policy,eh5_heads,eh_h14_interleaving,eh_h14_scale,eh7_invariance,eh8_privilege,eh6_two_oracle,eh_h13_scale,eh9_denial_weighted,eh6_counterfactual,eh_stream,synthesis_floor_cliff,horizon_scaling,horizon_scaling_xl,horizon_data_scaling,horizon_joint_scaling,horizon_host_scaling,horizon_graph_scaling,horizon_graph_data_scaling,horizon_graph_world_scaling,horizon_graph_joint_scaling,horizon_graph_schedule,horizon_synthesis,ed1_dist,ed1_learned,ed2,ed2_learned,ed2_smart,ed3,ed4_fault,ed4_consistency,ed5,ed6,ed6_two_oracle,ed6_two_oracle_learned,ed4_consistency,ed4_consistency_learned,ed7,ed8,ed9,ed10,ed11,ed12,ed13,ed14,ed15,ed16,ed17,ed18,ed19,sy1_agreement,sy2_disagreements,sy3_hermeticity,sy4_determinism,lp1_latent_geometry,lp2_faithful_graph}.{png,csv} =="
+echo "== LP3: goal reach — landmark planning vs flat free-running (SPEC-12 H33) — THE HEADLINE =="
+echo "   RESULT: H33 supported. Flat free-running decays with goal-space distance (0.50->0.17, HS3 cliff);"
+echo "   landmark planning re-grounding once per hop (rho~0.2) sustains and rises (0.50->0.83) — a 5x"
+echo "   far-goal gap that widens with distance and is monotone in the re-grounding budget."
+python -m verisim.experiments.lp3 --config configs/lp3.json --out figures/lp3_goal_reach.csv \
+    --plot figures/lp3_goal_reach.png
+
+echo "== done: figures/{e1_curve,e2_policies,e3_operators,calibration,e4_ablation,objective,representation,auto_search,en1_curve,en2_policies,en3_operators,en4_graph_vs_flat,en8_grounding,en9_contrastive,en8_scale,en9_scale,en8_capacity,en9_negatives,en7_invariance,en5_selfheal,en6_counterfactual,en8_ls3_hero,en10_two_oracle,eh1_curve,eh1_composition,eh2_policies,eh3_operators,eh4_factored_vs_flat,eh4_drift,eh5_subsystem_policy,eh5_heads,eh_h14_interleaving,eh_h14_scale,eh7_invariance,eh8_privilege,eh6_two_oracle,eh_h13_scale,eh9_denial_weighted,eh6_counterfactual,eh_stream,synthesis_floor_cliff,horizon_scaling,horizon_scaling_xl,horizon_data_scaling,horizon_joint_scaling,horizon_host_scaling,horizon_graph_scaling,horizon_graph_data_scaling,horizon_graph_world_scaling,horizon_graph_joint_scaling,horizon_graph_schedule,horizon_synthesis,ed1_dist,ed1_learned,ed2,ed2_learned,ed2_smart,ed3,ed4_fault,ed4_consistency,ed5,ed6,ed6_two_oracle,ed6_two_oracle_learned,ed4_consistency,ed4_consistency_learned,ed7,ed8,ed9,ed10,ed11,ed12,ed13,ed14,ed15,ed16,ed17,ed18,ed19,sy1_agreement,sy2_disagreements,sy3_hermeticity,sy4_determinism,lp1_latent_geometry,lp2_faithful_graph,lp3_goal_reach}.{png,csv} =="

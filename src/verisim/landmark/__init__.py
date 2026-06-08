@@ -22,21 +22,26 @@ from .geometry import (
     spearman,
 )
 from .graph import LandmarkGraph, ReachSig, reach_signature
+from .plan import Hop, RolloutTrace, execute_plan, shortest_landmark_path
 from .verify import EdgeVerdict, verify_edge
 
 __all__ = [
     "EdgeVerdict",
+    "Hop",
     "LandmarkGraph",
     "LandmarkSample",
     "LandmarkTransition",
     "ReachSig",
+    "RolloutTrace",
     "bfs_geodesics",
     "canon_key",
     "enumerate_actions",
+    "execute_plan",
     "pearson",
     "ranks",
     "reach_signature",
     "sample_landmarks",
+    "shortest_landmark_path",
     "spearman",
     "verify_edge",
 ]

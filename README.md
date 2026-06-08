@@ -1169,7 +1169,7 @@ under its determinism seal. *Prove the checks have teeth before reporting what t
 [SY3](src/verisim/experiments/sy3.py) → [SY4](src/verisim/experiments/sy4.py) →
 [SY1](src/verisim/experiments/sy1.py) → [SY2](src/verisim/experiments/sy2.py), the gate order.
 
-### 36. From faithfulness to *planning*: the oracle-grounded landmark graph (SPEC-12 / LP1–LP2 / H31–H32)
+### 36. From faithfulness to *planning*: the oracle-grounded landmark graph (SPEC-12 / LP1–LP3 / H31–H33)
 
 Every figure to §35 measures how *faithful* a learned world model stays under oracle budget. None of
 them *plans*. SPEC-12 adds the planning altitude — and it does so as the direct architectural answer
@@ -1222,12 +1222,33 @@ weakness of every static attack-graph tool (MulVAL et al.) fixed by the oracle.
 
 The defensive reading falls straight out: *"can an attacker reach the database from the DMZ, and by
 what path?"* becomes a graph search whose answer the oracle has already verified is real;
-*"did this firewall change open a new path?"* becomes a diff of the verified graph. **Next increment
-(LP3, the headline bet):** compose *multi-step* faithful hops between landmarks — verify only at
-landmark boundaries, so ρ < 1, the favorable-budget regime — and show the verified graph reaches
-distant goals the flat free-running rollout cannot. The machinery (the verified graph, per-hop
-verification) ships; LP3 adds the multi-step plan executor. Per the program's discipline it is
-measured, not asserted — see [SPEC-12 §7](docs/specs/SPEC-12.md).
+*"did this firewall change open a new path?"* becomes a diff of the verified graph.
+
+**LP3 — long-range goal reach: landmark planning vs flat free-running (H33 supported, the headline).**
+The bet SPEC-10's HS3 wall set up: a structured arm whose *step* horizon is pinned at zero cannot be
+rolled forward to a distant goal — but can it be re-grounded at landmark boundaries to reach one
+anyway? LP3 runs two arms on the *same* model and the *same* trajectory, differing only in
+re-grounding. The graph search ([`shortest_landmark_path`](src/verisim/landmark/plan.py)) emits the
+subgoal sequence; the shipped `imagine`/`verify` loop executes each `L`-step hop; the oracle
+re-grounds the coupled state at every *intermediate* landmark boundary — never at the goal, so
+goal-reach is a genuine model prediction, never a tautology. As the goal-space distance `G` grows,
+**flat free-running decays** — goal reach 0.50 → 0.33 → 0.17 from `G = 4` to `G = 20` (the HS3 cliff
+at reachability altitude: error compounds) — while **landmark planning, re-grounding once per
+`L = 4`-step hop (ρ ≈ 0.2), sustains and rises**: 0.50 → 0.67 → **0.83**. At the far goal the gap is
+**5×** (0.83 vs 0.17) and it *widens* with distance — the compounding-vs-re-grounding signature, not a
+constant offset. The budget sweep confirms the mechanism: at fixed `G = 16`, goal reach climbs
+monotonically with the re-grounding budget — 0.17 (ρ=0) → 0.33 (ρ=1/8) → 0.67 (ρ=1/4) → 0.83 (ρ=1/2)
+— so the verified graph buys goal-space horizon *in proportion to* the cheap oracle budget it spends.
+The honest control: at `G = L` (a single hop, no interior boundary) landmark *equals* flat at ρ = 0,
+so the win is the re-grounding and nothing else; and the model's own free-run reachability horizon
+stays ~3–7 steps, which is exactly why the hops must re-ground. **The structured arm whose *step*
+horizon SPEC-10 pinned at zero acquires a long *goal-space* horizon once short faithful hops are
+composed over the verified graph — the SPEC-12 thesis, measured.** (Magnitudes are at the small
+fast-CI scale; the separation and its distance-widening shape are the result.) The next bets are LP4
+(reachability vs exact-state edges), LP5/LP6 (placement, replanning), LP7 (the LLM-at-the-leaves
+boundary), and the LP8 cross-world fork — see [SPEC-12 §7](docs/specs/SPEC-12.md).
+
+![LP3: flat free-running's goal reach decays with goal-space distance (0.50→0.17) while landmark planning re-grounding once per hop sustains and rises (0.50→0.83) — a 5× far-goal gap that widens with distance and is monotone in the re-grounding budget](figures/lp3_goal_reach.png)
 
 ## The problem, and what we're trying to accomplish
 
@@ -1497,7 +1518,7 @@ host → distributed); three specs are *cross-cutting methods* every world inher
 | [SPEC-9](docs/specs/SPEC-9.md) | **method: free-oracle scaling** | because the oracle labels for free, world size is a *compute* choice, not a labeling-budget one — how large/deep the world goes on one machine, and what holds as it grows |
 | [SPEC-10](docs/specs/SPEC-10.md) | **method: the faithful-horizon scaling law** | scales the *prime directive itself* (`H_ε(ρ)`) along model capacity: does free-running faithful horizon grow with scale, or is the one-step→horizon compounding gap fundamental (H26)? |
 | [SPEC-11](docs/specs/SPEC-11.md) | **method: the system oracle** | validates the program's *one structural bet* — that a deterministic ground-truth oracle exists for computer worlds — by running the v0 grammar against a **real `/bin/sh` on a real kernel** in a hermetic sandbox and measuring agreement bit-for-bit (H27–H30). **The figure that retires W1.** |
-| [SPEC-12](docs/specs/SPEC-12.md) | **method: the landmark graph** | the planning altitude above the loop — a sparse graph of waypoint states with **oracle-verified** reachability edges, the L3P escape from the HS3 wall. **The §7 buildable tranche ships** ([`landmark/`](src/verisim/landmark/)): **LP1 refuted H31** (the latent doesn't encode planning geometry, ρ=0.27 → build in reachability space, [lp1](figures/lp1_latent_geometry.png)); **LP2 supports H32** (the hoped graph is 77% false edges; verification prunes all of them, residual 0.000, at 0.62× cost — the zero-false-paths faithful-graph artifact, [lp2](figures/lp2_faithful_graph.png)). LP3 (the long-range-goal-reach headline) is the next bet. |
+| [SPEC-12](docs/specs/SPEC-12.md) | **method: the landmark graph** | the planning altitude above the loop — a sparse graph of waypoint states with **oracle-verified** reachability edges, the L3P escape from the HS3 wall. **The §7 buildable tranche ships** ([`landmark/`](src/verisim/landmark/)): **LP1 refuted H31** (the latent doesn't encode planning geometry, ρ=0.27 → build in reachability space, [lp1](figures/lp1_latent_geometry.png)); **LP2 supports H32** (the hoped graph is 77% false edges; verification prunes all of them, residual 0.000, at 0.62× cost — the zero-false-paths faithful-graph artifact, [lp2](figures/lp2_faithful_graph.png)); **LP3 supports H33** (the headline — graph-search subgoals + per-hop re-grounding: flat free-running decays with goal-space distance 0.50→0.17 while landmark planning at ρ≈0.2 sustains and rises 0.50→0.83, a 5× far-goal gap that widens with distance and is monotone in the re-grounding budget — *structure buys goal-space horizon where SPEC-10 could not buy step horizon*, [lp3](figures/lp3_goal_reach.png)). The LP4–LP8 bets follow. |
 
 Semantics docs ([filesystem](docs/semantics.md), [network](docs/network-semantics.md)) pin the normative
 command semantics, paired with the reference oracles, which are the executable truth. SPEC-11's system
@@ -1668,9 +1689,10 @@ full result write-up is [docs/report.md](docs/report.md).
 > (rr/Hermit/gVisor) — a real-OS dependency, deferred under the no-egress posture (SPEC-6 §15).
 > The per-subsystem decode *heads* shipped as EH5-heads (above), an honest negative.
 >
-> **The planning layer (SPEC-12) has now begun** ([`landmark/`](src/verisim/landmark/),
-> [§36](#36-from-faithfulness-to-planning-the-oracle-grounded-landmark-graph-spec-12--lp1lp2--h31h32)):
-> the §7 *confidently-buildable* tranche ships, each graduating on a committed figure. **LP1 refuted
+> **The planning layer (SPEC-12) has landed its headline** ([`landmark/`](src/verisim/landmark/),
+> [§36](#36-from-faithfulness-to-planning-the-oracle-grounded-landmark-graph-spec-12--lp1lp3--h31h33)):
+> the §7 *confidently-buildable* tranche shipped and **LP3 then supported the headline H33**, each rung
+> graduating on a committed figure. **LP1 refuted
 > H31** — the graph arm's `embed()` latent does not encode planning geometry (Spearman ρ = 0.27 < 0.6
 > against the exact action-graph geodesic), so the landmark graph is built **in reachability space**
 > directly (the pre-registered §4 fallback), [`lp1_latent_geometry.png`](figures/lp1_latent_geometry.png).
@@ -1679,8 +1701,14 @@ full result write-up is [docs/report.md](docs/report.md).
 > and control-plane verification prunes **every** one (verified residual false-edge rate **0.000**) at
 > **0.62×** the data-plane cost, shipping the **zero-false-paths faithful-graph artifact** — the
 > MulVAL-unsoundness fix made a number, [`lp2_faithful_graph.png`](figures/lp2_faithful_graph.png).
-> Remaining: **LP3** (the headline — long-range goal reach by composing multi-step faithful hops, the
-> favorable-budget regime) and the LP4–LP8 bets.
+> **LP3 supports H33** (the headline) — graph-search subgoals + per-hop re-grounding over the verified
+> graph: as the goal-space distance grows, **flat free-running decays** (goal reach 0.50 → 0.17, the
+> HS3 cliff at reachability altitude) while **landmark planning at ρ ≈ 0.2 sustains and rises**
+> (0.50 → 0.83) — a **5× far-goal gap that widens with distance** and is monotone in the re-grounding
+> budget. *The structured arm whose step horizon SPEC-10 pinned at zero acquires a long goal-space
+> horizon once short faithful hops are composed*, [`lp3_goal_reach.png`](figures/lp3_goal_reach.png).
+> Remaining: the **LP4–LP8** bets (reachability-vs-exact edges, placement, replanning, the
+> LLM-at-the-leaves boundary, the cross-world fork).
 
 **v0 — shell/filesystem world (`src/verisim/`, SPEC-2 §13): complete.**
 
