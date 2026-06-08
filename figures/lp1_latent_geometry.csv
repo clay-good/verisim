@@ -1,0 +1,6 @@
+metric,mean,ci_lo,ci_hi,n
+spearman_latent_geodesic,0.273389,0.238833,0.315301,24
+pearson_latent_geodesic,0.272244,0.232419,0.318052,24
+spearman_latent_reach,0.103804,0.047559,0.158178,24
+pearson_latent_reach,0.099257,0.048885,0.148388,24
+spearman_geodesic_reach,0.229523,0.150549,0.301337,24

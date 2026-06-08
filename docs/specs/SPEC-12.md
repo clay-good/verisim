@@ -219,7 +219,21 @@ oracle-free landmark planner is, here, a measurement with a banked alternative o
   with control-plane reachability, strongly enough to seed landmark clustering (target: Spearman ρ ≥ 0.6
   on held-out state pairs). *Refuted if* latent distance is uncorrelated with oracle distance — in which
   case the EN8 representation captures one-step-prediction geometry but not planning geometry, and
-  SPEC-12 proceeds in reachability space directly (§4 fallback). Tested as **LP1**.
+  SPEC-12 proceeds in reachability space directly (§4 fallback). Tested as **LP1**. **Result —
+  REFUTED, the §4 fallback branch taken ([`lp1`](../../src/verisim/experiments/lp1.py),
+  [`landmark/geometry.py`](../../src/verisim/landmark/geometry.py), 24 anchors, 5-host world):
+  `embed()` latent distance correlates only weakly with the exact action-graph BFS geodesic
+  (Spearman ρ = 0.27, bootstrap CI [0.24, 0.32]) and barely at all with control-plane reachability
+  distance (ρ = 0.10, CI [0.05, 0.16]) — both far below the ρ ≥ 0.6 bar. The EN8 representation
+  encodes *one-step-prediction* geometry, not *planning* geometry: a clean, bankable negative that
+  decides the architecture. Notably even the two free ground truths agree only weakly with each
+  other (geodesic↔reachability ρ = 0.23) — a transition can move far in action-steps while changing
+  little reachability, and vice versa — which is itself why the graph must be wired on the
+  reachability projection the model is strong on, not the latent. SPEC-12 therefore builds the
+  landmark graph **directly in reachability space** (the control-plane metric, free and exact), and
+  the *latent-landmark* framing weakens to a *reachability-landmark* one (the honest §10 caveat
+  realized). The oracle is what let us measure — rather than assume — the load-bearing L3P
+  assumption, and find it false in this world.**
 
 - **H32 — the model's edges are unreliable but the oracle makes the graph exact cheaply.** Edges
   proposed by the model (latent distance / predicted reachability) have materially imperfect precision
@@ -228,7 +242,22 @@ oracle-free landmark planner is, here, a measurement with a banked alternative o
   full data-plane oracle (the H12 ~3.6× ratio, lifted to edges). *Refuted if* model edges are already
   near-exact (the verification is redundant — a strong, surprising positive about the structured arm) or
   if control-plane verification misses real edges the data-plane catches (reachability is not a
-  sufficient edge oracle here). Tested as **LP2**.
+  sufficient edge oracle here). Tested as **LP2**. **Result — SUPPORTED, decisively on the first
+  clause ([`lp2`](../../src/verisim/experiments/lp2.py),
+  [`landmark/build.py`](../../src/verisim/landmark/build.py),
+  [`landmark/verify.py`](../../src/verisim/landmark/verify.py); landmarks = reachability-distinct
+  states, an edge = a reachability-changing hop; 8 difficulty×seed cells). The structured arm's
+  *hoped* graph is overwhelmingly wrong: edge precision **0.11** (CI [0.03, 0.21]), edge recall
+  **0.08**, and a **false-edge rate of 0.77** (CI [0.53, 0.95]) — of the edges the model proposes
+  confidently onto a known landmark, three-quarters point at the *wrong* one. This is the HS3 wall
+  read at edge altitude: a structured arm that cannot free-run an exact rollout cannot propose an
+  exact reachability edge either. The oracle then makes the graph exact: control-plane verification
+  prunes **every** false edge — **verified residual false-edge rate = 0.000** (the SPEC-12 §8
+  zero-false-paths guarantee, now a measured fact) — at a consult cost of **0.62×** the full
+  data-plane consult (cheaper and *sufficient*, since an edge is a reachability claim; the ~3.6×
+  ratio of H12's larger world attenuates to ~1.6× here, the honest world-dependent number). The
+  reading licenses the rest of SPEC-12: the model's graph is unusable raw (you must verify), and the
+  verified graph is the faithful-graph artifact — the MulVAL-unsoundness fix (§2.3) made a number.**
 
 - **H33 — the verified landmark graph converts zero free-running horizon into long-range goal reach
   (THE headline).** To a distant goal, landmark-hop planning with per-hop `imagine`/`verify`
@@ -282,16 +311,20 @@ record stream, a `plot_*.py` emitting a committed `.png` + `.csv`, regenerable f
 deterministic and seeded (SPEC-2 §12). All reuse the shipped network apparatus (the graph arm, the two
 oracles, the `imagine`/`verify` loop) — SPEC-12 adds the graph builder, the search, and these harnesses.
 
-- **LP1 — does the latent encode planning geometry? (H31).** Sample held-out network state pairs;
+- ✅ **LP1 — does the latent encode planning geometry? (H31).** Sample held-out network state pairs;
   compute `embed()` latent distance, oracle BFS transition-distance, and control-plane reachability
-  distance; report Spearman/Pearson with bootstrap CIs and a 2-D embedding scatter colored by oracle
-  distance. **The gate that decides §4's branch.** `experiments/lp1.py`, `configs/lp1.json`.
+  distance; report Spearman/Pearson with bootstrap CIs. **The gate that decides §4's branch.**
+  `experiments/lp1.py`, `configs/lp1.json`. **Shipped — H31 refuted (ρ = 0.27), reachability-space
+  branch taken** (the per-anchor BFS geodesic is exact within a capped action-graph ball,
+  `landmark/geometry.py`; the planned 2-D scatter is deferred with the rest of the plotting polish).
 
-- **LP2 — the faithful landmark graph + the verified-vs-hoped gap (H32).** Build the landmark graph;
-  for every candidate edge record model proposal (latent / predicted reachability) vs data-plane and
-  control-plane oracle truth; report edge precision/recall of the *unverified* graph, the residual after
-  control-plane verification, and the consult-cost ratio (control-plane vs data-plane, the H12 ~3.6×
-  lifted to edges). Output: the committed faithful graph + the gap figure. `experiments/lp2.py`.
+- ✅ **LP2 — the faithful landmark graph + the verified-vs-hoped gap (H32).** Build the landmark graph;
+  for every candidate edge record model proposal (predicted reachability) vs the oracle truth; report
+  edge precision/recall of the *unverified* graph, the residual after control-plane verification, and
+  the consult-cost ratio (control-plane vs data-plane, the H12 ~3.6× lifted to edges). Output: the
+  committed faithful graph + the gap figure. `experiments/lp2.py`, `configs/lp2.json`,
+  `src/verisim/landmark/{graph,build,verify}.py`. **Shipped — H32 supported: hoped graph 77% false
+  edges, verified residual 0.000, consult cost 0.62×.**
 
 - **LP3 — goal reach: landmark planning vs flat free-running (H33, the headline).** Fix a battery of
   (start, distant-goal) pairs at increasing goal-space distance. Compare **(a)** flat/structured
@@ -348,6 +381,26 @@ onto the dependency order:
 **Recommended build order:** LP1 (decide the metric space) → LP2 (build + verify the graph; ship the
 faithful-graph artifact) → LP3 (the headline planning win) → LP4 → LP5/LP6 → LP7 → LP8 fork. Each rung
 graduates on a committed figure or a banked negative that licenses the next (SPEC §10.1, §12).
+
+**Status (2026-06-07).** The §7 *confidently-buildable* tranche has shipped, each graduating on a
+committed figure:
+
+- ✅ **LP1** ([`lp1`](../../src/verisim/experiments/lp1.py),
+  [`figures/lp1_latent_geometry.png`](../../figures/lp1_latent_geometry.png)) — the gate ran and
+  **refuted H31**: the latent does not encode planning geometry (ρ = 0.27 < 0.6), taking the §4
+  fallback. The metric space is decided: **reachability**, not the latent.
+- ✅ **LP2** ([`lp2`](../../src/verisim/experiments/lp2.py),
+  [`figures/lp2_faithful_graph.png`](../../figures/lp2_faithful_graph.png),
+  [`src/verisim/landmark/`](../../src/verisim/landmark/)) — the faithful graph builder + control-plane
+  verification, **supporting H32**: the hoped graph is 77% false edges; verification prunes all of
+  them (residual 0.000) at 0.62× the data-plane cost. The faithful-graph artifact ships.
+- ⏳ **LP3 (next increment, the headline bet).** The piece LP1/LP2 set up but the program will not
+  rush: long-range goal reach by composing *multi-step* faithful hops between landmarks (verify only
+  at landmark boundaries, so ρ < 1 — the favorable-budget regime), against flat free-running over the
+  same model. LP2 already supplies the verified graph and the per-hop verification; LP3 adds the
+  multi-step plan executor (`landmark/plan.py`) and the goal battery. Deferred deliberately because
+  "the graph composes cleanly under a real budget" is the genuine bet the program measures, not
+  asserts.
 
 ---
 

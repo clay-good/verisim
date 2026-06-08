@@ -1,0 +1,18 @@
+{
+  "name": "lp1-latent-geometry",
+  "n_hosts": 5,
+  "n_ports": 3,
+  "train_driver": "weighted",
+  "train_seeds": [0, 1, 2, 3],
+  "train_steps_per_traj": 48,
+  "graph_d_model": 64,
+  "graph_mp_rounds": 3,
+  "graph_iters": 2500,
+  "model_seed": 0,
+  "anchor_driver": "weighted",
+  "anchor_seeds": [100, 101, 102, 103, 104, 105],
+  "anchor_stride": 6,
+  "anchors_per_seed": 4,
+  "bfs_max_depth": 3,
+  "bfs_max_nodes": 240
+}

@@ -1,0 +1,6 @@
+metric,mean,ci_lo,ci_hi,n
+edge_precision,0.106250,0.025000,0.212500,8
+edge_recall,0.076339,0.015625,0.157143,8
+false_edge_rate,0.768750,0.525000,0.950000,8
+verified_residual_false_rate,0.000000,0.000000,0.000000,8
+consult_bits_ratio,0.624440,0.416136,0.907108,8

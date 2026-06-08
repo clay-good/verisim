@@ -1,0 +1,15 @@
+{
+  "name": "lp2-faithful-graph",
+  "n_hosts": 5,
+  "n_ports": 3,
+  "train_driver": "weighted",
+  "train_seeds": [0, 1, 2, 3],
+  "train_steps_per_traj": 48,
+  "graph_d_model": 64,
+  "graph_mp_rounds": 3,
+  "graph_iters": 2500,
+  "model_seed": 0,
+  "eval_difficulties": { "low": "weighted", "high": "adversarial" },
+  "eval_seeds": [100, 101, 102, 103],
+  "eval_steps": 40
+}

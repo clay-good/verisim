@@ -1169,6 +1169,66 @@ under its determinism seal. *Prove the checks have teeth before reporting what t
 [SY3](src/verisim/experiments/sy3.py) → [SY4](src/verisim/experiments/sy4.py) →
 [SY1](src/verisim/experiments/sy1.py) → [SY2](src/verisim/experiments/sy2.py), the gate order.
 
+### 36. From faithfulness to *planning*: the oracle-grounded landmark graph (SPEC-12 / LP1–LP2 / H31–H32)
+
+Every figure to §35 measures how *faithful* a learned world model stays under oracle budget. None of
+them *plans*. SPEC-12 adds the planning altitude — and it does so as the direct architectural answer
+to the wall §31–§34 found: the structured (GNN+RSSM) arm's free-running horizon is **pinned at zero**
+(HS3), a genuine compounding ceiling. The goal-conditioned-RL field met that exact failure and
+abandoned free-running rollout: *don't roll the model forward step by step (it diverges); plan
+landmark-to-landmark over a sparse graph and execute only short, trustable hops* (L3P, Zhang et al.
+ICML 2021; SoRB; SPTM). Verisim's contribution is the one thing that line structurally cannot do —
+**make every graph edge *exact* instead of distilled-and-hoped, because computer worlds have an oracle
+and continuous-control worlds do not.**
+
+```
+   high-level   graph search over the VERIFIED landmark graph
+                nodes = landmark states (reachability-distinct)   edges = reachability, ORACLE-VERIFIED
+                        │ subgoal sequence ℓ_a → ℓ_b → … → goal
+                        ▼
+   low-level    imagine(ℓ_i, hop)  ‖  verify against the oracle on budget ρ   (the shipped loop)
+                        ▼
+   oracle       data-plane ReferenceNetworkOracle (exact)  +  ControlPlaneOracle (cheap reachability)
+```
+
+**LP1 — does the latent encode planning geometry? The gate, and a clean negative (H31 refuted).** L3P
+scatters landmarks in a learned latent and *trusts* that latent distance ≈ reachability — the single
+assumption the whole architecture rests on. Verisim **measures** it instead of assuming it, because it
+has the oracle. On held-out states, the graph arm's `embed()` latent distance correlates only weakly
+with the exact action-graph BFS geodesic (**Spearman ρ = 0.27**, CI [0.24, 0.32]) and barely with
+control-plane reachability distance (ρ = 0.10) — both far below the ρ ≥ 0.6 bar. The EN8
+representation encodes *one-step-prediction* geometry, not *planning* geometry. This is the program's
+epistemic engine at design time: the assumption that sinks every oracle-free landmark planner is, here,
+a **measurement with a banked alternative** — SPEC-12 takes its pre-registered §4 fallback and builds
+the graph **directly in reachability space** (the control-plane metric, free and exact). The oracle
+let us find the load-bearing assumption false *before* building on it.
+
+![LP1: embed() latent distance vs oracle planning geometry — Spearman 0.27, below the 0.6 bar, so the graph is built in reachability space](figures/lp1_latent_geometry.png)
+
+**LP2 — the faithful landmark graph + the verified-vs-hoped gap (H32 supported).** With landmarks now
+reachability-distinct states and an edge a reachability-changing hop, LP2 measures what the model's
+*hoped* graph gets wrong and what verification costs. The verdict is the HS3 wall read at edge
+altitude: the structured arm's hoped graph is overwhelmingly wrong — edge precision **0.11**, and a
+**false-edge rate of 0.77** (of the edges the model proposes confidently onto a known landmark,
+three-quarters point at the *wrong* one). A model that cannot free-run an exact rollout cannot propose
+an exact reachability edge either. Then the oracle makes the graph exact: control-plane verification
+prunes **every** false edge — **verified residual false-edge rate = 0.000**, the zero-false-paths
+guarantee made a measured fact — at **0.62×** the data-plane consult cost (cheaper, and *sufficient*,
+because an edge is a reachability claim). The deliverable is the **faithful landmark graph**: an
+oracle-verified reachability/attack graph with **zero false paths by construction** — the standing
+weakness of every static attack-graph tool (MulVAL et al.) fixed by the oracle.
+
+![LP2: the hoped graph is 77% false edges; control-plane verification prunes all of them (residual 0.000) at 0.62× the data-plane cost](figures/lp2_faithful_graph.png)
+
+The defensive reading falls straight out: *"can an attacker reach the database from the DMZ, and by
+what path?"* becomes a graph search whose answer the oracle has already verified is real;
+*"did this firewall change open a new path?"* becomes a diff of the verified graph. **Next increment
+(LP3, the headline bet):** compose *multi-step* faithful hops between landmarks — verify only at
+landmark boundaries, so ρ < 1, the favorable-budget regime — and show the verified graph reaches
+distant goals the flat free-running rollout cannot. The machinery (the verified graph, per-hop
+verification) ships; LP3 adds the multi-step plan executor. Per the program's discipline it is
+measured, not asserted — see [SPEC-12 §7](docs/specs/SPEC-12.md).
+
 ## The problem, and what we're trying to accomplish
 
 ### The wall every world model hits
@@ -1437,6 +1497,7 @@ host → distributed); three specs are *cross-cutting methods* every world inher
 | [SPEC-9](docs/specs/SPEC-9.md) | **method: free-oracle scaling** | because the oracle labels for free, world size is a *compute* choice, not a labeling-budget one — how large/deep the world goes on one machine, and what holds as it grows |
 | [SPEC-10](docs/specs/SPEC-10.md) | **method: the faithful-horizon scaling law** | scales the *prime directive itself* (`H_ε(ρ)`) along model capacity: does free-running faithful horizon grow with scale, or is the one-step→horizon compounding gap fundamental (H26)? |
 | [SPEC-11](docs/specs/SPEC-11.md) | **method: the system oracle** | validates the program's *one structural bet* — that a deterministic ground-truth oracle exists for computer worlds — by running the v0 grammar against a **real `/bin/sh` on a real kernel** in a hermetic sandbox and measuring agreement bit-for-bit (H27–H30). **The figure that retires W1.** |
+| [SPEC-12](docs/specs/SPEC-12.md) | **method: the landmark graph** | the planning altitude above the loop — a sparse graph of waypoint states with **oracle-verified** reachability edges, the L3P escape from the HS3 wall. **The §7 buildable tranche ships** ([`landmark/`](src/verisim/landmark/)): **LP1 refuted H31** (the latent doesn't encode planning geometry, ρ=0.27 → build in reachability space, [lp1](figures/lp1_latent_geometry.png)); **LP2 supports H32** (the hoped graph is 77% false edges; verification prunes all of them, residual 0.000, at 0.62× cost — the zero-false-paths faithful-graph artifact, [lp2](figures/lp2_faithful_graph.png)). LP3 (the long-range-goal-reach headline) is the next bet. |
 
 Semantics docs ([filesystem](docs/semantics.md), [network](docs/network-semantics.md)) pin the normative
 command semantics, paired with the reference oracles, which are the executable truth. SPEC-11's system
@@ -1606,6 +1667,20 @@ full result write-up is [docs/report.md](docs/report.md).
 > (the SPEC-6 §18 honest write-up, per-hypothesis). Remaining: the **Tier-B system oracle**
 > (rr/Hermit/gVisor) — a real-OS dependency, deferred under the no-egress posture (SPEC-6 §15).
 > The per-subsystem decode *heads* shipped as EH5-heads (above), an honest negative.
+>
+> **The planning layer (SPEC-12) has now begun** ([`landmark/`](src/verisim/landmark/),
+> [§36](#36-from-faithfulness-to-planning-the-oracle-grounded-landmark-graph-spec-12--lp1lp2--h31h32)):
+> the §7 *confidently-buildable* tranche ships, each graduating on a committed figure. **LP1 refuted
+> H31** — the graph arm's `embed()` latent does not encode planning geometry (Spearman ρ = 0.27 < 0.6
+> against the exact action-graph geodesic), so the landmark graph is built **in reachability space**
+> directly (the pre-registered §4 fallback), [`lp1_latent_geometry.png`](figures/lp1_latent_geometry.png).
+> **LP2 supports H32** — the structured arm's *hoped* graph is **77% false edges** (the HS3 wall read at
+> edge altitude: a model that can't free-run an exact rollout can't propose an exact reachability edge),
+> and control-plane verification prunes **every** one (verified residual false-edge rate **0.000**) at
+> **0.62×** the data-plane cost, shipping the **zero-false-paths faithful-graph artifact** — the
+> MulVAL-unsoundness fix made a number, [`lp2_faithful_graph.png`](figures/lp2_faithful_graph.png).
+> Remaining: **LP3** (the headline — long-range goal reach by composing multi-step faithful hops, the
+> favorable-budget regime) and the LP4–LP8 bets.
 
 **v0 — shell/filesystem world (`src/verisim/`, SPEC-2 §13): complete.**
 
