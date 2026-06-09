@@ -9,9 +9,9 @@ oracle is a free, exact, unlimited calibration set — the textbook precondition
 so we can set the consultation threshold to GUARANTEE `P(undetected divergence > ε) ≤ α` distribution-free,
 finite-sample, and predict *which arm's trigger will work* from whether its signal is conformalizable.**
 
-> **✅ SHIPPED — METHOD SPEC, 2026-06 (CF1–CF4 on the controlled-signal core; trained-`M_θ` arm and
-> CF5 cross-world fork deferred). See §12 for the status table and results.** A *method* spec in the
-> lineage of [SPEC-12](./SPEC-12.md): it
+> **✅ SHIPPED — METHOD SPEC, 2026-06 (CF1–CF5 on the controlled-signal core, incl. the cross-world
+> fork; only the trained-`M_θ` arm deferred). See §12 for the status table and results.** A *method*
+> spec in the lineage of [SPEC-12](./SPEC-12.md): it
 > invents **no new world** (it runs on the SPEC-5 network world and its shipped flat + graph arms) and
 > **no new oracle** (it reuses the data-plane `ReferenceNetworkOracle` for exact divergence and the
 > `ControlPlaneOracle` for the cheap reachability projection). What it adds is a *calibration altitude*
@@ -313,9 +313,11 @@ thin `ConformalTriggered` / `AdaptiveConformalTriggered` policy.
   over fixed for each signal. **The figure that explains EH2-yes / ED2-smart-no with one controlled
   comparison.** `experiments/cf4.py`, `figures/plot_cf4.py`.
 
-- **CF5 — cross-world fork (deferred).** Re-run CF1/CF4 on the host arm (EH2/H9 confirmation) and the
-  distributed arm (ED2-smart challenge). Runs only after CF1 lands, per the evidence gate.
-  `experiments/cf5_host.py`, `experiments/cf5_dist.py`.
+- **CF5 — cross-world fork (✅ SHIPPED).** Re-runs CF1/CF4 on the host arm (EH2/H9 confirmation) and the
+  distributed arm (ED2-smart challenge), with the network as the anchor. Shipped as a single
+  world-parameterized [`experiments/cf5.py`](../../src/verisim/experiments/cf5.py) (one cross-world
+  figure) rather than the two files sketched here. Result (§12): H50/H51/H53 **transfer** — the
+  calibrated conformal win is world-generic; efficiency is the signal's, not the world's.
 
 ---
 
@@ -444,7 +446,7 @@ build, once shipped).
 
 ---
 
-## 12. Status (2026-06-08) — CF1–CF4 SHIPPED (committed CPU core; trained-`M_θ` arm deferred)
+## 12. Status (2026-06-09) — CF1–CF5 SHIPPED (committed CPU core; trained-`M_θ` arm deferred)
 
 The conformal program is built and committed. The calibrator is torch-free (it operates on recorded
 `(score, oracle-divergence)` pairs, §8), so the one dependency is the *score*: the trained `M_θ`'s
@@ -487,11 +489,24 @@ deterministic and seeded, on the SPEC-5 network world.
   by tolerating near-misses, while still certifying `E[graded loss] ≤ α` — the coverage-only trigger
   over-protects by treating every breach as full-severity. [`cf3`](../../src/verisim/experiments/cf3.py),
   [`figures/cf3_risk_control.png`](../../figures/cf3_risk_control.png).
+- ✅ **CF5 — the cross-world fork: does the conformal win transfer? (H50/H51/H53 TRANSFER).** Re-running
+  the *identical* torch-free conformal machinery on the **host** world (the EH2/H9 confirmation) and the
+  **distributed** world (the ED2-smart challenge) — alongside the network anchor — reproduces all three
+  results on every world: the coverage gate holds (H50, all `α`, all worlds), the calibrated trigger
+  certifies the target at **+0.42 / +0.44 / +0.44** lower ρ than fixed at `α=0.10` on network / host /
+  distributed (H51), and the calibrated signal saves ρ while the uncalibrated saves ~0 (−0.04 / −0.03 /
+  −0.03) on every world (H53). With the breach rate matched across worlds (the control that isolates the
+  *world's* contribution), the ρ-saved curves are near-coincident — **conformal validity and efficiency
+  are properties of the *signal*, not the *world***. This localizes the ED2-smart null: it was the
+  *uncalibrated signal*, not the distributed *world*, that could not conformalize — the calibrated signal
+  conformalizes there just as cleanly. (One unified world-parameterized run, not the spec's tentative
+  two-file `cf5_host`/`cf5_dist` layout, so the transfer reads at a glance.)
+  [`cf5`](../../src/verisim/experiments/cf5.py), [`figures/cf5_cross_world.png`](../../figures/cf5_cross_world.png).
 
-The headline is the program's RQ2 thread, finally resolved with a guarantee *and* a mechanism: the
-oracle is a free, exact, unlimited calibration set, so a consultation trigger can be **certified**
-(CF1), the EH2-yes / ED2-smart-no contradiction is **explained** (CF4: conformalizability), and the
-honest subtlety — exchangeability breaks under rollout — is **measured and fixed** (CF2: ACI on free
-per-step feedback). Remaining: the trained-`M_θ` arm (the one GPU dependency) and the CF5 cross-world
-fork (re-run CF1/CF4 on the host and distributed arms) — the rest of SPEC-15 (CF1–CF4, network) is
-shipped on the controlled-signal core.
+The headline is the program's RQ2 thread, finally resolved with a guarantee, a mechanism, and a transfer:
+the oracle is a free, exact, unlimited calibration set, so a consultation trigger can be **certified**
+(CF1), the EH2-yes / ED2-smart-no contradiction is **explained** (CF4: conformalizability), the honest
+subtlety — exchangeability breaks under rollout — is **measured and fixed** (CF2: ACI on free per-step
+feedback), and the whole result is shown **world-generic** (CF5: it transfers to host and distributed
+because efficiency is the signal's, not the world's). Remaining: only the trained-`M_θ` arm (the one GPU
+dependency) — the rest of SPEC-15 (CF1–CF5) is shipped on the controlled-signal core.

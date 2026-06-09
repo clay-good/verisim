@@ -1,9 +1,10 @@
-"""Smoke + structural-invariant tests for the SPEC-15 conformal experiments (CF1-CF4).
+"""Smoke + structural-invariant tests for the SPEC-15 conformal experiments (CF1-CF5).
 
 The committed CF core is the controlled signal stand-in (the trained-``M_θ`` arm is deferred, LP7
 rule), so the battery is fast and GPU-free. Tests assert the *structural* claims: the coverage gate,
 the conformal-beats-fixed budget, the calibrated/uncalibrated split, the static-drifts/ACI-recovers
-fork, the risk-control saving -- on tiny configs, not exact magnitudes (the macOS-first principle).
+fork, the risk-control saving, and the cross-world transfer of all three -- on tiny configs, not
+exact magnitudes (the macOS-first principle).
 """
 
 from __future__ import annotations
@@ -12,6 +13,7 @@ from verisim.experiments.cf1 import CF1Config, run_cf1
 from verisim.experiments.cf2 import CF2Config, run_cf2
 from verisim.experiments.cf3 import CF3Config, run_cf3
 from verisim.experiments.cf4 import CF4Config, calibration_curves, run_cf4
+from verisim.experiments.cf5 import CF5Config, run_cf5
 from verisim.experiments.cf_common import mean
 
 
@@ -66,4 +68,33 @@ def test_cf_determinism() -> None:
     cfg = CF1Config(n_rollouts=10, steps=40, n_seeds=3, alphas=(0.1,))
     a = [(s.alpha, s.conformal_rho) for s in run_cf1(cfg)]
     b = [(s.alpha, s.conformal_rho) for s in run_cf1(cfg)]
+    assert a == b
+
+
+def _cf5_tiny() -> CF5Config:
+    return CF5Config(n_rollouts=10, steps=40, n_seeds=4, alphas=(0.05, 0.10, 0.20),
+                     headline_alpha=0.10)
+
+
+def test_cf5_transfers_across_worlds() -> None:
+    stats = run_cf5(_cf5_tiny())
+    assert {s.world for s in stats} == {"network", "host", "distributed"}
+    for w in ("network", "host", "distributed"):
+        cal = [s for s in stats if s.world == w and s.arm == "calibrated"]
+        unc = [s for s in stats if s.world == w and s.arm == "uncalibrated"]
+        # H50 transfers: the coverage gate holds per world, every α.
+        for s in cal:
+            assert s.test_undetected <= s.alpha + 0.06
+        # H51 transfers: calibrated certifies at lower ρ than fixed on every world.
+        for s in cal:
+            assert s.conformal_rho <= s.fixed_rho + 1e-9
+        # H53 transfers: the calibrated signal saves ρ, the uncalibrated does not -- on every world.
+        cal_h = next(s for s in cal if abs(s.alpha - 0.10) < 1e-9)
+        unc_h = next(s for s in unc if abs(s.alpha - 0.10) < 1e-9)
+        assert cal_h.rho_saved > unc_h.rho_saved + 0.1
+
+
+def test_cf5_deterministic() -> None:
+    a = [(s.world, s.arm, s.alpha, round(s.rho_saved, 4)) for s in run_cf5(_cf5_tiny())]
+    b = [(s.world, s.arm, s.alpha, round(s.rho_saved, 4)) for s in run_cf5(_cf5_tiny())]
     assert a == b

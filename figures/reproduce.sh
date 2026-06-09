@@ -458,9 +458,19 @@ python -m verisim.experiments.cf2 --config configs/cf2.json \
 
 echo "== CF3: conformal risk control on the graded undetected-breach loss (H54) =="
 echo "   RESULT: H54 supported. Bounding the milder graded loss (vs the 0/1 indicator) buys ~0.22 lower"
-echo "   ρ by tolerating near-misses, while certifying E[graded loss] ≤ α. (CF5 cross-world fork: deferred.)"
+echo "   ρ by tolerating near-misses, while certifying E[graded loss] ≤ α."
 python -m verisim.experiments.cf3 --config configs/cf3.json \
     --out figures/cf3_risk_control.csv --plot figures/cf3_risk_control.png
+
+echo "== CF5: the conformal cross-world fork — does H50/H51/H53 transfer? (SPEC-15 §7) =="
+echo "   RESULT: H50/H51/H53 TRANSFER. The identical torch-free conformal machinery on the host (EH2/H9"
+echo "   confirmation) and distributed (ED2-smart challenge) worlds reproduces every result: the gate"
+echo "   holds, the calibrated trigger saves +0.42/+0.44/+0.44 ρ vs fixed at α=0.10 (net/host/dist), and"
+echo "   the uncalibrated signal saves ~0 everywhere. With breach rate matched (the control), the curves"
+echo "   are near-coincident — conformal efficiency is the SIGNAL's, not the WORLD's; the ED2-smart null"
+echo "   was the uncalibrated signal, not the distributed world."
+python -m verisim.experiments.cf5 --config configs/cf5.json \
+    --out figures/cf5_cross_world.csv --plot figures/cf5_cross_world.png
 
 # ---- SPEC-18: the product — a frozen faithfulness benchmark + sim-to-emulation ACD environment ----
 echo "== PB-bench: the discriminative-validity leaderboard (SPEC-18 H65) — gates the rest =="
@@ -526,4 +536,4 @@ echo "   (Trains 3 graph arms on CPU, ~1-2 min; NA1-NA4 re-scoped to decoder-sid
 python -m verisim.experiments.na0 --config configs/na0.json \
     --out figures/na0_hint_probe.csv --plot figures/na0_hint_probe.png
 
-echo "== done: figures/{e1_curve,e2_policies,e3_operators,calibration,e4_ablation,objective,representation,auto_search,en1_curve,en2_policies,en3_operators,en4_graph_vs_flat,en8_grounding,en9_contrastive,en8_scale,en9_scale,en8_capacity,en9_negatives,en7_invariance,en5_selfheal,en6_counterfactual,en8_ls3_hero,en10_two_oracle,eh1_curve,eh1_composition,eh2_policies,eh3_operators,eh4_factored_vs_flat,eh4_drift,eh5_subsystem_policy,eh5_heads,eh_h14_interleaving,eh_h14_scale,eh7_invariance,eh8_privilege,eh6_two_oracle,eh_h13_scale,eh9_denial_weighted,eh6_counterfactual,eh_stream,synthesis_floor_cliff,horizon_scaling,horizon_scaling_xl,horizon_data_scaling,horizon_joint_scaling,horizon_host_scaling,horizon_graph_scaling,horizon_graph_data_scaling,horizon_graph_world_scaling,horizon_graph_joint_scaling,horizon_graph_schedule,horizon_synthesis,ed1_dist,ed1_learned,ed2,ed2_learned,ed2_smart,ed3,ed4_fault,ed4_consistency,ed5,ed6,ed6_two_oracle,ed6_two_oracle_learned,ed4_consistency,ed4_consistency_learned,ed7,ed8,ed9,ed10,ed11,ed12,ed13,ed14,ed15,ed16,ed17,ed18,ed19,sy1_agreement,sy2_disagreements,sy3_hermeticity,sy4_determinism,lp1_latent_geometry,lp2_faithful_graph,lp3_goal_reach,lp4_edge_metric,lp5_placement,lp6_replanning,lp7_traversal,lp8_dist_goal_reach,lp8_host_goal_reach,sr1_knee,sr2_accept_law,sr3_tree,sr4_calibration,sr5_cascade,sr6_discreteness,cf1_coverage_frontier,cf2_drift_aci,cf3_risk_control,cf4_signal_split,pb_bench_leaderboard,pb_transfer_gap,pb_pack_contamination,cx0_scm_gate,cx1_counterfactual_effect,rs1_dagger,na0_hint_probe}.{png,csv} =="
+echo "== done: figures/{e1_curve,e2_policies,e3_operators,calibration,e4_ablation,objective,representation,auto_search,en1_curve,en2_policies,en3_operators,en4_graph_vs_flat,en8_grounding,en9_contrastive,en8_scale,en9_scale,en8_capacity,en9_negatives,en7_invariance,en5_selfheal,en6_counterfactual,en8_ls3_hero,en10_two_oracle,eh1_curve,eh1_composition,eh2_policies,eh3_operators,eh4_factored_vs_flat,eh4_drift,eh5_subsystem_policy,eh5_heads,eh_h14_interleaving,eh_h14_scale,eh7_invariance,eh8_privilege,eh6_two_oracle,eh_h13_scale,eh9_denial_weighted,eh6_counterfactual,eh_stream,synthesis_floor_cliff,horizon_scaling,horizon_scaling_xl,horizon_data_scaling,horizon_joint_scaling,horizon_host_scaling,horizon_graph_scaling,horizon_graph_data_scaling,horizon_graph_world_scaling,horizon_graph_joint_scaling,horizon_graph_schedule,horizon_synthesis,ed1_dist,ed1_learned,ed2,ed2_learned,ed2_smart,ed3,ed4_fault,ed4_consistency,ed5,ed6,ed6_two_oracle,ed6_two_oracle_learned,ed4_consistency,ed4_consistency_learned,ed7,ed8,ed9,ed10,ed11,ed12,ed13,ed14,ed15,ed16,ed17,ed18,ed19,sy1_agreement,sy2_disagreements,sy3_hermeticity,sy4_determinism,lp1_latent_geometry,lp2_faithful_graph,lp3_goal_reach,lp4_edge_metric,lp5_placement,lp6_replanning,lp7_traversal,lp8_dist_goal_reach,lp8_host_goal_reach,sr1_knee,sr2_accept_law,sr3_tree,sr4_calibration,sr5_cascade,sr6_discreteness,cf1_coverage_frontier,cf2_drift_aci,cf3_risk_control,cf4_signal_split,cf5_cross_world,pb_bench_leaderboard,pb_transfer_gap,pb_pack_contamination,cx0_scm_gate,cx1_counterfactual_effect,rs1_dagger,na0_hint_probe}.{png,csv} =="
