@@ -45,9 +45,10 @@ target-version = "py311"
 
 [tool.ruff.lint]
 select = ["E", "F", "I", "B", "UP", "SIM", "RUF"]
-# The spec uses Greek math notation (ρ for the consultation rate, etc.); allow
-# the one letter ruff flags as Latin-confusable so docstrings match the spec.
-allowed-confusables = ["ρ", "×", "−"]
+# The spec uses Greek math notation (ρ for the consultation rate, α for the
+# per-step acceptance, etc.); allow the letters ruff flags as Latin-confusable
+# so docstrings match the spec.
+allowed-confusables = ["ρ", "α", "×", "−"]
 
 [tool.mypy]
 python_version = "3.11"

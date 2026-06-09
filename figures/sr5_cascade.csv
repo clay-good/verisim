@@ -1,0 +1,10 @@
+world,arm,calls_per_faithful,cpf_lo,cpf_hi,n
+network,tiny-only,0.172297,0.155510,0.188929,24
+network,large-only,0.083057,0.077418,0.088662,24
+network,cascade,0.142618,0.132984,0.152522,24
+host,tiny-only,0.308194,0.279505,0.336650,24
+host,large-only,0.109225,0.102435,0.116741,24
+host,cascade,0.178350,0.165992,0.190053,24
+filesystem,tiny-only,0.337156,0.311861,0.363371,24
+filesystem,large-only,0.104049,0.097058,0.111313,24
+filesystem,cascade,0.179939,0.165748,0.194323,24

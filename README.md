@@ -1342,6 +1342,81 @@ follows whatever planning-relevant projection a world has an oracle for.** The e
 experimental program (LP1–LP8) is shipped; only LP7's deferred LLM arm (the one external-model
 dependency) remains. See [SPEC-12 §7](docs/specs/SPEC-12.md).
 
+### 37. Scheduling the oracle: speculative world-model rollout (SPEC-13 / SR1–SR6 / H39–H44)
+
+Every figure to here measures how *faithful* a model stays under an oracle budget. SPEC-13 asks a
+different question — **when** to spend the budget — and observes that the program's whole
+propose–verify–correct loop, read at the right altitude, **is speculative decoding lifted from tokens
+to world-states.** The cheap model drafts `k` steps; the oracle verifies and **accepts the longest
+faithful prefix**, re-anchoring at the first divergence — the same accept-longest-correct-prefix rule
+that makes LLM speculative decoding exact-by-construction. The one verisim twist is the move the LLM
+line structurally cannot make: the verifier is an **exact deterministic oracle**, so "longest correct
+prefix" is correct against *ground truth*, not against a larger model's distribution.
+
+```
+  step t:  s_t (trusted, oracle-anchored)
+             │  DRAFT k steps, NO oracle (free-run M_θ)
+   ŝ_{t+1} ─▶ … ─▶ ŝ_{t+k}        ← optionally a TREE of drafts (SR3)
+             │  VERIFY against the oracle, STOPPING at the first divergence
+   accept the longest prefix with divergence ≤ ε   (= faithful_horizon of the window)
+             │  CORRECT + RE-ANCHOR at the break, advance, repeat
+```
+
+The committed core is **CPU-only and deterministic**, built on a transparent *controlled stand-in
+drafter* (right with probability `α`, else it *stalls* — predicts no change), with `α` held identical
+across worlds so the figures isolate the *world's* contribution. The trained-`M_θ` arm is the one
+deferred, `skipif`-guarded dependency (the LP7 discipline). The primitive is
+[`loop/speculative.py`](src/verisim/loop/speculative.py); the bundles and drafters are in
+[`experiments/sr_common.py`](src/verisim/experiments/sr_common.py).
+
+**SR2 — the accepted-prefix law, and the reframing of K4 (H40 supported).** Run *before* any policy: the
+empirical mean accepted prefix grows with the **dimensionless ratio `g = ε/δ`** — `ε` relative to the
+world's *single-edit divergence granularity `δ`* — and tracks the i.i.d. law `E[a] = α(1−α^k)/(1−α)`
+fed the *measured* per-step acceptance, the residual being position-dependence. The pre-registered
+*world-identity* split (network gradual, filesystem discrete) turns out to be a **per-metric** law, not
+a per-world one: `g < 1` is the discrete K4 cliff (the first missed edit exceeds `ε`), `g ≥ 2` is
+gradual, and the worlds collapse onto one curve in `g`. This sharpens K4 and points the next move at
+the *metric* (an edit-distance-graded `ε`), not the policy.
+
+![SR2: the accepted prefix grows with g=ε/δ and the empirical mean tracks the i.i.d. law fed the measured acceptance; network/host/filesystem collapse onto one law in g — the split is the metric's granularity, not world identity](figures/sr2_accept_law.png)
+
+**SR1 — speculative vs fixed-ρ at equal budget: the budget crossover (H39 supported above ρ\*, refuted
+below — the headline).** At *equal expensive budget* there is a crossover `ρ\*`: **above it, speculative
+reaches full faithfulness** (consult-at-the-break wastes no oracle call on a still-faithful step — the
+escape from SPEC-7's no-knee floor, EN7/H22); **below it, fixed's uniform clock wins**, because
+accept-longest-prefix is *budget-greedy* — it spends corrections early and free-runs the tail. The
+crossover is `ρ\* ≈ 0.10` (network) / `0.13` (host) / `0.20` (filesystem). The honest reading: the
+favorable knee is real, but only once the budget covers the breaks; the scarce-budget loss is banked as
+a genuine property of reactive scheduling.
+
+![SR1: at equal expensive budget, speculative reaches full faithfulness above a per-world crossover ρ* (consult-at-the-break) while fixed-ρ's uniform spread wins below it (speculative is budget-greedy) — ρ* ≈ 0.10 net / 0.13 host / 0.20 filesystem](figures/sr1_knee.png)
+
+**SR3–SR6 — the follow-ons (two clean positives, two banked negatives).**
+- **SR3 (H42 supported):** a draft *tree* (best-of-`m`, verified against one oracle pass) lifts the
+  accepted prefix ~2.3× under **variance** (stochastic stalls) but is **flat under bias** (systematic
+  stalls) — a tree helps iff the model's divergence is stochastic.
+- **SR4 (H41 split):** the EAGLE-2 confidence↔acceptance link *transfers* (calibration slope ~+0.22 vs
+  ~0 for an uncalibrated signal), but **calibrated draft length does not beat draft-long-everywhere** —
+  the oracle-cost inversion (§8): the verify *stops at the break*, so a long draft that rejects early
+  costs no more, and calibrating `k` down only adds oracle calls.
+- **SR5 (H43 refuted — banked):** a cheap-drafter→large-drafter cascade does *not* cut **oracle** calls
+  per faithful step vs the larger drafter alone — only the oracle adjudicates, and the cheap tier adds a
+  verify round. The cheapness self-speculative decoding exploits lives on the GPU (free here), not in
+  the oracle.
+- **SR6 (H44 partial):** the speculative win is **hump-shaped in `g`** (small at the K4 cliff, small
+  once free-run is already faithful, peaking in the transition band); worlds share the shape but the
+  network saturates at lower `g`, so `g` governs the shape and the collapse is approximate.
+
+![SR3: a draft tree raises the accepted prefix under variance (independent stalls) but does nothing under bias (systematic stalls)](figures/sr3_tree.png)
+
+The SPEC-13 lesson is a *method* lesson, and it is mostly about the **cost inversion**: in LLM
+speculative decoding the GPU drafter is the cost and the verifier is cheap; in verisim the **oracle is
+the cost** and the drafter is free. That single flip explains every result — speculative wins by
+consulting only at breaks (SR1), trees are free because the oracle pass is shared (SR3), but calibrating
+draft length (SR4) and cascading cheap models (SR5) buy nothing because they only save the resource that
+was already free. The entire SPEC-13 program (SR1–SR6) is shipped on the controlled-drafter core; only
+the trained-`M_θ` arm remains. See [SPEC-13 §11](docs/specs/SPEC-13.md).
+
 ## The problem, and what we're trying to accomplish
 
 ### The wall every world model hits
@@ -1611,6 +1686,7 @@ host → distributed); three specs are *cross-cutting methods* every world inher
 | [SPEC-10](docs/specs/SPEC-10.md) | **method: the faithful-horizon scaling law** | scales the *prime directive itself* (`H_ε(ρ)`) along model capacity: does free-running faithful horizon grow with scale, or is the one-step→horizon compounding gap fundamental (H26)? |
 | [SPEC-11](docs/specs/SPEC-11.md) | **method: the system oracle** | validates the program's *one structural bet* — that a deterministic ground-truth oracle exists for computer worlds — by running the v0 grammar against a **real `/bin/sh` on a real kernel** in a hermetic sandbox and measuring agreement bit-for-bit (H27–H30). **The figure that retires W1.** |
 | [SPEC-12](docs/specs/SPEC-12.md) | **method: the landmark graph** | the planning altitude above the loop — a sparse graph of waypoint states with **oracle-verified** reachability edges, the L3P escape from the HS3 wall. **The §7 buildable tranche ships** ([`landmark/`](src/verisim/landmark/)): **LP1 refuted H31** (the latent doesn't encode planning geometry, ρ=0.27 → build in reachability space, [lp1](figures/lp1_latent_geometry.png)); **LP2 supports H32** (the hoped graph is 77% false edges; verification prunes all of them, residual 0.000, at 0.62× cost — the zero-false-paths faithful-graph artifact, [lp2](figures/lp2_faithful_graph.png)); **LP3 supports H33** (the headline — graph-search subgoals + per-hop re-grounding: flat free-running decays with goal-space distance 0.50→0.17 while landmark planning at ρ≈0.2 sustains and rises 0.50→0.83, a 5× far-goal gap that widens with distance and is monotone in the re-grounding budget — *structure buys goal-space horizon where SPEC-10 could not buy step horizon*, [lp3](figures/lp3_goal_reach.png)). **The LP4–LP7 follow-ons now ship too:** **LP4 supports H34** (reachability edges sustain 0.50→0.83, exact-state edges collapse to ~0 — exact-state horizon pinned at 0, reachability horizon ~7, [lp4](figures/lp4_edge_metric.png)); **LP5/LP6 are a mirrored pair** (placement: belief-variance is the load-bearing signal +0.10, betweenness underperforms; replanning: reachability-change beats fixed-interval +0.13, belief-variance miscalibrated — uncertainty for *where*, reachability-change for *when*, [lp5](figures/lp5_placement.png) / [lp6](figures/lp6_replanning.png)); **LP7 core supports H37** (graph search exact at every depth/degree while a myopic walk decays 1.00→0.39 by depth — the LLM-traverser arm deferred, [lp7](figures/lp7_traversal.png)). **LP8-dist supports H38 in kind** (the cross-world fork: the LP2/LP3 apparatus re-runs on `distsim` with the reachability→coarse-consistency/partition signature swap — flat free-running pinned near 0 on the consistency projection, consistency-landmark re-grounding lifts goal reach +0.10 monotone in budget, verified consistency-graph 75% false edges→0.000 residual at 0.46× cost; smaller magnitudes than network LP3 as the dist world is harder — *the method generalizes off the network*, [lp8-dist](figures/lp8_dist_goal_reach.png)). **LP8-host supports H38 more cleanly still** (the third world: the privilege/liveness class set — SPEC-6 §3.2 — as the host's design-choice projection; flat free-running decays with distance 0.50→0.00 while privilege-landmark re-grounding sustains 0.50 at the far goal, adv +0.18 monotone in budget, verified privilege-graph 74% false edges→0.000 residual at 0.25× cost — *the method holds across network/distributed/host, following whatever projection a world has an oracle for*, [lp8-host](figures/lp8_host_goal_reach.png)). Only LP7's deferred LLM arm remains. |
+| [SPEC-13](docs/specs/SPEC-13.md) | **method: speculative rollout** | the propose–verify–correct loop *is* speculative decoding lifted from tokens to world-states — draft `k`, the oracle verifies and accepts the longest faithful prefix, re-anchor at the break. **SR1–SR6 ship** ([`loop/speculative.py`](src/verisim/loop/speculative.py), [`experiments/sr_common.py`](src/verisim/experiments/sr_common.py)) on a controlled stand-in drafter (trained-`M_θ` arm deferred): **SR2 supports H40** (the accepted prefix tracks the i.i.d. law `E[a]=α(1−α^k)/(1−α)` and is governed by `g=ε/δ` — the metric's granularity, not world identity; this reframes K4 as a per-metric law and the worlds collapse onto one curve, [sr2](figures/sr2_accept_law.png)); **SR1 supports H39 above ρ\*, refutes below** (the headline budget crossover — speculative reaches *full faithfulness* above `ρ\*≈0.10/0.13/0.20` by consulting at the break, but is *budget-greedy* and loses to fixed's uniform spread below it, [sr1](figures/sr1_knee.png)); **SR3 supports H42** (a draft tree lifts the prefix ~2.3× under variance, flat under bias, [sr3](figures/sr3_tree.png)); **SR4 splits H41** (the EAGLE-2 confidence↔acceptance link transfers but calibrated draft length does not beat draft-long — the oracle-cost inversion, the verify stops at the break, [sr4](figures/sr4_calibration.png)); **SR5 refutes H43** (a cheap-drafter cascade saves no *oracle* calls — only the oracle adjudicates, banked negative, [sr5](figures/sr5_cascade.png)); **SR6 partially supports H44** (the win is hump-shaped in `g`, peaking in the transition band; worlds share the shape, collapse approximate, [sr6](figures/sr6_discreteness.png)). The whole program turns on the **cost inversion** — the oracle is the cost here, not the GPU. Only the trained-`M_θ` arm remains. |
 
 Semantics docs ([filesystem](docs/semantics.md), [network](docs/network-semantics.md)) pin the normative
 command semantics, paired with the reference oracles, which are the executable truth. SPEC-11's system

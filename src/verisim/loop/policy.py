@@ -23,6 +23,7 @@ variant of §6.1 is a later stretch.
 
 from __future__ import annotations
 
+from collections.abc import Callable
 from dataclasses import dataclass
 from typing import Protocol, runtime_checkable
 
@@ -98,6 +99,42 @@ class DriftTriggered:
 
     def should_consult(self, ctx: StepContext) -> bool:
         return ctx.cumulative_signal > self.tau
+
+
+@dataclass(frozen=True)
+class SpeculativeConsult:
+    """Draft ``k`` steps, verify the window, accept the longest faithful prefix (SPEC-13 §3).
+
+    The speculative consultation policy of SPEC-13: rather than consult on a clock, issue one oracle
+    verification of a ``k``-step draft *window* and re-anchor at the first divergence -- the
+    accept-longest-correct-prefix rule. The window verify and prefix acceptance live in
+    :mod:`verisim.loop.speculative` (the loop already computes the accepted length as
+    :func:`verisim.metrics.horizon.faithful_horizon`); this dataclass is the policy *descriptor*
+    that
+    carries the draft length and, optionally, the calibrated draft-length rule of SR4.
+
+    ``calibrate`` maps the model's per-step uncertainty signal to a draft length (draft longer where
+    the model is confident -- the EAGLE-2 confidence↔acceptance link, H41); when ``None`` the draft
+    length is the fixed ``k``. :meth:`should_consult` keeps :class:`SpeculativeConsult` a valid
+    :class:`ConsultationPolicy` (a window boundary every ``k`` steps) so it composes with the
+    shipped
+    per-step runners for diagnostics; the SR experiments drive it through the speculative rollout.
+    """
+
+    k: int
+    calibrate: Callable[[float], int] | None = None
+
+    def __post_init__(self) -> None:
+        if self.k < 1:
+            raise ValueError(f"SpeculativeConsult k must be >= 1, got {self.k}")
+
+    def draft_length(self, signal: float) -> int:
+        """The draft length to use given the model's confidence ``signal`` (SR4's calibrated ``k``).
+        """
+        return self.calibrate(signal) if self.calibrate is not None else self.k
+
+    def should_consult(self, ctx: StepContext) -> bool:
+        return (ctx.step + 1) % self.k == 0
 
 
 def fixed_interval_for_rho(rho: float) -> ConsultationPolicy:

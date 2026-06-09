@@ -392,4 +392,46 @@ echo "   -> 0.000 residual at 0.25x cost (the cheapest consult of the three worl
 python -m verisim.experiments.lp8_host --config configs/lp8_host.json \
     --out figures/lp8_host_goal_reach.csv --plot figures/lp8_host_goal_reach.png
 
-echo "== done: figures/{e1_curve,e2_policies,e3_operators,calibration,e4_ablation,objective,representation,auto_search,en1_curve,en2_policies,en3_operators,en4_graph_vs_flat,en8_grounding,en9_contrastive,en8_scale,en9_scale,en8_capacity,en9_negatives,en7_invariance,en5_selfheal,en6_counterfactual,en8_ls3_hero,en10_two_oracle,eh1_curve,eh1_composition,eh2_policies,eh3_operators,eh4_factored_vs_flat,eh4_drift,eh5_subsystem_policy,eh5_heads,eh_h14_interleaving,eh_h14_scale,eh7_invariance,eh8_privilege,eh6_two_oracle,eh_h13_scale,eh9_denial_weighted,eh6_counterfactual,eh_stream,synthesis_floor_cliff,horizon_scaling,horizon_scaling_xl,horizon_data_scaling,horizon_joint_scaling,horizon_host_scaling,horizon_graph_scaling,horizon_graph_data_scaling,horizon_graph_world_scaling,horizon_graph_joint_scaling,horizon_graph_schedule,horizon_synthesis,ed1_dist,ed1_learned,ed2,ed2_learned,ed2_smart,ed3,ed4_fault,ed4_consistency,ed5,ed6,ed6_two_oracle,ed6_two_oracle_learned,ed4_consistency,ed4_consistency_learned,ed7,ed8,ed9,ed10,ed11,ed12,ed13,ed14,ed15,ed16,ed17,ed18,ed19,sy1_agreement,sy2_disagreements,sy3_hermeticity,sy4_determinism,lp1_latent_geometry,lp2_faithful_graph,lp3_goal_reach,lp4_edge_metric,lp5_placement,lp6_replanning,lp7_traversal,lp8_dist_goal_reach,lp8_host_goal_reach}.{png,csv} =="
+# ---- SPEC-13: speculative world-model rollout (SR) — draft-verify-accept-prefix as the policy ----
+echo "== SR2: the accepted-prefix law per world (SPEC-13 H40) — runs first; gates SR1 =="
+echo "   RESULT: H40 supported. The accepted prefix grows with g=ε/δ and the empirical mean tracks"
+echo "   the i.i.d. law E[a]=α(1-α^k)/(1-α) fed the measured α̂; the split is g (discreteness), not"
+echo "   world identity — discrete-regime prefix ~3.7 vs gradual ~11.7, collapsing across worlds."
+python -m verisim.experiments.sr2 --config configs/sr2.json \
+    --out figures/sr2_accept_law.csv --plot figures/sr2_accept_law.png
+
+echo "== SR1: speculative vs fixed-ρ at equal budget (SPEC-13 H39) — THE HEADLINE (budget crossover) =="
+echo "   RESULT: H39 budget-split. Above ρ* speculative reaches full faithfulness (consult-at-break,"
+echo "   no wasted clock ticks); below ρ* fixed's uniform spread wins (accept-longest-prefix is"
+echo "   budget-greedy — it spends early and free-runs the tail). ρ* ≈ 0.10 (net) / 0.13 (host) / 0.20 (fs)."
+python -m verisim.experiments.sr1 --config configs/sr1.json \
+    --out figures/sr1_knee.csv --plot figures/sr1_knee.png
+
+echo "== SR3: multi-draft (tree) verification (SPEC-13 H42) =="
+echo "   RESULT: H42 supported. best-of-m lifts the accepted prefix ~2.3x under variance (stochastic"
+echo "   stalls) but is flat under bias (systematic stalls) — a tree helps iff divergence is variance."
+python -m verisim.experiments.sr3 --config configs/sr3.json \
+    --out figures/sr3_tree.csv --plot figures/sr3_tree.png
+
+echo "== SR4: calibrated draft length & the EAGLE-2 link (SPEC-13 H41) =="
+echo "   RESULT: H41 split. The confidence↔acceptance link transfers (calibration slope +0.22 vs ~0"
+echo "   null), but calibrated-k does NOT beat draft-long-everywhere (the oracle-cost inversion §8:"
+echo "   verify stops at the break, so a long draft costs no more — calibrating k down only adds calls)."
+python -m verisim.experiments.sr4 --config configs/sr4.json \
+    --out figures/sr4_calibration.csv --plot figures/sr4_calibration.png
+
+echo "== SR5: the two-tier self-speculative cascade (SPEC-13 H43) =="
+echo "   RESULT: H43 refuted (banked negative). A cheap pre-filter does not cut ORACLE calls per"
+echo "   faithful step — only the oracle adjudicates, and the cheap tier adds a verify round; use the"
+echo "   best drafter directly (cheapness lives on the GPU, free here, not in the oracle)."
+python -m verisim.experiments.sr5 --config configs/sr5.json \
+    --out figures/sr5_cascade.csv --plot figures/sr5_cascade.png
+
+echo "== SR6: the discreteness law / g-collapse (SPEC-13 H44, deferred fork) =="
+echo "   RESULT: H44 partial. The speculative win is hump-shaped in g (small at the K4 cliff, small"
+echo "   once free-run is already faithful, peaking in the transition band); worlds share the shape"
+echo "   but not exactly the peak (network saturates at lower g) — g governs the shape, collapse approx."
+python -m verisim.experiments.sr6 --config configs/sr6.json \
+    --out figures/sr6_discreteness.csv --plot figures/sr6_discreteness.png
+
+echo "== done: figures/{e1_curve,e2_policies,e3_operators,calibration,e4_ablation,objective,representation,auto_search,en1_curve,en2_policies,en3_operators,en4_graph_vs_flat,en8_grounding,en9_contrastive,en8_scale,en9_scale,en8_capacity,en9_negatives,en7_invariance,en5_selfheal,en6_counterfactual,en8_ls3_hero,en10_two_oracle,eh1_curve,eh1_composition,eh2_policies,eh3_operators,eh4_factored_vs_flat,eh4_drift,eh5_subsystem_policy,eh5_heads,eh_h14_interleaving,eh_h14_scale,eh7_invariance,eh8_privilege,eh6_two_oracle,eh_h13_scale,eh9_denial_weighted,eh6_counterfactual,eh_stream,synthesis_floor_cliff,horizon_scaling,horizon_scaling_xl,horizon_data_scaling,horizon_joint_scaling,horizon_host_scaling,horizon_graph_scaling,horizon_graph_data_scaling,horizon_graph_world_scaling,horizon_graph_joint_scaling,horizon_graph_schedule,horizon_synthesis,ed1_dist,ed1_learned,ed2,ed2_learned,ed2_smart,ed3,ed4_fault,ed4_consistency,ed5,ed6,ed6_two_oracle,ed6_two_oracle_learned,ed4_consistency,ed4_consistency_learned,ed7,ed8,ed9,ed10,ed11,ed12,ed13,ed14,ed15,ed16,ed17,ed18,ed19,sy1_agreement,sy2_disagreements,sy3_hermeticity,sy4_determinism,lp1_latent_geometry,lp2_faithful_graph,lp3_goal_reach,lp4_edge_metric,lp5_placement,lp6_replanning,lp7_traversal,lp8_dist_goal_reach,lp8_host_goal_reach,sr1_knee,sr2_accept_law,sr3_tree,sr4_calibration,sr5_cascade,sr6_discreteness}.{png,csv} =="

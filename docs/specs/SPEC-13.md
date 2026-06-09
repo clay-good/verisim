@@ -9,7 +9,8 @@ makes LLM speculative decoding exact-by-construction and fast. This spec asks wh
 produced the program's central negative — the floor + cliff with no favorable knee — and pre-registers
 exactly where it should and should not win.**
 
-> **▶ METHOD SPEC — 2026-06 — DESIGN-STAGE (◐, not built).** A *method* spec in the lineage of
+> **▶ METHOD SPEC — 2026-06 — SHIPPED (✅ SR1–SR6 on the controlled-drafter core; trained-`M_θ` arm
+> deferred). See §11 for the status table and results.** A *method* spec in the lineage of
 > [SPEC-3](./SPEC-3.md) (the consultation-policy program) and [SPEC-12](./SPEC-12.md) (planning
 > altitude above the loop): it invents **no new world** and **no new oracle**. It runs on the SPEC-5
 > network world (`ReferenceNetworkOracle` + `ControlPlaneOracle`), the SPEC-6 host world
@@ -438,3 +439,67 @@ Reading order for a newcomer: [SPEC.md §5](./SPEC.md) (the `π_c`/`ρ`/`H_ε` f
 [`hostsim/simulator.py`](../../src/verisim/hostsim/simulator.py) (the loop that already *is* draft-verify) →
 this document (§1 motivation, §3 architecture, §4 the K4 pre-registration, §5 the hypotheses) →
 `src/verisim/loop/speculative.py` and `src/verisim/experiments/sr2.py` (the concrete build, once shipped).
+
+---
+
+## 11. Status (2026-06-08) — SR1–SR6 SHIPPED (committed CPU core; trained-`M_θ` arm deferred)
+
+The full SR experimental program is built and committed. As pre-registered (§7, §9), the committed core
+uses a **controlled stand-in drafter** — a proposer that predicts the oracle's true next state with
+per-step probability `α` and otherwise *stalls* (predicts no change), with `α` held identical across
+worlds so the figures isolate the *world's* contribution, not the proposer's (the LP7 discipline: the
+trained-`M_θ` `belief_var`/decode-entropy arm is `skipif`-guarded and never counted). The primitive is
+[`loop/speculative.py`](../../src/verisim/loop/speculative.py) (`speculative_rollout`,
+`fixed_interval_rollout`, `accepted_prefix_law`, `free_run_divergences`); the policy descriptor is
+`SpeculativeConsult` in [`loop/policy.py`](../../src/verisim/loop/policy.py); the world-generic bundles
+and the two controlled drafters (`StallDrafter`, `VaryingDrafter`) are in
+[`experiments/sr_common.py`](../../src/verisim/experiments/sr_common.py). All six run on CPU,
+deterministic and seeded, across the SPEC-5 network, SPEC-6 host, and SPEC-2.1 filesystem worlds.
+
+**The headline reframing (made before any policy was run, SR2/§4).** The pre-registered *world-identity*
+split (network/host gradual, filesystem discrete) is not the controlling variable. The actual governor
+is the **dimensionless ratio `g = ε/δ`**, where `δ` is the world's *single-edit divergence granularity*
+(the median divergence one missed edit produces). When `g ≥ ~2` several edits fit under `ε` before the
+prefix breaks (gradual); when `g < 1` the first missed edit already exceeds `ε` (the K4 cliff). The SR
+figures sweep `g` and show the worlds collapse onto one law in `g` — the result is governed by the
+metric's granularity, not the world's identity. This *sharpens* K4 from a per-world claim into a
+per-metric one, and points the next move at the metric/representation (an edit-distance-graded `ε`),
+exactly as §4 anticipated.
+
+- ✅ **SR2 — the accepted-prefix law (H40 SUPPORTED).** Per world, the empirical mean accepted prefix
+  grows with `g` and tracks the i.i.d. law `E[a] = α(1−α^k)/(1−α)` fed the *measured* per-step
+  acceptance `α̂` (residual = position-dependence). Discrete-regime prefix ~3.7 vs gradual ~11.7.
+  [`sr2`](../../src/verisim/experiments/sr2.py), [`figures/sr2_accept_law.png`](../../figures/sr2_accept_law.png).
+- ✅ **SR1 — speculative vs fixed-ρ at equal budget (H39 SUPPORTED above ρ\*, REFUTED below — the
+  headline).** At *equal expensive budget* (matched oracle corrections) there is a **budget crossover
+  ρ\***: above it speculative reaches **full faithfulness** (consult-at-break wastes no clock tick on a
+  still-faithful step), below it fixed's *uniform spread* wins because accept-longest-prefix is
+  **budget-greedy** — it spends corrections early and free-runs the tail. `ρ\* ≈ 0.10` (network) /
+  `0.13` (host) / `0.20` (filesystem). The no-knee floor (EN7/H22) is *escaped* at sufficient budget; the
+  scarce-budget loss is banked as a real property of reactive scheduling.
+  [`sr1`](../../src/verisim/experiments/sr1.py), [`figures/sr1_knee.png`](../../figures/sr1_knee.png).
+- ✅ **SR3 — multi-draft (tree) verification (H42 SUPPORTED).** best-of-`m` lifts the accepted prefix
+  ~2.3× under **variance** (independent stalls) and is **flat under bias** (systematic stalls) — a draft
+  tree helps iff the drafter's divergence is stochastic; systematic error needs debiasing, not more
+  drafts. [`sr3`](../../src/verisim/experiments/sr3.py), [`figures/sr3_tree.png`](../../figures/sr3_tree.png).
+- ✅ **SR4 — calibrated draft length & the EAGLE-2 link (H41 SPLIT: link transfers, policy does not).**
+  The confidence↔acceptance link *transfers* (calibration slope ~+0.22 with a calibrated signal vs ~0
+  with the null, the ED2-smart/EH2 case), but **calibrated-`k` does not beat draft-long-everywhere** —
+  the oracle-cost inversion (§8): the verify *stops at the first divergence*, so a long draft that
+  rejects early costs no more than a short one, and calibrating `k` down only adds oracle calls. A
+  bankable negative whose premise holds and whose mechanism is absent.
+  [`sr4`](../../src/verisim/experiments/sr4.py), [`figures/sr4_calibration.png`](../../figures/sr4_calibration.png).
+- ✅ **SR5 — the two-tier self-speculative cascade (H43 REFUTED — banked negative).** A cheap drafter
+  pre-filtering for a larger one does **not** cut *oracle* calls per faithful step versus running the
+  larger drafter directly — only the oracle adjudicates faithfulness, and the cheap tier adds a verify
+  round without removing one. The cheapness the self-speculative line exploits lives on the GPU (free
+  here), not in the oracle. [`sr5`](../../src/verisim/experiments/sr5.py), [`figures/sr5_cascade.png`](../../figures/sr5_cascade.png).
+- ✅ **SR6 — the discreteness law / g-collapse (H44 PARTIALLY SUPPORTED — deferred fork).** The
+  speculative-vs-fixed win is **hump-shaped in `g`** (small at the K4 cliff, small once free-run is
+  already faithful, peaking in the transition band); the worlds share the shape but not exactly the peak
+  (the network saturates at lower `g`), so `g` governs the *shape* across worlds but the collapse is
+  approximate. [`sr6`](../../src/verisim/experiments/sr6.py), [`figures/sr6_discreteness.png`](../../figures/sr6_discreteness.png).
+
+Remaining: only the **trained-`M_θ` arm** (the one external/GPU dependency) — the rest of the SPEC-13
+program (SR1–SR6, network + host + filesystem) is shipped on the controlled-drafter core, each rung
+graduating on a committed figure or a banked negative.

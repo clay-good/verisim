@@ -1,0 +1,9 @@
+{
+  "alpha": 0.7,
+  "k": 12,
+  "g": 1.0,
+  "m_values": [1, 2, 4, 8],
+  "n_steps": 80,
+  "n_seeds": 24,
+  "base_seed": 0
+}

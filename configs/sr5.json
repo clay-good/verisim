@@ -1,0 +1,9 @@
+{
+  "alpha_tiny": 0.6,
+  "alpha_large": 0.9,
+  "k": 16,
+  "g": 1.5,
+  "n_steps": 80,
+  "n_seeds": 24,
+  "base_seed": 0
+}
