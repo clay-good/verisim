@@ -12,7 +12,9 @@ is two falsifiable claims the field has never measured: does the benchmark *disc
 (stable rankings), and is the sim-to-emulation transfer *measured* against the SPEC-11 real-OS oracle —
 the quantified version of what CybORG-class fields assert and leave open.**
 
-> **▶ PRODUCT / VALIDATION SPEC — 2026-06.** A *packaging-and-validation* spec, sibling to
+> **✅ SHIPPED — PRODUCT / VALIDATION SPEC — 2026-06 (PB-bench / PB-transfer / PB-pack on the
+> controlled-proposer core + the real-shell oracle; trained-`M_θ` leaderboard entries deferred).
+> See §10 for the status table and results.** A *packaging-and-validation* spec, sibling to
 > [SPEC-11](./SPEC-11.md) (the system oracle — the real-OS anchor this spec's transfer claim is measured
 > against). It invents **no new world, oracle, or model.** It consumes what already ships: the
 > Inspect faithfulness task ([`eval/inspect_task.py`](../../src/verisim/eval/inspect_task.py)), the
@@ -440,3 +442,48 @@ measures) → [SPEC.md §4.1](./SPEC.md) (the ACD sim-to-emulation gap) → [SPE
 system oracle, the real-OS anchor for the transfer claim) → this document (§2 the two artifacts, §3 the
 scientific spine, §5 the hypotheses, §8 the milestones, §9 why adoption is not a hypothesis) →
 `src/verisim/product/` and `src/verisim/experiments/pb_bench.py` (the concrete build, once shipped).
+
+---
+
+## 10. Status (2026-06-08) — PB-bench / PB-transfer / PB-pack SHIPPED
+
+The product layer is built and committed. The package is [`bench/`](../../src/verisim/bench/):
+`manifest.py` (the frozen, hashable :class:`BatteryManifest` + the Croissant / datasheet / model-card
+emitters + the reference fidelity ladder), `leaderboard.py` (proposer scoring + Kendall-τ rank
+stability), `conformance.py` (Gymnasium / `verifiers` contract checks). The three PB experiments are
+[`pb_bench`](../../src/verisim/experiments/pb_bench.py),
+[`pb_transfer`](../../src/verisim/experiments/pb_transfer.py),
+[`pb_pack`](../../src/verisim/experiments/pb_pack.py). The committed leaderboard entries are
+controlled-stand-in proposers (a per-step-accuracy fidelity ladder); the trained flat-transformer /
+GNN+RSSM arms are deferred (`skipif`-guarded, never scored without a checkpoint — the LP7 rule).
+
+- ✅ **PB-bench — discriminative validity (H65 SUPPORTED — gates the rest).** The leaderboard **stably
+  orders** the fidelity ladder: Kendall's τ between disjoint seed-split leaderboards is **1.00** at every
+  world (CI excluding 0), and the strict adjacent-tier test passes — the binding (worst-margin) adjacent
+  pair's gap exceeds twice its *paired* seed noise (common-mode seed noise does not reorder the ranking,
+  so the gap that matters is between adjacent proposers and the noise that matters is the noise of that
+  gap). The benchmark discriminates, so it is worth packaging.
+  [`figures/pb_bench_leaderboard.png`](../../figures/pb_bench_leaderboard.png).
+- ✅ **PB-transfer — the sim-to-emulation gap (H66 SUPPORTED, H67 banked — the bridge result).** A
+  proposer fit against the reference oracle, re-scored against the SPEC-11 **system oracle** (real
+  `/bin/sh`, real kernel — which *runs on this host*), has a transfer gap `ΔH = H_ε^ref − H_ε^sys` that
+  is **0.000 across the ρ-sweep** on the validated structure grammar: transfer is essentially lossless,
+  the first such number in faithful-horizon terms, confirming SY1/H27 in the program's headline metric.
+  Oracle-in-the-loop correction lifts the absolute real-OS horizon with `ρ` (e.g. 3.9 → 6.8) but there
+  is no gap to shrink — the banked H67 reading: *the bridge is the measurement, not the fix, on this
+  grammar*. `skipif`-guarded and disclosed when no real shell is present (a skip is never a result,
+  SPEC-11 §2.5). [`figures/pb_transfer_gap.png`](../../figures/pb_transfer_gap.png).
+- ✅ **PB-pack — packaging + contamination control (H68 SUPPORTED + the PB milestones).** The
+  public-minus-held-out faithful gap separates a public-manifest **memorizer** (≈ +0.98) from an
+  **honest** proposer (≈ +0.10): the frozen eval is contamination-resistant — overfitting the public
+  manifest is detectable. The **conformance suite is green** (6/6: each world's RL env honors the
+  Gymnasium reset/step contract and the `verifiers` `load_environment` entrypoint; the Inspect-task
+  contract is asserted in the test suite). The **Croissant descriptor, datasheet, and model-card** are
+  emitted to [`bench/`](../../bench/), regenerable from the manifest hash.
+  [`figures/pb_pack_contamination.png`](../../figures/pb_pack_contamination.png).
+
+The capstone ships the program's accumulated asset as two versioned artifacts: a faithfulness benchmark
+that *discriminates* (PB-bench) with a *measured, lossless* sim-to-emulation bridge to a real OS
+(PB-transfer) and *contamination-resistant, conformant, documented* packaging (PB-pack). Remaining:
+the trained-`M_θ` leaderboard entries (the one GPU dependency) and the CX5/PB-transfer broad-grammar
+arm (a non-zero ΔH outside the validated grammar) — the rest of SPEC-18 is shipped.

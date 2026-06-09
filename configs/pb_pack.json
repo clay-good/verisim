@@ -1,0 +1,1 @@
+{ "public_seeds": 16, "heldout_offset": 10000, "heldout_seeds": 16, "honest_alpha": 0.85, "memorizer_public_alpha": 1.0, "memorizer_heldout_alpha": 0.5, "n_steps": 80, "epsilon_g": 1.0, "bench_dir": "bench" }

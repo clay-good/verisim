@@ -1,0 +1,1 @@
+{ "alpha": 0.8, "driver": "structural", "rhos": [0.0, 0.1, 0.25, 0.5], "n_steps": 24, "n_seeds": 8, "epsilon": 0.0, "base_seed": 0 }

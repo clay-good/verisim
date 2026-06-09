@@ -1,0 +1,88 @@
+{
+  "@context": {
+    "@vocab": "https://schema.org/",
+    "cr": "http://mlcommons.org/croissant/"
+  },
+  "@type": "Dataset",
+  "cr:provenance": "oracle-generated (deterministic reference oracle); no scraped data",
+  "cr:recordSet": [
+    {
+      "@type": "cr:RecordSet",
+      "cr:field": [
+        {
+          "dataType": "Text",
+          "name": "state"
+        },
+        {
+          "dataType": "Text",
+          "name": "action"
+        },
+        {
+          "dataType": "Text",
+          "name": "next_state"
+        },
+        {
+          "dataType": "Integer",
+          "name": "faithful_horizon"
+        }
+      ],
+      "description": "network world rollouts under the weighted driver",
+      "name": "network"
+    },
+    {
+      "@type": "cr:RecordSet",
+      "cr:field": [
+        {
+          "dataType": "Text",
+          "name": "state"
+        },
+        {
+          "dataType": "Text",
+          "name": "action"
+        },
+        {
+          "dataType": "Text",
+          "name": "next_state"
+        },
+        {
+          "dataType": "Integer",
+          "name": "faithful_horizon"
+        }
+      ],
+      "description": "host world rollouts under the forky driver",
+      "name": "host"
+    },
+    {
+      "@type": "cr:RecordSet",
+      "cr:field": [
+        {
+          "dataType": "Text",
+          "name": "state"
+        },
+        {
+          "dataType": "Text",
+          "name": "action"
+        },
+        {
+          "dataType": "Text",
+          "name": "next_state"
+        },
+        {
+          "dataType": "Integer",
+          "name": "faithful_horizon"
+        }
+      ],
+      "description": "filesystem world rollouts under the structural driver",
+      "name": "filesystem"
+    }
+  ],
+  "creator": {
+    "@type": "Organization",
+    "name": "Verisim"
+  },
+  "description": "Oracle-grounded world-model faithfulness benchmark: per-step (state, action, true next-state) records and H_\u03b5(\u03c1) faithful-horizon scores across the network, host, and filesystem worlds, labeled bit-exact by a deterministic reference oracle.",
+  "license": "https://opensource.org/licenses/MIT",
+  "manifestHash": "8147113f0407082f",
+  "name": "verisim-bench",
+  "version": "0.1.0"
+}
