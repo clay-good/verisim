@@ -1,0 +1,21 @@
+{
+  "name": "rs3-noise-prob-magnitude-grid",
+  "n_hosts": 5,
+  "n_ports": 3,
+  "train_driver": "weighted",
+  "train_seeds": [0, 1, 2],
+  "train_steps_per_traj": 40,
+  "graph_d_model": 64,
+  "graph_mp_rounds": 3,
+  "train_steps": 1000,
+  "lr": 3e-3,
+  "batch_size": 32,
+  "noise_probs": [0.0, 0.15, 0.3, 0.45],
+  "magnitudes": [1, 2, 3],
+  "model_seeds": [0, 1, 2],
+  "eval_seeds": [100, 101, 102, 103, 104],
+  "eval_steps": 32,
+  "one_step_seeds": [200, 201],
+  "epsilons": [0.0, 0.1, 0.2, 0.3, 0.5],
+  "headline_epsilon": 0.3
+}

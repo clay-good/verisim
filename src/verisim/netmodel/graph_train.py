@@ -49,29 +49,40 @@ GraphExample = tuple[NetGraph, list[int]]  # (featurized state/action, target de
 # --- the noise-injection lever (§6.3) ---------------------------------------
 
 
-def corrupt_state(state: NetworkState, config: NetConfig, rng: random.Random) -> NetworkState:
-    """Apply one random off-trajectory mutation (the GNS perturbation, then oracle-relabeled)."""
+def corrupt_state(
+    state: NetworkState, config: NetConfig, rng: random.Random, magnitude: int = 1
+) -> NetworkState:
+    """Apply ``magnitude`` random off-trajectory mutations (the GNS perturbation, oracle-relabeled).
+
+    ``magnitude=1`` (the default) is the single-mutation corruption every existing caller uses — one
+    loop iteration, the same RNG draw order as before, so committed callers are byte-identical.
+    Larger magnitudes stack independent mutations to push the corrupted state *further*
+    off-trajectory: the RS3 noise-magnitude axis (SPEC-16 §5), where the question is whether deeper
+    corruption (closer to where long-rollout drift lands) covers the deploy distribution better or
+    just hurts the one-step map.
+    """
     s = state.copy()
     hosts = config.hosts
-    kind = rng.choice(["host", "svc", "fw", "link", "flow"])
-    h = rng.choice(hosts)
-    if kind == "host":
-        s.hosts[h] = s.hosts[h].with_up(not s.hosts[h].up)
-    elif kind == "svc":
-        port = rng.choice(config.ports)
-        s.hosts[h] = s.hosts[h].with_service(port, port not in s.hosts[h].services)
-    elif kind == "fw":
-        src = rng.choice(hosts)
-        s.hosts[h] = s.hosts[h].with_fw(src, src not in s.hosts[h].fw_deny)
-    elif kind == "link":
-        other = rng.choice([x for x in hosts if x != h])
-        key = link_key(h, other)
-        s.links.discard(key) if key in s.links else s.links.add(key)
-    else:  # flow
-        dst = rng.choice([x for x in hosts if x != h])
-        port = rng.choice(config.ports)
-        flow = (h, dst, port)
-        s.flows.discard(flow) if flow in s.flows else s.flows.add(flow)
+    for _ in range(max(1, magnitude)):
+        kind = rng.choice(["host", "svc", "fw", "link", "flow"])
+        h = rng.choice(hosts)
+        if kind == "host":
+            s.hosts[h] = s.hosts[h].with_up(not s.hosts[h].up)
+        elif kind == "svc":
+            port = rng.choice(config.ports)
+            s.hosts[h] = s.hosts[h].with_service(port, port not in s.hosts[h].services)
+        elif kind == "fw":
+            src = rng.choice(hosts)
+            s.hosts[h] = s.hosts[h].with_fw(src, src not in s.hosts[h].fw_deny)
+        elif kind == "link":
+            other = rng.choice([x for x in hosts if x != h])
+            key = link_key(h, other)
+            s.links.discard(key) if key in s.links else s.links.add(key)
+        else:  # flow
+            dst = rng.choice([x for x in hosts if x != h])
+            port = rng.choice(config.ports)
+            flow = (h, dst, port)
+            s.flows.discard(flow) if flow in s.flows else s.flows.add(flow)
     return s
 
 
@@ -88,12 +99,15 @@ def build_graph_dataset(
     n_steps: int = 40,
     noise_prob: float = 0.0,
     noise_seed: int = 0,
+    noise_magnitude: int = 1,
 ) -> list[GraphExample]:
     """``(NetGraph, target_ids)`` per step of seeded rollouts, with optional noise injection.
 
-    With probability ``noise_prob`` a step's state is replaced by a one-mutation corruption and the
-    target is **relabeled by the oracle** for the corrupted state (§6.3). The clean trajectory still
-    advances on the *true* next state, so noise augments coverage without derailing the rollout.
+    With probability ``noise_prob`` a step's state is replaced by a ``noise_magnitude``-mutation
+    corruption and the target is **relabeled by the oracle** for the corrupted state (§6.3). The
+    clean trajectory still advances on the *true* next state, so noise augments coverage without
+    derailing the rollout. ``noise_magnitude=1`` (the default) is byte-identical to every existing
+    caller; the RS3 sweep (SPEC-16 §5) varies it to probe how far off-trajectory the noise reaches.
     """
     noise_rng = random.Random(noise_seed)
     examples: list[GraphExample] = []
@@ -104,7 +118,7 @@ def build_graph_dataset(
             action = driver_obj.sample(state)
             true_result = oracle.step(state, action)
             if noise_prob > 0.0 and noise_rng.random() < noise_prob:
-                noisy = corrupt_state(state, config, noise_rng)
+                noisy = corrupt_state(state, config, noise_rng, noise_magnitude)
                 delta = oracle.step(noisy, action).delta
                 examples.append((build_graph(noisy, action, config), encode_target(delta, vocab)))
             else:

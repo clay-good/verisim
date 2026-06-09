@@ -547,6 +547,23 @@ echo "   scale is the standing open bet.)"
 python -m verisim.experiments.rs1_dagger --config configs/rs1_dagger.json \
     --out figures/rs1_dagger.csv --plot figures/rs1_dagger.png
 
+echo "== RS2: scheduled sampling — the sample_prob tradeoff curve on the REAL structured arm (SPEC-16 H57) =="
+echo "   RESULT: H57 NULL. Sweeping max_sample_prob in {0,0.25,0.5,0.75,1.0} on the structured GNN+RSSM"
+echo "   arm, neither one-step p (flat ~0.58) nor H_free (best +0.36 at ε=0.3, within seed-CI ±0.70)"
+echo "   moves beyond seed noise — no signed bias-stability tradeoff, strengthening NA6's single-point"
+echo "   self-forced null into a full curve. (Trains the real graph arm on CPU, ~4 min.)"
+python -m verisim.experiments.rs2_scheduled --config configs/rs2_scheduled.json \
+    --out figures/rs2_sample_prob_tradeoff.csv --plot figures/rs2_sample_prob_tradeoff.png
+
+echo "== RS3: noise injection — the noise_prob x magnitude grid on the REAL structured arm (SPEC-16 H57) =="
+echo "   RESULT: H57 NULL. Sweeping the oracle-relabeled noise lever over noise_prob in {0,0.15,0.3,0.45}"
+echo "   x magnitude in {1,2,3} (magnitude = stacked off-trajectory mutations, a knob this adds; mag=1 is"
+echo "   byte-identical to every prior caller), NO cell lifts H_free over the no-noise baseline beyond seed"
+echo "   noise (best +0.67, within ±1.50) and the p surface is flat (~0.56-0.59). Neither a higher noise"
+echo "   rate nor a deeper corruption buys free-running horizon. (Trains the real graph arm on CPU, ~5 min.)"
+python -m verisim.experiments.rs3_noise --config configs/rs3_noise.json \
+    --out figures/rs3_noise_surface.csv --plot figures/rs3_noise_surface.png
+
 echo "== RS4: the multi-step unrolled loss — the pushforward made exact — on the REAL structured arm (SPEC-16 H55/H57/H58) =="
 echo "   RESULT: the nuanced, bankable result that completes the rollout-aware family. RS4 adds the one"
 echo "   new trainer (train_unrolled): re-anchor to truth every k steps, unroll the GNN+RSSM on its OWN"
@@ -554,7 +571,7 @@ echo "   predictions, and supervise EVERY drifted step with the oracle's exact d
 echo "   pushforward, made exact by the free total oracle). Swept over k in {1,2,4,8}, it is the FIRST"
 echo "   rollout-aware lever to move the structured floor — η0 crosses 1 (H_free(ε=0) 1.28->1.60) and"
 echo "   raw H_free lifts at the loosest tolerance (k=8 +3.24 at ε=0.5, clearing TF's CI) where RS1 and"
-echo "   NA6's scheduled-sampling/noise arms all tied teacher forcing — BUT it does not pay net-per-compute"
+echo "   the RS2/RS3 sweeps all tied teacher forcing — BUT it does not pay net-per-compute"
 echo "   (H58): charged 1.5x-4.5x for the extra forwards, net H_free/cost falls with depth. The cure"
 echo "   reshapes the error budget, it does not reduce it. (Trains the real graph arm on CPU, ~4 min;"
 echo "   k=1 reproduces teacher forcing byte-for-byte, the cost-1.0 anchor.)"
@@ -593,4 +610,4 @@ echo "   (Trains 15 graph arms on CPU, ~4-6 min.)"
 python -m verisim.experiments.na6 --config configs/na6.json \
     --out figures/na6_decode_training.csv --plot figures/na6_decode_training.png
 
-echo "== done: figures/{e1_curve,e2_policies,e3_operators,calibration,e4_ablation,objective,representation,auto_search,en1_curve,en2_policies,en3_operators,en4_graph_vs_flat,en8_grounding,en9_contrastive,en8_scale,en9_scale,en8_capacity,en9_negatives,en7_invariance,en5_selfheal,en6_counterfactual,en8_ls3_hero,en10_two_oracle,eh1_curve,eh1_composition,eh2_policies,eh3_operators,eh4_factored_vs_flat,eh4_drift,eh5_subsystem_policy,eh5_heads,eh_h14_interleaving,eh_h14_scale,eh7_invariance,eh8_privilege,eh6_two_oracle,eh_h13_scale,eh9_denial_weighted,eh6_counterfactual,eh_stream,synthesis_floor_cliff,horizon_scaling,horizon_scaling_xl,horizon_data_scaling,horizon_joint_scaling,horizon_host_scaling,horizon_graph_scaling,horizon_graph_data_scaling,horizon_graph_world_scaling,horizon_graph_joint_scaling,horizon_graph_schedule,horizon_synthesis,ed1_dist,ed1_learned,ed2,ed2_learned,ed2_smart,ed3,ed4_fault,ed4_consistency,ed5,ed6,ed6_two_oracle,ed6_two_oracle_learned,ed4_consistency,ed4_consistency_learned,ed7,ed8,ed9,ed10,ed11,ed12,ed13,ed14,ed15,ed16,ed17,ed18,ed19,sy1_agreement,sy2_disagreements,sy3_hermeticity,sy4_determinism,lp1_latent_geometry,lp2_faithful_graph,lp3_goal_reach,lp4_edge_metric,lp5_placement,lp6_replanning,lp7_traversal,lp8_dist_goal_reach,lp8_host_goal_reach,sr1_knee,sr2_accept_law,sr3_tree,sr4_calibration,sr5_cascade,sr6_discreteness,cf1_coverage_frontier,cf2_drift_aci,cf3_risk_control,cf4_signal_split,cf5_cross_world,cf6_real_signal,pb_bench_leaderboard,pb_transfer_gap,pb_pack_contamination,cx0_scm_gate,cx1_counterfactual_effect,cx5_system_oracle,rs1_dagger,rs4_unroll_depth,na0_hint_probe,na5_decode_rollout,na6_decode_training}.{png,csv} =="
+echo "== done: figures/{e1_curve,e2_policies,e3_operators,calibration,e4_ablation,objective,representation,auto_search,en1_curve,en2_policies,en3_operators,en4_graph_vs_flat,en8_grounding,en9_contrastive,en8_scale,en9_scale,en8_capacity,en9_negatives,en7_invariance,en5_selfheal,en6_counterfactual,en8_ls3_hero,en10_two_oracle,eh1_curve,eh1_composition,eh2_policies,eh3_operators,eh4_factored_vs_flat,eh4_drift,eh5_subsystem_policy,eh5_heads,eh_h14_interleaving,eh_h14_scale,eh7_invariance,eh8_privilege,eh6_two_oracle,eh_h13_scale,eh9_denial_weighted,eh6_counterfactual,eh_stream,synthesis_floor_cliff,horizon_scaling,horizon_scaling_xl,horizon_data_scaling,horizon_joint_scaling,horizon_host_scaling,horizon_graph_scaling,horizon_graph_data_scaling,horizon_graph_world_scaling,horizon_graph_joint_scaling,horizon_graph_schedule,horizon_synthesis,ed1_dist,ed1_learned,ed2,ed2_learned,ed2_smart,ed3,ed4_fault,ed4_consistency,ed5,ed6,ed6_two_oracle,ed6_two_oracle_learned,ed4_consistency,ed4_consistency_learned,ed7,ed8,ed9,ed10,ed11,ed12,ed13,ed14,ed15,ed16,ed17,ed18,ed19,sy1_agreement,sy2_disagreements,sy3_hermeticity,sy4_determinism,lp1_latent_geometry,lp2_faithful_graph,lp3_goal_reach,lp4_edge_metric,lp5_placement,lp6_replanning,lp7_traversal,lp8_dist_goal_reach,lp8_host_goal_reach,sr1_knee,sr2_accept_law,sr3_tree,sr4_calibration,sr5_cascade,sr6_discreteness,cf1_coverage_frontier,cf2_drift_aci,cf3_risk_control,cf4_signal_split,cf5_cross_world,cf6_real_signal,pb_bench_leaderboard,pb_transfer_gap,pb_pack_contamination,cx0_scm_gate,cx1_counterfactual_effect,cx5_system_oracle,rs1_dagger,rs2_sample_prob_tradeoff,rs3_noise_surface,rs4_unroll_depth,na0_hint_probe,na5_decode_rollout,na6_decode_training}.{png,csv} =="
