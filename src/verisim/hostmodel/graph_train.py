@@ -333,6 +333,83 @@ def train_host_graph_model_self_forced(
     return losses
 
 
+def build_unrolled_host_examples(
+    model: GraphHostWorldModel,
+    oracle: HostOracle,
+    vocab: HostVocab,
+    config: HostConfig,
+    *,
+    driver: str,
+    seeds: tuple[int, ...],
+    n_steps: int,
+    unroll_k: int,
+) -> list[GraphExample]:
+    """The pushforward trick (Brandstetter et al., ICLR 2022), made exact — the host analogue of the
+    network :func:`verisim.netmodel.graph_train.build_unrolled_examples` (SPEC-16 RS4/RS7).
+
+    Re-anchor the drifted state to the true trajectory at the start of each ``unroll_k``-length
+    window, then advance it on the model's *own* predictions within the window, supervising every
+    visited drifted state with the oracle's exact bundle delta there. ``unroll_k = 1`` re-anchors
+    every step (teacher forcing); larger ``unroll_k`` supervises the model deeper into its own
+    compounding drift. The action sequence is sampled on the true trajectory (matching the other
+    arms). The advance is a discrete :func:`apply_host_delta` of the model's predicted delta — no
+    gradient flows through it, so the exact oracle label at the drifted state makes it trainable.
+    """
+    examples: list[GraphExample] = []
+    for seed in seeds:
+        driver_obj = HostDriver(name=driver, config=config, rng=random.Random(seed))
+        true_state = HostState.initial()
+        drifted = true_state
+        for t in range(n_steps):
+            if t % unroll_k == 0:  # re-anchor the pushforward window to the true trajectory
+                drifted = true_state
+            action = driver_obj.sample(true_state)
+            delta = oracle.step(drifted, action).delta  # the EXACT label at the drifted state
+            examples.append(
+                (build_host_graph(drifted, action, config, vocab.max_pid),
+                 encode_target(delta, vocab))
+            )
+            drifted = apply_host_delta(drifted, model.predict_delta(drifted, action))  # own drift
+            true_state = oracle.step(true_state, action).state  # advance the anchor on truth
+    return examples
+
+
+def train_host_unrolled(
+    model: GraphHostWorldModel,
+    oracle: HostOracle,
+    vocab: HostVocab,
+    config: HostConfig,
+    *,
+    driver: str = "forky",
+    seeds: tuple[int, ...] = (0,),
+    n_steps: int = 40,
+    rounds: int = 4,
+    steps_per_round: int = 200,
+    unroll_k: int = 2,
+    lr: float = 3e-3,
+    batch_size: int = 32,
+    seed: int = 0,
+) -> list[float]:
+    """Multi-step unrolled-loss trainer for the host factored arm (RS7): a warmup teacher-forced
+    round, then rounds on the :func:`build_unrolled_host_examples` pushforward of depth ``unroll_k``
+    rebuilt from the model each round (mirroring :func:`train_host_graph_model_self_forced`)."""
+    losses: list[float] = []
+    for r in range(rounds):
+        if r == 0:
+            examples = build_host_graph_dataset(
+                oracle, vocab, config, driver=driver, seeds=seeds, n_steps=n_steps
+            )
+        else:
+            examples = build_unrolled_host_examples(
+                model, oracle, vocab, config, driver=driver, seeds=seeds, n_steps=n_steps,
+                unroll_k=unroll_k,
+            )
+        losses += train_host_graph_model(
+            model, examples, steps=steps_per_round, lr=lr, batch_size=batch_size, seed=seed + r
+        )
+    return losses
+
+
 def online_update(
     model: GraphHostWorldModel,
     optimizer: torch.optim.Optimizer,

@@ -10,17 +10,19 @@ exact, callable at any visited state. So verisim can run the cure the simulator-
 approximate. This spec measures whether the cure lifts `H_ε`, or whether the gap survives it — in which
 case the wall is fundamental compounding, not a train/deploy mismatch.**
 
-> **✅ SHIPPED (RS1–RS4 + RS6; RS5 answered in aggregate) — TRAINING-METHOD SPEC, 2026-06. RS1
+> **✅ SHIPPED — COMPLETE (RS1–RS7; RS5 answered in aggregate) — TRAINING-METHOD SPEC, 2026-06. RS1
 > free-oracle DAgger on the real flat `M_θ` (a null); RS2/RS3 the scheduled-sampling and
 > noise-injection sweeps on the real structured GNN+RSSM arm (both H57 nulls — no signed tradeoff at
 > any knob setting); RS4 the multi-step unrolled loss — the pushforward made exact — the one
 > rollout-aware lever that lifts *raw* `H_free` (η crosses 1 where RS1, RS2, and RS3 all tied teacher
 > forcing) but does **not** pay net-per-compute; RS6 the cross-trainer per-compute Pareto that closes
 > the H58 question for the whole family — **teacher forcing is the faithful-horizon-per-compute
-> frontier; no rollout-aware trainer beats it beyond seed noise.** RS5 (does *any* rollout-aware
-> trainer move the structured floor?) is answered in aggregate by the RS2/RS3/RS4/RS6 structured-arm
-> ensemble (only RS4 moves raw `H_free`, and not net); only the RS7 cross-world fork remains deferred.
-> See §9 for the status table.** A *method* spec, sibling to
+> frontier; no rollout-aware trainer beats it beyond seed noise;** and RS7 the cross-world fork onto
+> the **host** world — **H59 confirmed: the verdict transfers** (no host-arm lever beats teacher
+> forcing either). RS5 (does *any* rollout-aware trainer move the structured floor?) is answered in
+> aggregate by the RS2/RS3/RS4/RS6 ensemble (only RS4 moves raw `H_free`, and not net). The full CPU
+> program is shipped; only the GPU/competent-high-`p` scale regime remains the standing open bet. See
+> §9 for the status table.** A *method* spec, sibling to
 > [SPEC-8](./SPEC-8.md) (oracle-grounded SSL) and [SPEC-12](./SPEC-12.md) (planning over the model):
 > it invents **no new world** (runs on the SPEC-5 network world and the SPEC-6 host world) and **no
 > new oracle** (reuses [`ReferenceNetworkOracle`](../../src/verisim/netoracle/reference.py) for the
@@ -431,7 +433,7 @@ concrete build, once shipped).
 
 ---
 
-## 9. Status (2026-06-09) — RS1–RS4 + RS6 SHIPPED (the rollout-aware trainer family + the per-compute verdict)
+## 9. Status (2026-06-09) — COMPLETE: RS1–RS7 SHIPPED (the whole rollout-aware trainer family, both worlds)
 
 RS1 is built and committed as a **genuine trained-`M_θ` experiment** (not a stand-in): it trains the
 real flat GPT proposer ([`experiments/rs1_dagger.py`](../../src/verisim/experiments/rs1_dagger.py)) two
@@ -552,11 +554,21 @@ off-trajectory mutations; `magnitude=1` is byte-identical to every committed cal
   trainer move the structured floor?) in aggregate — only RS4's unrolled loss moves *raw* `H_free`, and
   not net. [`figures/rs6_net_pareto.png`](../../figures/rs6_net_pareto.png).
 
-**Deferred (disclosed):** RS5 as a *separate* cell is subsumed by the RS2/RS3/RS4/RS6 structured-arm
-ensemble above; RS7 (the cross-world / cross-proposer fork onto the host world) is the one remaining
-trained-arm/scale follow-on. The committed RS1–RS4 + RS6 results are the honest headline: **at CPU scale
-free-oracle DAgger does not cure the flat arm; scheduled sampling and noise injection, swept fully,
-produce no signed tradeoff on the structured arm; only the unrolled loss lifts raw horizon — and the
-per-compute Pareto shows even that does not beat teacher forcing once compute is charged** — banked as
-the pre-registered fundamental-compounding / scale-limited branches, with the competent-high-`p` / GPU
-regime the next bet.
+- ◐ **RS7 — the cross-world fork onto the host world (H59 CONFIRMED: the verdict transfers; the spec's
+  closer).** The four-arm comparison (teacher-forced, self-forced, noise, unrolled) re-run on the
+  **host** factored arm (the SPEC-6 GNN+RSSM proposer; a different oracle over a process/fd/mount state
+  grammar, with the HS2 re-lowered floor / re-opened headroom). It required one new trainer,
+  `train_host_unrolled` (the host analogue of RS4's pushforward, additive in
+  [`hostmodel/graph_train.py`](../../src/verisim/hostmodel/graph_train.py)). **The network verdict
+  transfers**: no rollout-aware trainer lifts `H_free` over teacher forcing beyond seed noise (best
+  +0.44 at ε=0.1, within TF's seed-CI half-width ±2.38; all four arms cluster at `p ≈ 0.19`, `η0 ≈
+  7.2–8.0`, with overlapping `H_free`(ε) curves). So the rollout-stability picture is a property of the
+  oracle-grounded *loop*, not one world×proposer cell: on the host arm too, the levers reshape the error
+  budget without buying horizon. [`figures/rs7_host_transfer.png`](../../figures/rs7_host_transfer.png).
+
+**SPEC-16 is complete** (RS1–RS7; RS5 subsumed by the RS2/RS3/RS4/RS6 structured-arm ensemble). The
+committed results are the honest headline: **at CPU scale free-oracle DAgger does not cure the flat arm;
+scheduled sampling and noise injection, swept fully, produce no signed tradeoff on the structured arm;
+only the unrolled loss lifts raw horizon — and neither the per-compute Pareto (RS6) nor the cross-world
+fork (RS7) lets any rollout-aware trainer beat teacher forcing** — banked as the pre-registered
+fundamental-compounding / scale-limited branches, with the competent-high-`p` / GPU regime the next bet.
