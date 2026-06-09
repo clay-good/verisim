@@ -13,11 +13,13 @@ finally **disentangle counterfactual *branching* from fault *coverage*** — the
 qualifies the ED6 positive — by constructing interventions matched on coverage. This spec is the
 do-calculus reading of H5 and the experiment that resolves its open caveat.**
 
-> **✅ SHIPPED (pure-oracle core + the confound-resolver) — METHOD SPEC, 2026-06 (CX0 H60 + CX1 H61 on
-> all four worlds + CX5 H64 on the real system oracles + CX3 H62 — the matched-coverage cut that closes
-> the ED6 branching-vs-coverage caveat: **H62 REFUTED, the ED6 lift was fault coverage, not
-> counterfactual branching**; the *learned*-lift bets CX2/CX4 remain deferred to the trained/contrastive
-> arm). See §8 for the status table.**
+> **✅ SHIPPED (pure-oracle core + the confound-resolver + the CoDA contrast) — METHOD SPEC, 2026-06
+> (CX0 H60 + CX1 H61 on all four worlds + CX5 H64 on the real system oracles + CX3 H62 — the
+> matched-coverage cut: **H62 REFUTED, the ED6 lift was fault coverage, not counterfactual branching**
+> — + CX4 H63 — exact-oracle vs learned-model (CoDA) counterfactual augmentation: **H63 SUPPORTED, a
+> learned augmenter's 6%-valid counterfactuals corrupt training below baseline while the exact oracle's
+> lift it, validating SPEC §1.1's unverifiability thesis**; only the CX2 three-world *learned* lift
+> remains deferred). See §8 for the status table.**
 > A *cross-world method* in the lineage of [SPEC-8](./SPEC-8.md)
 > (oracle-grounded self-supervision) and [SPEC-12](./SPEC-12.md) (planning over the world model): it
 > invents **no new world** — it runs on the SPEC-5 network, SPEC-6 host, and SPEC-7 distributed worlds
@@ -486,7 +488,7 @@ hypotheses) → [`src/verisim/netdata/negatives.py`](../../src/verisim/netdata/n
 
 ---
 
-## 8. Status (2026-06-09) — CX0 + CX1 + CX3 + CX5 SHIPPED (pure-oracle core + the confound-resolver)
+## 8. Status (2026-06-09) — CX0 + CX1 + CX3 + CX4 + CX5 SHIPPED (only the CX2 learned lift remains)
 
 The pure-oracle causal core is built and committed. The package is
 [`causal/`](../../src/verisim/causal/): `scm.py` (the world-generic SCM machinery -- `abduct_and_replay`,
@@ -543,13 +545,29 @@ network/host/filesystem/distributed, CPU-only, deterministic and seeded -- no le
   "no safe prior" question, answered. (The raw arms reproduce the original lift: trajectory 0.245 →
   +counterfactual 0.425, at coverage 0.10 → 0.59 — the lift tracks coverage.)
   [`figures/cx3_matched_coverage.png`](../../figures/cx3_matched_coverage.png).
+- ◐ **CX4 — exact-oracle vs learned-model counterfactual augmentation (H63 SUPPORTED — the CoDA contrast;
+  the unverifiability thesis, made a measured cost).** A CPU-scale trained-arm experiment
+  ([`cx4`](../../src/verisim/experiments/cx4.py)) on the distributed world: build one counterfactual
+  query set (alternative fault actions at visited on-policy states) and label it two ways — the **exact
+  oracle** ``O(s, a')`` (causally valid by construction) and a **learned local model** ``M_local`` (a
+  small `M_θ` trained on the on-policy trajectory, the CoDA stand-in) predicting ``M_local(s, a')`` (the
+  same prompts, labels that inherit its drift). Both augment the same base to the same sample count; a
+  `base` arm is the no-augmentation reference. **Result: H63 supported, decisively.** +oracle-aug lifts
+  held-out intervention-exact to **0.394** (over base 0.277) while +learned-aug **collapses to 0.064 —
+  *below* the no-augmentation base** — disjoint CIs ([0.307,0.485] vs [0.049,0.084]). The mechanism is
+  causal validity: the learned model's counterfactual samples are only **0.058** valid (the oracle's are
+  1.00 by construction), so its augmentation injects ~94% causally-invalid data that *corrupts* training.
+  This is [SPEC §1.1](./SPEC.md)'s unverifiability claim made a measured cost — a learned model's
+  counterfactual augmentation is not merely useless but actively harmful, exactly where the exact oracle
+  is the unique leverage over the CoDA line. [`figures/cx4_coda_contrast.png`](../../figures/cx4_coda_contrast.png).
 - ✅ **H64 (the cross-world method) — supported in kind *and* on the system oracle.** CX0/CX1 run on all
   four worlds with the *identical* SCM machinery and no per-world causal-discovery step (the SCM is
   *given* by the oracle, not learned); CX5 then shows the contract holds on the real system oracles too.
 
 **Deferred to the trained/contrastive arm (the LP7 rule, §7), disclosed and never counted on a
-stand-in:** **CX2** (the three-world *learned* lift -- does training `M_θ` on rung-3 targets improve
-held-out counterfactual prediction) and **CX4** (the CoDA contrast, H63 -- exact-oracle vs learned-model
-augmentation, needing a CoDA learned-local-model baseline). The pure-oracle core (CX0/CX1 identification
-+ effect-size law, CX5 system-oracle transfer) and the CX3 confound-resolver are what ship; CX2 and the
-CoDA contrast remain the open learned-arm bets.
+stand-in:** only **CX2** (the three-world *learned* lift -- does training `M_θ` on rung-3 targets improve
+held-out counterfactual prediction across network/host/distributed). Its headline is now nuanced by CX3
+(the distributed counterfactual lift is fault coverage, not branching), so CX2 would measure where the
+coverage-driven counterfactual-training lift appears across worlds — the one remaining learned-arm bet.
+Everything else (CX0/CX1 identification + effect-size law, CX3 confound-resolver, CX4 CoDA contrast, CX5
+system-oracle transfer) ships.

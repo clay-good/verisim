@@ -1,0 +1,9 @@
+arm,metric,mean,ci_lo,ci_hi,n
+base,intervention_exact,0.2766,0.2367,0.3189,12
+base,medium_recall,0.2620,0.2064,0.3135,12
++oracle-aug,intervention_exact,0.3941,0.3067,0.4850,12
++oracle-aug,medium_recall,0.4328,0.3303,0.5462,12
++learned-aug,intervention_exact,0.0642,0.0492,0.0845,12
++learned-aug,medium_recall,0.0441,0.0286,0.0646,12
++learned-aug,causal_validity,0.0583,0.0531,0.0641,3
++oracle-aug,causal_validity,1.0000,1.0000,1.0000,3
