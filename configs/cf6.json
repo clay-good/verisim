@@ -1,0 +1,19 @@
+{
+  "name": "cf6-real-belief-var-conformalizability",
+  "n_hosts": 5,
+  "n_ports": 3,
+  "train_driver": "weighted",
+  "train_seeds": [0, 1, 2],
+  "train_steps_per_traj": 40,
+  "graph_d_model": 64,
+  "graph_mp_rounds": 3,
+  "graph_iters": 800,
+  "model_seeds": [0, 1, 2, 3, 4],
+  "drafter_alpha": 0.8,
+  "breach_quantile": 0.6,
+  "headline_alpha": 0.10,
+  "pool_rollouts": 24,
+  "pool_steps": 60,
+  "max_window": 12,
+  "n_score_bins": 5
+}

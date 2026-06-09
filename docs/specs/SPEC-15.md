@@ -9,9 +9,10 @@ oracle is a free, exact, unlimited calibration set — the textbook precondition
 so we can set the consultation threshold to GUARANTEE `P(undetected divergence > ε) ≤ α` distribution-free,
 finite-sample, and predict *which arm's trigger will work* from whether its signal is conformalizable.**
 
-> **✅ SHIPPED — METHOD SPEC, 2026-06 (CF1–CF5 on the controlled-signal core, incl. the cross-world
-> fork; only the trained-`M_θ` arm deferred). See §12 for the status table and results.** A *method*
-> spec in the lineage of [SPEC-12](./SPEC-12.md): it
+> **✅ SHIPPED — METHOD SPEC, 2026-06 (CF1–CF6: the controlled-signal core, the cross-world fork, AND
+> the trained-`M_θ` `belief_var` arm — which finds the real network signal is NOT conformalizable, H53
+> on the real arm). See §12 for the status table and results.** A *method* spec in the lineage of
+> [SPEC-12](./SPEC-12.md): it
 > invents **no new world** (it runs on the SPEC-5 network world and its shipped flat + graph arms) and
 > **no new oracle** (it reuses the data-plane `ReferenceNetworkOracle` for exact divergence and the
 > `ControlPlaneOracle` for the cheap reachability projection). What it adds is a *calibration altitude*
@@ -446,7 +447,7 @@ build, once shipped).
 
 ---
 
-## 12. Status (2026-06-09) — CF1–CF5 SHIPPED (committed CPU core; trained-`M_θ` arm deferred)
+## 12. Status (2026-06-09) — CF1–CF6 SHIPPED (CPU core + the trained-`M_θ` `belief_var` arm)
 
 The conformal program is built and committed. The calibrator is torch-free (it operates on recorded
 `(score, oracle-divergence)` pairs, §8), so the one dependency is the *score*: the trained `M_θ`'s
@@ -502,11 +503,30 @@ deterministic and seeded, on the SPEC-5 network world.
   conformalizes there just as cleanly. (One unified world-parameterized run, not the spec's tentative
   two-file `cf5_host`/`cf5_dist` layout, so the transfer reads at a glance.)
   [`cf5`](../../src/verisim/experiments/cf5.py), [`figures/cf5_cross_world.png`](../../figures/cf5_cross_world.png).
+- ✅ **CF6 — the trained-`M_θ` conformalizability check (H53 instantiated on the REAL signal).** The
+  deferred trained-arm bet: does the *real* model's uncertainty behave like the calibrated stand-in? CF6
+  trains the real structured graph arm and uses its actual RSSM `belief_var`
+  (`predict_delta_with_uncertainty`) as the conformal score, against the two controlled stand-ins on the
+  identical calibrator (5 model seeds, CIs). Finding (honest, and *not* the optimistic stand-in): on the
+  **network** arm the real `belief_var` is **not** calibrated — weakly anti-correlated with divergence
+  (score↔divergence slope **−0.004 ≈ 0**, vs the calibrated stand-in's **+0.10**). So conformal
+  **validity holds** (the real-`belief_var` trigger hits coverage, undetected ≈ 0.10 — validity is
+  signal-agnostic, H50), but its **efficiency is null**: it saves **−0.015 ρ** vs the calibrated
+  stand-in's **+0.45** — identical to the uncalibrated stand-in (−0.015). This **instantiates H53's
+  mechanism on the real arm**: efficiency *is* the signal's conformalizability, and the real network
+  RSSM variance sits at the uncalibrated end of that axis. The calibrated stand-in (CF1's ~0.43) is the
+  *achievable best case*, not the real network signal; the host `belief_var` (the EH2/H9 win) is the
+  known positive — so conformalizability is **world/arm-dependent**, a refinement of H53, not a
+  refutation. Actionable: a network-arm conformal trigger needs a better-calibrated signal than its own
+  RSSM variance. [`cf6`](../../src/verisim/experiments/cf6.py), [`configs/cf6.json`](../../configs/cf6.json),
+  [`figures/cf6_real_signal.png`](../../figures/cf6_real_signal.png).
 
 The headline is the program's RQ2 thread, finally resolved with a guarantee, a mechanism, and a transfer:
 the oracle is a free, exact, unlimited calibration set, so a consultation trigger can be **certified**
 (CF1), the EH2-yes / ED2-smart-no contradiction is **explained** (CF4: conformalizability), the honest
 subtlety — exchangeability breaks under rollout — is **measured and fixed** (CF2: ACI on free per-step
 feedback), and the whole result is shown **world-generic** (CF5: it transfers to host and distributed
-because efficiency is the signal's, not the world's). Remaining: only the trained-`M_θ` arm (the one GPU
-dependency) — the rest of SPEC-15 (CF1–CF5) is shipped on the controlled-signal core.
+because efficiency is the signal's, not the world's), and the **trained-`M_θ` arm is now run** (CF6:
+the real network `belief_var` is *not* conformalizable, so it inherits conformal validity but not the
+efficiency win — H53's mechanism on the real arm). The whole SPEC-15 program (CF1–CF6) is shipped; what
+remains is engineering a better-calibrated trigger signal for the network arm, not a CF experiment.

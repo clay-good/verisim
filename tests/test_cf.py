@@ -14,6 +14,7 @@ from verisim.experiments.cf2 import CF2Config, run_cf2
 from verisim.experiments.cf3 import CF3Config, run_cf3
 from verisim.experiments.cf4 import CF4Config, calibration_curves, run_cf4
 from verisim.experiments.cf5 import CF5Config, run_cf5
+from verisim.experiments.cf6 import CF6Config
 from verisim.experiments.cf_common import mean
 
 
@@ -97,4 +98,42 @@ def test_cf5_transfers_across_worlds() -> None:
 def test_cf5_deterministic() -> None:
     a = [(s.world, s.arm, s.alpha, round(s.rho_saved, 4)) for s in run_cf5(_cf5_tiny())]
     b = [(s.world, s.arm, s.alpha, round(s.rho_saved, 4)) for s in run_cf5(_cf5_tiny())]
+    assert a == b
+
+
+def _cf6_tiny() -> CF6Config:
+    return CF6Config(
+        n_hosts=4, n_ports=2, train_seeds=(0, 1), train_steps_per_traj=20,
+        graph_d_model=32, graph_mp_rounds=2, graph_iters=60, model_seeds=(0,),
+        pool_rollouts=8, pool_steps=24,
+    )
+
+
+def test_cf6_validity_holds_efficiency_is_the_signals() -> None:
+    import pytest
+
+    pytest.importorskip("torch")  # CF6 trains a real graph arm; skip cleanly where torch is absent
+    from verisim.experiments.cf6 import run_cf6
+
+    stats = run_cf6(_cf6_tiny())
+    by = {s.arm: s for s in stats}
+    assert set(by) == {"real belief_var", "calibrated stand-in", "uncalibrated stand-in"}
+    # H50: conformal validity is signal-agnostic -- every arm hits coverage (incl. the real signal).
+    for s in stats:
+        assert s.test_undetected <= 0.10 + 0.08
+    # H53: the calibrated stand-in conformalizes (saves ρ, positive slope); the real network
+    # belief_var sits at the uncalibrated end (slope well below the calibrated one).
+    cal = by["calibrated stand-in"]
+    assert cal.rho_saved > 0.1
+    assert by["real belief_var"].score_div_slope < cal.score_div_slope
+
+
+def test_cf6_deterministic() -> None:
+    import pytest
+
+    pytest.importorskip("torch")
+    from verisim.experiments.cf6 import run_cf6
+
+    a = [(s.arm, round(s.rho_saved, 4), round(s.score_div_slope, 4)) for s in run_cf6(_cf6_tiny())]
+    b = [(s.arm, round(s.rho_saved, 4), round(s.score_div_slope, 4)) for s in run_cf6(_cf6_tiny())]
     assert a == b

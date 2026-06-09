@@ -1,0 +1,4 @@
+arm,test_undetected,conformal_rho,fixed_rho,rho_saved,saved_lo,saved_hi,score_div_slope,n
+real belief_var,0.094722,0.758114,0.743368,-0.014746,-0.093947,0.069688,-0.004189,5
+calibrated stand-in,0.095885,0.291577,0.738908,0.447331,0.424877,0.469629,0.101959,5
+uncalibrated stand-in,0.106813,0.753501,0.738908,-0.014593,-0.097902,0.057630,0.000348,5
