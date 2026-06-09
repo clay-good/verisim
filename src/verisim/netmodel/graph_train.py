@@ -159,10 +159,10 @@ def train_graph_model(
 ) -> list[float]:
     """Minibatch teacher-forced training of the graph arm; return per-step losses.
 
-    ``warmup_frac`` is **opt-in and defaults to 0.0** (a flat LR -- the original behaviour, so every
+    ``warmup_frac`` is **opt-in and defaults to 0.0** (a flat LR — the original behaviour, so every
     committed caller is byte-identical). When ``> 0`` it enables the same **linear warmup + cosine
     decay** schedule :func:`verisim.train.supervised.train_batched` uses for the flat arm (SPEC-2.1
-    §6) -- the lever HS3-T (SPEC-10 §4.11) uses to ask whether the graph arm's `p` plateau is a
+    §6) — the lever HS3-T (SPEC-10 §4.11) uses to ask whether the graph arm's `p` plateau is a
     flat-LR trainer artifact rather than an architectural ceiling.
     """
     torch.manual_seed(seed)
@@ -207,7 +207,7 @@ def online_update(
     *,
     steps: int = 1,
 ) -> float:
-    """Take ``steps`` teacher-forced gradient steps on ``examples`` -- the self-healing update (H7).
+    """Take ``steps`` teacher-forced gradient steps on ``examples`` — the self-healing update (H7).
 
     The test-time-training primitive EN5 consumes: when the loop consults the oracle mid-rollout,
     the revealed ``(state, action)`` -> true-delta is a free, exactly-labeled example, so a small
@@ -306,6 +306,112 @@ def train_graph_model_self_forced(
             examples = build_self_forced_examples(
                 model, oracle, vocab, config, driver=driver, seeds=seeds,
                 n_steps=n_steps, sample_prob=sample_prob, rng=roll_rng,
+            )
+            perm = []
+            cursor = 0
+        if cursor + batch_size > len(examples) or not perm:
+            perm = torch.randperm(len(examples), generator=gen).tolist()
+            cursor = 0
+        batch = [examples[i] for i in perm[cursor : cursor + batch_size]]
+        cursor += batch_size
+        model.net.train()
+        optimizer.zero_grad()
+        loss = _batch_loss(model, batch, sample=True)
+        loss.backward()
+        optimizer.step()
+        losses.append(float(loss.item()))
+    return losses
+
+
+# --- the multi-step unrolled-loss lever (RS4, SPEC-16 §5; the pushforward made exact) ----
+
+
+def build_unrolled_examples(
+    model: GraphRSSMWorldModel,
+    oracle: NetOracle,
+    vocab: NetVocab,
+    config: NetConfig,
+    *,
+    driver: str,
+    seeds: tuple[int, ...],
+    n_steps: int,
+    unroll_k: int,
+) -> list[GraphExample]:
+    """The pushforward trick (Brandstetter et al., ICLR 2022), made exact by the free total oracle.
+
+    Brandstetter's pushforward poses rollout stability as domain adaptation: unroll the model a few
+    steps on its *own* predictions so it is supervised on the drifted states it actually visits at
+    deploy, not only the oracle's true states. Its load-bearing approximation is that the *target*
+    at a drifted state is unknown, so the unrolled steps run stop-gradient and only the final step
+    is supervised (against the true sequence). Here the oracle removes that approximation entirely:
+    the exact delta ``O(s̃, a)`` is known at *every* drifted state, so we supervise **every**
+    unrolled step against the oracle's exact label there.
+
+    ``unroll_k`` is the pushforward depth. The drifted state is re-anchored to the true trajectory
+    at the start of each ``unroll_k``-length window, then advanced on the model's own predictions
+    within the window (the off-distribution states a free-running rollout lands in). ``unroll_k=1``
+    re-anchors every step, so the drifted state never leaves the true trajectory and the trainer
+    reduces to teacher forcing byte-for-byte; larger ``unroll_k`` supervises the model deeper into
+    its own compounding drift. The action sequence is sampled on the **true** trajectory (matching
+    the teacher-forced and self-forced arms), so the only thing ``unroll_k`` varies is how far the
+    supervised state has drifted. The advance is a discrete :func:`apply` of the model's argmax
+    delta — no gradient flows through it (the discrete state transition is non-differentiable),
+    which is why the *exact oracle label* at the drifted state makes the unrolled loss trainable.
+    """
+    examples: list[GraphExample] = []
+    for seed in seeds:
+        driver_obj = NetDriver(name=driver, config=config, rng=random.Random(seed))
+        true_state = NetworkState.initial(config.hosts)
+        drifted = true_state
+        for t in range(n_steps):
+            if t % unroll_k == 0:  # re-anchor the pushforward window to the true trajectory
+                drifted = true_state
+            action = driver_obj.sample(true_state)
+            delta = oracle.step(drifted, action).delta  # the EXACT label at the drifted state
+            examples.append((build_graph(drifted, action, config), encode_target(delta, vocab)))
+            drifted = apply(drifted, model.predict_delta(drifted, action))  # advance on own drift
+            true_state = oracle.step(true_state, action).state  # advance the anchor on truth
+    return examples
+
+
+def train_unrolled(
+    model: GraphRSSMWorldModel,
+    oracle: NetOracle,
+    vocab: NetVocab,
+    config: NetConfig,
+    *,
+    driver: str = "weighted",
+    seeds: tuple[int, ...] = (0,),
+    n_steps: int = 40,
+    steps: int = 800,
+    unroll_k: int = 2,
+    refresh_every: int = 150,
+    lr: float = 3e-3,
+    batch_size: int = 32,
+    seed: int = 0,
+) -> list[float]:
+    """Multi-step unrolled-loss trainer (RS4, §5): one optimizer, dataset refreshed from the model.
+
+    Structurally identical to :func:`train_graph_model_self_forced` (a single optimizer spanning
+    periodic dataset refreshes, so Adam's state is not reset), but the dataset is the
+    :func:`build_unrolled_examples` pushforward of depth ``unroll_k`` rather than the
+    scheduled-sampling rollout. Every ``refresh_every`` steps the drifted-state examples are
+    regenerated from the *current* model, so late training is supervised on the model's *current*
+    drift. Returns per-step losses.
+    """
+    torch.manual_seed(seed)
+    gen = torch.Generator()
+    gen.manual_seed(seed)
+    optimizer = torch.optim.AdamW(model.net.parameters(), lr=lr)
+    losses: list[float] = []
+    examples: list[GraphExample] = []
+    perm: list[int] = []
+    cursor = 0
+    for step in range(steps):
+        if step % refresh_every == 0:
+            examples = build_unrolled_examples(
+                model, oracle, vocab, config, driver=driver, seeds=seeds,
+                n_steps=n_steps, unroll_k=unroll_k,
             )
             perm = []
             cursor = 0

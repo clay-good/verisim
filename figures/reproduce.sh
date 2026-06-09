@@ -536,15 +536,30 @@ python -m verisim.experiments.cx5 --config configs/cx5.json \
 
 # ---- SPEC-16: rollout-stability training — free-oracle DAgger and the exposure-bias cure ----
 echo "== RS1: free-oracle DAgger vs teacher forcing on the REAL flat M_θ (SPEC-16 H55) — the headline =="
-echo "   RESULT: H55 supported. Every horizon to date trained teacher-forced and rolled out free-running"
-echo "   (the exposure-bias gap HS1.1 caught). DAgger relabels the LEARNER'S OWN drifted states with the"
-echo "   oracle (free, exact) and aggregates: at equal example + per-train step budget it lifts the"
-echo "   free-running faithful horizon over teacher forcing while one-step accuracy stays comparable —"
-echo "   the gap is a train/deploy mismatch the free oracle cures, not fundamental compounding. (This"
-echo "   trains a real GPT on CPU, ~10 min; RS2-RS7 — scheduled sampling / noise / unrolled loss / the"
-echo "   structured arm / the per-compute Pareto — are the deferred follow-ons.)"
+echo "   RESULT: H55 NOT supported at CPU scale (the pre-registered, first-class negative). Every horizon"
+echo "   to date trained teacher-forced and rolled out free-running (the exposure-bias gap HS1.1 caught)."
+echo "   DAgger relabels the LEARNER'S OWN drifted states with the oracle (free, exact) and aggregates,"
+echo "   but at the affordable CPU scale the flat M_θ is near the H_ε floor with only modest one-step"
+echo "   competence: DAgger does NOT lift the free-running horizon over teacher forcing (CIs overlap) —"
+echo "   at this scale the gap behaves like fundamental compounding, not a fixable train/deploy mismatch."
+echo "   (Trains a real GPT on CPU, ~10 min; whether the cure pays for a competent high-p model at GPU"
+echo "   scale is the standing open bet.)"
 python -m verisim.experiments.rs1_dagger --config configs/rs1_dagger.json \
     --out figures/rs1_dagger.csv --plot figures/rs1_dagger.png
+
+echo "== RS4: the multi-step unrolled loss — the pushforward made exact — on the REAL structured arm (SPEC-16 H55/H57/H58) =="
+echo "   RESULT: the nuanced, bankable result that completes the rollout-aware family. RS4 adds the one"
+echo "   new trainer (train_unrolled): re-anchor to truth every k steps, unroll the GNN+RSSM on its OWN"
+echo "   predictions, and supervise EVERY drifted step with the oracle's exact delta (Brandstetter's"
+echo "   pushforward, made exact by the free total oracle). Swept over k in {1,2,4,8}, it is the FIRST"
+echo "   rollout-aware lever to move the structured floor — η0 crosses 1 (H_free(ε=0) 1.28->1.60) and"
+echo "   raw H_free lifts at the loosest tolerance (k=8 +3.24 at ε=0.5, clearing TF's CI) where RS1 and"
+echo "   NA6's scheduled-sampling/noise arms all tied teacher forcing — BUT it does not pay net-per-compute"
+echo "   (H58): charged 1.5x-4.5x for the extra forwards, net H_free/cost falls with depth. The cure"
+echo "   reshapes the error budget, it does not reduce it. (Trains the real graph arm on CPU, ~4 min;"
+echo "   k=1 reproduces teacher forcing byte-for-byte, the cost-1.0 anchor.)"
+python -m verisim.experiments.rs4_unrolled --config configs/rs4_unrolled.json \
+    --out figures/rs4_unroll_depth.csv --plot figures/rs4_unroll_depth.png
 
 # ---- SPEC-14: neural algorithmic reasoning — diagnosing the structured-arm wall ----
 echo "== NA0: does the graph processor execute the reachability propagation? (SPEC-14 H45) — the gate =="
@@ -578,4 +593,4 @@ echo "   (Trains 15 graph arms on CPU, ~4-6 min.)"
 python -m verisim.experiments.na6 --config configs/na6.json \
     --out figures/na6_decode_training.csv --plot figures/na6_decode_training.png
 
-echo "== done: figures/{e1_curve,e2_policies,e3_operators,calibration,e4_ablation,objective,representation,auto_search,en1_curve,en2_policies,en3_operators,en4_graph_vs_flat,en8_grounding,en9_contrastive,en8_scale,en9_scale,en8_capacity,en9_negatives,en7_invariance,en5_selfheal,en6_counterfactual,en8_ls3_hero,en10_two_oracle,eh1_curve,eh1_composition,eh2_policies,eh3_operators,eh4_factored_vs_flat,eh4_drift,eh5_subsystem_policy,eh5_heads,eh_h14_interleaving,eh_h14_scale,eh7_invariance,eh8_privilege,eh6_two_oracle,eh_h13_scale,eh9_denial_weighted,eh6_counterfactual,eh_stream,synthesis_floor_cliff,horizon_scaling,horizon_scaling_xl,horizon_data_scaling,horizon_joint_scaling,horizon_host_scaling,horizon_graph_scaling,horizon_graph_data_scaling,horizon_graph_world_scaling,horizon_graph_joint_scaling,horizon_graph_schedule,horizon_synthesis,ed1_dist,ed1_learned,ed2,ed2_learned,ed2_smart,ed3,ed4_fault,ed4_consistency,ed5,ed6,ed6_two_oracle,ed6_two_oracle_learned,ed4_consistency,ed4_consistency_learned,ed7,ed8,ed9,ed10,ed11,ed12,ed13,ed14,ed15,ed16,ed17,ed18,ed19,sy1_agreement,sy2_disagreements,sy3_hermeticity,sy4_determinism,lp1_latent_geometry,lp2_faithful_graph,lp3_goal_reach,lp4_edge_metric,lp5_placement,lp6_replanning,lp7_traversal,lp8_dist_goal_reach,lp8_host_goal_reach,sr1_knee,sr2_accept_law,sr3_tree,sr4_calibration,sr5_cascade,sr6_discreteness,cf1_coverage_frontier,cf2_drift_aci,cf3_risk_control,cf4_signal_split,cf5_cross_world,cf6_real_signal,pb_bench_leaderboard,pb_transfer_gap,pb_pack_contamination,cx0_scm_gate,cx1_counterfactual_effect,cx5_system_oracle,rs1_dagger,na0_hint_probe,na5_decode_rollout,na6_decode_training}.{png,csv} =="
+echo "== done: figures/{e1_curve,e2_policies,e3_operators,calibration,e4_ablation,objective,representation,auto_search,en1_curve,en2_policies,en3_operators,en4_graph_vs_flat,en8_grounding,en9_contrastive,en8_scale,en9_scale,en8_capacity,en9_negatives,en7_invariance,en5_selfheal,en6_counterfactual,en8_ls3_hero,en10_two_oracle,eh1_curve,eh1_composition,eh2_policies,eh3_operators,eh4_factored_vs_flat,eh4_drift,eh5_subsystem_policy,eh5_heads,eh_h14_interleaving,eh_h14_scale,eh7_invariance,eh8_privilege,eh6_two_oracle,eh_h13_scale,eh9_denial_weighted,eh6_counterfactual,eh_stream,synthesis_floor_cliff,horizon_scaling,horizon_scaling_xl,horizon_data_scaling,horizon_joint_scaling,horizon_host_scaling,horizon_graph_scaling,horizon_graph_data_scaling,horizon_graph_world_scaling,horizon_graph_joint_scaling,horizon_graph_schedule,horizon_synthesis,ed1_dist,ed1_learned,ed2,ed2_learned,ed2_smart,ed3,ed4_fault,ed4_consistency,ed5,ed6,ed6_two_oracle,ed6_two_oracle_learned,ed4_consistency,ed4_consistency_learned,ed7,ed8,ed9,ed10,ed11,ed12,ed13,ed14,ed15,ed16,ed17,ed18,ed19,sy1_agreement,sy2_disagreements,sy3_hermeticity,sy4_determinism,lp1_latent_geometry,lp2_faithful_graph,lp3_goal_reach,lp4_edge_metric,lp5_placement,lp6_replanning,lp7_traversal,lp8_dist_goal_reach,lp8_host_goal_reach,sr1_knee,sr2_accept_law,sr3_tree,sr4_calibration,sr5_cascade,sr6_discreteness,cf1_coverage_frontier,cf2_drift_aci,cf3_risk_control,cf4_signal_split,cf5_cross_world,cf6_real_signal,pb_bench_leaderboard,pb_transfer_gap,pb_pack_contamination,cx0_scm_gate,cx1_counterfactual_effect,cx5_system_oracle,rs1_dagger,rs4_unroll_depth,na0_hint_probe,na5_decode_rollout,na6_decode_training}.{png,csv} =="
