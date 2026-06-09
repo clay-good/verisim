@@ -176,6 +176,33 @@ class GraphRSSMNet(nn.Module):
         pooled, _ = self._message_pass(node, gfeat, a_link, a_flow)
         return pooled
 
+    def message_pass_trace(
+        self, node: Tensor, gfeat: Tensor, a_link: Tensor, a_flow: Tensor
+    ) -> list[Tensor]:
+        """Per-round node embeddings ``[h_0, h_1, …, h_R]``, each ``[B,N,d]`` (SPEC-14 NA0).
+
+        ``h_0`` is the bare input projection (0-hop, self only); ``h_r`` is the node state after
+        ``r`` message-passing rounds. The diagnostic question (H45) is whether the processor's
+        round-``r`` state linearly decodes the oracle's ≤``r``-hop reachability frontier — i.e.
+        whether the GNN *executes* the propagation BFS rather than shortcutting it. Recomputes the
+        :meth:`_message_pass` loop exactly; purely additive, training path unchanged.
+        """
+        h = self.node_in(node)  # [B,N,d]  — round 0
+        g = self.graph_in(gfeat)  # [B,d]
+        a_link_n = _row_normalize(a_link)
+        a_flow_fwd = _row_normalize(a_flow)
+        a_flow_rev = _row_normalize(a_flow.transpose(1, 2))
+        trace = [h]
+        for r in range(self.config.mp_rounds):
+            m_link = a_link_n @ self.mp_link[r](h)
+            m_fwd = a_flow_fwd @ self.mp_flow_fwd[r](h)
+            m_rev = a_flow_rev @ self.mp_flow_rev[r](h)
+            upd = self.mp_update[r](torch.cat([h, m_link, m_fwd, m_rev], dim=-1))
+            upd = upd + g[:, None, :]
+            h = self.mp_norm[r](h + torch.nn.functional.gelu(upd))
+            trace.append(h)
+        return trace
+
     def encode(
         self, node: Tensor, gfeat: Tensor, a_link: Tensor, a_flow: Tensor, *, sample: bool
     ) -> tuple[Tensor, Tensor]:

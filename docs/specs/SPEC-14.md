@@ -8,7 +8,9 @@ proxy/truth split. This spec attacks the wall with the literature built for exac
 Neural Algorithmic Reasoning (NAR) — and the one asset that literature never had: the oracle emits the
 algorithm's intermediate computation states for free.**
 
-> **▶ METHOD SPEC — 2026-06. DESIGN-STAGE (◐).** A *method* spec in the lineage of [SPEC-8](./SPEC-8.md)
+> **▶ METHOD SPEC — 2026-06 — NA0 SHIPPED (✅ the diagnosis gate; H45 REFUTED → the spec is
+> redirected to the decoder/rollout side; NA1–NA4 re-scoped, see §11).** A *method* spec in the
+> lineage of [SPEC-8](./SPEC-8.md)
 > (oracle-grounded self-supervision) and [SPEC-12](./SPEC-12.md) (planning over the same model). It
 > invents **no new world** (the SPEC-5 network world), **no new oracle** (the data-plane
 > `ReferenceNetworkOracle` + the control-plane `ControlPlaneOracle`), and **no new arm** — it changes
@@ -425,3 +427,57 @@ Reading order for a newcomer: [SPEC.md §0/§5](./SPEC.md) (the oracle, `H_ε(ρ
 this document (§1 the motivation, §3 the architecture, §4 the load-bearing claim, §5 the hypotheses) →
 `src/verisim/netmodel/graph_hints.py` and `src/verisim/experiments/na0.py` (the concrete build, once
 shipped).
+
+---
+
+## 11. Status (2026-06-09) — NA0 SHIPPED; H45 REFUTED → the spec redirects to the decoder side
+
+The diagnosis gate is built, committed, and **decided the branch §7 said it would**. NA0 trains three
+HS3-level graph arms (8 hosts, `d_model=64`, `mp_rounds=3`, 600 steps; one-step next-state-exact
+`p = 0.475`, the EN4 regime), then on held-out states extracts the per-round node embeddings via the
+new additive [`GraphRSSMNet.message_pass_trace`](../../src/verisim/netmodel/graph_model.py) and fits a
+closed-form ridge probe from each round-`r` embedding `h_r` to the oracle's free, exact `≤ r`-hop
+reachability frontier `F_r` ([`reach_frontiers`](../../src/verisim/experiments/na0.py), hop-bounded
+BFS over up-links between up-hosts). The load-bearing comparison is the **processed** probe `h_r → F_r`
+against a **pre-propagation control** `h_0 → F_r` (the input projection, which carries the node
+features but *no link adjacency*) on the identical target — so any margin is exactly what the message
+passing *adds*. CPU, deterministic, seeded; multi-seed with bootstrap CIs.
+
+- ✅ **NA0 — the NAR diagnosis (H45 REFUTED, the gate).** The processor's per-round embeddings linearly
+  decode the multi-hop reachability frontier, and *increasingly so with depth*: the lift over the
+  marginal-rate baseline is `0.119 / 0.237 / 0.283` at hops `r = 1 / 2 / 3`, while the pre-propagation
+  control (`h_0 → F_r`) reaches only `0.037 / 0.090 / 0.131` — the processed lift is **~2–3× the
+  control at every deep hop, with non-overlapping CIs**. Message passing demonstrably injects the
+  multi-hop reachability a linear readout extracts and the input embedding lacks. **H45 is refuted**:
+  the `mp_rounds` processor *does* execute the propagation (in the NAR linear-decodability sense). This
+  is precisely the §5 "*Refuted if* the per-round embeddings already encode the full propagation
+  trajectory … a strong, surprising result that would redirect the spec to the decode side."
+  [`na0`](../../src/verisim/experiments/na0.py), [`configs/na0.json`](../../configs/na0.json),
+  [`figures/na0_hint_probe.png`](../../figures/na0_hint_probe.png).
+
+**What this means for the spec (the principled redirection, §7's gate firing).** SPEC-14 was built to
+attack the HS3 `H_free = 0` wall by supervising the processor's intermediate computation (NA1's hint
+head on `h_r`). NA0 shows that supervision would be **redundant**: the per-round embeddings already
+carry the round-`r` frontier linearly, so the processor is not where the propagation fails. By the §7
+dependency gate — *"if the processor already executes the propagation (H45 refuted), NA1's hint head is
+redundant and the spec pivots to the decoder/rollout side"* — the genuine open work moves **downstream
+of the processor**: the autoregressive **delta decoder + free-running rollout**, where the EN4/H11
+proxy/truth split and the η < 1 compounding actually live. The bankable conclusion: the HS3 wall is a
+**decode/compounding** failure, not an under-aligned **processor** — the message passing computes the
+reachability; the autoregressive head fails to turn it into a faithful multi-step rollout.
+
+- **NA1–NA4, re-scoped (genuine bets, deferred — the LP7 discipline).** The hint-on-`h_r` head (NA1 as
+  originally cast) is deprioritized by the NA0 verdict. The redirected open work is decoder-side and
+  remains a trained-arm bet: supervise the **decoder/rollout** against the oracle (free-run relabel /
+  pushforward loss — the SPEC-16 RS-family lever, now on the structured arm), and test whether
+  iterate-to-convergence (NA3) on the *reachability-shaped* part of the prediction buys horizon. NA2
+  (aggregation alignment) and NA4 (cross-world fork) follow only if a decoder-side lift lands. As in
+  SPEC-13/15/16/17, the controlled diagnostic ships now; the learned lift is measured, not assumed.
+
+**Honest caveats.** (i) "Executes the propagation" is the NAR operational sense — *linear
+decodability* of `F_r` from `h_r`, not a proof the network's forward computation is BFS. (ii) The
+control lift also rises with `r` (the probe is expressive and denser frontiers correlate with up-host
+status); the claim rests on the **processed-minus-control margin**, which is decisive (2–3×,
+CI-separated), not on the processed lift alone. (iii) The world is 8 hosts (small diameter); the
+qualitative gate (processor computes multi-hop reachability) is robust, but the quantitative margins
+are this-scale numbers, read on the same axis as HS3 per §6.

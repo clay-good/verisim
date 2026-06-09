@@ -1,0 +1,18 @@
+{
+  "name": "na0-nar-diagnosis",
+  "n_hosts": 8,
+  "n_ports": 3,
+  "train_driver": "weighted",
+  "train_seeds": [0, 1, 2],
+  "train_steps_per_traj": 40,
+  "graph_d_model": 64,
+  "graph_mp_rounds": 3,
+  "graph_iters": 600,
+  "model_seeds": [0, 1, 2],
+  "eval_driver": "weighted",
+  "eval_seeds": [100, 101, 102, 103],
+  "eval_steps": 40,
+  "ridge_lambda": 1.0,
+  "test_frac": 0.4,
+  "split_seed": 7
+}
