@@ -10,13 +10,17 @@ exact, callable at any visited state. So verisim can run the cure the simulator-
 approximate. This spec measures whether the cure lifts `H_ε`, or whether the gap survives it — in which
 case the wall is fundamental compounding, not a train/deploy mismatch.**
 
-> **✅ SHIPPED (RS1 + RS2 + RS3 + RS4) — TRAINING-METHOD SPEC, 2026-06. RS1 free-oracle DAgger on the
-> real flat `M_θ` (a null); RS2/RS3 the scheduled-sampling and noise-injection sweeps on the real
-> structured GNN+RSSM arm (both H57 nulls — no signed tradeoff at any knob setting); RS4 the
-> multi-step unrolled loss — the pushforward made exact — the one rollout-aware lever that lifts
-> *raw* `H_free` (η crosses 1 where RS1, RS2, and RS3 all tied teacher forcing) but does **not** pay
-> net-per-compute (H58). RS5–RS7 (the per-proposer fork, the full cross-trainer Pareto, the
-> cross-world fork) remain deferred. See §9 for the status table.** A *method* spec, sibling to
+> **✅ SHIPPED (RS1–RS4 + RS6; RS5 answered in aggregate) — TRAINING-METHOD SPEC, 2026-06. RS1
+> free-oracle DAgger on the real flat `M_θ` (a null); RS2/RS3 the scheduled-sampling and
+> noise-injection sweeps on the real structured GNN+RSSM arm (both H57 nulls — no signed tradeoff at
+> any knob setting); RS4 the multi-step unrolled loss — the pushforward made exact — the one
+> rollout-aware lever that lifts *raw* `H_free` (η crosses 1 where RS1, RS2, and RS3 all tied teacher
+> forcing) but does **not** pay net-per-compute; RS6 the cross-trainer per-compute Pareto that closes
+> the H58 question for the whole family — **teacher forcing is the faithful-horizon-per-compute
+> frontier; no rollout-aware trainer beats it beyond seed noise.** RS5 (does *any* rollout-aware
+> trainer move the structured floor?) is answered in aggregate by the RS2/RS3/RS4/RS6 structured-arm
+> ensemble (only RS4 moves raw `H_free`, and not net); only the RS7 cross-world fork remains deferred.
+> See §9 for the status table.** A *method* spec, sibling to
 > [SPEC-8](./SPEC-8.md) (oracle-grounded SSL) and [SPEC-12](./SPEC-12.md) (planning over the model):
 > it invents **no new world** (runs on the SPEC-5 network world and the SPEC-6 host world) and **no
 > new oracle** (reuses [`ReferenceNetworkOracle`](../../src/verisim/netoracle/reference.py) for the
@@ -427,7 +431,7 @@ concrete build, once shipped).
 
 ---
 
-## 9. Status (2026-06-09) — RS1 + RS2 + RS3 + RS4 SHIPPED (the rollout-aware trainer family on real `M_θ`)
+## 9. Status (2026-06-09) — RS1–RS4 + RS6 SHIPPED (the rollout-aware trainer family + the per-compute verdict)
 
 RS1 is built and committed as a **genuine trained-`M_θ` experiment** (not a stand-in): it trains the
 real flat GPT proposer ([`experiments/rs1_dagger.py`](../../src/verisim/experiments/rs1_dagger.py)) two
@@ -534,10 +538,25 @@ off-trajectory mutations; `magnitude=1` is byte-identical to every committed cal
     **Whether the unrolled loss pays net at GPU scale (where a competent high-`p` model has a larger gap
     to cure) is the standing open bet** — the same caveat as RS1.
 
-**Deferred (the trained-arm / scale follow-ons, disclosed):** RS5 (RS1/RS4 forked across more proposers),
-RS6 (the full faithful-horizon-per-compute Pareto over all four trainers), RS7 (the cross-world fork). The
-committed RS1–RS4 results are the honest headline: **at CPU scale free-oracle DAgger does not cure the
-flat arm; scheduled sampling and noise injection, swept fully, produce no signed tradeoff on the
-structured arm; and only the unrolled loss lifts its raw horizon — but not its net-per-compute** — banked
-as the pre-registered fundamental-compounding / scale-limited branches, with the competent-high-`p` / GPU
+- ◐ **RS6 — the net faithful-horizon-per-compute Pareto (H58 CONFIRMED at the family level; the honest
+  capstone, and RS5 answered in aggregate).** All four structured-arm trainers — teacher-forced,
+  self-forced (DAgger), noise-injected, unrolled — on one figure, each swept over a gradient-step grid
+  ({500, 1000, 2000}) with a real total-compute axis (forward passes × params, *charging* self-forcing
+  and unrolling for the extra model forwards their data generation spends; teacher forcing and noise pay
+  zero). **Teacher forcing is the faithful-horizon-per-compute frontier**: at ε=0.3 its curve runs 8.93
+  → 9.53 → 9.47 `H_free` over 16k → 32k → 64k forwards, and *no* rollout-aware trainer beats it beyond
+  seed noise — every rollout-aware point lies within its CI of (or below) the TF curve once charged
+  (the lone numerical exceedance, self-forced at the largest budget, +0.27, is inside its own wide CI).
+  This closes H58 for the whole family: **rollout-aware training reshapes the error budget; it does not
+  buy faithful horizon per unit compute on this arm.** It also answers RS5 (does *any* rollout-aware
+  trainer move the structured floor?) in aggregate — only RS4's unrolled loss moves *raw* `H_free`, and
+  not net. [`figures/rs6_net_pareto.png`](../../figures/rs6_net_pareto.png).
+
+**Deferred (disclosed):** RS5 as a *separate* cell is subsumed by the RS2/RS3/RS4/RS6 structured-arm
+ensemble above; RS7 (the cross-world / cross-proposer fork onto the host world) is the one remaining
+trained-arm/scale follow-on. The committed RS1–RS4 + RS6 results are the honest headline: **at CPU scale
+free-oracle DAgger does not cure the flat arm; scheduled sampling and noise injection, swept fully,
+produce no signed tradeoff on the structured arm; only the unrolled loss lifts raw horizon — and the
+per-compute Pareto shows even that does not beat teacher forcing once compute is charged** — banked as
+the pre-registered fundamental-compounding / scale-limited branches, with the competent-high-`p` / GPU
 regime the next bet.
