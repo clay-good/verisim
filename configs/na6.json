@@ -1,0 +1,19 @@
+{
+  "name": "na6-decode-side-rollout-stability",
+  "n_hosts": 5,
+  "n_ports": 3,
+  "train_driver": "weighted",
+  "train_seeds": [0, 1, 2],
+  "train_steps_per_traj": 40,
+  "graph_d_model": 64,
+  "graph_mp_rounds": 3,
+  "train_steps": 1000,
+  "noise_prob": 0.3,
+  "sf_max_sample_prob": 0.8,
+  "sf_refresh_every": 150,
+  "model_seeds": [0, 1, 2, 3, 4],
+  "eval_seeds": [100, 101, 102, 103, 104],
+  "eval_steps": 32,
+  "one_step_seeds": [200, 201],
+  "epsilons": [0.0, 0.1, 0.2, 0.3, 0.5]
+}

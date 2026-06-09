@@ -53,6 +53,7 @@ pytest.importorskip("torch")  # the rest trains a real graph arm; skip cleanly w
 
 from verisim.experiments.na0 import NA0Config, run_na0  # noqa: E402
 from verisim.experiments.na5 import NA5Config, run_na5  # noqa: E402
+from verisim.experiments.na6 import NA6Config, run_na6  # noqa: E402
 
 
 def _tiny() -> NA0Config:
@@ -107,4 +108,32 @@ def test_na5_smoke_structural() -> None:
 def test_na5_deterministic() -> None:
     a = [(s.depth, round(s.frozen_own, 4), round(s.refit_own, 4)) for s in run_na5(_na5_tiny())]
     b = [(s.depth, round(s.frozen_own, 4), round(s.refit_own, 4)) for s in run_na5(_na5_tiny())]
+    assert a == b
+
+
+def _na6_tiny() -> NA6Config:
+    return NA6Config(
+        n_hosts=4, n_ports=2, train_seeds=(0, 1), train_steps_per_traj=20,
+        graph_d_model=32, graph_mp_rounds=2, train_steps=60, sf_refresh_every=30,
+        model_seeds=(0,), eval_seeds=(100, 101), eval_steps=12, one_step_seeds=(200,),
+        one_step_steps=12, epsilons=(0.0, 0.3),
+    )
+
+
+def test_na6_smoke_structural() -> None:
+    stats = run_na6(_na6_tiny())
+    assert {s.arm for s in stats} == {"teacher-forced", "self-forced", "noise-injected"}
+    for s in stats:
+        assert 0.0 <= s.p_one_step <= 1.0
+        assert s.p_lo <= s.p_one_step <= s.p_hi
+        assert set(s.h_free) == {0.0, 0.3}
+        for eps in (0.0, 0.3):
+            assert 0.0 <= s.h_free[eps] <= 12.0
+            assert s.h_lo[eps] <= s.h_free[eps] <= s.h_hi[eps]
+        assert s.n == 1
+
+
+def test_na6_deterministic() -> None:
+    a = [(s.arm, round(s.p_one_step, 4), round(s.h_free[0.3], 4)) for s in run_na6(_na6_tiny())]
+    b = [(s.arm, round(s.p_one_step, 4), round(s.h_free[0.3], 4)) for s in run_na6(_na6_tiny())]
     assert a == b

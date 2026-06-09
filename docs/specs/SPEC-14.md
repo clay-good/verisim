@@ -8,9 +8,10 @@ proxy/truth split. This spec attacks the wall with the literature built for exac
 Neural Algorithmic Reasoning (NAR) — and the one asset that literature never had: the oracle emits the
 algorithm's intermediate computation states for free.**
 
-> **▶ METHOD SPEC — 2026-06 — NA0 + NA5 SHIPPED (✅ the diagnosis gate + the decode-side
-> confirmation; H45 REFUTED → the wall is the decoder/rollout, not the processor — confirmed at the
-> rollout level; NA1–NA4 re-scoped, see §11).** A *method* spec in the
+> **▶ METHOD SPEC — 2026-06 — NA0 + NA5 + NA6 SHIPPED (✅ diagnosis gate + decode-side confirmation +
+> the decoder-side training test; H45 REFUTED → the wall is the decoder/rollout, and decoder-side
+> rollout-stability training does NOT lift it at CPU scale — the banked compounding negative, see
+> §11).** A *method* spec in the
 > lineage of [SPEC-8](./SPEC-8.md)
 > (oracle-grounded self-supervision) and [SPEC-12](./SPEC-12.md) (planning over the same model). It
 > invents **no new world** (the SPEC-5 network world), **no new oracle** (the data-plane
@@ -292,6 +293,17 @@ seed-reduction, same CSV schema) so every NA number is read on the *same axis* a
   no trained-arm bet, so it ships now alongside NA0. `experiments/na5.py`, `configs/na5.json`
   → `na5_decode_rollout.{png,csv}`.
 
+- **NA6 — the decoder-side rollout-stability test: the redirected headline (H46-redirected).** What
+  the original NA1 *became* after NA0 refuted hint supervision: attack the decoder/rollout NA0/NA5
+  localized, at training time, on the structured arm. Train it three ways — teacher-forced (HS3
+  baseline), self-forced scheduled-sampling DAgger (`train_graph_model_self_forced`, oracle-relabel the
+  arm's own drifted states), and oracle-relabeled noise injection (§6.3) — and read `p`/`H_free`/`η`
+  across an ε sweep, multi-seed. **Result: NOT supported — the banked compounding negative** (no
+  decoder-side arm lifts `H_free` past teacher forcing's seed-CI at any ε; the wall is
+  exact-tolerance-specific and stays). The machinery is the shipped §6.3 trainer, so NA6 is a genuine
+  trained-arm experiment that is still CPU-feasible. `experiments/na6.py`, `configs/na6.json`
+  → `na6_decode_training.{png,csv}`.
+
 - **NA1 — free hint supervision vs the HS3 hint-free arm (H46, the headline).** Add a hint head on
   `h_r` and the loss term `λ·Σ_r hint_loss_r` (oracle round-`r` frontier, teacher-forced); train at
   fixed `m` capacity on the HS3 coverage set. Head-to-head against the committed HS3 graph arm on the
@@ -441,7 +453,7 @@ shipped).
 
 ---
 
-## 11. Status (2026-06-09) — NA0 + NA5 SHIPPED; H45 REFUTED, the decode-side redirection confirmed
+## 11. Status (2026-06-09) — NA0 + NA5 + NA6 SHIPPED; H45 REFUTED, decode-side wall confirmed + tested
 
 The diagnosis gate is built, committed, and **decided the branch §7 said it would**. NA0 trains three
 HS3-level graph arms (8 hosts, `d_model=64`, `mp_rounds=3`, 600 steps; one-step next-state-exact
@@ -481,6 +493,23 @@ passing *adds*. CPU, deterministic, seeded; multi-seed with bootstrap CIs.
   probe — no trained-arm bet. [`na5`](../../src/verisim/experiments/na5.py),
   [`configs/na5.json`](../../configs/na5.json),
   [`figures/na5_decode_rollout.png`](../../figures/na5_decode_rollout.png).
+- ✅ **NA6 — the decoder-side rollout-stability test (H46-redirected NOT SUPPORTED — the banked
+  compounding negative).** NA0/NA5 pointed at the decoder/rollout, so NA6 attacks it at *training* time
+  on the structured arm — the *competent one-step / zero-horizon* regime the flat-arm RS1 lacked.
+  Three arms at fixed capacity: **teacher-forced** (HS3 baseline), **self-forced** (scheduled-sampling
+  DAgger — `train_graph_model_self_forced`, the arm rolls on its own predictions and oracle-relabels
+  each drifted state), and **noise-injected** (oracle-relabeled state-noise augmentation, §6.3). Read
+  across an ε sweep (5 model seeds, CIs). Result: neither decoder-side fix lifts `H_free` over
+  teacher-forced at *any* tolerance — the best lift is +0.92 (self-forced, ε=0.5), inside teacher
+  forcing's own seed-CI half-width (±3.04). The ε sweep also reframes the wall: the `H_free = 0` headline
+  is **exact-tolerance-specific** — at ε=0 a competent-but-imperfect one-step arm (`p ≈ 0.57`, η0 < 1)
+  misses instantly so `H_free → 0`, while at ε=0.5 the *same* arm free-runs ~26 steps; the decoder-side
+  fix neither lifts `p` nor buys rollout horizon. **The bankable compounding negative** §4 pre-registered
+  as "as valuable as the positive": on the competent structured arm too the exact-tolerance wall is
+  fundamental compounding, not exposure bias (sharpening RS1's flat-arm null). Scale caveat (RS1's):
+  whether the cure pays for a higher-`p` model at GPU scale is the open bet.
+  [`na6`](../../src/verisim/experiments/na6.py), [`configs/na6.json`](../../configs/na6.json),
+  [`figures/na6_decode_training.png`](../../figures/na6_decode_training.png).
 
 **What this means for the spec (the principled redirection, §7's gate firing).** SPEC-14 was built to
 attack the HS3 `H_free = 0` wall by supervising the processor's intermediate computation (NA1's hint
