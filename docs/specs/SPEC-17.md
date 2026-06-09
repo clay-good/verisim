@@ -13,8 +13,9 @@ finally **disentangle counterfactual *branching* from fault *coverage*** — the
 qualifies the ED6 positive — by constructing interventions matched on coverage. This spec is the
 do-calculus reading of H5 and the experiment that resolves its open caveat.**
 
-> **✅ SHIPPED (pure-oracle core) — METHOD SPEC, 2026-06 (CX0 H60 + CX1 H61 on all four worlds; the
-> *learned*-lift bets CX2–CX4 deferred to the trained/contrastive arm). See §8 for the status table.**
+> **✅ SHIPPED (pure-oracle core) — METHOD SPEC, 2026-06 (CX0 H60 + CX1 H61 on all four worlds + CX5
+> H64 on the real system oracles; the *learned*-lift bets CX2–CX4 deferred to the trained/contrastive
+> arm). See §8 for the status table.**
 > A *cross-world method* in the lineage of [SPEC-8](./SPEC-8.md)
 > (oracle-grounded self-supervision) and [SPEC-12](./SPEC-12.md) (planning over the world model): it
 > invents **no new world** — it runs on the SPEC-5 network, SPEC-6 host, and SPEC-7 distributed worlds
@@ -300,11 +301,14 @@ block is dependency-free; CX4's learned-model augmenter is the one torch-gated p
   by construction; the learned model's is what it is). `experiments/cx4.py`. *(Torch-gated; `skipif`
   with disclosure, never counted as a result when skipped.)*
 
-- **CX5 — cross-world fork (H64, deferred).** Re-run CX0/CX2 on the system oracles (SPEC-11 host
-  `SandboxOracle`, SPEC-7 Tier-B [`distoracle/system.py`](../../src/verisim/distoracle/system.py)) to
-  confirm the rung-3 recipe survives the move from a model-of-reality SCM to a reality SCM (the H4
-  reading). Runs only after CX3 lands, per the evidence gate. `experiments/cx5_host.py`,
-  `experiments/cx5_dist.py`.
+- **CX5 — system-oracle fork (H64, ✅ SHIPPED).** Re-runs the CX0 abduction gate (and rung-3
+  exactness) on the system oracles — the real `/bin/sh` `SandboxOracle` (filesystem) and the Tier-B
+  [`distoracle/system.py`](../../src/verisim/distoracle/system.py) (distributed) — confirming the rung-3
+  recipe survives the move from a model-of-reality SCM to a reality SCM (the H4 reading). The
+  *buildable* part (CX0 on the system oracles, pure-oracle) shipped now, ahead of the CX2 learned arm;
+  shipped as a single [`experiments/cx5.py`](../../src/verisim/experiments/cx5.py) over both system
+  oracles. Result (§8): abduction + rung-3 are bit-exact on both (H64 transfer) — the SY4 seal and the
+  DST seeded scheduler are what make the real system an exact SCM.
 
 ---
 
@@ -480,7 +484,7 @@ hypotheses) → [`src/verisim/netdata/negatives.py`](../../src/verisim/netdata/n
 
 ---
 
-## 8. Status (2026-06-08) — CX0 + CX1 SHIPPED (pure-oracle core; learned-lift bets deferred)
+## 8. Status (2026-06-09) — CX0 + CX1 + CX5 SHIPPED (pure-oracle core; learned-lift bets deferred)
 
 The pure-oracle causal core is built and committed. The package is
 [`causal/`](../../src/verisim/causal/): `scm.py` (the world-generic SCM machinery -- `abduct_and_replay`,
@@ -506,14 +510,28 @@ network/host/filesystem/distributed, CPU-only, deterministic and seeded -- no le
   is the do-calculus reading of the mixed H5: counterfactual *structure* is large exactly where the
   world has off-policy exogenous hidden state. [`cx1`](../../src/verisim/experiments/cx1.py),
   [`figures/cx1_counterfactual_effect.png`](../../figures/cx1_counterfactual_effect.png).
-- ✅ **H64 (the cross-world method) — supported in kind.** CX0 and CX1 run on all four worlds with the
-  *identical* SCM machinery and no per-world causal-discovery step (the SCM is *given* by the oracle,
-  not learned), so the rung-3 recipe is a cross-world method by construction.
+- ✅ **CX5 — the system-oracle fork (H64 TRANSFER — the SCM survives reality).** The objection to CX0
+  is that bit-exact abduction is a property of the reference *abstraction*, not reality. CX5 re-runs the
+  abduction gate on the **system oracles** — the real `/bin/sh` + coreutils `SandboxOracle` (filesystem)
+  and the Tier-B `SystemDistOracle` (distributed, autonomous actors under a seeded scheduler) — with
+  the action sequence replayed *through the system oracle*. Result: abduction-exactness, rung-3
+  counterfactual-exactness, and cf-differs are **all 1.0 on both system oracles**, matching the
+  reference anchor — so exact, free rung-3 counterfactuals survive the move to the real system. The
+  honest, load-bearing reading: this holds **because** the filesystem oracle is sealed against
+  clock/RNG/concurrency (the SY4 `DeterminismSeal`) and the distributed oracle drives its real
+  concurrency with a **seeded** scheduler (the DST thesis) — a real system *without* the seal/seed is
+  *not* an SCM, so CX5 measures that the seal/seed is exactly what buys an exact rung 3 on reality.
+  Pure-oracle; a genuinely unavailable system oracle is a disclosed skip, never a pass.
+  [`cx5`](../../src/verisim/experiments/cx5.py), [`configs/cx5.json`](../../configs/cx5.json),
+  [`figures/cx5_system_oracle.png`](../../figures/cx5_system_oracle.png).
+- ✅ **H64 (the cross-world method) — supported in kind *and* on the system oracle.** CX0/CX1 run on all
+  four worlds with the *identical* SCM machinery and no per-world causal-discovery step (the SCM is
+  *given* by the oracle, not learned); CX5 then shows the contract holds on the real system oracles too.
 
 **Deferred to the trained/contrastive arm (the LP7 rule, §7), disclosed and never counted on a
 stand-in:** **CX2** (the three-world *learned* lift -- does training `M_θ` on rung-3 targets improve
 held-out counterfactual prediction), **CX3** (the matched-coverage cut, H62 -- branching vs coverage,
-the ED6 confound resolver), **CX4** (the CoDA contrast, H63), and **CX5** (the system-oracle fork). A
-non-parametric stand-in captures only the *coverage* channel of the lift, not the paired-contrast
-*structure* channel a parametric model exploits, so the learned-lift verdict honestly requires the
-trained arm; the pure-oracle core (the identification + the effect-size law) is what ships.
+the ED6 confound resolver), and **CX4** (the CoDA contrast, H63). A non-parametric stand-in captures
+only the *coverage* channel of the lift, not the paired-contrast *structure* channel a parametric model
+exploits, so the learned-lift verdict honestly requires the trained arm; the pure-oracle core (the
+identification, the effect-size law, and the system-oracle transfer) is what ships.

@@ -1,0 +1,7 @@
+{
+  "name": "cx5-system-oracle-scm-fork",
+  "n_steps": 40,
+  "n_seeds": 8,
+  "base_seed": 0,
+  "intervene_at": 0.5
+}
