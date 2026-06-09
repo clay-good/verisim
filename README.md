@@ -1547,6 +1547,36 @@ The same SCM machinery runs on all four worlds with no per-world causal-discover
 (H64, in kind). The pure-oracle identification + effect-size law ship; the learned lift, the
 matched-coverage cut (H62), and the CoDA contrast (H63) remain. See [SPEC-17 §8](docs/specs/SPEC-17.md).
 
+### 41. Curing the exposure-bias gap: free-oracle DAgger (SPEC-16 / RS1 / H55) — a banked negative
+
+Every horizon number to here trained the proposer **teacher-forced** (on the oracle's true states) and
+rolled it out **free-running** (on its own predictions) — the textbook exposure-bias / covariate-shift
+gap, exactly what SPEC-10's HS1.1 caught (a per-step-accurate model with a near-zero free-running
+horizon). The classic cure is DAgger: query the expert on the *learner's own* drifted states and
+aggregate. DAgger's bottleneck is the expensive expert — but in verisim the expert is the **oracle**:
+free, exact, callable at any drifted state. RS1 runs that cure on the **real flat `M_θ`** (a genuine
+trained-arm experiment, not a stand-in): teacher-forced vs free-oracle DAgger at a fixed example
+budget, with bootstrap CIs over 5 model × 12 eval seeds.
+
+**The result is the program's pre-registered, first-class *negative* (H55 not supported at this
+scale).** At CPU-affordable scale the flat `M_θ` reaches only modest one-step accuracy (`p≈0.47`) and a
+near-floor horizon (`H_ε≈1.6`); free-oracle DAgger — despite relabeling the learner's own drift with
+the exact oracle *and* spending extra compute (it retrains every round) — **does not lift `H_ε`** (best
+DAgger round 1.47 vs teacher-forced 1.63, CIs overlapping, `p` unchanged). Showing the model its own
+oracle-relabeled drift buys no horizon: at this scale the gap behaves like **fundamental compounding**,
+not a fixable train/deploy mismatch — the deeper, sharper reading SPEC-16 §7 banks as "arguably the
+bigger result."
+
+![RS1: free-oracle DAgger (blue) vs teacher forcing (red dashed) on the real flat M_θ — DAgger's free-running faithful horizon sits at or below teacher forcing across rounds with overlapping CIs, and one-step accuracy is unchanged; at CPU scale the exposure-bias gap is not cured by relabeling the learner's own drift](figures/rs1_dagger.png)
+
+**Honest caveat (load-bearing).** At CPU scale the model is near the `H_ε` floor with only modest
+one-step competence, so there is not a large per-step-accurate-but-horizon-poor gap to cure. Small-scale
+single-seed runs showed large but high-variance swings (a +2.2 fluke that did not survive powering up);
+the powered multi-seed estimate is the trustworthy one, and it is a null. **Whether the cure pays for a
+*competent* (high-`p`) model at larger scale is the genuinely open question** the compute budget did not
+settle. RS2–RS7 (scheduled sampling, noise injection, the unrolled-loss pushforward, the structured
+GNN+RSSM arm, the per-compute Pareto) are the deferred follow-ons. See [SPEC-16 §9](docs/specs/SPEC-16.md).
+
 ## The problem, and what we're trying to accomplish
 
 ### The wall every world model hits
@@ -1820,6 +1850,7 @@ host → distributed); three specs are *cross-cutting methods* every world inher
 | [SPEC-15](docs/specs/SPEC-15.md) | **method: conformal consultation** | the *calibration altitude* beside the loop — the free, exact, unlimited oracle is a distribution-free conformal calibration set, so a consultation trigger gets a finite-sample coverage guarantee instead of a hand-set threshold. **CF1–CF4 ship** ([`conformal/`](src/verisim/conformal/), [`experiments/cf_common.py`](src/verisim/experiments/cf_common.py)) on a controlled signal stand-in (trained-`M_θ` arm + CF5 cross-world fork deferred): **CF1 passes H50 + supports H51** (the coverage gate holds on exchangeable data, and the calibrated trigger certifies the same α at ~0.43 lower ρ than fixed — a *guaranteed* RQ2 win, [cf1](figures/cf1_coverage_frontier.png)); **CF4 supports H53** (the EH2/ED2 mechanism — both signals hit coverage, but the calibrated one saves ~0.50 ρ and the uncalibrated ~0: conformal *validity* is signal-agnostic, *efficiency* is not, [cf4](figures/cf4_signal_split.png)); **CF2 supports H52** (the deepest result — static conformal's undetected rate climbs above α with rollout depth as exchangeability breaks, while ACI fed the free per-step oracle truth restores long-run coverage near target, [cf2](figures/cf2_drift_aci.png)); **CF3 supports H54** (conformal risk control on the graded loss buys ~0.22 lower ρ by tolerating near-misses, [cf3](figures/cf3_risk_control.png)). Resolves the RQ2 contradiction with a guarantee *and* a mechanism. |
 | [SPEC-18](docs/specs/SPEC-18.md) | **product: the benchmark** | the capstone — freezes the accumulated asset (the one faithfulness benchmark with *exact* labels) into a versioned product. **PB-bench/transfer/pack ship** ([`bench/`](src/verisim/bench/)) on the controlled-proposer core + the real-shell oracle (trained-arm leaderboard entries deferred): **PB-bench supports H65** (the leaderboard stably orders the fidelity ladder, Kendall τ=1.0 across seed splits, adjacent tiers resolved above paired noise — discriminative, [pb-bench](figures/pb_bench_leaderboard.png)); **PB-transfer supports H66 / banks H67** (the sim-to-emulation gap vs the SPEC-11 real-OS oracle is ΔH≈0 across the ρ-sweep on the validated grammar — transfer is lossless, the first such number in horizon terms, confirming SY1/H27; correction lifts the absolute real-OS horizon, [pb-transfer](figures/pb_transfer_gap.png)); **PB-pack supports H68** (the public-minus-held-out gap separates a memorizer ~+0.98 from an honest proposer ~+0.10 — contamination-resistant; conformance 6/6 green; Croissant + datasheet + model-card emitted to [bench/](bench/), [pb-pack](figures/pb_pack_contamination.png)). Ships the asset as a versioned, conformant, documented benchmark. |
 | [SPEC-17](docs/specs/SPEC-17.md) | **method: the oracle as an SCM** | a deterministic, resettable, seedable oracle *is* an exact Structural Causal Model (`step`=`F`, seed=`U`, abduction=reset+replay), so all three rungs of Pearl's ladder are executable exactly and for free. **CX0–CX1 ship** ([`causal/`](src/verisim/causal/), [`experiments/cx_common.py`](src/verisim/experiments/cx_common.py)) pure-oracle on all four worlds (learned-lift bets deferred): **CX0 supports H60** (abduction-action-prediction is bit-exact on every world, rate 1.0 — the gate that makes rung-3 counterfactuals exact and free, an O(1) lookup not the intractable inference of an oracle-free SCM, [cx0](figures/cx0_scm_gate.png)); **CX1 supports H61** (the counterfactual effect is hidden-state-dependent — it amplifies ~3.6× downstream on the distributed world's persistent medium but ~1× on the on-policy-complete network/host worlds: the do-calculus reading of the mixed H5, [cx1](figures/cx1_counterfactual_effect.png)); the recipe runs cross-world with no causal-discovery step (H64 in kind). The *learned* lift (CX2), matched-coverage cut (CX3/H62), and CoDA contrast (CX4/H63) are deferred to the trained/contrastive arm. |
+| [SPEC-16](docs/specs/SPEC-16.md) | **method: rollout-stability training** | the exposure-bias cure — train the proposer on the *learner's own* drifted states relabeled by the free, exact oracle (DAgger), where the simulator-learning field can only approximate it. **RS1 ships** ([`experiments/rs1_dagger.py`](src/verisim/experiments/rs1_dagger.py)) as a *genuine trained-`M_θ`* experiment (a real GPT, teacher-forced vs free-oracle DAgger at equal example budget, 5 model × 12 eval seeds): **H55 not supported at CPU scale** — the flat `M_θ` is near the `H_ε` floor (`p≈0.47`, `H_ε≈1.6`) and DAgger, despite relabeling its own drift with the exact oracle and spending extra compute, does not lift `H_ε` (best round 1.47 vs teacher-forced 1.63, CIs overlap, [rs1](figures/rs1_dagger.png)). The program's pre-registered, first-class **negative**: at this scale the gap behaves like fundamental compounding, not a train/deploy mismatch (a +2.2 small-scale fluke did not survive powering up). Whether the cure pays for a competent high-`p` model at larger scale is the open question; RS2–RS7 (scheduled sampling, noise, unrolled loss, the structured arm, the per-compute Pareto) are deferred. |
 
 Semantics docs ([filesystem](docs/semantics.md), [network](docs/network-semantics.md)) pin the normative
 command semantics, paired with the reference oracles, which are the executable truth. SPEC-11's system

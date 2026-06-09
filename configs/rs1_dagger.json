@@ -1,0 +1,10 @@
+{
+  "n_hosts": 6, "n_ports": 3, "driver": "weighted",
+  "n_examples": 640, "total_steps": 1000, "n_rounds": 3,
+  "n_layer": 2, "n_head": 4, "n_embd": 96, "block_size": 160,
+  "lr": 3e-4, "batch_size": 64, "n_steps": 48, "epsilon": 0.05,
+  "train_seeds": [0,1,2,3,4,5,6,7,8,9,10,11],
+  "eval_seeds": [100,101,102,103,104,105,106,107,108,109,110,111],
+  "one_step_seeds": [200,201,202,203,204,205],
+  "model_seeds": [0,1,2,3,4], "num_threads": 1
+}
