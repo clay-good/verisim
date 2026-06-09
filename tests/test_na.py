@@ -52,6 +52,7 @@ def test_reach_frontiers_respects_down_hosts() -> None:
 pytest.importorskip("torch")  # the rest trains a real graph arm; skip cleanly where torch is absent
 
 from verisim.experiments.na0 import NA0Config, run_na0  # noqa: E402
+from verisim.experiments.na5 import NA5Config, run_na5  # noqa: E402
 
 
 def _tiny() -> NA0Config:
@@ -76,4 +77,34 @@ def test_na0_smoke_structural() -> None:
 def test_na0_deterministic() -> None:
     a = [(s.round, round(s.lift, 4), round(s.control_lift, 4)) for s in run_na0(_tiny())[0]]
     b = [(s.round, round(s.lift, 4), round(s.control_lift, 4)) for s in run_na0(_tiny())[0]]
+    assert a == b
+
+
+def _na5_tiny() -> NA5Config:
+    return NA5Config(
+        n_hosts=5, n_ports=2, train_seeds=(0, 1), train_steps_per_traj=20,
+        graph_d_model=32, graph_mp_rounds=3, graph_iters=60, model_seeds=(0,),
+        probe_seeds=(100, 101), probe_steps=20,
+        rollout_seeds=(200, 201, 202, 203), rollout_steps=6, depth_buckets=3,
+    )
+
+
+def test_na5_smoke_structural() -> None:
+    stats = run_na5(_na5_tiny())
+    assert 1 <= len(stats) <= 3  # one row per non-empty depth bucket
+    for s in stats:
+        assert 0.0 <= s.frozen_own <= 1.0
+        assert 0.0 <= s.refit_own <= 1.0
+        assert 0.0 <= s.tracks_truth <= 1.0
+        assert 0.0 <= s.divergence <= 1.0
+        assert s.frozen_lo <= s.frozen_own <= s.frozen_hi
+        assert s.n_seeds == 1
+    # The refit probe (oracle-relabeled on drifted states) decodes its own state at least as well as
+    # the frozen in-distribution probe at the deepest bucket -- the control's defining property.
+    assert stats[-1].refit_own >= stats[-1].frozen_own - 1e-6
+
+
+def test_na5_deterministic() -> None:
+    a = [(s.depth, round(s.frozen_own, 4), round(s.refit_own, 4)) for s in run_na5(_na5_tiny())]
+    b = [(s.depth, round(s.frozen_own, 4), round(s.refit_own, 4)) for s in run_na5(_na5_tiny())]
     assert a == b

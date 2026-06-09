@@ -8,8 +8,9 @@ proxy/truth split. This spec attacks the wall with the literature built for exac
 Neural Algorithmic Reasoning (NAR) — and the one asset that literature never had: the oracle emits the
 algorithm's intermediate computation states for free.**
 
-> **▶ METHOD SPEC — 2026-06 — NA0 SHIPPED (✅ the diagnosis gate; H45 REFUTED → the spec is
-> redirected to the decoder/rollout side; NA1–NA4 re-scoped, see §11).** A *method* spec in the
+> **▶ METHOD SPEC — 2026-06 — NA0 + NA5 SHIPPED (✅ the diagnosis gate + the decode-side
+> confirmation; H45 REFUTED → the wall is the decoder/rollout, not the processor — confirmed at the
+> rollout level; NA1–NA4 re-scoped, see §11).** A *method* spec in the
 > lineage of [SPEC-8](./SPEC-8.md)
 > (oracle-grounded self-supervision) and [SPEC-12](./SPEC-12.md) (planning over the same model). It
 > invents **no new world** (the SPEC-5 network world), **no new oracle** (the data-plane
@@ -281,6 +282,16 @@ seed-reduction, same CSV schema) so every NA number is read on the *same axis* a
   executes the algorithm, the fix is the decoder, not hints). `experiments/na0.py`, `configs/na0.json`,
   `figures/plot_na0.py` → `na0_hint_probe.{png,csv}`.
 
+- **NA5 — the decode-side rollout diagnostic: confirm the wall is the decoder, not the processor
+  (post-NA0, pure measurement).** Added after NA0's refutation to test the redirection *directly*.
+  Free-run the NA0 arm; at each rollout depth apply NA0's **frozen** reachability probe to the embedding
+  of the model's *own drifted* state, and disambiguate the in-distribution probe's off-distribution
+  decay with a **refit** control (a fresh probe fit on the drifted states, whose oracle frontier is
+  free, evaluated held-out). If the refit probe recovers what the frozen one loses, the reachability is
+  still in the embedding and the wall is the decoder/rollout, not the processor. Reuses the NA0 arm —
+  no trained-arm bet, so it ships now alongside NA0. `experiments/na5.py`, `configs/na5.json`
+  → `na5_decode_rollout.{png,csv}`.
+
 - **NA1 — free hint supervision vs the HS3 hint-free arm (H46, the headline).** Add a hint head on
   `h_r` and the loss term `λ·Σ_r hint_loss_r` (oracle round-`r` frontier, teacher-forced); train at
   fixed `m` capacity on the HS3 coverage set. Head-to-head against the committed HS3 graph arm on the
@@ -430,7 +441,7 @@ shipped).
 
 ---
 
-## 11. Status (2026-06-09) — NA0 SHIPPED; H45 REFUTED → the spec redirects to the decoder side
+## 11. Status (2026-06-09) — NA0 + NA5 SHIPPED; H45 REFUTED, the decode-side redirection confirmed
 
 The diagnosis gate is built, committed, and **decided the branch §7 said it would**. NA0 trains three
 HS3-level graph arms (8 hosts, `d_model=64`, `mp_rounds=3`, 600 steps; one-step next-state-exact
@@ -454,6 +465,22 @@ passing *adds*. CPU, deterministic, seeded; multi-seed with bootstrap CIs.
   trajectory … a strong, surprising result that would redirect the spec to the decode side."
   [`na0`](../../src/verisim/experiments/na0.py), [`configs/na0.json`](../../configs/na0.json),
   [`figures/na0_hint_probe.png`](../../figures/na0_hint_probe.png).
+- ✅ **NA5 — the decode-side rollout diagnostic (the redirection confirmed at the rollout level).** NA0
+  read the embedding on *teacher-forced* states; NA5 tests the redirection *directly* by **free-running**
+  the same arm and asking, at each rollout depth, whether the processor still encodes the reachability of
+  its *own drifted* state. The trap is that NA0's probe, fit in-distribution, degrades off-distribution
+  for *either* reason (representation drift *or* probe-transfer failure); the control that resolves it is
+  to **refit a fresh probe on the drifted states** (their oracle frontier is free) and evaluate it
+  held-out. Result: the frozen in-distribution probe falls with depth (`0.87 → 0.71`) but a refit probe
+  **recovers most of it** (`0.87 → 0.83`, **+0.12 over frozen at the deepest bucket**), so the reachability
+  is *still linearly in the embedding* of the drifted state — and `tracks-truth` (probe vs the *true*
+  state's frontier) falls **~4× more than the refit probe** as the state divergence climbs. **The wall is
+  predominantly the decoder/rollout**: the processor stays faithful to whatever state it is in, the
+  autoregressive decoder emits wrong deltas that compound. A small residual (~0.04–0.06) of genuine
+  off-distribution representation drift is reported, not hidden. Pure measurement on the NA0 arm + a frozen
+  probe — no trained-arm bet. [`na5`](../../src/verisim/experiments/na5.py),
+  [`configs/na5.json`](../../configs/na5.json),
+  [`figures/na5_decode_rollout.png`](../../figures/na5_decode_rollout.png).
 
 **What this means for the spec (the principled redirection, §7's gate firing).** SPEC-14 was built to
 attack the HS3 `H_free = 0` wall by supervising the processor's intermediate computation (NA1's hint

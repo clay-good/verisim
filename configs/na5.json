@@ -1,0 +1,20 @@
+{
+  "name": "na5-decode-rollout-diagnostic",
+  "n_hosts": 8,
+  "n_ports": 3,
+  "train_driver": "weighted",
+  "train_seeds": [0, 1, 2],
+  "train_steps_per_traj": 40,
+  "graph_d_model": 64,
+  "graph_mp_rounds": 3,
+  "graph_iters": 600,
+  "model_seeds": [0, 1, 2],
+  "probe_driver": "weighted",
+  "probe_seeds": [100, 101, 102, 103],
+  "probe_steps": 40,
+  "ridge_lambda": 1.0,
+  "rollout_driver": "weighted",
+  "rollout_seeds": [200, 201, 202, 203, 204, 205, 206, 207],
+  "rollout_steps": 12,
+  "depth_buckets": 6
+}
