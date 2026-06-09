@@ -1,0 +1,9 @@
+{
+  "grammars": ["structural", "weighted", "adversarial"],
+  "alpha": 0.8,
+  "rhos": [0.0, 0.1, 0.25, 0.5],
+  "n_steps": 24,
+  "n_seeds": 12,
+  "epsilon": 0.0,
+  "base_seed": 0
+}

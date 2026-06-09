@@ -488,7 +488,7 @@ hypotheses) → [`src/verisim/netdata/negatives.py`](../../src/verisim/netdata/n
 
 ---
 
-## 8. Status (2026-06-09) — CX0 + CX1 + CX3 + CX4 + CX5 SHIPPED (only the CX2 learned lift remains)
+## 12. Status (2026-06-09) — CX0 + CX1 + CX3 + CX4 + CX5 SHIPPED (only the CX2 learned lift remains)
 
 The pure-oracle causal core is built and committed. The package is
 [`causal/`](../../src/verisim/causal/): `scm.py` (the world-generic SCM machinery -- `abduct_and_replay`,

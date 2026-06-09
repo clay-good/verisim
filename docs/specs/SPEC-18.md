@@ -12,9 +12,13 @@ is two falsifiable claims the field has never measured: does the benchmark *disc
 (stable rankings), and is the sim-to-emulation transfer *measured* against the SPEC-11 real-OS oracle —
 the quantified version of what CybORG-class fields assert and leave open.**
 
-> **✅ SHIPPED — PRODUCT / VALIDATION SPEC — 2026-06 (PB-bench / PB-transfer / PB-pack on the
-> controlled-proposer core + the real-shell oracle; trained-`M_θ` leaderboard entries deferred).
-> See §10 for the status table and results.** A *packaging-and-validation* spec, sibling to
+> **✅ SHIPPED — PRODUCT / VALIDATION SPEC — 2026-06 (PB-bench / PB-transfer / PB-transfer-broad /
+> PB-pack on the controlled-proposer core + the real-shell oracle; trained-`M_θ` leaderboard entries
+> deferred). PB-transfer-broad maps the **sim-to-emulation boundary**: ΔH = 0 on the validated
+> structure grammar but rises to **+5.75** on the destructive `adversarial` grammar — the first
+> quantified measurement of *where* the reference model stops matching a real OS (SPEC-3 W1), turning
+> the §10 datasheet caveat into a number. See §10 for the status table and results.** A
+> *packaging-and-validation* spec, sibling to
 > [SPEC-11](./SPEC-11.md) (the system oracle — the real-OS anchor this spec's transfer claim is measured
 > against). It invents **no new world, oracle, or model.** It consumes what already ships: the
 > Inspect faithfulness task ([`eval/inspect_task.py`](../../src/verisim/eval/inspect_task.py)), the
@@ -445,7 +449,7 @@ scientific spine, §5 the hypotheses, §8 the milestones, §9 why adoption is no
 
 ---
 
-## 10. Status (2026-06-08) — PB-bench / PB-transfer / PB-pack SHIPPED
+## 10. Status (2026-06-09) — PB-bench / PB-transfer / PB-transfer-broad / PB-pack SHIPPED
 
 The product layer is built and committed. The package is [`bench/`](../../src/verisim/bench/):
 `manifest.py` (the frozen, hashable :class:`BatteryManifest` + the Croissant / datasheet / model-card
@@ -473,6 +477,20 @@ GNN+RSSM arms are deferred (`skipif`-guarded, never scored without a checkpoint 
   is no gap to shrink — the banked H67 reading: *the bridge is the measurement, not the fix, on this
   grammar*. `skipif`-guarded and disclosed when no real shell is present (a skip is never a result,
   SPEC-11 §2.5). [`figures/pb_transfer_gap.png`](../../figures/pb_transfer_gap.png).
+- ◐ **PB-transfer-broad — the sim-to-emulation boundary across grammars (H66, the boundary mapped).**
+  PB-transfer's ΔH=0 was the validated structure grammar; PB-transfer-broad
+  ([`pb_transfer_broad`](../../src/verisim/experiments/pb_transfer_broad.py)) runs the *identical* ΔH
+  measurement against the real `/bin/sh` across grammars of widening scope. **The boundary is now a
+  number:** ΔH(ρ=0) = **0.000** on `structural` (lossless, confirming PB-transfer), **+0.67** on the
+  everyday `weighted` grammar (cp/mv/rm/chmod/append), and **+5.75** on the destructive `adversarial`
+  grammar (rm -r / mv / rmdir-heavy) — the reference FS model diverges from the real shell exactly on
+  the ops SY1/H27 did not validate. A sharp H67-broad finding: **oracle-in-the-loop correction does
+  *not* close the gap** — on the broad grammars ΔH *grows* with ρ (0.67→4.83 weighted, 5.75→8.17
+  adversarial), because the loop consults the *reference* oracle, which cannot fix a divergence from
+  reality. This is the first quantified faithfulness boundary (SPEC-3 W1): the SPEC-18 §10 / SPEC-11
+  §9 "validated grammar is not all of POSIX" caveat is now a measured curve, not a disclaimer.
+  `skipif`-guarded / disclosed when no real shell is present (§2.5).
+  [`figures/pb_transfer_broad.png`](../../figures/pb_transfer_broad.png).
 - ✅ **PB-pack — packaging + contamination control (H68 SUPPORTED + the PB milestones).** The
   public-minus-held-out faithful gap separates a public-manifest **memorizer** (≈ +0.98) from an
   **honest** proposer (≈ +0.10): the frozen eval is contamination-resistant — overfitting the public
@@ -484,6 +502,7 @@ GNN+RSSM arms are deferred (`skipif`-guarded, never scored without a checkpoint 
 
 The capstone ships the program's accumulated asset as two versioned artifacts: a faithfulness benchmark
 that *discriminates* (PB-bench) with a *measured, lossless* sim-to-emulation bridge to a real OS
-(PB-transfer) and *contamination-resistant, conformant, documented* packaging (PB-pack). Remaining:
-the trained-`M_θ` leaderboard entries (the one GPU dependency) and the CX5/PB-transfer broad-grammar
-arm (a non-zero ΔH outside the validated grammar) — the rest of SPEC-18 is shipped.
+(PB-transfer) and *contamination-resistant, conformant, documented* packaging (PB-pack), with the
+sim-to-emulation **boundary** now mapped across grammars (PB-transfer-broad: ΔH 0 → +5.75 from the
+validated to the destructive grammar). Remaining: only the trained-`M_θ` leaderboard entries (the one
+GPU dependency) — the rest of SPEC-18 is shipped.
