@@ -13,7 +13,9 @@ finally **disentangle counterfactual *branching* from fault *coverage*** — the
 qualifies the ED6 positive — by constructing interventions matched on coverage. This spec is the
 do-calculus reading of H5 and the experiment that resolves its open caveat.**
 
-> **▶ METHOD SPEC — 2026-06.** A *cross-world method* in the lineage of [SPEC-8](./SPEC-8.md)
+> **✅ SHIPPED (pure-oracle core) — METHOD SPEC, 2026-06 (CX0 H60 + CX1 H61 on all four worlds; the
+> *learned*-lift bets CX2–CX4 deferred to the trained/contrastive arm). See §8 for the status table.**
+> A *cross-world method* in the lineage of [SPEC-8](./SPEC-8.md)
 > (oracle-grounded self-supervision) and [SPEC-12](./SPEC-12.md) (planning over the world model): it
 > invents **no new world** — it runs on the SPEC-5 network, SPEC-6 host, and SPEC-7 distributed worlds
 > and their shipped oracles — and **no new oracle**. What it adds is a *formal layer*: the recognition
@@ -475,3 +477,43 @@ Reading order for a newcomer: [SPEC §2 (the oracle asymmetry)](./SPEC.md) →
 (§1 motivation, §2 the SCM identification, §3 architecture, §4 the load-bearing assumption, §5 the
 hypotheses) → [`src/verisim/netdata/negatives.py`](../../src/verisim/netdata/negatives.py) and
 `src/verisim/causal/abduct.py` (the concrete rung-3 build, once shipped).
+
+---
+
+## 8. Status (2026-06-08) — CX0 + CX1 SHIPPED (pure-oracle core; learned-lift bets deferred)
+
+The pure-oracle causal core is built and committed. The package is
+[`causal/`](../../src/verisim/causal/): `scm.py` (the world-generic SCM machinery -- `abduct_and_replay`,
+`abduction_exact`, `rung2_branch`, `rung3_counterfactual`, `downstream_amplification`). The world
+bundles, including the **distributed** world (the off-policy world where H5/H61 predicts the largest
+counterfactual structure), are in
+[`experiments/cx_common.py`](../../src/verisim/experiments/cx_common.py). Both experiments run on
+network/host/filesystem/distributed, CPU-only, deterministic and seeded -- no learner, no GPU.
+
+- ✅ **CX0 — the oracle is an exact SCM (H60 SUPPORTED — the gate).** Abduction-action-prediction is
+  **bit-exact on every world** (rate 1.0): recovering `U` from the seed and replaying `F` reproduces
+  the factual trajectory bit-for-bit, so rung-3 counterfactuals are *exact and free* -- abduction is an
+  `O(1)` reset+replay, not the intractable inference an oracle-free SCM faces. The rung-3 trajectory
+  genuinely differs from the factual (cf-differs 0.81–1.00), so the recovered `U` is producing a real
+  counterfactual. This is the identification the whole spec rests on, made empirical -- a *build*, not a
+  bet. [`cx0`](../../src/verisim/experiments/cx0.py), [`figures/cx0_scm_gate.png`](../../figures/cx0_scm_gate.png).
+- ✅ **CX1 — the counterfactual effect is hidden-state-dependent (H61 effect-size SUPPORTED — the
+  do-calculus reading of H5).** Sweeping interventions across depths/seeds and measuring the rung-2
+  immediate vs rung-3 downstream effect: the **distributed** world's counterfactual effect amplifies
+  **~3.6× downstream** (its persistent partition/crash medium carries the intervention forward, 65% of
+  interventions consequential), while the **on-policy-complete network/host** worlds amplify ~1× (the
+  effect washes out, 0–41% consequential). The clean ordering distributed ≫ host > filesystem ≫ network
+  is the do-calculus reading of the mixed H5: counterfactual *structure* is large exactly where the
+  world has off-policy exogenous hidden state. [`cx1`](../../src/verisim/experiments/cx1.py),
+  [`figures/cx1_counterfactual_effect.png`](../../figures/cx1_counterfactual_effect.png).
+- ✅ **H64 (the cross-world method) — supported in kind.** CX0 and CX1 run on all four worlds with the
+  *identical* SCM machinery and no per-world causal-discovery step (the SCM is *given* by the oracle,
+  not learned), so the rung-3 recipe is a cross-world method by construction.
+
+**Deferred to the trained/contrastive arm (the LP7 rule, §7), disclosed and never counted on a
+stand-in:** **CX2** (the three-world *learned* lift -- does training `M_θ` on rung-3 targets improve
+held-out counterfactual prediction), **CX3** (the matched-coverage cut, H62 -- branching vs coverage,
+the ED6 confound resolver), **CX4** (the CoDA contrast, H63), and **CX5** (the system-oracle fork). A
+non-parametric stand-in captures only the *coverage* channel of the lift, not the paired-contrast
+*structure* channel a parametric model exploits, so the learned-lift verdict honestly requires the
+trained arm; the pure-oracle core (the identification + the effect-size law) is what ships.

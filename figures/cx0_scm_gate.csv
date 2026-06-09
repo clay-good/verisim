@@ -1,0 +1,5 @@
+world,abduction_exact_rate,cf_differs_rate,n
+network,1.000000,0.812500,16
+host,1.000000,0.812500,16
+filesystem,1.000000,1.000000,16
+distributed,1.000000,1.000000,16

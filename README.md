@@ -1510,6 +1510,43 @@ The capstone ships the accumulated asset as a versioned product: a faithfulness 
 conformant, documented* packaging. The trained-`M_θ` leaderboard entries and a broad-grammar (non-zero
 ΔH) transfer arm remain. See [SPEC-18 §10](docs/specs/SPEC-18.md).
 
+### 40. The oracle as an exact Structural Causal Model (SPEC-17 / CX0–CX1 / H60–H61)
+
+The program's most-qualified result is H5: the counterfactual lift is *world-dependent* — it exists for
+the distributed fault-branch replay (ED6) but is null for plain supervision in the on-policy-complete
+network/host worlds (EN6/EH6). SPEC-17 gives that mixed result the one formalism that explains it
+cleanly — Pearl's ladder — by observing that a **deterministic, resettable, seedable oracle *is* an
+exact Structural Causal Model**: `step(s,a)` are the structural equations `F`, the seed/clock is the
+exogenous noise `U`, and **abduction is reset+replay** — recovering the exact `U` behind a factual state
+is an `O(1)` lookup, not the intractable inference an oracle-free SCM faces. From that one
+identification, all three rungs of Pearl's ladder are executable exactly and for free.
+
+The committed tranche is **pure-oracle** (no learner, no GPU): the `causal/` package + two experiments
+across all four worlds. The *learned* counterfactual-lift bets (CX2–CX4) are deferred to the trained
+arm — a non-parametric stand-in captures only the coverage channel, not the paired-contrast structure
+channel a parametric model exploits, so the learned verdict honestly needs the trained arm.
+
+**CX0 — the SCM gate (H60 supported, the build that licenses rung 3).** Abduction-action-prediction is
+**bit-exact on every world** (rate 1.0): recovering `U` from the seed and replaying `F` reproduces the
+factual trajectory bit-for-bit, so rung-3 counterfactuals are exact and free; the rung-3 trajectory
+genuinely differs from the factual (cf-differs 0.81–1.00). This is the identification the whole spec
+rests on, made empirical — a build, not a bet.
+
+**CX1 — the counterfactual effect is hidden-state-dependent (H61 effect-size, the do-calculus reading
+of H5).** Measuring each intervention's rung-2 *immediate* vs rung-3 *downstream* effect: the
+**distributed** world's effect amplifies **~3.6× downstream** (its persistent partition/crash medium
+carries the intervention forward, 65% of interventions consequential), while the on-policy-complete
+**network/host** worlds amplify ~1× (the effect washes out). The clean ordering distributed ≫ host >
+filesystem ≫ network *is* the mixed H5, now with a mechanism: counterfactual structure is large exactly
+where the world has off-policy exogenous hidden state.
+
+![CX1: the rung-3 downstream / rung-2 immediate amplification of an intervention, by world — distributed ~3.6× (persistent partition/crash medium carries the effect forward) ≫ host ~1.9× > filesystem ~1.1× ≫ network ~0.4× (the effect washes out as reachability re-converges); the do-calculus reading of the mixed H5](figures/cx1_counterfactual_effect.png)
+
+The same SCM machinery runs on all four worlds with no per-world causal-discovery step (the SCM is
+*given* by the oracle, not learned), so the rung-3 recipe is a cross-world method by construction
+(H64, in kind). The pure-oracle identification + effect-size law ship; the learned lift, the
+matched-coverage cut (H62), and the CoDA contrast (H63) remain. See [SPEC-17 §8](docs/specs/SPEC-17.md).
+
 ## The problem, and what we're trying to accomplish
 
 ### The wall every world model hits
@@ -1782,6 +1819,7 @@ host → distributed); three specs are *cross-cutting methods* every world inher
 | [SPEC-13](docs/specs/SPEC-13.md) | **method: speculative rollout** | the propose–verify–correct loop *is* speculative decoding lifted from tokens to world-states — draft `k`, the oracle verifies and accepts the longest faithful prefix, re-anchor at the break. **SR1–SR6 ship** ([`loop/speculative.py`](src/verisim/loop/speculative.py), [`experiments/sr_common.py`](src/verisim/experiments/sr_common.py)) on a controlled stand-in drafter (trained-`M_θ` arm deferred): **SR2 supports H40** (the accepted prefix tracks the i.i.d. law `E[a]=α(1−α^k)/(1−α)` and is governed by `g=ε/δ` — the metric's granularity, not world identity; this reframes K4 as a per-metric law and the worlds collapse onto one curve, [sr2](figures/sr2_accept_law.png)); **SR1 supports H39 above ρ\*, refutes below** (the headline budget crossover — speculative reaches *full faithfulness* above `ρ\*≈0.10/0.13/0.20` by consulting at the break, but is *budget-greedy* and loses to fixed's uniform spread below it, [sr1](figures/sr1_knee.png)); **SR3 supports H42** (a draft tree lifts the prefix ~2.3× under variance, flat under bias, [sr3](figures/sr3_tree.png)); **SR4 splits H41** (the EAGLE-2 confidence↔acceptance link transfers but calibrated draft length does not beat draft-long — the oracle-cost inversion, the verify stops at the break, [sr4](figures/sr4_calibration.png)); **SR5 refutes H43** (a cheap-drafter cascade saves no *oracle* calls — only the oracle adjudicates, banked negative, [sr5](figures/sr5_cascade.png)); **SR6 partially supports H44** (the win is hump-shaped in `g`, peaking in the transition band; worlds share the shape, collapse approximate, [sr6](figures/sr6_discreteness.png)). The whole program turns on the **cost inversion** — the oracle is the cost here, not the GPU. Only the trained-`M_θ` arm remains. |
 | [SPEC-15](docs/specs/SPEC-15.md) | **method: conformal consultation** | the *calibration altitude* beside the loop — the free, exact, unlimited oracle is a distribution-free conformal calibration set, so a consultation trigger gets a finite-sample coverage guarantee instead of a hand-set threshold. **CF1–CF4 ship** ([`conformal/`](src/verisim/conformal/), [`experiments/cf_common.py`](src/verisim/experiments/cf_common.py)) on a controlled signal stand-in (trained-`M_θ` arm + CF5 cross-world fork deferred): **CF1 passes H50 + supports H51** (the coverage gate holds on exchangeable data, and the calibrated trigger certifies the same α at ~0.43 lower ρ than fixed — a *guaranteed* RQ2 win, [cf1](figures/cf1_coverage_frontier.png)); **CF4 supports H53** (the EH2/ED2 mechanism — both signals hit coverage, but the calibrated one saves ~0.50 ρ and the uncalibrated ~0: conformal *validity* is signal-agnostic, *efficiency* is not, [cf4](figures/cf4_signal_split.png)); **CF2 supports H52** (the deepest result — static conformal's undetected rate climbs above α with rollout depth as exchangeability breaks, while ACI fed the free per-step oracle truth restores long-run coverage near target, [cf2](figures/cf2_drift_aci.png)); **CF3 supports H54** (conformal risk control on the graded loss buys ~0.22 lower ρ by tolerating near-misses, [cf3](figures/cf3_risk_control.png)). Resolves the RQ2 contradiction with a guarantee *and* a mechanism. |
 | [SPEC-18](docs/specs/SPEC-18.md) | **product: the benchmark** | the capstone — freezes the accumulated asset (the one faithfulness benchmark with *exact* labels) into a versioned product. **PB-bench/transfer/pack ship** ([`bench/`](src/verisim/bench/)) on the controlled-proposer core + the real-shell oracle (trained-arm leaderboard entries deferred): **PB-bench supports H65** (the leaderboard stably orders the fidelity ladder, Kendall τ=1.0 across seed splits, adjacent tiers resolved above paired noise — discriminative, [pb-bench](figures/pb_bench_leaderboard.png)); **PB-transfer supports H66 / banks H67** (the sim-to-emulation gap vs the SPEC-11 real-OS oracle is ΔH≈0 across the ρ-sweep on the validated grammar — transfer is lossless, the first such number in horizon terms, confirming SY1/H27; correction lifts the absolute real-OS horizon, [pb-transfer](figures/pb_transfer_gap.png)); **PB-pack supports H68** (the public-minus-held-out gap separates a memorizer ~+0.98 from an honest proposer ~+0.10 — contamination-resistant; conformance 6/6 green; Croissant + datasheet + model-card emitted to [bench/](bench/), [pb-pack](figures/pb_pack_contamination.png)). Ships the asset as a versioned, conformant, documented benchmark. |
+| [SPEC-17](docs/specs/SPEC-17.md) | **method: the oracle as an SCM** | a deterministic, resettable, seedable oracle *is* an exact Structural Causal Model (`step`=`F`, seed=`U`, abduction=reset+replay), so all three rungs of Pearl's ladder are executable exactly and for free. **CX0–CX1 ship** ([`causal/`](src/verisim/causal/), [`experiments/cx_common.py`](src/verisim/experiments/cx_common.py)) pure-oracle on all four worlds (learned-lift bets deferred): **CX0 supports H60** (abduction-action-prediction is bit-exact on every world, rate 1.0 — the gate that makes rung-3 counterfactuals exact and free, an O(1) lookup not the intractable inference of an oracle-free SCM, [cx0](figures/cx0_scm_gate.png)); **CX1 supports H61** (the counterfactual effect is hidden-state-dependent — it amplifies ~3.6× downstream on the distributed world's persistent medium but ~1× on the on-policy-complete network/host worlds: the do-calculus reading of the mixed H5, [cx1](figures/cx1_counterfactual_effect.png)); the recipe runs cross-world with no causal-discovery step (H64 in kind). The *learned* lift (CX2), matched-coverage cut (CX3/H62), and CoDA contrast (CX4/H63) are deferred to the trained/contrastive arm. |
 
 Semantics docs ([filesystem](docs/semantics.md), [network](docs/network-semantics.md)) pin the normative
 command semantics, paired with the reference oracles, which are the executable truth. SPEC-11's system
