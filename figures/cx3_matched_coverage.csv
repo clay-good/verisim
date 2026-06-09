@@ -1,0 +1,9 @@
+arm,metric,mean,ci_lo,ci_hi,coverage,n_examples,n
+trajectory,intervention_exact,0.2454,0.2025,0.2841,0.1033,639,12
+trajectory,medium_recall,0.2338,0.1812,0.2793,0.1033,639,12
++counterfactual,intervention_exact,0.4248,0.3756,0.4786,0.5915,639,12
++counterfactual,medium_recall,0.4662,0.4090,0.5309,0.5915,639,12
+factual-matched,intervention_exact,0.5689,0.5278,0.6105,0.7781,639,12
+factual-matched,medium_recall,0.6395,0.5837,0.6941,0.7781,639,12
++counterfactual-matched,intervention_exact,0.4265,0.3594,0.5012,0.7781,639,12
++counterfactual-matched,medium_recall,0.4795,0.3990,0.5665,0.7781,639,12

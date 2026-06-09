@@ -13,8 +13,10 @@ finally **disentangle counterfactual *branching* from fault *coverage*** — the
 qualifies the ED6 positive — by constructing interventions matched on coverage. This spec is the
 do-calculus reading of H5 and the experiment that resolves its open caveat.**
 
-> **✅ SHIPPED (pure-oracle core) — METHOD SPEC, 2026-06 (CX0 H60 + CX1 H61 on all four worlds + CX5
-> H64 on the real system oracles; the *learned*-lift bets CX2–CX4 deferred to the trained/contrastive
+> **✅ SHIPPED (pure-oracle core + the confound-resolver) — METHOD SPEC, 2026-06 (CX0 H60 + CX1 H61 on
+> all four worlds + CX5 H64 on the real system oracles + CX3 H62 — the matched-coverage cut that closes
+> the ED6 branching-vs-coverage caveat: **H62 REFUTED, the ED6 lift was fault coverage, not
+> counterfactual branching**; the *learned*-lift bets CX2/CX4 remain deferred to the trained/contrastive
 > arm). See §8 for the status table.**
 > A *cross-world method* in the lineage of [SPEC-8](./SPEC-8.md)
 > (oracle-grounded self-supervision) and [SPEC-12](./SPEC-12.md) (planning over the world model): it
@@ -484,7 +486,7 @@ hypotheses) → [`src/verisim/netdata/negatives.py`](../../src/verisim/netdata/n
 
 ---
 
-## 8. Status (2026-06-09) — CX0 + CX1 + CX5 SHIPPED (pure-oracle core; learned-lift bets deferred)
+## 8. Status (2026-06-09) — CX0 + CX1 + CX3 + CX5 SHIPPED (pure-oracle core + the confound-resolver)
 
 The pure-oracle causal core is built and committed. The package is
 [`causal/`](../../src/verisim/causal/): `scm.py` (the world-generic SCM machinery -- `abduct_and_replay`,
@@ -524,14 +526,30 @@ network/host/filesystem/distributed, CPU-only, deterministic and seeded -- no le
   Pure-oracle; a genuinely unavailable system oracle is a disclosed skip, never a pass.
   [`cx5`](../../src/verisim/experiments/cx5.py), [`configs/cx5.json`](../../configs/cx5.json),
   [`figures/cx5_system_oracle.png`](../../figures/cx5_system_oracle.png).
+- ◐ **CX3 — the matched-coverage cut (H62 REFUTED — branching was coverage; the program's open caveat,
+  closed).** A genuine CPU-scale trained-arm experiment ([`cx3`](../../src/verisim/experiments/cx3.py),
+  the new [`causal/coverage.py`](../../src/verisim/causal/coverage.py) sampler): the ED6 re-run with the
+  `+counterfactual` arm and a *factual* control matched on **both** example count *and* fault-coverage
+  (the fraction of training examples whose action changes the `_medium`). The factual-matched control is
+  a fault-heavy on-policy trajectory (high coverage, no branching); the +counterfactual-matched arm is
+  branches off the light-fault on-policy states (the same states, many alternative fault futures — the
+  abduction/re-grounding structure), subsampled to the identical coverage — so the two differ in
+  **branching alone**. **Result: at matched count and coverage (0.78) the factual control STRICTLY
+  beats the counterfactual arm** on held-out intervention-exact (0.569 vs 0.426) and medium-recall
+  (0.639 vs 0.480), **disjoint CIs both ways**. So ED6's ~2× lift was **fault coverage, not
+  counterfactual structure** — re-attributed to H21 (fault coverage at equal volume); branching per se
+  not only fails to help, a fault-heavy factual sequence does *better* (it visits deeper drifted states
+  in-sequence). The SPEC-7 §10.1 caveat resolves **decisively against branching** — the pre-registered
+  "no safe prior" question, answered. (The raw arms reproduce the original lift: trajectory 0.245 →
+  +counterfactual 0.425, at coverage 0.10 → 0.59 — the lift tracks coverage.)
+  [`figures/cx3_matched_coverage.png`](../../figures/cx3_matched_coverage.png).
 - ✅ **H64 (the cross-world method) — supported in kind *and* on the system oracle.** CX0/CX1 run on all
   four worlds with the *identical* SCM machinery and no per-world causal-discovery step (the SCM is
   *given* by the oracle, not learned); CX5 then shows the contract holds on the real system oracles too.
 
 **Deferred to the trained/contrastive arm (the LP7 rule, §7), disclosed and never counted on a
 stand-in:** **CX2** (the three-world *learned* lift -- does training `M_θ` on rung-3 targets improve
-held-out counterfactual prediction), **CX3** (the matched-coverage cut, H62 -- branching vs coverage,
-the ED6 confound resolver), and **CX4** (the CoDA contrast, H63). A non-parametric stand-in captures
-only the *coverage* channel of the lift, not the paired-contrast *structure* channel a parametric model
-exploits, so the learned-lift verdict honestly requires the trained arm; the pure-oracle core (the
-identification, the effect-size law, and the system-oracle transfer) is what ships.
+held-out counterfactual prediction) and **CX4** (the CoDA contrast, H63 -- exact-oracle vs learned-model
+augmentation, needing a CoDA learned-local-model baseline). The pure-oracle core (CX0/CX1 identification
++ effect-size law, CX5 system-oracle transfer) and the CX3 confound-resolver are what ship; CX2 and the
+CoDA contrast remain the open learned-arm bets.

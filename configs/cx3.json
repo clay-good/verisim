@@ -1,0 +1,24 @@
+{
+  "ed6": {
+    "train_driver": "uniform",
+    "intervention_driver": "adversarial",
+    "intervention_fault_prob": 0.85,
+    "intervention_partition_bias": 0.75,
+    "train_seeds": [0, 1, 2, 3],
+    "train_steps_per_traj": 40,
+    "k_counterfactual": 4,
+    "n_layer": 2,
+    "n_head": 2,
+    "n_embd": 64,
+    "block_size": 512,
+    "train_iters": 500,
+    "batch_size": 64,
+    "lr": 0.003,
+    "max_int": 256,
+    "eval_seeds": [100, 101, 102, 103],
+    "eval_steps": 24,
+    "m_interventions": 6
+  },
+  "target_coverage": null,
+  "model_seeds": [0, 1, 2]
+}
