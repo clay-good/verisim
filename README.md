@@ -1417,6 +1417,56 @@ draft length (SR4) and cascading cheap models (SR5) buy nothing because they onl
 was already free. The entire SPEC-13 program (SR1–SR6) is shipped on the controlled-drafter core; only
 the trained-`M_θ` arm remains. See [SPEC-13 §11](docs/specs/SPEC-13.md).
 
+### 38. Guaranteeing the trigger: oracle-calibrated conformal consultation (SPEC-15 / CF1–CF4 / H50–H54)
+
+Every consultation policy the program measured was a *heuristic* — "consult when the signal is high,"
+threshold hand-set, payoff decided empirically per arm. That produced a split with no theory: the
+host's calibrated belief-variance trigger beat fixed ~2.2× (EH2/H9), while the flat arm's
+decode-entropy trigger lost, and lost badly (ED2-smart). SPEC-15 turns the trigger into a *guarantee*
+and explains the split — using the one asset oracle-free domains can never have: **the oracle is a
+free, exact, unlimited calibration set**, the textbook precondition for **conformal prediction**. So
+the consultation threshold can be set to certify `P(undetected divergence > ε) ≤ α`, distribution-free
+and finite-sample.
+
+The calibrator is torch-free (it works on recorded `(score, oracle-divergence)` pairs); the committed
+CPU core supplies the *score* with a transparent controlled stand-in — a noisy predictor of the step's
+true divergence whose correlation is a stated knob (calibrated `belief_var` vs uncalibrated
+decode-entropy), the trained-`M_θ` arm deferred. The drift and divergence are real (the SPEC-13
+drafter against the real oracle). The layer is [`conformal/`](src/verisim/conformal/).
+
+**CF1 — the coverage gate + the ρ-vs-coverage frontier (H50 pass, H51 supported — the headline).** On
+exchangeable held-out steps the certified threshold keeps the empirical undetected-breach rate at or
+under `α` for every target (H50, an implementation-correctness gate), and the calibrated trigger
+certifies the same `α` at **~0.43 lower oracle budget ρ than fixed-interval** (H51) — a *guaranteed*
+version of the EH2/H9 win: fewer consults to certify the same safety.
+
+![CF1: the conformal coverage gate holds (empirical undetected rate on/under the y=x target line) and the calibrated conformal trigger certifies each α at far lower oracle budget ρ than fixed-interval](figures/cf1_coverage_frontier.png)
+
+**CF4 — conformalizability: the EH2/ED2 mechanism (H53 supported).** The *identical* conformal
+calibration on a calibrated signal saves ~0.50 ρ over fixed (score↔divergence slope ~+0.13) while on
+an uncalibrated signal it saves ~0 (slope ~0). Crucially **both hit coverage** — conformal *validity*
+is signal-agnostic; only *efficiency* is not. That is the measured, mechanistic statement of "entropy
+is a decode artifact, not a calibrated belief," and it explains the EH2-yes / ED2-smart-no split with
+one controlled comparison.
+
+**CF2 — exchangeability under rollout: static vs ACI (H52 supported — the deepest result).** Split
+conformal assumes exchangeability; an autoregressive rollout breaks it (the model goes overconfident as
+its state leaves the calibration distribution). Static conformal's undetected rate **climbs with depth**
+(0.10 → 0.41, above `α=0.1`). Gibbs–Candès **ACI**, fed the oracle's *free, exact per-step truth* — the
+verisim twist, since that feedback is unavailable in ACI's native time-series setting — restores the
+long-run rate near target (~0.13).
+
+![CF2: static conformal's undetected-breach rate climbs above α with rollout depth (exchangeability breaks) while adaptive conformal inference, fed the free per-step oracle truth, holds it near the target α](figures/cf2_drift_aci.png)
+
+**CF3 — conformal risk control (H54 supported).** Bounding the *graded* undetected-breach loss
+(severity, not a 0/1 indicator) buys ~0.22 lower ρ by tolerating near-misses, while still certifying
+`E[graded loss] ≤ α` — the coverage-only trigger over-protects.
+
+The headline is the program's RQ2 thread resolved at last with a guarantee *and* a mechanism: certify
+the trigger (CF1), explain the EH2/ED2 contradiction (CF4), and measure-and-fix the honest subtlety
+that exchangeability breaks under rollout (CF2). CF1–CF4 ship on the controlled-signal core; the
+trained-`M_θ` arm and the CF5 cross-world fork remain. See [SPEC-15 §12](docs/specs/SPEC-15.md).
+
 ## The problem, and what we're trying to accomplish
 
 ### The wall every world model hits
@@ -1687,6 +1737,7 @@ host → distributed); three specs are *cross-cutting methods* every world inher
 | [SPEC-11](docs/specs/SPEC-11.md) | **method: the system oracle** | validates the program's *one structural bet* — that a deterministic ground-truth oracle exists for computer worlds — by running the v0 grammar against a **real `/bin/sh` on a real kernel** in a hermetic sandbox and measuring agreement bit-for-bit (H27–H30). **The figure that retires W1.** |
 | [SPEC-12](docs/specs/SPEC-12.md) | **method: the landmark graph** | the planning altitude above the loop — a sparse graph of waypoint states with **oracle-verified** reachability edges, the L3P escape from the HS3 wall. **The §7 buildable tranche ships** ([`landmark/`](src/verisim/landmark/)): **LP1 refuted H31** (the latent doesn't encode planning geometry, ρ=0.27 → build in reachability space, [lp1](figures/lp1_latent_geometry.png)); **LP2 supports H32** (the hoped graph is 77% false edges; verification prunes all of them, residual 0.000, at 0.62× cost — the zero-false-paths faithful-graph artifact, [lp2](figures/lp2_faithful_graph.png)); **LP3 supports H33** (the headline — graph-search subgoals + per-hop re-grounding: flat free-running decays with goal-space distance 0.50→0.17 while landmark planning at ρ≈0.2 sustains and rises 0.50→0.83, a 5× far-goal gap that widens with distance and is monotone in the re-grounding budget — *structure buys goal-space horizon where SPEC-10 could not buy step horizon*, [lp3](figures/lp3_goal_reach.png)). **The LP4–LP7 follow-ons now ship too:** **LP4 supports H34** (reachability edges sustain 0.50→0.83, exact-state edges collapse to ~0 — exact-state horizon pinned at 0, reachability horizon ~7, [lp4](figures/lp4_edge_metric.png)); **LP5/LP6 are a mirrored pair** (placement: belief-variance is the load-bearing signal +0.10, betweenness underperforms; replanning: reachability-change beats fixed-interval +0.13, belief-variance miscalibrated — uncertainty for *where*, reachability-change for *when*, [lp5](figures/lp5_placement.png) / [lp6](figures/lp6_replanning.png)); **LP7 core supports H37** (graph search exact at every depth/degree while a myopic walk decays 1.00→0.39 by depth — the LLM-traverser arm deferred, [lp7](figures/lp7_traversal.png)). **LP8-dist supports H38 in kind** (the cross-world fork: the LP2/LP3 apparatus re-runs on `distsim` with the reachability→coarse-consistency/partition signature swap — flat free-running pinned near 0 on the consistency projection, consistency-landmark re-grounding lifts goal reach +0.10 monotone in budget, verified consistency-graph 75% false edges→0.000 residual at 0.46× cost; smaller magnitudes than network LP3 as the dist world is harder — *the method generalizes off the network*, [lp8-dist](figures/lp8_dist_goal_reach.png)). **LP8-host supports H38 more cleanly still** (the third world: the privilege/liveness class set — SPEC-6 §3.2 — as the host's design-choice projection; flat free-running decays with distance 0.50→0.00 while privilege-landmark re-grounding sustains 0.50 at the far goal, adv +0.18 monotone in budget, verified privilege-graph 74% false edges→0.000 residual at 0.25× cost — *the method holds across network/distributed/host, following whatever projection a world has an oracle for*, [lp8-host](figures/lp8_host_goal_reach.png)). Only LP7's deferred LLM arm remains. |
 | [SPEC-13](docs/specs/SPEC-13.md) | **method: speculative rollout** | the propose–verify–correct loop *is* speculative decoding lifted from tokens to world-states — draft `k`, the oracle verifies and accepts the longest faithful prefix, re-anchor at the break. **SR1–SR6 ship** ([`loop/speculative.py`](src/verisim/loop/speculative.py), [`experiments/sr_common.py`](src/verisim/experiments/sr_common.py)) on a controlled stand-in drafter (trained-`M_θ` arm deferred): **SR2 supports H40** (the accepted prefix tracks the i.i.d. law `E[a]=α(1−α^k)/(1−α)` and is governed by `g=ε/δ` — the metric's granularity, not world identity; this reframes K4 as a per-metric law and the worlds collapse onto one curve, [sr2](figures/sr2_accept_law.png)); **SR1 supports H39 above ρ\*, refutes below** (the headline budget crossover — speculative reaches *full faithfulness* above `ρ\*≈0.10/0.13/0.20` by consulting at the break, but is *budget-greedy* and loses to fixed's uniform spread below it, [sr1](figures/sr1_knee.png)); **SR3 supports H42** (a draft tree lifts the prefix ~2.3× under variance, flat under bias, [sr3](figures/sr3_tree.png)); **SR4 splits H41** (the EAGLE-2 confidence↔acceptance link transfers but calibrated draft length does not beat draft-long — the oracle-cost inversion, the verify stops at the break, [sr4](figures/sr4_calibration.png)); **SR5 refutes H43** (a cheap-drafter cascade saves no *oracle* calls — only the oracle adjudicates, banked negative, [sr5](figures/sr5_cascade.png)); **SR6 partially supports H44** (the win is hump-shaped in `g`, peaking in the transition band; worlds share the shape, collapse approximate, [sr6](figures/sr6_discreteness.png)). The whole program turns on the **cost inversion** — the oracle is the cost here, not the GPU. Only the trained-`M_θ` arm remains. |
+| [SPEC-15](docs/specs/SPEC-15.md) | **method: conformal consultation** | the *calibration altitude* beside the loop — the free, exact, unlimited oracle is a distribution-free conformal calibration set, so a consultation trigger gets a finite-sample coverage guarantee instead of a hand-set threshold. **CF1–CF4 ship** ([`conformal/`](src/verisim/conformal/), [`experiments/cf_common.py`](src/verisim/experiments/cf_common.py)) on a controlled signal stand-in (trained-`M_θ` arm + CF5 cross-world fork deferred): **CF1 passes H50 + supports H51** (the coverage gate holds on exchangeable data, and the calibrated trigger certifies the same α at ~0.43 lower ρ than fixed — a *guaranteed* RQ2 win, [cf1](figures/cf1_coverage_frontier.png)); **CF4 supports H53** (the EH2/ED2 mechanism — both signals hit coverage, but the calibrated one saves ~0.50 ρ and the uncalibrated ~0: conformal *validity* is signal-agnostic, *efficiency* is not, [cf4](figures/cf4_signal_split.png)); **CF2 supports H52** (the deepest result — static conformal's undetected rate climbs above α with rollout depth as exchangeability breaks, while ACI fed the free per-step oracle truth restores long-run coverage near target, [cf2](figures/cf2_drift_aci.png)); **CF3 supports H54** (conformal risk control on the graded loss buys ~0.22 lower ρ by tolerating near-misses, [cf3](figures/cf3_risk_control.png)). Resolves the RQ2 contradiction with a guarantee *and* a mechanism. |
 
 Semantics docs ([filesystem](docs/semantics.md), [network](docs/network-semantics.md)) pin the normative
 command semantics, paired with the reference oracles, which are the executable truth. SPEC-11's system

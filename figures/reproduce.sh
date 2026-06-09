@@ -434,4 +434,32 @@ echo "   but not exactly the peak (network saturates at lower g) — g governs t
 python -m verisim.experiments.sr6 --config configs/sr6.json \
     --out figures/sr6_discreteness.csv --plot figures/sr6_discreteness.png
 
-echo "== done: figures/{e1_curve,e2_policies,e3_operators,calibration,e4_ablation,objective,representation,auto_search,en1_curve,en2_policies,en3_operators,en4_graph_vs_flat,en8_grounding,en9_contrastive,en8_scale,en9_scale,en8_capacity,en9_negatives,en7_invariance,en5_selfheal,en6_counterfactual,en8_ls3_hero,en10_two_oracle,eh1_curve,eh1_composition,eh2_policies,eh3_operators,eh4_factored_vs_flat,eh4_drift,eh5_subsystem_policy,eh5_heads,eh_h14_interleaving,eh_h14_scale,eh7_invariance,eh8_privilege,eh6_two_oracle,eh_h13_scale,eh9_denial_weighted,eh6_counterfactual,eh_stream,synthesis_floor_cliff,horizon_scaling,horizon_scaling_xl,horizon_data_scaling,horizon_joint_scaling,horizon_host_scaling,horizon_graph_scaling,horizon_graph_data_scaling,horizon_graph_world_scaling,horizon_graph_joint_scaling,horizon_graph_schedule,horizon_synthesis,ed1_dist,ed1_learned,ed2,ed2_learned,ed2_smart,ed3,ed4_fault,ed4_consistency,ed5,ed6,ed6_two_oracle,ed6_two_oracle_learned,ed4_consistency,ed4_consistency_learned,ed7,ed8,ed9,ed10,ed11,ed12,ed13,ed14,ed15,ed16,ed17,ed18,ed19,sy1_agreement,sy2_disagreements,sy3_hermeticity,sy4_determinism,lp1_latent_geometry,lp2_faithful_graph,lp3_goal_reach,lp4_edge_metric,lp5_placement,lp6_replanning,lp7_traversal,lp8_dist_goal_reach,lp8_host_goal_reach,sr1_knee,sr2_accept_law,sr3_tree,sr4_calibration,sr5_cascade,sr6_discreteness}.{png,csv} =="
+# ---- SPEC-15: oracle-calibrated conformal consultation (CF) — a guaranteed, explained trigger ----
+echo "== CF1: split-conformal coverage gate (H50) + the ρ-vs-coverage frontier (H51) — THE HEADLINE =="
+echo "   RESULT: H50 gate holds (undetected ≤ α on exchangeable data) and H51 supported — the calibrated"
+echo "   trigger certifies the same α at ~0.43 lower ρ than fixed (a guaranteed RQ2 win: fewer consults"
+echo "   to certify the same safety). The oracle is the free, exact, unlimited calibration set."
+python -m verisim.experiments.cf1 --config configs/cf1.json \
+    --out figures/cf1_coverage_frontier.csv --plot figures/cf1_coverage_frontier.png
+
+echo "== CF4: conformalizability — belief_var vs decode-entropy (H53), the EH2/ED2-smart mechanism =="
+echo "   RESULT: H53 supported. Both signals HIT coverage (conformal validity is signal-agnostic), but"
+echo "   the calibrated signal saves ~0.50 ρ over fixed (score↔divergence slope +0.13) while the"
+echo "   uncalibrated saves ~0 (slope ~0) — conformal *efficiency* is not signal-agnostic."
+python -m verisim.experiments.cf4 --config configs/cf4.json \
+    --out figures/cf4_signal_split.csv --plot figures/cf4_signal_split.png
+
+echo "== CF2: exchangeability under rollout — static conformal vs ACI (H52), the deepest result =="
+echo "   RESULT: H52 supported. Static conformal's undetected rate climbs with depth (0.10 -> 0.41,"
+echo "   above α=0.1) — rollout drift breaks exchangeability; ACI, fed the free per-step oracle truth,"
+echo "   restores the long-run rate near target (~0.13). Residual deep lag motivates conformal-PID."
+python -m verisim.experiments.cf2 --config configs/cf2.json \
+    --out figures/cf2_drift_aci.csv --plot figures/cf2_drift_aci.png
+
+echo "== CF3: conformal risk control on the graded undetected-breach loss (H54) =="
+echo "   RESULT: H54 supported. Bounding the milder graded loss (vs the 0/1 indicator) buys ~0.22 lower"
+echo "   ρ by tolerating near-misses, while certifying E[graded loss] ≤ α. (CF5 cross-world fork: deferred.)"
+python -m verisim.experiments.cf3 --config configs/cf3.json \
+    --out figures/cf3_risk_control.csv --plot figures/cf3_risk_control.png
+
+echo "== done: figures/{e1_curve,e2_policies,e3_operators,calibration,e4_ablation,objective,representation,auto_search,en1_curve,en2_policies,en3_operators,en4_graph_vs_flat,en8_grounding,en9_contrastive,en8_scale,en9_scale,en8_capacity,en9_negatives,en7_invariance,en5_selfheal,en6_counterfactual,en8_ls3_hero,en10_two_oracle,eh1_curve,eh1_composition,eh2_policies,eh3_operators,eh4_factored_vs_flat,eh4_drift,eh5_subsystem_policy,eh5_heads,eh_h14_interleaving,eh_h14_scale,eh7_invariance,eh8_privilege,eh6_two_oracle,eh_h13_scale,eh9_denial_weighted,eh6_counterfactual,eh_stream,synthesis_floor_cliff,horizon_scaling,horizon_scaling_xl,horizon_data_scaling,horizon_joint_scaling,horizon_host_scaling,horizon_graph_scaling,horizon_graph_data_scaling,horizon_graph_world_scaling,horizon_graph_joint_scaling,horizon_graph_schedule,horizon_synthesis,ed1_dist,ed1_learned,ed2,ed2_learned,ed2_smart,ed3,ed4_fault,ed4_consistency,ed5,ed6,ed6_two_oracle,ed6_two_oracle_learned,ed4_consistency,ed4_consistency_learned,ed7,ed8,ed9,ed10,ed11,ed12,ed13,ed14,ed15,ed16,ed17,ed18,ed19,sy1_agreement,sy2_disagreements,sy3_hermeticity,sy4_determinism,lp1_latent_geometry,lp2_faithful_graph,lp3_goal_reach,lp4_edge_metric,lp5_placement,lp6_replanning,lp7_traversal,lp8_dist_goal_reach,lp8_host_goal_reach,sr1_knee,sr2_accept_law,sr3_tree,sr4_calibration,sr5_cascade,sr6_discreteness,cf1_coverage_frontier,cf2_drift_aci,cf3_risk_control,cf4_signal_split}.{png,csv} =="

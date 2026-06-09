@@ -1,0 +1,14 @@
+{
+  "drafter_alpha": 0.78,
+  "corr": 0.9,
+  "breach_quantile": 0.6,
+  "alpha": 0.10,
+  "gamma": 0.06,
+  "n_depth_buckets": 6,
+  "cal_rollouts": 24,
+  "cal_steps": 60,
+  "test_rollouts": 40,
+  "test_steps": 90,
+  "n_seeds": 8,
+  "base_seed": 0
+}

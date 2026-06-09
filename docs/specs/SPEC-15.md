@@ -9,7 +9,9 @@ oracle is a free, exact, unlimited calibration set — the textbook precondition
 so we can set the consultation threshold to GUARANTEE `P(undetected divergence > ε) ≤ α` distribution-free,
 finite-sample, and predict *which arm's trigger will work* from whether its signal is conformalizable.**
 
-> **◐ DESIGN — METHOD SPEC, 2026-06.** A *method* spec in the lineage of [SPEC-12](./SPEC-12.md): it
+> **✅ SHIPPED — METHOD SPEC, 2026-06 (CF1–CF4 on the controlled-signal core; trained-`M_θ` arm and
+> CF5 cross-world fork deferred). See §12 for the status table and results.** A *method* spec in the
+> lineage of [SPEC-12](./SPEC-12.md): it
 > invents **no new world** (it runs on the SPEC-5 network world and its shipped flat + graph arms) and
 > **no new oracle** (it reuses the data-plane `ReferenceNetworkOracle` for exact divergence and the
 > `ControlPlaneOracle` for the cheap reachability projection). What it adds is a *calibration altitude*
@@ -439,3 +441,57 @@ free and exact) → [SPEC.md §5, §7](./SPEC.md) (the loop, `π_c`, and the cal
 §3 the method, §4 the exchangeability assumption, §5 the hypotheses) →
 [`loop/policy.py`](../../src/verisim/loop/policy.py) and `src/verisim/conformal/calibrate.py` (the concrete
 build, once shipped).
+
+---
+
+## 12. Status (2026-06-08) — CF1–CF4 SHIPPED (committed CPU core; trained-`M_θ` arm deferred)
+
+The conformal program is built and committed. The calibrator is torch-free (it operates on recorded
+`(score, oracle-divergence)` pairs, §8), so the one dependency is the *score*: the trained `M_θ`'s
+`belief_var` / decode-entropy (GPU, `skipif`-guarded, the LP7 rule). The committed core supplies that
+score with a **controlled stand-in** — a noisy predictor of the step's true divergence whose
+correlation with it is a stated knob — so the two arms the spec must contrast (calibrated `belief_var`
+vs uncalibrated decode-entropy) are reproduced honestly. The *drift and divergence are real* (the
+SPEC-13 [`StallDrafter`](../../src/verisim/experiments/sr_common.py) free-running against the real
+oracle and the real divergence metric); only the score is a stand-in.
+
+The layer is [`conformal/`](../../src/verisim/conformal/): `calibrate.py` (the split-conformal /
+conformal-risk-control threshold `τ_α` and the region-conditional `τ_α(r)`), `policy.py`
+(`ConformalTriggered`, `AdaptiveConformalTriggered` — Gibbs–Candès ACI), `risk.py` (the graded
+undetected-breach loss). The data + scored-rollout generator is
+[`experiments/cf_common.py`](../../src/verisim/experiments/cf_common.py). All four run on CPU,
+deterministic and seeded, on the SPEC-5 network world.
+
+- ✅ **CF1 — the coverage gate + the ρ-vs-coverage frontier (H50 PASS, H51 SUPPORTED — the headline).**
+  On exchangeable held-out steps the certified threshold keeps the empirical undetected-breach rate at
+  or under `α` for every `α ∈ {0.01, 0.05, 0.10, 0.20}` (H50, an implementation-correctness gate), and
+  the calibrated trigger certifies the same `α` at **~0.43 lower oracle budget ρ** than fixed-interval
+  on average (H51) — a *guaranteed* version of the EH2/H9 win: fewer consults to certify the same
+  safety. [`cf1`](../../src/verisim/experiments/cf1.py), [`figures/cf1_coverage_frontier.png`](../../figures/cf1_coverage_frontier.png).
+- ✅ **CF4 — conformalizability: `belief_var` vs decode-entropy (H53 SUPPORTED — the mechanism).** The
+  *identical* conformal calibration on a calibrated signal saves ~0.50 ρ over fixed (score↔divergence
+  slope ~+0.13) while on an uncalibrated signal it saves ~0 (slope ~0) — **both hit coverage** (conformal
+  *validity* is signal-agnostic) but only the calibrated one is *efficient*. This is the measured,
+  mechanistic statement of the EH2-yes / ED2-smart-no split: entropy is a decode artifact, not a
+  calibrated belief. [`cf4`](../../src/verisim/experiments/cf4.py), [`figures/cf4_signal_split.png`](../../figures/cf4_signal_split.png).
+- ✅ **CF2 — exchangeability under rollout: static conformal vs ACI (H52 SUPPORTED — the deepest result).**
+  Static conformal's undetected rate **climbs with rollout depth** (0.10 → 0.41, above `α=0.1`) — the
+  autoregressive drift breaks exchangeability (modeled as the model going overconfident as its state
+  leaves the calibration distribution). Gibbs–Candès **ACI**, fed the oracle's *free, exact per-step
+  truth* (the verisim twist — that feedback is unavailable in ACI's native time-series setting),
+  restores the long-run undetected rate near target (~0.13) and roughly halves the deepest-depth miss
+  rate. Residual deep lag under monotone shift is banked, motivating conformal-PID (the §2.4 stretch).
+  [`cf2`](../../src/verisim/experiments/cf2.py), [`figures/cf2_drift_aci.png`](../../figures/cf2_drift_aci.png).
+- ✅ **CF3 — conformal risk control on the graded undetected-breach loss (H54 SUPPORTED).** Bounding the
+  *graded* loss (severity of the undetected breach) instead of the 0/1 indicator buys **~0.22 lower ρ**
+  by tolerating near-misses, while still certifying `E[graded loss] ≤ α` — the coverage-only trigger
+  over-protects by treating every breach as full-severity. [`cf3`](../../src/verisim/experiments/cf3.py),
+  [`figures/cf3_risk_control.png`](../../figures/cf3_risk_control.png).
+
+The headline is the program's RQ2 thread, finally resolved with a guarantee *and* a mechanism: the
+oracle is a free, exact, unlimited calibration set, so a consultation trigger can be **certified**
+(CF1), the EH2-yes / ED2-smart-no contradiction is **explained** (CF4: conformalizability), and the
+honest subtlety — exchangeability breaks under rollout — is **measured and fixed** (CF2: ACI on free
+per-step feedback). Remaining: the trained-`M_θ` arm (the one GPU dependency) and the CF5 cross-world
+fork (re-run CF1/CF4 on the host and distributed arms) — the rest of SPEC-15 (CF1–CF4, network) is
+shipped on the controlled-signal core.

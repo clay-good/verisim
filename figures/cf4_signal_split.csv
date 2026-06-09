@@ -1,0 +1,3 @@
+arm,test_undetected,conformal_rho,cf_lo,cf_hi,fixed_rho,score_div_slope,n
+calibrated,0.027868,0.373043,0.353774,0.393498,0.872669,0.125062,12
+uncalibrated,0.045092,0.883480,0.850697,0.915084,0.872669,-0.002958,12
