@@ -1320,10 +1320,27 @@ oracle can verify it.
 
 ![LP8-dist: flat free-running is pinned near 0 on the distributed world's consistency projection (the HS3 analogue) while consistency-landmark re-grounding lifts goal reach (adv +0.10, monotone in budget); the verified consistency-graph prunes 75% false edges to 0.000 residual at 0.46× cost](figures/lp8_dist_goal_reach.png)
 
-With LP1–LP7 (network) and LP8-dist (distributed) shipped, the only remaining SPEC-12 work is
-**LP8-host** — the host world has no canonical coarse reachability/partition hidden state, so the
-projection is a design choice rather than a given, making it the next evidence-gated increment (now
-licensed by the dist result) — and LP7's deferred LLM arm. See [SPEC-12 §7](docs/specs/SPEC-12.md).
+**LP8-host — the third world, transferring more cleanly (H38 supported).** The host fork is the
+*harder* test: unlike the network (reachability) and distributed (partition/consistency) worlds, the
+host has **no given coarse hidden state** — its security-relevant projection is **privilege** (SPEC-6
+§3.2: a non-root process gaining root), encoded as the coarse **privilege/liveness class set** — the
+set of `(process state, uid)` classes present, count-free (it drops the exact process population so a
+second `fork` does not move it, but an escalation or a process-death does). The pre-registered worry
+was that this projection might be too *stable* (the model already faithful, re-grounding pointless) —
+but measurement refuted it: the trained host model genuinely drifts on privilege over long free-runs.
+The result transfers **more cleanly than the dist fork**: flat free-running decays with distance (goal
+reach 0.50 → 0.00, the HS3 cliff at privilege altitude) while privilege-landmark re-grounding sustains
+(0.50 at the far goal), mean **adv +0.18**, monotone in budget (ρ: 0 → 1/8 → 1/4 → 1/2 gives 0.00 →
+0.08 → 0.25 → 0.50), and the verified privilege-graph prunes **74% false edges** to 0.000 residual at
+the **cheapest consult of the three worlds (0.25×** the bit-exact set).
+
+![LP8-host: flat free-running decays with distance (0.50→0.00, the HS3 cliff at privilege altitude) while privilege-landmark re-grounding sustains (0.50 at the far goal, adv +0.18, monotone in budget); the verified privilege-graph prunes 74% false edges to 0.000 residual at 0.25× cost](figures/lp8_host_goal_reach.png)
+
+So the landmark method holds across **all three worlds** — network *reachability*, distributed
+*consistency/partition*, host *privilege* — the strongest form of H38: **it is not network-specific; it
+follows whatever planning-relevant projection a world has an oracle for.** The entire SPEC-12
+experimental program (LP1–LP8) is shipped; only LP7's deferred LLM arm (the one external-model
+dependency) remains. See [SPEC-12 §7](docs/specs/SPEC-12.md).
 
 ## The problem, and what we're trying to accomplish
 
@@ -1593,7 +1610,7 @@ host → distributed); three specs are *cross-cutting methods* every world inher
 | [SPEC-9](docs/specs/SPEC-9.md) | **method: free-oracle scaling** | because the oracle labels for free, world size is a *compute* choice, not a labeling-budget one — how large/deep the world goes on one machine, and what holds as it grows |
 | [SPEC-10](docs/specs/SPEC-10.md) | **method: the faithful-horizon scaling law** | scales the *prime directive itself* (`H_ε(ρ)`) along model capacity: does free-running faithful horizon grow with scale, or is the one-step→horizon compounding gap fundamental (H26)? |
 | [SPEC-11](docs/specs/SPEC-11.md) | **method: the system oracle** | validates the program's *one structural bet* — that a deterministic ground-truth oracle exists for computer worlds — by running the v0 grammar against a **real `/bin/sh` on a real kernel** in a hermetic sandbox and measuring agreement bit-for-bit (H27–H30). **The figure that retires W1.** |
-| [SPEC-12](docs/specs/SPEC-12.md) | **method: the landmark graph** | the planning altitude above the loop — a sparse graph of waypoint states with **oracle-verified** reachability edges, the L3P escape from the HS3 wall. **The §7 buildable tranche ships** ([`landmark/`](src/verisim/landmark/)): **LP1 refuted H31** (the latent doesn't encode planning geometry, ρ=0.27 → build in reachability space, [lp1](figures/lp1_latent_geometry.png)); **LP2 supports H32** (the hoped graph is 77% false edges; verification prunes all of them, residual 0.000, at 0.62× cost — the zero-false-paths faithful-graph artifact, [lp2](figures/lp2_faithful_graph.png)); **LP3 supports H33** (the headline — graph-search subgoals + per-hop re-grounding: flat free-running decays with goal-space distance 0.50→0.17 while landmark planning at ρ≈0.2 sustains and rises 0.50→0.83, a 5× far-goal gap that widens with distance and is monotone in the re-grounding budget — *structure buys goal-space horizon where SPEC-10 could not buy step horizon*, [lp3](figures/lp3_goal_reach.png)). **The LP4–LP7 follow-ons now ship too:** **LP4 supports H34** (reachability edges sustain 0.50→0.83, exact-state edges collapse to ~0 — exact-state horizon pinned at 0, reachability horizon ~7, [lp4](figures/lp4_edge_metric.png)); **LP5/LP6 are a mirrored pair** (placement: belief-variance is the load-bearing signal +0.10, betweenness underperforms; replanning: reachability-change beats fixed-interval +0.13, belief-variance miscalibrated — uncertainty for *where*, reachability-change for *when*, [lp5](figures/lp5_placement.png) / [lp6](figures/lp6_replanning.png)); **LP7 core supports H37** (graph search exact at every depth/degree while a myopic walk decays 1.00→0.39 by depth — the LLM-traverser arm deferred, [lp7](figures/lp7_traversal.png)). **LP8-dist supports H38 in kind** (the cross-world fork: the LP2/LP3 apparatus re-runs on `distsim` with the reachability→coarse-consistency/partition signature swap — flat free-running pinned near 0 on the consistency projection, consistency-landmark re-grounding lifts goal reach +0.10 monotone in budget, verified consistency-graph 75% false edges→0.000 residual at 0.46× cost; smaller magnitudes than network LP3 as the dist world is harder — *the method generalizes off the network*, [lp8](figures/lp8_dist_goal_reach.png)). Only **LP8-host** and LP7's LLM arm remain. |
+| [SPEC-12](docs/specs/SPEC-12.md) | **method: the landmark graph** | the planning altitude above the loop — a sparse graph of waypoint states with **oracle-verified** reachability edges, the L3P escape from the HS3 wall. **The §7 buildable tranche ships** ([`landmark/`](src/verisim/landmark/)): **LP1 refuted H31** (the latent doesn't encode planning geometry, ρ=0.27 → build in reachability space, [lp1](figures/lp1_latent_geometry.png)); **LP2 supports H32** (the hoped graph is 77% false edges; verification prunes all of them, residual 0.000, at 0.62× cost — the zero-false-paths faithful-graph artifact, [lp2](figures/lp2_faithful_graph.png)); **LP3 supports H33** (the headline — graph-search subgoals + per-hop re-grounding: flat free-running decays with goal-space distance 0.50→0.17 while landmark planning at ρ≈0.2 sustains and rises 0.50→0.83, a 5× far-goal gap that widens with distance and is monotone in the re-grounding budget — *structure buys goal-space horizon where SPEC-10 could not buy step horizon*, [lp3](figures/lp3_goal_reach.png)). **The LP4–LP7 follow-ons now ship too:** **LP4 supports H34** (reachability edges sustain 0.50→0.83, exact-state edges collapse to ~0 — exact-state horizon pinned at 0, reachability horizon ~7, [lp4](figures/lp4_edge_metric.png)); **LP5/LP6 are a mirrored pair** (placement: belief-variance is the load-bearing signal +0.10, betweenness underperforms; replanning: reachability-change beats fixed-interval +0.13, belief-variance miscalibrated — uncertainty for *where*, reachability-change for *when*, [lp5](figures/lp5_placement.png) / [lp6](figures/lp6_replanning.png)); **LP7 core supports H37** (graph search exact at every depth/degree while a myopic walk decays 1.00→0.39 by depth — the LLM-traverser arm deferred, [lp7](figures/lp7_traversal.png)). **LP8-dist supports H38 in kind** (the cross-world fork: the LP2/LP3 apparatus re-runs on `distsim` with the reachability→coarse-consistency/partition signature swap — flat free-running pinned near 0 on the consistency projection, consistency-landmark re-grounding lifts goal reach +0.10 monotone in budget, verified consistency-graph 75% false edges→0.000 residual at 0.46× cost; smaller magnitudes than network LP3 as the dist world is harder — *the method generalizes off the network*, [lp8-dist](figures/lp8_dist_goal_reach.png)). **LP8-host supports H38 more cleanly still** (the third world: the privilege/liveness class set — SPEC-6 §3.2 — as the host's design-choice projection; flat free-running decays with distance 0.50→0.00 while privilege-landmark re-grounding sustains 0.50 at the far goal, adv +0.18 monotone in budget, verified privilege-graph 74% false edges→0.000 residual at 0.25× cost — *the method holds across network/distributed/host, following whatever projection a world has an oracle for*, [lp8-host](figures/lp8_host_goal_reach.png)). Only LP7's deferred LLM arm remains. |
 
 Semantics docs ([filesystem](docs/semantics.md), [network](docs/network-semantics.md)) pin the normative
 command semantics, paired with the reference oracles, which are the executable truth. SPEC-11's system
@@ -1764,7 +1781,7 @@ full result write-up is [docs/report.md](docs/report.md).
 > (rr/Hermit/gVisor) — a real-OS dependency, deferred under the no-egress posture (SPEC-6 §15).
 > The per-subsystem decode *heads* shipped as EH5-heads (above), an honest negative.
 >
-> **The planning layer (SPEC-12) has shipped LP1–LP7 (network) + LP8-dist (distributed)**
+> **The planning layer (SPEC-12) has shipped LP1–LP8 across all three worlds (network + distributed + host)**
 > ([`landmark/`](src/verisim/landmark/),
 > [§36](#36-from-faithfulness-to-planning-the-oracle-grounded-landmark-graph-spec-12--lp1lp8--h31h38)):
 > the §7 *confidently-buildable* tranche, the headline (LP3/H33), and the LP4–LP7 follow-ons, each rung
@@ -1803,8 +1820,15 @@ full result write-up is [docs/report.md](docs/report.md).
 > re-grounding lifts goal reach (adv +0.10, monotone in budget), and the verified consistency-graph
 > prunes 75% false edges to 0.000 residual at 0.46× cost; the magnitudes are smaller than the network
 > LP3 because the dist world is harder — *the planning method generalizes off the network*,
-> [`lp8_dist_goal_reach.png`](figures/lp8_dist_goal_reach.png). Remaining: **LP8-host** (no canonical
-> coarse projection — the next gated increment) and LP7's deferred LLM arm.
+> [`lp8_dist_goal_reach.png`](figures/lp8_dist_goal_reach.png). **LP8-host then transfers more cleanly
+> still** — the third world, whose design-choice projection is the coarse privilege/liveness class set
+> (SPEC-6 §3.2): flat free-running decays with distance (0.50 → 0.00, the HS3 cliff at privilege
+> altitude) while privilege-landmark re-grounding sustains (0.50 at the far goal), adv +0.18 monotone in
+> budget, and the verified privilege-graph prunes 74% false edges to 0.000 residual at the cheapest
+> consult of the three worlds (0.25×); the worry that the privilege projection was too stable was
+> refuted by measurement, [`lp8_host_goal_reach.png`](figures/lp8_host_goal_reach.png). So the landmark
+> method holds across **all three worlds** (network reachability / distributed consistency / host
+> privilege) — the strongest form of H38. Remaining: only LP7's deferred LLM arm.
 
 **v0 — shell/filesystem world (`src/verisim/`, SPEC-2 §13): complete.**
 

@@ -1,0 +1,18 @@
+{
+  "train_driver": "forky",
+  "train_seeds": [0, 1, 2, 3],
+  "train_steps_per_traj": 40,
+  "train_iters": 700,
+  "n_layer": 2,
+  "n_head": 2,
+  "n_embd": 64,
+  "block_size": 256,
+  "lr": 0.003,
+  "model_seed": 0,
+  "eval_difficulties": {"low": "uniform", "high": "adversarial"},
+  "eval_seeds": [100, 101, 102, 103, 104, 105],
+  "hop_length": 4,
+  "goal_distances": [4, 8, 12, 16, 20],
+  "budget_hop_lengths": [2, 4, 8],
+  "budget_goal_distance": 16
+}

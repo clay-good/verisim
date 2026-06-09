@@ -370,11 +370,12 @@ oracle-free landmark planner is, here, a measurement with a banked alternative o
   world (`distsim`, where partition/reachability is the hidden state ED12 measured), giving long-range
   plans the same way it does on the network. *Refuted if* it is network-specific (the reachability edge
   metric does not generalize) — itself a result about which worlds admit landmark planning. Tested as
-  **LP8** (deferred fork; runs after the network headline). **Result — the distributed fork SUPPORTED
-  IN KIND ([`lp8_dist`](../../src/verisim/experiments/lp8_dist.py),
+  **LP8** (deferred fork; runs after the network headline). **Result — SUPPORTED across all three
+  worlds (network + distributed + host); both forks landed. The distributed fork
+  ([`lp8_dist`](../../src/verisim/experiments/lp8_dist.py),
   [`landmark/dist.py`](../../src/verisim/landmark/dist.py),
-  [`figures/lp8_dist_goal_reach.png`](../../figures/lp8_dist_goal_reach.png); the host fork deferred,
-  below). The whole LP2/LP3 apparatus re-runs on `distsim` with one swap: the network's *reachability*
+  [`figures/lp8_dist_goal_reach.png`](../../figures/lp8_dist_goal_reach.png); the host fork below). The
+  whole LP2/LP3 apparatus re-runs on `distsim` with one swap: the network's *reachability*
   signature becomes the distributed world's **coarse consistency/partition structure** — per-object
   converged-vs-split, the partition topology, and the down-node set (the ED12 hidden state, and
   deliberately coarse: the per-replica exact `(version, value)` increments every write and would make
@@ -388,10 +389,22 @@ oracle-free landmark planner is, here, a measurement with a banked alternative o
   *smaller* than the network LP3 (which reached 0.83): the distributed world is genuinely harder — the
   model's per-hop coarse-consistency faithfulness caps the lift at ~0.25 and the far goal G=20 is not
   reliably reached — and that weaker-but-real transfer is itself the honest cross-world finding. CIs
-  overlap at this fast-CI scale (banked). **Host fork deferred:** unlike the network (reachability) and
-  the distributed world (partition/consistency), the host world has no canonical coarse "reachability"
-  hidden state — the process/fd/exit structure is a *design choice* of projection, not a given — so
-  LP8-host is the next evidence-gated increment (licensed now by the dist result), not forced here.**
+  overlap at this fast-CI scale (banked). **And the HOST fork now lands too, supporting H38 across all
+  three worlds** ([`lp8_host`](../../src/verisim/experiments/lp8_host.py),
+  [`landmark/host.py`](../../src/verisim/landmark/host.py),
+  [`figures/lp8_host_goal_reach.png`](../../figures/lp8_host_goal_reach.png)). The host world has no
+  *given* coarse projection — process/fd/exit structure is a design choice, the honest test of H38's
+  refutation branch — so the signature is the **coarse privilege/liveness class set** (the set of
+  `(process state, uid)` classes present, count-free; the SPEC-6 §3.2 privilege axis). On it the method
+  transfers *more cleanly than on the dist world*: flat free-running decays with distance (goal reach
+  0.50 → 0.00, the HS3 cliff at privilege altitude) while privilege-landmark re-grounding sustains
+  (0.50 → 0.50 at the far goal), mean **adv +0.18**, monotone in budget (ρ: 0 → 1/8 → 1/4 → 1/2 gives
+  0.00 → 0.08 → 0.25 → 0.50), and the verified privilege-graph prunes 74% false edges to 0.000 residual
+  at the cheapest consult yet (**0.25×** the bit-exact set). The pre-session worry (the privilege
+  projection too stable / the model too faithful, so re-grounding buys nothing) was *refuted by
+  measurement*: the trained host model genuinely drifts on privilege over long free-runs. So the
+  landmark method is **not network-specific** — it follows whatever planning-relevant projection a
+  world has an oracle for (reachability / consistency / privilege), the strongest form of H38.**
 
 ---
 
@@ -465,10 +478,18 @@ oracles, the `imagine`/`verify` loop) — SPEC-12 adds the graph builder, the se
   supported in kind: flat free-running pinned near 0 on the consistency projection (the HS3 analogue),
   consistency-landmark re-grounding lifts goal reach (adv +0.10, monotone in budget), verified
   consistency-graph 75% false edges → 0.000 residual at 0.46× cost. Smaller magnitudes than the network
-  LP3 — the dist world is harder — which is the honest transfer finding.** **LP8-host deferred**
-  (`experiments/lp8_host.py`): the host world lacks a canonical coarse reachability/partition hidden
-  state, so the projection is a design choice rather than a given — the next evidence-gated increment,
-  licensed by the dist result.
+  LP3 — the dist world is harder — which is the honest transfer finding.**
+
+- ✅ **LP8-host — cross-world fork (H38).** Re-run LP2/LP3 on `hostsim`, swapping the reachability
+  signature for the coarse **privilege/liveness class set** (the SPEC-6 §3.2 privilege axis — the host
+  world has no *given* coarse projection, so this is the honest test of H38's refutation branch).
+  `experiments/lp8_host.py`, `configs/lp8_host.json`, `src/verisim/landmark/host.py`. **Shipped — H38
+  supported, more cleanly than the dist fork: flat free-running decays with distance (0.50 → 0.00, the
+  HS3 cliff at privilege altitude) while privilege-landmark re-grounding sustains (0.50 at the far
+  goal), adv +0.18, monotone in budget (0 → 0.08 → 0.25 → 0.50); verified privilege-graph 74% false
+  edges → 0.000 residual at 0.25× cost (the cheapest consult of the three worlds). The worry that the
+  privilege projection would be too stable was refuted by measurement — the host model drifts on
+  privilege over long free-runs.** The landmark method now holds across network/distributed/host.
 
 ---
 
@@ -499,8 +520,8 @@ graduates on a committed figure or a banked negative that licenses the next (SPE
 
 **Status (2026-06-08).** The §7 *confidently-buildable* tranche shipped, the headline bet (LP3)
 landed and supported H33, the full network LP series LP1–LP7 shipped, and **the LP8 cross-world fork
-has now landed on the distributed world** (only LP8-host and LP7's deferred LLM arm remain) — each
-rung graduating on a committed figure:
+has now landed on BOTH the distributed and the host worlds** — so the entire SPEC-12 experimental
+program (LP1–LP8) is shipped bar LP7's deferred LLM arm, each rung graduating on a committed figure:
 
 - ✅ **LP1** ([`lp1`](../../src/verisim/experiments/lp1.py),
   [`figures/lp1_latent_geometry.png`](../../figures/lp1_latent_geometry.png)) — the gate ran and
@@ -554,10 +575,20 @@ rung graduating on a committed figure:
   reach (adv +0.10, monotone in budget); the verified consistency-graph prunes 75% false edges to
   0.000 residual at 0.46× cost. Smaller magnitudes than the network LP3 (the dist world is harder) —
   the honest transfer finding. **The method generalizes off the network.**
+- ✅ **LP8-host** ([`lp8_host`](../../src/verisim/experiments/lp8_host.py),
+  [`landmark/host.py`](../../src/verisim/landmark/host.py),
+  [`figures/lp8_host_goal_reach.png`](../../figures/lp8_host_goal_reach.png)) — the third world,
+  **supporting H38 more cleanly than the dist fork**: the LP2/LP3 apparatus re-runs on `hostsim` with
+  the reachability→coarse **privilege/liveness class set** swap (the SPEC-6 §3.2 privilege axis, the
+  host world's design-choice projection). Flat free-running decays with distance (0.50 → 0.00, the HS3
+  cliff at privilege altitude) while privilege-landmark re-grounding sustains (0.50 at the far goal),
+  adv +0.18, monotone in budget; the verified privilege-graph prunes 74% false edges to 0.000 residual
+  at the cheapest consult of the three worlds (0.25×). **The landmark method holds across all three
+  worlds — it follows whatever planning-relevant projection a world has an oracle for, the strongest
+  form of H38.**
 
-Remaining: **LP8-host** (the host world has no canonical coarse reachability/partition projection, so
-the projection choice is itself the next increment) and **LP7's deferred LLM arm** (the one
-external-model dependency).
+Remaining: only **LP7's deferred LLM arm** (the one external-model dependency) — the rest of the
+SPEC-12 experimental program (LP1–LP8, network + distributed + host) is shipped.
 
 ---
 
@@ -594,7 +625,8 @@ src/verisim/landmark/                 # NEW — the planning layer (no new world
   verify.py           # oracle edge-verification (data-plane exact + control-plane cheap)
   plan.py             # high-level graph search → subgoal sequence; per-hop H_ε bound
   placement.py        # landmark placement policies (random / betweenness / belief-variance / combined)
-  dist.py             # the distributed twin (LP8): consistency signature + re-grounding executor
+  dist.py             # the distributed twin (LP8-dist): consistency signature + re-grounding executor
+  host.py             # the host twin (LP8-host): privilege signature + re-grounding executor
 src/verisim/experiments/
   lp1.py … lp8_*.py   # NEW — the LP experiments
 figures/
