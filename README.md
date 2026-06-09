@@ -2363,6 +2363,51 @@ but whether its *height* is a resourcing artifact is **proposer-dependent**.
 | **HS3-T** | capacity → **LR schedule** | network / graph | the `p` plateau is the **representation, not the flat LR** (schedule lifts only 0.66→0.68) |
 | **HS-synth** | — (figures-from-records) | flat vs graph overlay | the capstone: the floor is **proposer-dependent**, in one figure |
 
+### SPEC-13–18 hypothesis-verdict ledger (the method-spec era, H39–H68)
+
+Every hypothesis in the SPEC-13–18 research backlog, with its verdict, the experiment that decided it,
+and the committed figure. Verdicts: **✓** supported · **✗** refuted · **◐** split/partial · **⊟**
+banked negative (a pre-registered, load-bearing null) · **⟂** gate-pass · **○** deferred (a trained-`M_θ`
+/ GPU-scale bet, never counted on a stand-in — the LP7 rule). Each row is read on the program's one
+axis, the faithful horizon `H_ε(ρ)`; the controlled-core and pure-oracle results ship now, the deferred
+rows are the honest frontier.
+
+| H | verdict | experiment | finding (one line) | figure |
+|---|---------|-----------|--------------------|--------|
+| **H39** | ◐ | SR1 | speculative lifts faithful-steps-per-oracle-call **above** a budget crossover `ρ*≈0.10/0.13/0.20`, loses below (accept-longest-prefix is budget-greedy) | [sr1](figures/sr1_knee.png) |
+| **H40** | ✓ | SR2 | the accepted-prefix tracks the i.i.d. law `E[a]=α(1−α^k)/(1−α)`, governed by `g=ε/δ` (metric granularity), not world identity | [sr2](figures/sr2_accept_law.png) |
+| **H41** | ◐ | SR4 | the EAGLE-2 confidence↔acceptance link transfers, but calibrated draft-length does **not** beat draft-long — the oracle-cost inversion | [sr4](figures/sr4_calibration.png) |
+| **H42** | ✓ | SR3 | a draft tree lifts the accepted prefix ~2.3× under variance, flat under bias (stochastic vs systematic stalls) | [sr3](figures/sr3_tree.png) |
+| **H43** | ✗ | SR5 | a cheap-drafter cascade saves **no** oracle calls — only the oracle adjudicates faithfulness | [sr5](figures/sr5_cascade.png) |
+| **H44** | ◐ | SR6 | the speculative-vs-fixed win is hump-shaped in `g`; the worlds collapse onto the curve approximately | [sr6](figures/sr6_discreteness.png) |
+| **H45** | ✗ | NA0 | the graph processor **does** execute the multi-hop reachability propagation (per-round `h_r` decodes the ≤r-hop frontier at ~2–3× the pre-propagation control) | [na0](figures/na0_hint_probe.png) |
+| **H46** | ⊟ | NA5, NA6 | the `H_free=0` wall is the **decoder/rollout** (NA5: the processor stays faithful to its own drifted state); decoder-side rollout-stability training does **not** lift `H_free` at CPU scale (NA6) | [na5](figures/na5_decode_rollout.png) · [na6](figures/na6_decode_training.png) |
+| **H47** | ○ | NA2 | algorithmic-alignment of the aggregation/update is necessary beyond hints — GPU-scale bet | — |
+| **H48** | ○ | NA3 | iterate-to-convergence at inference buys horizon (DEQ/ACT axis) — GPU-scale bet | — |
+| **H49** | ○ | NA4 | NAR training closes the proxy/truth split and transfers cross-world — GPU-scale bet | — |
+| **H50** | ⟂ | CF1 | the split-conformal trigger hits target coverage on exchangeable steps (the implementation gate) | [cf1](figures/cf1_coverage_frontier.png) |
+| **H51** | ✓ | CF1 | the calibrated trigger certifies the same `α` at **~0.43 lower oracle budget `ρ`** than fixed — a guaranteed RQ2 win | [cf1](figures/cf1_coverage_frontier.png) |
+| **H52** | ✓ | CF2 | static conformal loses coverage under rollout drift (0.10→0.41); ACI fed the free per-step oracle truth restores it (~0.13) | [cf2](figures/cf2_drift_aci.png) |
+| **H53** | ✓ | CF4, CF5, CF6 | conformalizability explains the EH2-yes/ED2-no split (calibrated saves ~0.50 `ρ`, uncalibrated ~0); transfers cross-world (CF5); the **real** network `belief_var` is **not** conformalizable so it inherits validity but not efficiency (CF6) | [cf4](figures/cf4_signal_split.png) · [cf6](figures/cf6_real_signal.png) |
+| **H54** | ✓ | CF3 | conformal risk control on the graded undetected-breach loss buys ~0.22 lower `ρ` by tolerating near-misses | [cf3](figures/cf3_risk_control.png) |
+| **H55** | ⊟ | RS1 | free-oracle DAgger does **not** lift `H_ε` at CPU scale — fundamental compounding, not exposure bias (the real flat `M_θ`) | [rs1](figures/rs1_dagger.png) |
+| **H56–H59** | ○ | RS2–RS7 | scheduled-sampling / noise / unrolled-loss / per-compute Pareto / cross-world (NA6 corroborates the negative on the structured arm) — GPU-scale bets | — |
+| **H60** | ✓ | CX0 | the oracle is an exact SCM — abduction (reset+replay) is bit-exact (rate 1.0), so rung-3 counterfactuals are exact and free | [cx0](figures/cx0_scm_gate.png) |
+| **H61** | ✓ | CX1 | the counterfactual effect is hidden-state-dependent: distributed ~3.6× downstream amplification ≫ network ~0.4× (the off-policy medium carries it) | [cx1](figures/cx1_counterfactual_effect.png) |
+| **H62** | ○ | CX3 | counterfactual branching carries the lift net of coverage (the matched-coverage cut) — trained/contrastive-arm bet | — |
+| **H63** | ○ | CX4 | exact-oracle counterfactual augmentation (CoDA) beats a learned model — trained-arm bet | — |
+| **H64** | ✓ | CX5 | the SCM framing is cross-world and **survives the system oracle** — abduction + rung-3 bit-exact on the real `/bin/sh` and the Tier-B scheduler | [cx5](figures/cx5_system_oracle.png) |
+| **H65** | ✓ | PB-bench | the faithfulness leaderboard discriminates — Kendall `τ=1.0` across disjoint seed splits, adjacent tiers resolved above paired noise | [pb](figures/pb_bench_leaderboard.png) |
+| **H66** | ✓ | PB-transfer | the sim-to-emulation gap is lossless — `ΔH=0.000` across the `ρ`-sweep vs the SPEC-11 system oracle | [pb](figures/pb_transfer_gap.png) |
+| **H67** | ⊟ | PB-transfer | oracle correction is the measurement, not the fix, on the validated grammar (the bridge is lossless, so there is no gap to shrink) | [pb](figures/pb_transfer_gap.png) |
+| **H68** | ✓ | PB-pack | the frozen eval is contamination-resistant — a public-manifest memorizer's gap (~0.98) separates cleanly from an honest proposer's (~0.10) | [pb](figures/pb_pack_contamination.png) |
+
+The shape of the era (30 backlog hypotheses): **✓ 12** supported, **◐ 3** split, **✗ 2** refuted,
+**⟂ 1** gate-pass, **⊟ 3** banked negatives, **○ 9** deferred (trained-`M_θ`/GPU-scale bets, the LP7
+rule). The decided tranche is the controlled-core + pure-oracle work; the negatives are first-class:
+H45→H46 turned SPEC-14 from "supervise the processor" to "the wall is the decoder," and RS1 + NA6
+banked that the exposure-bias cure does not pay at CPU scale on either the flat or the structured arm.
+
 ## Design decisions (the load-bearing ones)
 
 | DD | Decision | Why |
