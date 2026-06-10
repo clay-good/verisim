@@ -1,0 +1,6 @@
+{
+  "name": "ed35-gcounter",
+  "cluster_sizes": [3, 5, 7],
+  "key": "c",
+  "k": 3
+}

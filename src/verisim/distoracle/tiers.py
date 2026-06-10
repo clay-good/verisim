@@ -149,6 +149,12 @@ class TieredOracle:
         for (node, _key) in predicted.config:
             if node not in set(self.config.nodes):
                 return True, f"config pushed to unknown node {node!r}"
+        # CRDT G-counter sub-counts (DS0 incr 28) are non-negative monotone values held by and owned
+        # by known cluster nodes — a negative sub-count or a phantom holder/owner is impossible.
+        nodeset = set(self.config.nodes)
+        for (_key, holder, owner), count in predicted.gcounters.items():
+            if count < 0 or holder not in nodeset or owner not in nodeset:
+                return True, f"invalid gcounter sub-count {count} at ({holder!r},{owner!r})"
         return False, ""
 
     def _cycle(

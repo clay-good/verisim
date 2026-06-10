@@ -34,6 +34,7 @@ from verisim.dist.delta import (
     DistDelta,
     DistEdit,
     EventAppend,
+    GCounterSet,
     HostStep,
     LeaseSet,
     LogSet,
@@ -173,8 +174,78 @@ def gossip_edits(
         if (rb.version, rb.value) != win:
             edits.append(ReplicaWrite(obj, b, win[0], win[1]))
             synced += 1
+    # The CRDT G-counter join (DS0 incr 28): both endpoints adopt the per-(key, owner) **max** of
+    # their two copies — the commutative/idempotent state-based merge. Disjoint from the LWW replica
+    # merge above and a no-op when no CRDT counter is used (so the pre-incr-28 form is unchanged).
+    edits.extend(_gcounter_merge_edits(state, [a, b], [a, b]))
+    synced = sum(1 for e in edits if isinstance(e, (ReplicaWrite, GCounterSet)))  # all moves
     value = str(synced)
     return [*edits, SetResult("gossiped", value)], "gossiped", value
+
+
+def _gcounter_keys_owners(state: DistributedState) -> set[tuple[str, str]]:
+    """Every ``(key, owner)`` CRDT sub-counter that appears anywhere in the cluster (incr 28)."""
+    return {(key, owner) for (key, _holder, owner) in state.gcounters}
+
+
+def _gcounter_merge_edits(
+    state: DistributedState, into: list[str], among: list[str]
+) -> list[DistEdit]:
+    """Per-(key, owner) **max**-merge of the CRDT G-counter copies (DS0 incr 28, the CRDT join).
+
+    For each node in ``into``, raise its copy of every ``(key, owner)`` sub-count to the max held by
+    any node in ``among`` (the reachable set). Emits a ``GCounterSet`` per copy that moves. This is
+    the commutative, associative, idempotent state-based join: applying it converges the counters to
+    the same per-owner vector regardless of order, and it never loses an increment (each owner's
+    sub-count is monotone and single-writer). ``anti_entropy`` pulls one node; ``gossip`` a pair.
+    """
+    edits: list[DistEdit] = []
+    for key, owner in sorted(_gcounter_keys_owners(state)):
+        best = max(state.gcounters.get((key, h, owner), 0) for h in among)
+        if best == 0:
+            continue
+        for holder in into:
+            if state.gcounters.get((key, holder, owner), 0) < best:
+                edits.append(GCounterSet(key, holder, owner, best))
+    return edits
+
+
+def cincr_edits(
+    state: DistributedState, action: DistAction, config: DistConfig
+) -> tuple[DistDelta, str, str]:
+    """``cincr node key``: CRDT G-counter increment (DS0 increment 28, the loss-free counter).
+
+    A *state-based* CRDT increment: ``node`` bumps **only its own** sub-count for ``key`` — a purely
+    node-local edit (``GCounterSet(key, node, node, +1)``), no replication and no in-flight message.
+    So it is **always available** when the node is up — a partitioned-alone node counts (the AP
+    property the LWW ``incr`` lacks under ``quorum``/``linearizable``) — and because each node only
+    ever writes its own sub-count, two concurrent ``cincr``s never conflict and **never lose an
+    update** (the resolution to ED34). The full count is reconciled by the per-owner max join in
+    ``anti_entropy``/``gossip``. Node-local and deterministic, so Tier-A ≡ Tier-B bit-for-bit. A
+    crashed node is ``unavailable``. Reports the node's own new sub-count.
+    """
+    node, key = action.args[0], action.args[1]
+    if not state.is_up(node):
+        return [SetResult("unavailable", "")], "unavailable", ""
+    new = state.gcounters.get((key, node, node), 0) + 1
+    return [GCounterSet(key, node, node, new), SetResult("ok", str(new))], "ok", str(new)
+
+
+def cget_edits(
+    state: DistributedState, action: DistAction, config: DistConfig
+) -> tuple[DistDelta, str, str]:
+    """``cget node key``: read a CRDT counter — the sum of ``node``'s per-owner sub-counts (inc 28).
+
+    The counter's value at ``node`` is the sum over owners of ``node``'s G-counter copies. Under a
+    partition this is ``node``'s *local* view (it may not yet include the other side's increments,
+    but never *loses* them: a later ``gossip``/``anti_entropy`` max-merge adds them). A pure read;
+    a crashed node is ``unavailable``.
+    """
+    node, key = action.args[0], action.args[1]
+    if not state.is_up(node):
+        return [SetResult("unavailable", "")], "unavailable", ""
+    total = str(state.gcounter_value(key, node))
+    return [SetResult("ok", total)], "ok", total
 
 
 def active_members(state: DistributedState, config: DistConfig) -> frozenset[str]:
@@ -771,6 +842,10 @@ class ReferenceDistOracle:
             return self._write(state, action)
         if name == "get":
             return self._get(state, action)
+        if name == "cincr":
+            return cincr_edits(state, action, self.config)
+        if name == "cget":
+            return cget_edits(state, action, self.config)
         if name in ("begin", "tget", "tput", "commit", "abort"):
             # The transaction family (DS0 increment 2) — shared OCC logic; a committed write's
             # async replication flows through the same in-flight medium as ``put`` (delivered by
@@ -1076,6 +1151,13 @@ class ReferenceDistOracle:
             if (best_version, best_value) != (local.version, local.value):
                 edits.append(ReplicaWrite(obj, node, best_version, best_value))
                 repaired += 1
+        # CRDT G-counter join (DS0 incr 28): pull each (key, owner) sub-count to the reachable max
+        # (a no-op when no CRDT counter is used; the pre-incr-28 form is unchanged).
+        reachable = [node, *(p for p in self.config.nodes
+                             if p != node and state.connected(node, p) and state.is_up(p))]
+        gc = _gcounter_merge_edits(state, [node], reachable)
+        edits.extend(gc)
+        repaired += len(gc)
         value = str(repaired)
         edits.append(SetResult("repaired", value))
         return edits, "repaired", value

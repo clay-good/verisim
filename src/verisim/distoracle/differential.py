@@ -75,6 +75,9 @@ def cluster_view(state: DistributedState) -> str:
     # (node, key) value, sorted id-independently. Empty for a cluster that never pushes config, so
     # the channel is unchanged there (and the config-divergence-under-partition is compared too).
     config = sorted((n, k, v) for (n, k), v in state.config.items())
+    # CRDT G-counter copies (DS0 incr 28) are observable cluster state — each (key, holder, owner)
+    # sub-count, sorted id-independently. Empty for a cluster with no CRDT counter (channel same).
+    gcounters = sorted((k, h, o, c) for (k, h, o), c in state.gcounters.items() if c != 0)
     # The embedded per-node hosts (DS0 incr 23) are observable cluster state — each node's host
     # canonical form, sorted by node. Empty for a host-free cluster, so the channel is unchanged.
     hosts = sorted((n, to_canonical_host(h)) for n, h in state.hosts.items())
@@ -88,6 +91,7 @@ def cluster_view(state: DistributedState) -> str:
         "queues": queues,
         "versions": versions,
         "config": config,
+        "gcounters": gcounters,
         "hosts": hosts,
     })
 

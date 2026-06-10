@@ -252,6 +252,18 @@ class DistributedState:
     # repaired by a re-push after heal. Empty by default and omitted from the canonical form, so a
     # cluster that never pushes config serializes to the exact pre-increment-24 form (purely additive).
     config: dict[tuple[str, str], str] = field(default_factory=dict)
+    # The CRDT grow-only counter (DS0 increment 28, `cincr`/`cget`): a *state-based* G-counter, the
+    # loss-free resolution to `incr`'s LWW lost-update negative (ED34). Keyed by `(key, holder, owner)`
+    # — node `holder`'s local copy of `owner`'s monotone sub-count for counter `key`. The counter's
+    # value at a node is the **sum over owners** of that node's copies. Because each node only ever
+    # increments its *own* sub-count (`cincr n` bumps `(key, n, n)`), two concurrent increments touch
+    # disjoint vector entries — no conflict, no lost update — and the CRDT **join is the per-(key,
+    # owner) max**, applied by `anti_entropy`/`gossip` (a commutative, idempotent merge that converges
+    # regardless of order or partition). `cincr` is purely node-local, so it is **always available**
+    # (even a partitioned-alone node counts — the AP property `quorum`/`linearizable` lack). Empty by
+    # default and omitted from the canonical form, so a cluster that never uses a CRDT counter
+    # serializes to the exact pre-increment-28 form (purely additive).
+    gcounters: dict[tuple[str, str, str], int] = field(default_factory=dict)
     # The embedded SPEC-6 host inside each node (DS0 increment 23, `host`): a per-node `HostState`
     # (process table + per-process fd tables + the embedded v0 filesystem), so a cluster node is not
     # just a bag of KV replicas but a real host running processes — the compositional vision SPEC-7
@@ -313,9 +325,15 @@ class DistributedState:
             queues={k: v for k, v in self.queues.items()},
             versions=dict(self.versions),
             config=dict(self.config),
+            gcounters=dict(self.gcounters),
             hosts={node: h.copy() for node, h in self.hosts.items()},
             lease_until=self.lease_until,
         )
+
+    def gcounter_value(self, key: str, node: str) -> int:
+        """``node``'s local view of CRDT counter ``key`` — the sum over owners of its sub-counts."""
+        return sum(c for (k, holder, _owner), c in self.gcounters.items()
+                   if k == key and holder == node)
 
     def group_of(self, node: str) -> frozenset[str]:
         """The partition group ``node`` belongs to (a singleton if it is mentioned by no group)."""

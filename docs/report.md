@@ -1726,7 +1726,14 @@ read-modify-write op, and it is the textbook case where eventual last-writer-win
 updates** — two concurrent increments across a partition are both acknowledged yet the count ends up
 short by one (where a blind `put` would merely go stale), while `quorum` makes the minority unavailable
 (no silent loss) and `linearizable` rejects under any partition; the read-modify-write CAP tradeoff is
-strictly worse than the blind-write one (ED14), and a loss-free eventual counter needs a CRDT (deferred).
+strictly worse than the blind-write one (ED14). **And the CRDT G-counter ships as the resolution**
+(ED35): `cincr`/`cget` is a state-based grow-only counter where each node bumps only its own per-owner
+sub-count, so concurrent increments touch disjoint entries (no lost update) and the per-(key, owner)
+**max** join — applied by `anti_entropy`/`gossip`, commutative/associative/idempotent — converges every
+node to the exact total; because `cincr` is purely node-local it is *always available* (a
+partitioned-alone node counts, the AP property LWW lacks). The three-increment partition that lost one
+under `incr` reads 3 under `cincr` — the negative (ED34) and its positive (ED35) banked as a matched
+pair, the textbook reason CRDTs exist.
 Every
 one of these is additive (omitted from the canonical form until first used, so all prior goldens/hashes
 hold) and validated bit-for-bit against the autonomous-actor Tier-B execution.
@@ -2225,10 +2232,10 @@ python -m verisim.experiments.ed16 --config configs/ed16.json \
     --out figures/ed16.csv --plot figures/ed16.png  # read-committed isolation: lost update + its price (DS0 incr 9)
 python -m verisim.experiments.ed17 --config configs/ed17.json \
     --out figures/ed17.csv --plot figures/ed17.png  # read-uncommitted isolation: dirty read + black-box recovery (DS0 incr 10)
-# DS0 increments 11–27 (ED18–ED34): the complete §3.4 fault grammar (drop/delay/reorder/clock_skew +
+# DS0 increments 11–28 (ED18–ED35): the complete §3.4 fault grammar (drop/delay/reorder/clock_skew +
 # anti_entropy/gossip), the Raft-subset consensus core (elect/propose/step_down/lease/lread/read_index/
 # append/membership), the FIFO queue, the deploy + config_push admin ops, the embedded SPEC-6 host, the
-# tombstone delete, and the atomic counter — see figures/reproduce.sh
+# tombstone delete, the atomic counter, and the CRDT G-counter — see figures/reproduce.sh
 python -m verisim.experiments.ed31 --config configs/ed31.json \
     --out figures/ed31.csv --plot figures/ed31.png  # config push: leader-committed config + divergence (DS0 incr 24)
 python -m verisim.experiments.ed32 --config configs/ed32.json \
@@ -2237,6 +2244,8 @@ python -m verisim.experiments.ed33 --config configs/ed33.json \
     --out figures/ed33.csv --plot figures/ed33.png  # delete: versioned tombstone, resurrection-safe (DS0 incr 26)
 python -m verisim.experiments.ed34 --config configs/ed34.json \
     --out figures/ed34.csv --plot figures/ed34.png  # incr: atomic counter + the lost-update negative (DS0 incr 27)
+python -m verisim.experiments.ed35 --config configs/ed35.json \
+    --out figures/ed35.csv --plot figures/ed35.png  # CRDT G-counter: loss-free + convergent (DS0 incr 28)
 ```
 
 The run-records are git-ignored (regenerable); the figures and their CSVs are

@@ -158,6 +158,8 @@ of a real message-passing execution, not just the analytic DES.
 | `cas <node> <key> <old> <new>` | if `node`'s local value `== old`, behave as `put node key new`; else no write, `("conflict", local_value)`. |
 | `delete <node> <key>` (DS0 increment 26) | **tombstone delete**: behave as `put node key TOMBSTONE` — a *versioned write of a tombstone*, not a removal of the replica, so it inherits every consistency model and is ordered by version (the resurrection-safe discipline). A `get` on a tombstoned replica reports `("deleted", "")`. The client result is `("deleted", "")`; the replicated value is the `__deleted__` sentinel. Purely additive (no new state field, no new edit). |
 | `incr <node> <key>` (DS0 increment 27) | **atomic counter** (read-modify-write): read `node`'s local counter (a non-numeric/absent value is `0`) and behave as `put node key str(count+1)`. Sequentially correct, but under a partition the consistency model decides whether concurrent increments survive: `eventual` **silently loses** a concurrent increment (two same-version writes, LWW keeps one), `quorum` makes the minority `("unavailable", "")` (no silent loss), `linearizable` rejects under any partition. `("ok", new_count)`. Purely additive (the counter is a digit-valued replica). |
+| `cincr <node> <key>` (DS0 increment 28) | **CRDT G-counter increment**: bump **only `node`'s own** sub-count for `key` (`GCounterSet(key, node, node, +1)`) — purely node-local, so **always available** (a partitioned-alone node still counts — the AP property `incr` lacks under quorum/lin) and **never loses** a concurrent increment (disjoint owners). The CRDT join (per-(key, owner) max) is applied by `anti_entropy`/`gossip`. `("ok", new_own_subcount)`; `("unavailable", "")` if down. Purely additive (one `gcounters` map + one `GCounterSet` edit). |
+| `cget <node> <key>` (DS0 increment 28) | **CRDT counter read**: return the sum over owners of `node`'s G-counter sub-counts — `node`'s local view (may lag, but never loses; a later join adds the rest). `("ok", total)`; `("unavailable", "")` if down. A pure read. |
 | `enqueue <node> <queue> <val>` (DS0 incr 21) | append `val` to each reachable replica's FIFO `queue` list (the relative append op). Availability follows the consistency model (linearizable needs every replica, quorum a majority, eventual/causal proceed on the reachable set); else `("unavailable", "")`. `("enqueued", val)`. |
 | `dequeue <node> <queue>` (DS0 incr 21) | return the head of `node`'s local `queue` replica and pop the head from each reachable replica. The delivery semantics follow the model: `eventual` admits **duplicate delivery** under partition (the removal does not cross the split), `linearizable`/`quorum` gate availability for **exactly-once**. `("dequeued", head)`, or `("empty", "")` if the local replica has no items; `("unavailable", "")` if the model's quorum is unreachable. |
 
@@ -670,7 +672,43 @@ digit string as a legal counter value. ED34
 ([`experiments/ed34.py`](../src/verisim/experiments/ed34.py)) pins both panels (sequential
 correctness; the read-modify-write CAP tradeoff across the three models) with Tier-B agreeing on every
 transition. (A loss-free eventual counter is a **CRDT/PN-counter** — per-node sub-counters merged by
-max — a deferred later increment; the point here is the negative the simple model exhibits.)
+max — built next in increment 28; the point here is the negative the simple model exhibits.)
+
+### 3.10 `cincr` / `cget` — the CRDT G-counter (DS0 increment 28)
+
+The **loss-free, always-available resolution** to `incr`'s negative — a *state-based* grow-only
+counter (the canonical CRDT). The state is a vector: per `(key, holder, owner)`, node `holder`'s copy
+of `owner`'s monotone sub-count; the counter's value at a node is the **sum over owners**. The
+discipline that makes it work is *single-writer-per-entry*: `cincr n key` bumps **only `n`'s own**
+sub-count (`GCounterSet(key, n, n, +1)`), so two concurrent `cincr`s at different nodes touch
+*disjoint* vector entries — there is no conflict and **nothing to lose**. The CRDT **join is the
+per-(key, owner) max**, a commutative, associative, idempotent merge applied by `anti_entropy` (pull
+into one node) and `gossip` (merge a pair); applying it in any order, any number of times, converges
+every node to the same vector — the exact total.
+
+Two properties distinguish it sharply from the LWW `incr`:
+
+- **Always available (AP).** `cincr` is purely node-local — no replication, no in-flight message — so
+  it succeeds whenever the node is up, *including a partitioned-alone node*, where the LWW `incr`
+  under `quorum`/`linearizable` is `unavailable`. Availability with no coordination.
+- **No lost update.** The three-increment partition that lost one under `incr` (ED34) keeps all three
+  here: each side's increments land on different owners' sub-counts, and the join sums them.
+
+```
+partition n0 n1 n2 | n3 n4
+cincr n0 c; cincr n0 c          # ("ok","1"), ("ok","2") — n0's own sub-count
+cincr n3 c                      # ("ok","1") — the minority node still counts (AP)
+heal; gossip n0 n3; cget n0 c   # ("ok","3") — 2 (n0) + 1 (n3), no lost update
+```
+
+`cincr` is node-local and the merge is a coordinator-level read of the medium, so Tier-A and Tier-B
+compute byte-identical deltas. The `gcounters` map joins `cluster_view`, is omitted from the canonical
+form until the first `cincr` (purely additive), and the metamorphic tier checks sub-counts are
+non-negative and held/owned by known nodes. ED35
+([`experiments/ed35.py`](../src/verisim/experiments/ed35.py)) pins both panels (loss-free +
+always-available; gossip/anti_entropy convergence + idempotence) with Tier-B agreeing on every
+transition. (Honest scope: this is a **grow-only** G-counter — a decrementable **PN-counter** pairs
+two G-counters, a clean later extension.)
 
 ## 4. The delta and the `apply == oracle` invariant
 
@@ -679,7 +717,7 @@ The oracle returns the next state **and** the structured delta that produces it
 `MsgDrop`, `EventAppend`, `PartitionSet`, `NodeDown`/`NodeUp`, `ClockSet`, the consensus
 `ProtocolStep`/`LeaseSet`, the replicated-log `LogSet`/`CommitIndexSet`, the membership `MemberSet`,
 the FIFO-queue `QueueSet`, the per-node `VersionSet`, the embedded-host `HostStep`, the cluster-config
-`ConfigSet` (DS0 incr 16–24), and `SetResult`. The **M1-analogue invariant** holds by construction and is tested on every
+`ConfigSet`, the CRDT-counter `GCounterSet` (DS0 incr 16–28), and `SetResult`. The **M1-analogue invariant** holds by construction and is tested on every
 transition:
 
 ```

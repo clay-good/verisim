@@ -293,6 +293,24 @@ class ConfigSet:
 
 
 @dataclass(frozen=True)
+class GCounterSet:
+    """Set node ``holder``'s copy of ``owner``'s sub-count for CRDT counter ``key`` (DS0 incr 28).
+
+    The single edit for the state-based G-counter (`cincr`/`cget`): ``cincr n`` emits
+    ``GCounterSet(key, n, n, count+1)`` (a node bumps its *own* sub-count), and the CRDT join in
+    ``anti_entropy``/``gossip`` emits ``GCounterSet(key, holder, owner, max)`` when a holder's copy of
+    an owner's sub-count is behind. A ``count`` of ``0`` carries no information and is dropped from the
+    canonical form, so a cluster that never uses a CRDT counter is byte-identical to the pre-incr-28
+    form.
+    """
+
+    key: str
+    holder: str
+    owner: str
+    count: int
+
+
+@dataclass(frozen=True)
 class HostStep:
     """A SPEC-6 host syscall applied to one node's embedded host (DS0 increment 23, the §4 `HostDelta`).
 
@@ -339,6 +357,7 @@ DistEdit = (
     | QueueSet
     | VersionSet
     | ConfigSet
+    | GCounterSet
     | HostStep
     | SetResult
 )
@@ -419,6 +438,11 @@ def apply(state: DistributedState, delta: DistDelta) -> DistributedState:
                 s.versions.pop(edit.node, None)  # the base version leaves no residue
         elif isinstance(edit, ConfigSet):
             s.config[(edit.node, edit.key)] = edit.value  # a pushed config value (never the default)
+        elif isinstance(edit, GCounterSet):
+            if edit.count != 0:
+                s.gcounters[(edit.key, edit.holder, edit.owner)] = edit.count
+            else:
+                s.gcounters.pop((edit.key, edit.holder, edit.owner), None)  # 0 carries no info
         elif isinstance(edit, HostStep):
             # apply the SPEC-6 host delta to the node's embedded host (created lazily), via the
             # SPEC-6 ``apply`` verbatim — the §4 composition. An untouched host leaves no residue.
@@ -490,6 +514,9 @@ def edit_to_dict(edit: DistEdit) -> dict[str, Any]:
         return {"op": "VersionSet", "node": edit.node, "version": edit.version}
     if isinstance(edit, ConfigSet):
         return {"op": "ConfigSet", "node": edit.node, "key": edit.key, "value": edit.value}
+    if isinstance(edit, GCounterSet):
+        return {"op": "GCounterSet", "key": edit.key, "holder": edit.holder,
+                "owner": edit.owner, "count": edit.count}
     if isinstance(edit, HostStep):
         return {"op": "HostStep", "node": edit.node, "edits": host_delta_to_list(edit.edits)}
     assert isinstance(edit, SetResult)
@@ -551,6 +578,8 @@ def edit_from_dict(d: dict[str, Any]) -> DistEdit:
         return VersionSet(d["node"], d["version"])
     if op == "ConfigSet":
         return ConfigSet(d["node"], d["key"], d["value"])
+    if op == "GCounterSet":
+        return GCounterSet(d["key"], d["holder"], d["owner"], d["count"])
     if op == "HostStep":
         return HostStep(d["node"], host_delta_from_list(d["edits"]))
     if op == "SetResult":

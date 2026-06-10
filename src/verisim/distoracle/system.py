@@ -69,9 +69,12 @@ from verisim.dist.state import TOMBSTONE, DistributedState, Message
 from verisim.dist.txn import txn_step
 from verisim.distoracle.base import DistStepResult
 from verisim.distoracle.reference import (
+    _gcounter_merge_edits,
     add_replica_edits,
     append_edits,
     causal_deps,
+    cget_edits,
+    cincr_edits,
     clock_skew_edits,
     config_push_edits,
     deploy_edits,
@@ -244,6 +247,13 @@ class SystemDistOracle:
             # — flows through the in-flight medium and is delivered later by this oracle's own
             # autonomous-actor ``_advance``, exactly where Tier-B's independence does its work.
             return txn_step(state, action, self.config)
+        if name == "cincr":
+            # The CRDT G-counter increment (DS0 incr 28) is purely node-local (bumps the node's own
+            # sub-count), so it is deterministic and Tier-A ≡ Tier-B via the shared helper — no msg
+            # interaction, and always available even on a partitioned-alone node (the AP property).
+            return cincr_edits(state, action, self.config)
+        if name == "cget":
+            return cget_edits(state, action, self.config)
         ev = self._event(state, action)
         if name in ("put", "cas", "delete", "incr"):
             return self._write(state, action, ev)
@@ -610,6 +620,13 @@ class SystemDistOracle:
             if (best_version, best_value) != (local.version, local.value):
                 edits.append(ReplicaWrite(obj, node, best_version, best_value))
                 repaired += 1
+        # CRDT G-counter join (DS0 incr 28): the same coordinator-level per-(key, owner) max-merge
+        # as Tier-A, via the shared helper — a no-op when no CRDT counter is used.
+        reachable = [node, *(p for p in self.config.nodes
+                             if p != node and state.connected(node, p) and state.is_up(p))]
+        gc = _gcounter_merge_edits(state, [node], reachable)
+        edits.extend(gc)
+        repaired += len(gc)
         value = str(repaired)
         edits.append(SetResult("repaired", value))
         return edits, "repaired", value

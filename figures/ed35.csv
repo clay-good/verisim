@@ -1,0 +1,8 @@
+panel,metric,value,detail
+crdt,counts_to_k,1.0000,k=3_over_3_clusters
+crdt,always_available,1.0000,minority_cincr_acked_AP
+crdt,no_lost_update,1.0000,three_concurrent_incrs_total_3
+converge,gossip,1.0000,epidemic_all_nodes_total_3
+converge,anti_entropy,1.0000,all_nodes_total_3
+converge,idempotent,1.0000,second_gossip_unchanged
+tier_b,all,1.0000,steps=54
