@@ -421,14 +421,16 @@ factory, not a change *to* it (DD-AR2: never edit the oracle, metric, or gate).
 
 ```bash
 echo "== CX0: the oracle is an exact SCM — abduction-exactness per world (H60) — gates rung 3 =="
-python -m verisim.experiments.cx0 --config configs/cx0.json --out runs/cx0/records.jsonl --plot figures/cx0_abduction_exact.png
-echo "== CX1: rung 2 (do) vs rung 3 (abduct) — does abduction add anything? (H61) =="
-python -m verisim.experiments.cx1 --config configs/cx1.json --out runs/cx1/records.jsonl --plot figures/cx1_rung2_vs_rung3.png
-echo "== CX2: the three-world hidden-state sweep (H61) — THE HEADLINE =="
-python -m verisim.experiments.cx2 --config configs/cx2.json --out runs/cx2/records.jsonl --plot figures/cx2_hidden_state_lift.png
+python -m verisim.experiments.cx0 --config configs/cx0.json --plot figures/cx0_scm_gate.png
+echo "== CX1: the counterfactual effect is hidden-state-dependent — dist >> net/host (H61) =="
+python -m verisim.experiments.cx1 --config configs/cx1.json --plot figures/cx1_counterfactual_effect.png
 echo "== CX3: the matched-coverage cut (H62) — settles the ED6 branching-vs-coverage caveat =="
-python -m verisim.experiments.cx3 --config configs/cx3.json --out runs/cx3/records.jsonl --plot figures/cx3_matched_coverage.png
-# CX4 (CoDA contrast, torch-gated) and CX5 (system-oracle fork) follow; CX5 gated on CX3.
+python -m verisim.experiments.cx3 --config configs/cx3.json --plot figures/cx3_matched_coverage.png
+echo "== CX4: exact-oracle vs learned-model counterfactual augmentation — the CoDA contrast (H63, torch-gated) =="
+python -m verisim.experiments.cx4 --config configs/cx4.json --plot figures/cx4_coda_contrast.png
+echo "== CX5: the system-oracle fork — the SCM survives the move to reality (H64) =="
+python -m verisim.experiments.cx5 --config configs/cx5.json --plot figures/cx5_system_oracle.png
+# CX2 (the learned contrastive lift) is the one remaining deferred arm — no module/config until a checkpoint exists (the LP7 rule).
 ```
 
 The non-CoDA CX block runs on CPU (the deterministic gate); CX4's learned-model augmenter is the one

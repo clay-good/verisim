@@ -57,7 +57,7 @@ the proxy metrics everyone else uses cannot see (a bigger, per-step-*more*-accur
 
 ## Results at a glance
 
-Twenty-five committed, oracle-grounded figures — the smoke-scale bet in one screen — each detailed below, each
+Thirty-six committed, oracle-grounded figures — the smoke-scale bet in one screen — each detailed below, each
 with its honest negative, now joined by the **SPEC-11 system-oracle validation** ([§35](#35-the-oracle-is-faithful-to-a-real-computer--the-one-structural-bet-measured-spec-11--sy1--h27)) — *the figure that retires W1*: the program's load-bearing assumption (a free, exact oracle exists for computer worlds) measured against a **real `/bin/sh` on a real kernel**, bit-for-bit. **Two one-figure theses frame the rest: the cross-*world* synthesis ([§22](#22-the-thesis-in-one-figure-the-floorcliff-is-the-same-in-every-world-cross-world-synthesis)) — the floor+cliff `H_ε(ρ)` is the *same shape in all four worlds* — and the cross-*proposer* synthesis ([§34](#34-the-spec-10-capstone-the-floor-is-proposer-dependent-cross-proposer-synthesis)) — whether that floor is a *resourcing artifact* depends on the proposer.** **What survives scaling is the real verdict: see [§8](#8-which-wins-survive-scaling--the-honest-mixed-verdict-spec-9).** Every number regenerates from
 config + seeds (`bash figures/reproduce.sh`).
 
@@ -2324,6 +2324,43 @@ full result write-up is [docs/report.md](docs/report.md).
 > refuted by measurement, [`lp8_host_goal_reach.png`](figures/lp8_host_goal_reach.png). So the landmark
 > method holds across **all three worlds** (network reachability / distributed consistency / host
 > privilege) — the strongest form of H38. Remaining: only LP7's deferred LLM arm.
+>
+> **The six cross-cutting method specs (SPEC-13–18) each shipped a committed CPU tranche** — the
+> controlled-stand-in / pure-oracle cores; the trained-`M_θ`/GPU and external-LLM arms stay
+> `skipif`-guarded and deferred under the LP7 rule (never scored without a checkpoint or live model).
+> **SPEC-13 — speculative world-model rollout** (SR1–SR6, [§37](#37-scheduling-the-oracle-speculative-world-model-rollout-spec-13--sr1sr6--h39h44)):
+> accept-longest-faithful-prefix lifts faithful-steps-per-oracle-call above fixed-`ρ` *above* a per-world
+> crossover `ρ*` and ties below it (H39), governed by the accepted-prefix law `g = ε/δ` (H40), the
+> cost-inversion the LLM-decoding analogy predicts.
+> **SPEC-14 — NAR repair of the structured arm** (NA0+NA5+NA6, [§42](#42-diagnosing-the-structured-arm-wall-does-the-gnn-execute-the-propagation-spec-14--na0na5na6--h45h46--diagnosis-confirmation-and-a-banked-negative)):
+> a linear probe **refutes H45** — the GNN processor *does* execute the multi-hop reachability
+> propagation, so the `H_free=0` wall is downstream in the decoder/rollout (NA5 confirms at rollout
+> level), and no decoder-side training arm lifts it past teacher forcing (NA6, the banked compounding
+> negative).
+> **SPEC-15 — oracle-calibrated conformal consultation** (CF1–CF6, [§38](#38-guaranteeing-the-trigger-oracle-calibrated-conformal-consultation-spec-15--cf1cf6--h50h54)):
+> the free exact oracle is a perfect conformal calibration set, certifying `P(undetected divergence > ε) ≤ α`
+> at ~0.43 lower `ρ` than fixed (H50/H51); ACI restores coverage under rollout non-exchangeability (H52);
+> conformalizability *is* the EH2/ED2 mechanism (H53), and it is world/arm-dependent — the real network
+> graph-arm `belief_var` is valid but **not** efficiently conformalizable (CF6).
+> **SPEC-16 — rollout-stability training** (RS1–RS7, [§41](#41-curing-the-exposure-bias-gap-free-oracle-dagger--the-unrolled-loss-spec-16--rs1--rs4--h55h58)):
+> free-oracle DAgger on the real flat `M_θ` does **not** cure the gap at CPU scale (RS1, the pre-registered
+> negative — the gap is fundamental compounding, not exposure bias); scheduled sampling and noise injection
+> swept fully are null (RS2/RS3); the unrolled loss lifts raw horizon but teacher forcing holds the
+> per-compute Pareto frontier (RS4/RS6), and the verdict transfers to the host world (RS7).
+> **SPEC-17 — the oracle as an exact Structural Causal Model** (CX0–CX1+CX3+CX4+CX5, [§40](#40-the-oracle-as-an-exact-structural-causal-model-spec-17--cx0cx1--cx3--cx4--cx5--h60h64)):
+> reset+replay *is* exact abduction, so verisim climbs Pearl's rung 3 bit-exactly and for free where every
+> oracle-free world model is barred (H60); the counterfactual effect is hidden-state-dependent (distributed
+> ~3.6× ≫ network ~0.4×, H61); the matched-coverage cut **refutes H62** (ED6's lift was fault coverage, not
+> branching); the CoDA contrast supports H63; and the SCM contract **survives the move to a real `/bin/sh`**
+> (CX5/H64).
+> **SPEC-18 — the product** (PB-bench/transfer/transfer-broad/pack, [§39](#39-the-product-a-ground-truth-faithfulness-benchmark--a-sim-to-emulation-bridge-and-boundary-spec-18--pb--h65h68)):
+> the faithfulness leaderboard **discriminates** (Kendall τ=1.0 across seed splits, H65), the
+> sim-to-emulation transfer to the SPEC-11 system oracle is **lossless on the validated structure grammar**
+> (ΔH=0, H66/H67) with the boundary now mapped across grammars (ΔH grows to +5.75 on the destructive
+> grammar SY1 did not validate — and oracle-in-the-loop correction does *not* close it, since the loop
+> consults the *reference* oracle), and the frozen battery is **contamination-resistant** (H68) with a
+> Croissant descriptor + datasheet + model-card emitted to [`bench/`](bench/). Across all six, only the
+> trained-`M_θ`/GPU and external-LLM arms remain deferred; every committed result is CPU-reproducible.
 
 **v0 — shell/filesystem world (`src/verisim/`, SPEC-2 §13): complete.**
 
