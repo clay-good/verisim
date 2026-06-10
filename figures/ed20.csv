@@ -1,0 +1,7 @@
+panel,regime,value,detail
+convergence,delay,1.0000,converged=2/2
+convergence,drop,0.0000,converged=0/2
+delay_detail,stale_then_converges,1.0000,recoverable
+reorder,transit_flip,1.0000,in_transit_value_changes
+reorder,converged_invariant,1.0000,lww_commutative_join
+tier_b,all,1.0000,steps=70;peers=2

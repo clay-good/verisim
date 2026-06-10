@@ -175,6 +175,66 @@ def test_golden_anti_entropy_repairs_a_dropped_write_without_a_new_write():
     assert (r.version, r.value) == (0, "nil")  # nothing reachable held the new value
 
 
+def test_golden_delay_defers_a_message_but_holds_it_in_flight():
+    # The recoverable-delay golden (SPEC-7 §3.4, DS0 incr 13): a write, then delay the n0->n1
+    # replication message by 5 (deliver_after 1 -> 6), then advance to clock 2. Unlike drop, the
+    # message is *held*, not destroyed — n1 is stale now but the message is still in flight (due at
+    # clock 6), so it will arrive on a later advance (the recoverable half of the medium).
+    final = _final(["put n0 x b", "delay n0 n1 5", "advance 2"])
+    assert final == {
+        "replicas": [
+            _rep("x", "n0", 1, "b"),    # writer
+            _rep("x", "n1", 0, "nil"),  # deferred: not yet delivered at clock 2 (due at 6)
+            _rep("x", "n2", 1, "b"),    # the un-delayed peer's message was delivered
+            *_boot_y(),
+        ],
+        "log": [{"id": 0, "node": "n0", "op": "put n0 x b", "clock": 0, "happens_before": []}],
+        "inflight": [
+            # the delayed message is held (not lost): same payload, deliver_after pushed 1 -> 6.
+            {"id": 0, "src": "n0", "dst": "n1", "object_id": "x", "version": 1, "value": "b",
+             "deliver_after": 6}
+        ],
+        "partitions": [["n0", "n1", "n2"]],
+        "down": [],
+        "clock": 2,
+        "next_event_id": 1,
+        "next_msg_id": 2,
+        "last_result": ["advanced", "1"],  # only the un-delayed n0->n2 message delivered
+    }
+
+
+def test_golden_reorder_flips_which_write_arrives_first():
+    # The reorder golden (SPEC-7 §3.4, DS0 incr 13): two writes to x (b then c); delay the first so
+    # the newer write (c) is scheduled to arrive first; reorder reverses the schedule, so the older
+    # write (b) arrives first instead. advance 2 then delivers b to n1 (the transit flip) while c is
+    # held to deliver_after 101 — yet n2 (un-reordered) already shows the converged c. Last-writer-
+    # wins keeps the eventual value at c regardless; only the in-transit observation moved.
+    final = _final(["put n0 x b", "delay n0 n1 100", "put n0 x c", "reorder n0 n1", "advance 2"])
+    assert final == {
+        "replicas": [
+            _rep("x", "n0", 2, "c"),   # writer: the newer value
+            _rep("x", "n1", 1, "b"),   # transit flip: reorder made the OLDER write arrive first
+            _rep("x", "n2", 2, "c"),   # un-reordered peer: already converged to the newer value
+            *_boot_y(),
+        ],
+        "log": [
+            {"id": 0, "node": "n0", "op": "put n0 x b", "clock": 0, "happens_before": []},
+            {"id": 1, "node": "n0", "op": "put n0 x c", "clock": 0, "happens_before": [0]},
+        ],
+        "inflight": [
+            # the newer write's message to n1 is held (reorder pushed it to deliver_after 101).
+            {"id": 2, "src": "n0", "dst": "n1", "object_id": "x", "version": 2, "value": "c",
+             "deliver_after": 101}
+        ],
+        "partitions": [["n0", "n1", "n2"]],
+        "down": [],
+        "clock": 2,
+        "next_event_id": 2,
+        "next_msg_id": 4,
+        "last_result": ["advanced", "3"],  # b->n1, b->n2, then c->n2 (c->n1 still held)
+    }
+
+
 def test_golden_linearizable_replicates_synchronously():
     # A single put commits to *every* replica in the same step — no in-flight, no advance needed,
     # the strong-consistency counterpart of the eventual-consistency async-then-converge golden.

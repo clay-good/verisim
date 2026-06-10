@@ -13,6 +13,8 @@ workload and the fault/time medium (the consensus/admin family arrives with the 
     crash <node>                    # fault: <node> goes down (stops delivering/applying)
     restart <node>                  # fault: <node> comes back up
     drop <src> <dst>                # fault: lose every in-flight message from <src> to <dst>
+    delay <src> <dst> <dt>          # fault: defer every in-flight <src>-><dst> message by <dt>
+    reorder <src> <dst>             # fault: reverse the delivery schedule of <src>-><dst> messages
     anti_entropy <node>             # protocol: read-repair <node> to the latest reachable replica
 
 The fault/time family is the source of all interesting dynamics (stale reads under partition,
@@ -25,8 +27,14 @@ write -- the lost-message anomaly that breaks the eventual-consistency convergen
 op: the **read-repair / anti-entropy** mechanism real eventually-consistent stores (Dynamo,
 Cassandra) use to converge *despite* lost messages -- a node pulls each object to the latest
 ``(version, value)`` among its reachable replicas, so it repairs a dropped write that ``advance``
-never can, bounded only by what is currently reachable (ED19). Transactions and ``propose``/leader
-ops are later increments, and so are message-level ``delay``/``reorder``.
+never can, bounded only by what is currently reachable (ED19). ``delay`` and ``reorder`` (DS0
+increment 13) are the message-timing faults: ``delay src dst dt`` defers every in-flight
+``src``->``dst`` message by ``dt`` (a *recoverable* delay -- the counterpart to ``drop``'s
+unrecoverable loss), and ``reorder src dst`` reverses the delivery schedule of that channel's
+messages (the multiset of times preserved, the order flipped). Both only edit the existing
+``Message.deliver_after`` field, so they add no state and compose with every consistency model;
+they make the §3.4 "reorder/skew is the medium" axis a controllable input (ED20). Transactions and
+``propose``/leader ops are later increments.
 """
 
 from __future__ import annotations
@@ -45,6 +53,8 @@ _ARITY: dict[str, int | None] = {
     "crash": 1,  # node
     "restart": 1,  # node
     "drop": 2,  # src dst  -- lose every in-flight message from <src> to <dst> (DS0 incr 11)
+    "delay": 3,  # src dst dt  -- defer every in-flight <src>-><dst> message by <dt> (DS0 incr 13)
+    "reorder": 2,  # src dst  -- reverse the delivery schedule of <src>-><dst> messages (DS0 incr 13)
     "anti_entropy": 1,  # node  -- read-repair <node> to the latest reachable replica (DS0 incr 12)
     # Transaction family (DS0 increment 2): a multi-key OCC transaction at a coordinator node.
     "begin": 2,  # node txn  -- open a transaction
@@ -57,7 +67,9 @@ _ARITY: dict[str, int | None] = {
 # ``begin``/``commit``/``abort`` + the txn-scoped ``tget``/``tput`` are client ops (the workload).
 CLIENT_OPS = frozenset({"put", "get", "cas", "begin", "tget", "tput", "commit", "abort"})
 TXN_OPS = frozenset({"begin", "tget", "tput", "commit", "abort"})
-FAULT_OPS = frozenset({"advance", "partition", "heal", "crash", "restart", "drop"})
+FAULT_OPS = frozenset(
+    {"advance", "partition", "heal", "crash", "restart", "drop", "delay", "reorder"}
+)
 # Protocol/admin ops (SPEC-7 §3.2, the third action family). ``anti_entropy`` (the read-repair
 # convergence mechanism, DS0 increment 12) is the first; ``propose``/leader ops are later increments.
 PROTOCOL_OPS = frozenset({"anti_entropy"})
@@ -98,6 +110,8 @@ def parse_dist_action(raw: str) -> DistAction:
         raise DistParseError(f"{name} expects {arity} args, got {len(rest)}: {raw!r}")
     if name == "advance":
         _parse_positive_int(rest[0], raw)
+    if name == "delay":
+        _parse_positive_int(rest[2], raw)  # dt: a positive deferral, like advance's
     return DistAction(raw=raw, name=name, args=tuple(rest))
 
 
@@ -132,5 +146,5 @@ def _parse_positive_int(tok: str, raw: str) -> int:
     except ValueError as exc:
         raise DistParseError(f"expected an integer, got {tok!r} in {raw!r}") from exc
     if value <= 0:
-        raise DistParseError(f"advance dt must be positive, got {value} in {raw!r}")
+        raise DistParseError(f"dt must be positive, got {value} in {raw!r}")
     return value

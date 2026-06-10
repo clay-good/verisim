@@ -1,0 +1,9 @@
+{
+  "name": "ed20-timing",
+  "nodes": ["n0", "n1", "n2"],
+  "key": "x",
+  "v1": "b",
+  "v2": "c",
+  "delay_dt": 5,
+  "stagger": 100
+}

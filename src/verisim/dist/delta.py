@@ -14,7 +14,7 @@ The allocator bumps (``next_event_id`` / ``next_msg_id``) are folded into the ``
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from typing import Any
 
 from verisim.dist.state import DistributedState, Event, Message, ReplicaState, TxnState
@@ -60,6 +60,22 @@ class MsgDrop:
     """Remove a dropped message from the in-flight set (no effect applied)."""
 
     msg_id: int
+
+
+@dataclass(frozen=True)
+class MsgReschedule:
+    """Change an in-flight message's ``deliver_after`` (the ``delay`` / ``reorder`` faults, incr 13).
+
+    The message keeps its identity and payload; only *when* it becomes deliverable moves. ``delay``
+    pushes it later (a recoverable delay -- the counterpart to ``drop``'s unrecoverable loss);
+    ``reorder`` reverses the delivery schedule of a channel's messages (the multiset of times is
+    preserved, the order flipped). It edits the ``Message.deliver_after`` field that already exists,
+    so it adds **no new state field** and every prior golden/hash/tokenization is byte-for-byte
+    unchanged. Applying it to a missing ``msg_id`` (already delivered/dropped) is a no-op.
+    """
+
+    msg_id: int
+    deliver_after: int
 
 
 @dataclass(frozen=True)
@@ -140,6 +156,7 @@ DistEdit = (
     | MsgSend
     | MsgDeliver
     | MsgDrop
+    | MsgReschedule
     | EventAppend
     | PartitionSet
     | NodeDown
@@ -169,6 +186,10 @@ def apply(state: DistributedState, delta: DistDelta) -> DistributedState:
             s.next_msg_id = max(s.next_msg_id, edit.msg_id + 1)
         elif isinstance(edit, (MsgDeliver, MsgDrop)):
             s.inflight.pop(edit.msg_id, None)
+        elif isinstance(edit, MsgReschedule):
+            msg = s.inflight.get(edit.msg_id)
+            if msg is not None:  # no-op if already delivered/dropped
+                s.inflight[edit.msg_id] = replace(msg, deliver_after=edit.deliver_after)
         elif isinstance(edit, EventAppend):
             s.log = (*s.log, Event(edit.id, edit.node, edit.op, edit.clock, edit.happens_before))
             s.next_event_id = max(s.next_event_id, edit.id + 1)
@@ -216,6 +237,8 @@ def edit_to_dict(edit: DistEdit) -> dict[str, Any]:
         return {"op": "MsgDeliver", "msg_id": edit.msg_id}
     if isinstance(edit, MsgDrop):
         return {"op": "MsgDrop", "msg_id": edit.msg_id}
+    if isinstance(edit, MsgReschedule):
+        return {"op": "MsgReschedule", "msg_id": edit.msg_id, "deliver_after": edit.deliver_after}
     if isinstance(edit, EventAppend):
         return {"op": "EventAppend", "id": edit.id, "node": edit.node, "op_str": edit.op,
                 "clock": edit.clock, "happens_before": list(edit.happens_before)}
@@ -254,6 +277,8 @@ def edit_from_dict(d: dict[str, Any]) -> DistEdit:
         return MsgDeliver(d["msg_id"])
     if op == "MsgDrop":
         return MsgDrop(d["msg_id"])
+    if op == "MsgReschedule":
+        return MsgReschedule(d["msg_id"], d["deliver_after"])
     if op == "EventAppend":
         return EventAppend(d["id"], d["node"], d["op_str"], d["clock"],
                            tuple(d["happens_before"]))

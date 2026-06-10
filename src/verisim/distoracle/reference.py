@@ -33,6 +33,7 @@ from verisim.dist.delta import (
     EventAppend,
     MsgDeliver,
     MsgDrop,
+    MsgReschedule,
     MsgSend,
     NodeDown,
     NodeUp,
@@ -64,6 +65,47 @@ def causal_deps(state: DistributedState, node: str, key: str) -> tuple[tuple[str
         if n == node and obj != key and r.version > 0
     ]
     return tuple(sorted(deps))
+
+
+def timing_fault_edits(
+    state: DistributedState, action: DistAction
+) -> tuple[DistDelta, str, str]:
+    """``delay`` / ``reorder``: reschedule a channel's in-flight messages (DS0 incr 13, §3.4).
+
+    A pure **medium** change (it only moves *when* messages become deliverable, never a replica), so
+    -- like ``drop`` -- there is no actor work and **Tier-A and Tier-B compute byte-identical
+    deltas**. Shared by both oracles (imported by :mod:`verisim.distoracle.system`) so they cannot
+    drift, exactly as :func:`causal_deps` is shared.
+
+    - ``delay src dst dt`` pushes every in-flight ``src``->``dst`` message ``dt`` clock units later
+      (``deliver_after += dt``) -- a *recoverable* delay, the counterpart to ``drop``'s
+      unrecoverable loss: the write still arrives, just later, so the cluster still converges.
+    - ``reorder src dst`` reverses the channel's delivery schedule: among its messages sorted by
+      ``(deliver_after, id)`` the multiset of delivery times is reassigned in reverse, so the
+      message that was due first becomes due last. Last-writer-wins makes the *converged* state
+      invariant under this (a commutative join), but it flips which write a peer sees *in transit*.
+      A channel of fewer than two messages, or one whose times all coincide, is an observational
+      no-op (the reversal changes nothing). Reports the count of messages actually moved.
+    """
+    src, dst = action.args[0], action.args[1]
+    channel = sorted(
+        (m for m in state.inflight.values() if m.src == src and m.dst == dst),
+        key=lambda m: (m.deliver_after, m.id),
+    )
+    if action.name == "delay":
+        dt = int(action.args[2])
+        edits: DistDelta = [MsgReschedule(m.id, m.deliver_after + dt) for m in channel]
+        value = str(len(edits))
+        return [*edits, SetResult("delayed", value)], "delayed", value
+    # reorder: reverse the schedule -- reassign the (sorted) delivery times in reverse order.
+    new_times = [m.deliver_after for m in reversed(channel)]
+    edits = [
+        MsgReschedule(m.id, t)
+        for m, t in zip(channel, new_times, strict=True)
+        if t != m.deliver_after
+    ]
+    value = str(len(edits))
+    return [*edits, SetResult("reordered", value)], "reordered", value
 
 
 class ReferenceDistOracle:
@@ -101,6 +143,8 @@ class ReferenceDistOracle:
             return self._node_status(state, action)
         if name == "drop":
             return self._drop(state, action)
+        if name in ("delay", "reorder"):
+            return timing_fault_edits(state, action)
         if name == "anti_entropy":
             return self._anti_entropy(state, action)
         raise ValueError(f"unhandled action {name!r}")  # pragma: no cover - grammar is closed

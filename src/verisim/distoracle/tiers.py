@@ -147,11 +147,12 @@ class TieredOracle:
         canonical next-state, but catches the action-specific structural errors bit-exact would.
         """
         name = action.name
-        no_write = ("get", "partition", "heal", "crash", "restart", "drop",
+        no_write = ("get", "partition", "heal", "crash", "restart", "drop", "delay", "reorder",
                     "begin", "tget", "tput", "abort")
         if name in no_write:
             # none of these write replicas; the replica map must be unchanged. ``drop`` (DS0 inc 11)
-            # only removes in-flight messages; the txn ops begin/tget/tput/abort only touch the
+            # and ``delay``/``reorder`` (DS0 inc 13) only touch the in-flight set; the txn ops
+            # begin/tget/tput/abort only touch the
             # (consistency-invisible) txn buffer — a committed write reaches replicas only via
             # ``commit`` (handled below); a read/drop/buffer/abort that mutated a replica is an
             # inadmissible transition the cheap symbolic tier can refute.
