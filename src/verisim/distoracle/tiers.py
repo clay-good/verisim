@@ -155,6 +155,12 @@ class TieredOracle:
         for (_key, holder, owner), count in predicted.gcounters.items():
             if count < 0 or holder not in nodeset or owner not in nodeset:
                 return True, f"invalid gcounter sub-count {count} at ({holder!r},{owner!r})"
+        # The PN-counter decrement half (DS0 incr 29) is the same: each N sub-count is a
+        # non-negative monotone count on known nodes — only the counter's *value* (P − N) may go
+        # negative, never a sub-count. A negative decrement or a phantom holder/owner is impossible.
+        for (_key, holder, owner), count in predicted.ncounters.items():
+            if count < 0 or holder not in nodeset or owner not in nodeset:
+                return True, f"invalid pn-counter decrement {count} at ({holder!r},{owner!r})"
         return False, ""
 
     def _cycle(

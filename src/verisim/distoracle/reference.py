@@ -24,6 +24,8 @@ increments. The oracle returns the next state *and* the delta that produces it, 
 
 from __future__ import annotations
 
+from collections.abc import Callable
+
 from verisim.dist.action import DistAction
 from verisim.dist.config import DEFAULT_DIST_CONFIG, DistConfig
 from verisim.dist.delta import (
@@ -43,6 +45,7 @@ from verisim.dist.delta import (
     MsgDrop,
     MsgReschedule,
     MsgSend,
+    NCounterSet,
     NodeDown,
     NodeUp,
     PartitionSet,
@@ -174,40 +177,54 @@ def gossip_edits(
         if (rb.version, rb.value) != win:
             edits.append(ReplicaWrite(obj, b, win[0], win[1]))
             synced += 1
-    # The CRDT G-counter join (DS0 incr 28): both endpoints adopt the per-(key, owner) **max** of
-    # their two copies — the commutative/idempotent state-based merge. Disjoint from the LWW replica
-    # merge above and a no-op when no CRDT counter is used (so the pre-incr-28 form is unchanged).
+    # The CRDT counter join (DS0 incr 28/29): both endpoints adopt the per-(key, owner) **max** of
+    # their two copies — the commutative/idempotent state-based merge, over *both* halves (the
+    # G-counter P and the PN-counter's decrement N). Disjoint from the LWW replica merge above and a
+    # no-op when no CRDT counter is used (so the pre-incr-28 form is unchanged).
     edits.extend(_gcounter_merge_edits(state, [a, b], [a, b]))
-    synced = sum(1 for e in edits if isinstance(e, (ReplicaWrite, GCounterSet)))  # all moves
+    synced = sum(1 for e in edits
+                 if isinstance(e, (ReplicaWrite, GCounterSet, NCounterSet)))  # all moves
     value = str(synced)
     return [*edits, SetResult("gossiped", value)], "gossiped", value
 
 
-def _gcounter_keys_owners(state: DistributedState) -> set[tuple[str, str]]:
-    """Every ``(key, owner)`` CRDT sub-counter that appears anywhere in the cluster (incr 28)."""
-    return {(key, owner) for (key, _holder, owner) in state.gcounters}
+def _vector_merge_edits(
+    copies: dict[tuple[str, str, str], int], into: list[str], among: list[str],
+    make: Callable[[str, str, str, int], DistEdit],
+) -> list[DistEdit]:
+    """Per-(key, owner) **max**-merge of one CRDT counter vector (DS0 incr 28/29, the CRDT join).
+
+    For each node in ``into``, raise its copy of every ``(key, owner)`` sub-count to the max held by
+    any node in ``among`` (the reachable set), emitting ``make(key, holder, owner, best)`` per copy
+    that moves. The commutative, associative, idempotent state-based join: applying it converges the
+    vector regardless of order and never loses an update (each owner's sub-count is monotone and
+    single-writer). Shared by the G-counter (P) and PN-counter decrement (N) halves.
+    """
+    edits: list[DistEdit] = []
+    for key, owner in sorted({(key, owner) for (key, _h, owner) in copies}):
+        best = max(copies.get((key, h, owner), 0) for h in among)
+        if best == 0:
+            continue
+        for holder in into:
+            if copies.get((key, holder, owner), 0) < best:
+                edits.append(make(key, holder, owner, best))
+    return edits
 
 
 def _gcounter_merge_edits(
     state: DistributedState, into: list[str], among: list[str]
 ) -> list[DistEdit]:
-    """Per-(key, owner) **max**-merge of the CRDT G-counter copies (DS0 incr 28, the CRDT join).
+    """Max-merge **both** CRDT counter halves (DS0 incr 28/29): the G-counter P and PN-counter N.
 
-    For each node in ``into``, raise its copy of every ``(key, owner)`` sub-count to the max held by
-    any node in ``among`` (the reachable set). Emits a ``GCounterSet`` per copy that moves. This is
-    the commutative, associative, idempotent state-based join: applying it converges the counters to
-    the same per-owner vector regardless of order, and it never loses an increment (each owner's
-    sub-count is monotone and single-writer). ``anti_entropy`` pulls one node; ``gossip`` a pair.
+    The join over the full PN-counter is just the join over each half independently — so this merges
+    ``gcounters`` (emitting ``GCounterSet``) and ``ncounters`` (emitting ``NCounterSet``). A no-op
+    for a half that is empty, so a cluster that only ``cincr``-s is byte-identical to the
+    pre-incr-29 form. ``anti_entropy`` pulls one node; ``gossip`` a pair.
     """
-    edits: list[DistEdit] = []
-    for key, owner in sorted(_gcounter_keys_owners(state)):
-        best = max(state.gcounters.get((key, h, owner), 0) for h in among)
-        if best == 0:
-            continue
-        for holder in into:
-            if state.gcounters.get((key, holder, owner), 0) < best:
-                edits.append(GCounterSet(key, holder, owner, best))
-    return edits
+    return [
+        *_vector_merge_edits(state.gcounters, into, among, GCounterSet),
+        *_vector_merge_edits(state.ncounters, into, among, NCounterSet),
+    ]
 
 
 def cincr_edits(
@@ -231,20 +248,43 @@ def cincr_edits(
     return [GCounterSet(key, node, node, new), SetResult("ok", str(new))], "ok", str(new)
 
 
-def cget_edits(
+def cdecr_edits(
     state: DistributedState, action: DistAction, config: DistConfig
 ) -> tuple[DistDelta, str, str]:
-    """``cget node key``: read a CRDT counter — the sum of ``node``'s per-owner sub-counts (inc 28).
+    """``cdecr node key``: CRDT PN-counter decrement (DS0 increment 29, the decrementable counter).
 
-    The counter's value at ``node`` is the sum over owners of ``node``'s G-counter copies. Under a
-    partition this is ``node``'s *local* view (it may not yet include the other side's increments,
-    but never *loses* them: a later ``gossip``/``anti_entropy`` max-merge adds them). A pure read;
-    a crashed node is ``unavailable``.
+    The exact twin of :func:`cincr_edits` over the PN-counter's *decrement* half (``ncounters``):
+    ``node`` bumps **only its own** N sub-count for ``key`` — a purely node-local edit
+    (``NCounterSet(key, node, node, +1)``), no replication and no message. So it is **always
+    available** (a partitioned-alone node still counts down — the AP property), concurrent
+    ``cdecr``s never conflict, and the per-(key, owner) max join merges it in
+    ``anti_entropy``/``gossip`` exactly like the P half. The counter's value (``cget`` = P − N) may
+    now go **negative**, the property the grow-only G-counter lacks. Node-local and deterministic,
+    so Tier-A ≡ Tier-B bit-for-bit. A crashed node is ``unavailable``. Reports the new decrement
+    sub-count.
     """
     node, key = action.args[0], action.args[1]
     if not state.is_up(node):
         return [SetResult("unavailable", "")], "unavailable", ""
-    total = str(state.gcounter_value(key, node))
+    new = state.ncounters.get((key, node, node), 0) + 1
+    return [NCounterSet(key, node, node, new), SetResult("ok", str(new))], "ok", str(new)
+
+
+def cget_edits(
+    state: DistributedState, action: DistAction, config: DistConfig
+) -> tuple[DistDelta, str, str]:
+    """``cget node key``: read a CRDT counter — ``node``'s G-counter sum **minus** decrements (29).
+
+    The counter's value at ``node`` is ``sum(P) − sum(N)`` over owners (a PN-counter; for a
+    grow-only counter that was never ``cdecr``-ed, N is empty and this is just the G-counter sum).
+    Under a partition this is ``node``'s *local* view (it may not yet include the other side's incs
+    or decrements, but never *loses* them: a later ``gossip``/``anti_entropy`` max-merge adds them).
+    A pure read; a crashed node is ``unavailable``.
+    """
+    node, key = action.args[0], action.args[1]
+    if not state.is_up(node):
+        return [SetResult("unavailable", "")], "unavailable", ""
+    total = str(state.pncounter_value(key, node))
     return [SetResult("ok", total)], "ok", total
 
 
@@ -844,6 +884,8 @@ class ReferenceDistOracle:
             return self._get(state, action)
         if name == "cincr":
             return cincr_edits(state, action, self.config)
+        if name == "cdecr":
+            return cdecr_edits(state, action, self.config)
         if name == "cget":
             return cget_edits(state, action, self.config)
         if name in ("begin", "tget", "tput", "commit", "abort"):

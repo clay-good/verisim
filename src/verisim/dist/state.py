@@ -264,6 +264,16 @@ class DistributedState:
     # default and omitted from the canonical form, so a cluster that never uses a CRDT counter
     # serializes to the exact pre-increment-28 form (purely additive).
     gcounters: dict[tuple[str, str, str], int] = field(default_factory=dict)
+    # The negative half of the CRDT PN-counter (DS0 increment 29, `cdecr`): a *second* G-counter of
+    # decrements, keyed identically `(key, holder, owner)`. A PN-counter is the standard CRDT way to
+    # make a counter *decrementable* — two grow-only G-counters, P (=`gcounters`) and N (=`ncounters`),
+    # whose value at a node is **sum(P) − sum(N)** over owners. `cdecr n` bumps `n`'s *own* N sub-count
+    # `(key, n, n)`, so (like `cincr`) it is purely node-local and **always available**, concurrent
+    # `cdecr`s never conflict, and the per-(key, owner) **max** join merges *both* halves — so the
+    # PN-counter converges loss-free under partition, and its value may go **negative** (the grow-only
+    # G-counter cannot). Empty by default and omitted from the canonical form, so a cluster that never
+    # decrements a CRDT counter serializes to the exact pre-increment-29 form (purely additive).
+    ncounters: dict[tuple[str, str, str], int] = field(default_factory=dict)
     # The embedded SPEC-6 host inside each node (DS0 increment 23, `host`): a per-node `HostState`
     # (process table + per-process fd tables + the embedded v0 filesystem), so a cluster node is not
     # just a bag of KV replicas but a real host running processes — the compositional vision SPEC-7
@@ -326,6 +336,7 @@ class DistributedState:
             versions=dict(self.versions),
             config=dict(self.config),
             gcounters=dict(self.gcounters),
+            ncounters=dict(self.ncounters),
             hosts={node: h.copy() for node, h in self.hosts.items()},
             lease_until=self.lease_until,
         )
@@ -334,6 +345,18 @@ class DistributedState:
         """``node``'s local view of CRDT counter ``key`` — the sum over owners of its sub-counts."""
         return sum(c for (k, holder, _owner), c in self.gcounters.items()
                    if k == key and holder == node)
+
+    def ncounter_value(self, key: str, node: str) -> int:
+        """``node``'s view of the PN-counter's *decrement* half (DS0 incr 29) — sum over owners."""
+        return sum(c for (k, holder, _owner), c in self.ncounters.items()
+                   if k == key and holder == node)
+
+    def pncounter_value(self, key: str, node: str) -> int:
+        """``node``'s PN-counter value (DS0 incr 29): the G-counter sum **minus** the decrement sum.
+
+        For a counter that has only ever been ``cincr``-ed (``ncounters`` empty) this equals
+        :meth:`gcounter_value` — so ``cget`` is unchanged for the grow-only case (purely additive)."""
+        return self.gcounter_value(key, node) - self.ncounter_value(key, node)
 
     def group_of(self, node: str) -> frozenset[str]:
         """The partition group ``node`` belongs to (a singleton if it is mentioned by no group)."""

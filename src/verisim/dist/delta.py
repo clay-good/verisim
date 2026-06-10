@@ -311,6 +311,23 @@ class GCounterSet:
 
 
 @dataclass(frozen=True)
+class NCounterSet:
+    """Set node ``holder``'s copy of ``owner``'s *decrement* sub-count for PN-counter ``key`` (incr 29).
+
+    The N (decrement) half of the CRDT PN-counter — the exact twin of :class:`GCounterSet` but over the
+    ``ncounters`` map. ``cdecr n`` emits ``NCounterSet(key, n, n, count+1)`` (a node bumps its *own*
+    decrement sub-count), and the same per-(key, owner) **max** join in ``anti_entropy``/``gossip``
+    merges it. A ``count`` of ``0`` is dropped from the canonical form, so a cluster that never
+    ``cdecr``-s is byte-identical to the pre-increment-29 form.
+    """
+
+    key: str
+    holder: str
+    owner: str
+    count: int
+
+
+@dataclass(frozen=True)
 class HostStep:
     """A SPEC-6 host syscall applied to one node's embedded host (DS0 increment 23, the §4 `HostDelta`).
 
@@ -358,6 +375,7 @@ DistEdit = (
     | VersionSet
     | ConfigSet
     | GCounterSet
+    | NCounterSet
     | HostStep
     | SetResult
 )
@@ -443,6 +461,11 @@ def apply(state: DistributedState, delta: DistDelta) -> DistributedState:
                 s.gcounters[(edit.key, edit.holder, edit.owner)] = edit.count
             else:
                 s.gcounters.pop((edit.key, edit.holder, edit.owner), None)  # 0 carries no info
+        elif isinstance(edit, NCounterSet):
+            if edit.count != 0:
+                s.ncounters[(edit.key, edit.holder, edit.owner)] = edit.count
+            else:
+                s.ncounters.pop((edit.key, edit.holder, edit.owner), None)  # 0 carries no info
         elif isinstance(edit, HostStep):
             # apply the SPEC-6 host delta to the node's embedded host (created lazily), via the
             # SPEC-6 ``apply`` verbatim — the §4 composition. An untouched host leaves no residue.
@@ -517,6 +540,9 @@ def edit_to_dict(edit: DistEdit) -> dict[str, Any]:
     if isinstance(edit, GCounterSet):
         return {"op": "GCounterSet", "key": edit.key, "holder": edit.holder,
                 "owner": edit.owner, "count": edit.count}
+    if isinstance(edit, NCounterSet):
+        return {"op": "NCounterSet", "key": edit.key, "holder": edit.holder,
+                "owner": edit.owner, "count": edit.count}
     if isinstance(edit, HostStep):
         return {"op": "HostStep", "node": edit.node, "edits": host_delta_to_list(edit.edits)}
     assert isinstance(edit, SetResult)
@@ -580,6 +606,8 @@ def edit_from_dict(d: dict[str, Any]) -> DistEdit:
         return ConfigSet(d["node"], d["key"], d["value"])
     if op == "GCounterSet":
         return GCounterSet(d["key"], d["holder"], d["owner"], d["count"])
+    if op == "NCounterSet":
+        return NCounterSet(d["key"], d["holder"], d["owner"], d["count"])
     if op == "HostStep":
         return HostStep(d["node"], host_delta_from_list(d["edits"]))
     if op == "SetResult":

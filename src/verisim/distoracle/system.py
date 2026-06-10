@@ -73,6 +73,7 @@ from verisim.distoracle.reference import (
     add_replica_edits,
     append_edits,
     causal_deps,
+    cdecr_edits,
     cget_edits,
     cincr_edits,
     clock_skew_edits,
@@ -252,6 +253,10 @@ class SystemDistOracle:
             # sub-count), so it is deterministic and Tier-A ≡ Tier-B via the shared helper — no msg
             # interaction, and always available even on a partitioned-alone node (the AP property).
             return cincr_edits(state, action, self.config)
+        if name == "cdecr":
+            # The PN-counter decrement (DS0 incr 29) is likewise purely node-local (bumps the node's
+            # own decrement sub-count), deterministic, always available, Tier-A ≡ Tier-B.
+            return cdecr_edits(state, action, self.config)
         if name == "cget":
             return cget_edits(state, action, self.config)
         ev = self._event(state, action)

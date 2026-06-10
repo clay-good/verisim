@@ -1,0 +1,9 @@
+panel,metric,value,detail
+pncounter,nets_to_k_minus_m,1.0000,k=3_m=1_over_3_clusters
+pncounter,goes_negative,1.0000,fresh_cdecr_reads_minus_1
+pncounter,always_available,1.0000,minority_cdecr_acked_AP
+pncounter,no_lost_update,1.0000,plus2_minus1_net_1
+converge,gossip,1.0000,epidemic_all_nodes_net_1
+converge,anti_entropy,1.0000,all_nodes_net_1
+converge,idempotent,1.0000,second_gossip_unchanged
+tier_b,all,1.0000,steps=59

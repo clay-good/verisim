@@ -78,6 +78,8 @@ def cluster_view(state: DistributedState) -> str:
     # CRDT G-counter copies (DS0 incr 28) are observable cluster state — each (key, holder, owner)
     # sub-count, sorted id-independently. Empty for a cluster with no CRDT counter (channel same).
     gcounters = sorted((k, h, o, c) for (k, h, o), c in state.gcounters.items() if c != 0)
+    # The PN-counter decrement half (DS0 incr 29) is observable cluster state too — same shape.
+    ncounters = sorted((k, h, o, c) for (k, h, o), c in state.ncounters.items() if c != 0)
     # The embedded per-node hosts (DS0 incr 23) are observable cluster state — each node's host
     # canonical form, sorted by node. Empty for a host-free cluster, so the channel is unchanged.
     hosts = sorted((n, to_canonical_host(h)) for n, h in state.hosts.items())
@@ -92,6 +94,7 @@ def cluster_view(state: DistributedState) -> str:
         "versions": versions,
         "config": config,
         "gcounters": gcounters,
+        "ncounters": ncounters,
         "hosts": hosts,
     })
 

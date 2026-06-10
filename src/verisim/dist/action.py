@@ -10,7 +10,8 @@ workload and the fault/time medium (the consensus/admin family arrives with the 
     delete <node> <key>             # client: tombstone <key> (a versioned delete; resurrection-safe)
     incr <node> <key>               # client: atomic +1 (read-modify-write; LWW loses concurrent incrs)
     cincr <node> <key>              # client: CRDT G-counter +1 (loss-free, always available; sums on merge)
-    cget <node> <key>               # client: read a CRDT counter (sum of per-owner sub-counts)
+    cdecr <node> <key>              # client: CRDT PN-counter -1 (decrementable; may go negative; loss-free)
+    cget <node> <key>               # client: read a CRDT counter (G-counter sum, minus PN decrements)
     advance <dt>                    # time: +<dt> clock; deliver in-flight msgs now due & reachable
     partition <nodes> | <nodes>     # fault: split the network into groups (| separates groups)
     heal                            # fault: remove all partitions (one fully-connected group)
@@ -176,7 +177,14 @@ apply, so the counter converges to the exact total regardless of partition or me
 because ``cincr`` is purely node-local it is **always available** — a partitioned-alone node still
 counts, where the LWW ``incr`` under ``quorum``/``linearizable`` is ``unavailable``. So ``cincr`` is
 both more available *and* loss-free than ``incr``: the textbook reason CRDTs exist, recovered as the
-positive that resolves ED34's negative (ED35).
+positive that resolves ED34's negative (ED35). ``cdecr`` (DS0 increment 29) makes the counter
+**decrementable** — the **CRDT PN-counter**: a grow-only G-counter cannot go down, so a PN-counter
+pairs *two* G-counters, P (the ``cincr`` half) and N (the ``cdecr`` half), and ``cget`` reads
+**P − N**. ``cdecr n key`` bumps **only ``n``'s own** N sub-count, so (like ``cincr``) it is purely
+node-local and always available, concurrent decrements never conflict, and the per-(key, owner) max
+join merges *both* halves — so the PN-counter still converges loss-free under partition, and its
+value may now go **negative** (the property the grow-only G-counter lacks). ``cincr``/``cdecr``/``cget``
+together are the full decrementable CRDT counter (ED36).
 """
 
 from __future__ import annotations
@@ -192,7 +200,8 @@ _ARITY: dict[str, int | None] = {
     "delete": 2,  # node key  -- tombstone <key>, a versioned (resurrection-safe) delete (DS0 incr 26)
     "incr": 2,  # node key  -- atomic read-modify-write +1 on a counter value (DS0 incr 27)
     "cincr": 2,  # node key  -- CRDT G-counter +1 (node-local, loss-free, always available; incr 28)
-    "cget": 2,  # node key  -- read a CRDT counter: sum of per-owner sub-counts (DS0 incr 28)
+    "cdecr": 2,  # node key  -- CRDT PN-counter -1 (decrementable; may go negative; DS0 incr 29)
+    "cget": 2,  # node key  -- read a CRDT counter: G-counter sum minus PN decrements (incr 28/29)
     "advance": 1,  # dt
     "partition": None,  # <nodes> | <nodes> [| ...]
     "host": None,  # <node> <syscall...>  -- a SPEC-6 host syscall on <node>'s host (DS0 incr 23)
@@ -230,7 +239,7 @@ _ARITY: dict[str, int | None] = {
 # ``begin``/``commit``/``abort`` + the txn-scoped ``tget``/``tput`` are client ops (the workload), as
 # are the ``enqueue``/``dequeue`` FIFO-queue ops (DS0 incr 21).
 CLIENT_OPS = frozenset({
-    "put", "get", "cas", "delete", "incr", "cincr", "cget",
+    "put", "get", "cas", "delete", "incr", "cincr", "cdecr", "cget",
     "begin", "tget", "tput", "commit", "abort", "enqueue", "dequeue",
 })
 TXN_OPS = frozenset({"begin", "tget", "tput", "commit", "abort"})

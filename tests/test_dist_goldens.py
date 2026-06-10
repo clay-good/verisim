@@ -621,6 +621,43 @@ def test_golden_gcounter_concurrent_increments_converge_no_loss():
     assert oracle.step(state, parse_dist_action("cget n0 c")).value == "2"  # no lost update
 
 
+def test_golden_pncounter_inc_and_dec_converge_to_net():
+    # The CRDT PN-counter golden (SPEC-7 §3.2, DS0 incr 29): under a partition n0 `cincr`s (P[n0]=1)
+    # while n2 `cdecr`s (N[n2]=1) — both succeed (AP), touching disjoint vector entries in different
+    # halves. After heal, `gossip n0 n2` max-merges BOTH halves, so both hold P={n0:1} and N={n2:1}
+    # and read net P - N = 1 - 1 = 0 — no lost update across either half. The ncounters appear in
+    # the canonical form (omitted until the first cdecr); the gcounter half is the incr-28 shape.
+    config = DistConfig(name="golden-pn", nodes=("n0", "n1", "n2"), objects=("c",),
+                        values=("a",), consistency_model="eventual")
+    oracle = ReferenceDistOracle(config)
+    state = DistributedState.initial(config)
+    for cmd in ["partition n0 n1 | n2", "cincr n0 c", "cdecr n2 c", "heal", "gossip n0 n2"]:
+        state = oracle.step(state, parse_dist_action(cmd)).state
+    final = to_canonical(state)
+    assert final == {
+        "replicas": [
+            _rep("c", "n0", 0, "nil"), _rep("c", "n1", 0, "nil"), _rep("c", "n2", 0, "nil"),
+        ],
+        "log": [],
+        "inflight": [],
+        "partitions": [["n0", "n1", "n2"]],
+        "down": [],
+        "clock": 0,
+        "next_event_id": 0,
+        "next_msg_id": 0,
+        "last_result": ["gossiped", "2"],  # one P copy + one N copy moved across the pair
+        "gcounters": [
+            {"key": "c", "holder": "n0", "owner": "n0", "count": 1},
+            {"key": "c", "holder": "n2", "owner": "n0", "count": 1},
+        ],
+        "ncounters": [
+            {"key": "c", "holder": "n0", "owner": "n2", "count": 1},
+            {"key": "c", "holder": "n2", "owner": "n2", "count": 1},
+        ],
+    }
+    assert oracle.step(state, parse_dist_action("cget n0 c")).value == "0"  # +1 - 1, nothing lost
+
+
 def test_golden_config_push_commits_on_majority_minority_stays_stale() -> None:
     # The config-push golden (SPEC-7 §3.2, DS0 incr 24): n0 leads (term 1), then the network splits
     # {n0,n1} | {n2}. `config_push n0 feature on` from n0 (on the 2-of-3 majority side) commits and

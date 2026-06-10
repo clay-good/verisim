@@ -146,6 +146,15 @@ def to_canonical(state: DistributedState) -> dict[str, Any]:
             {"key": key, "holder": holder, "owner": owner, "count": gcounters[(key, holder, owner)]}
             for key, holder, owner in sorted(gcounters)
         ]
+    # The PN-counter decrement half (DS0 incr 29, `cdecr`): the N G-counter, same shape as `gcounters`.
+    # Omitted when empty, so a cluster that never `cdecr`-s serializes to the exact pre-increment-29
+    # form (purely additive over increment 28).
+    ncounters = {k: c for k, c in state.ncounters.items() if c != 0}
+    if ncounters:
+        out["ncounters"] = [
+            {"key": key, "holder": holder, "owner": owner, "count": ncounters[(key, holder, owner)]}
+            for key, holder, owner in sorted(ncounters)
+        ]
     # The embedded SPEC-6 hosts (DS0 incr 23): per-node host canonical form (the v0 FS reuses its own
     # canonical verbatim — the composition is visible in serialization). Omitted when no node runs a
     # host op, so a host-free cluster serializes to the exact pre-increment-23 form (purely additive).
@@ -221,6 +230,9 @@ def from_canonical(d: dict[str, Any]) -> DistributedState:
         config={(c["node"], c["key"]): c["value"] for c in d.get("config", [])},
         gcounters={
             (g["key"], g["holder"], g["owner"]): g["count"] for g in d.get("gcounters", [])
+        },
+        ncounters={
+            (g["key"], g["holder"], g["owner"]): g["count"] for g in d.get("ncounters", [])
         },
         hosts={h["node"]: from_canonical_host(h["host"]) for h in d.get("hosts", [])},
         lease_until=d.get("lease_until", 0),

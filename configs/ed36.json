@@ -1,0 +1,7 @@
+{
+  "name": "ed36-pncounter",
+  "cluster_sizes": [3, 5, 7],
+  "key": "c",
+  "k": 3,
+  "m": 1
+}

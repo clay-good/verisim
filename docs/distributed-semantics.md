@@ -159,7 +159,8 @@ of a real message-passing execution, not just the analytic DES.
 | `delete <node> <key>` (DS0 increment 26) | **tombstone delete**: behave as `put node key TOMBSTONE` — a *versioned write of a tombstone*, not a removal of the replica, so it inherits every consistency model and is ordered by version (the resurrection-safe discipline). A `get` on a tombstoned replica reports `("deleted", "")`. The client result is `("deleted", "")`; the replicated value is the `__deleted__` sentinel. Purely additive (no new state field, no new edit). |
 | `incr <node> <key>` (DS0 increment 27) | **atomic counter** (read-modify-write): read `node`'s local counter (a non-numeric/absent value is `0`) and behave as `put node key str(count+1)`. Sequentially correct, but under a partition the consistency model decides whether concurrent increments survive: `eventual` **silently loses** a concurrent increment (two same-version writes, LWW keeps one), `quorum` makes the minority `("unavailable", "")` (no silent loss), `linearizable` rejects under any partition. `("ok", new_count)`. Purely additive (the counter is a digit-valued replica). |
 | `cincr <node> <key>` (DS0 increment 28) | **CRDT G-counter increment**: bump **only `node`'s own** sub-count for `key` (`GCounterSet(key, node, node, +1)`) — purely node-local, so **always available** (a partitioned-alone node still counts — the AP property `incr` lacks under quorum/lin) and **never loses** a concurrent increment (disjoint owners). The CRDT join (per-(key, owner) max) is applied by `anti_entropy`/`gossip`. `("ok", new_own_subcount)`; `("unavailable", "")` if down. Purely additive (one `gcounters` map + one `GCounterSet` edit). |
-| `cget <node> <key>` (DS0 increment 28) | **CRDT counter read**: return the sum over owners of `node`'s G-counter sub-counts — `node`'s local view (may lag, but never loses; a later join adds the rest). `("ok", total)`; `("unavailable", "")` if down. A pure read. |
+| `cdecr <node> <key>` (DS0 increment 29) | **CRDT PN-counter decrement**: bump **only `node`'s own** *decrement* sub-count for `key` (`NCounterSet(key, node, node, +1)`) — the twin of `cincr` over the PN-counter's N half. Purely node-local (**always available**), concurrent decrements never conflict, and the same per-(key, owner) max join merges it. The counter's value (`cget` = P − N) may now go **negative**, the property the grow-only G-counter lacks. `("ok", new_own_decrement_subcount)`; `("unavailable", "")` if down. Purely additive (one `ncounters` map + one `NCounterSet` edit). |
+| `cget <node> <key>` (DS0 increment 28/29) | **CRDT counter read**: return `node`'s G-counter sum **minus** its decrement sum over owners (a PN-counter; for a grow-only counter never `cdecr`-ed, N is empty and this is just the G-counter sum) — `node`'s local view (may lag, but never loses; a later join adds the rest). `("ok", total)`; `("unavailable", "")` if down. A pure read. |
 | `enqueue <node> <queue> <val>` (DS0 incr 21) | append `val` to each reachable replica's FIFO `queue` list (the relative append op). Availability follows the consistency model (linearizable needs every replica, quorum a majority, eventual/causal proceed on the reachable set); else `("unavailable", "")`. `("enqueued", val)`. |
 | `dequeue <node> <queue>` (DS0 incr 21) | return the head of `node`'s local `queue` replica and pop the head from each reachable replica. The delivery semantics follow the model: `eventual` admits **duplicate delivery** under partition (the removal does not cross the split), `linearizable`/`quorum` gate availability for **exactly-once**. `("dequeued", head)`, or `("empty", "")` if the local replica has no items; `("unavailable", "")` if the model's quorum is unreachable. |
 
@@ -708,7 +709,40 @@ non-negative and held/owned by known nodes. ED35
 ([`experiments/ed35.py`](../src/verisim/experiments/ed35.py)) pins both panels (loss-free +
 always-available; gossip/anti_entropy convergence + idempotence) with Tier-B agreeing on every
 transition. (Honest scope: this is a **grow-only** G-counter — a decrementable **PN-counter** pairs
-two G-counters, a clean later extension.)
+two G-counters, built next in increment 29.)
+
+### 3.11 `cdecr` — the CRDT PN-counter (DS0 increment 29)
+
+A G-counter only goes up. The **PN-counter** is the standard CRDT way to make a counter
+*decrementable*: pair **two** G-counters — `P` (the `cincr` half, `gcounters`) and `N` (the `cdecr`
+half, `ncounters`) — and read the value as **`P − N`**. `cdecr n key` is the exact twin of `cincr`
+over the N half: it bumps **only `n`'s own** decrement sub-count (`NCounterSet(key, n, n, +1)`), so it
+inherits every property that made the G-counter work — purely node-local (**always available**, the AP
+property), single-writer-per-entry (concurrent decrements touch *disjoint* entries, **nothing to
+lose**), and merged by the same per-(key, owner) **max** join. The join over the full PN-counter is
+just the join over each half independently, so `anti_entropy`/`gossip` reconcile `P` and `N` together
+and every node converges to the exact net.
+
+The one thing the PN-counter adds is the property the G-counter *lacked*: the value may go
+**negative**. (The sub-counts are still individually monotone and non-negative — only their
+*difference* can dip below zero. The metamorphic tier enforces exactly this: a negative *sub-count* is
+impossible, a negative *value* is fine.)
+
+```
+cdecr n0 c                      # ("ok","1") — n0's own decrement sub-count; cget now reads -1
+partition n0 n1 n2 | n3 n4
+cincr n0 c; cincr n0 c          # ("ok","1"), ("ok","2") — majority side, P[n0]=2
+cdecr n3 c                      # ("ok","1") — the minority node still counts down (AP)
+heal; gossip n0 n3; cget n0 c   # ("ok","1") — +2 (n0) − 1 (n3), no lost update across either half
+```
+
+`cdecr` is node-local and the merge is a coordinator-level read of the medium, so Tier-A and Tier-B
+compute byte-identical deltas. The `ncounters` map joins `cluster_view`, is omitted from the canonical
+form until the first `cdecr` (purely additive over increment 28), and a cluster that only ever
+`cincr`-s is byte-identical to the pre-increment-29 form. ED36
+([`experiments/ed36.py`](../src/verisim/experiments/ed36.py)) pins both panels (decrement works +
+loss-free + goes-negative + always-available; gossip/anti_entropy convergence + idempotence over both
+halves) with Tier-B agreeing on every transition.
 
 ## 4. The delta and the `apply == oracle` invariant
 
