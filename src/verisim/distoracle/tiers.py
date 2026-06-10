@@ -148,7 +148,7 @@ class TieredOracle:
         """
         name = action.name
         no_write = ("get", "partition", "heal", "crash", "restart", "drop", "delay", "reorder",
-                    "begin", "tget", "tput", "abort")
+                    "clock_skew", "begin", "tget", "tput", "abort")
         if name in no_write:
             # none of these write replicas; the replica map must be unchanged. ``drop`` (DS0 inc 11)
             # and ``delay``/``reorder`` (DS0 inc 13) only touch the in-flight set; the txn ops

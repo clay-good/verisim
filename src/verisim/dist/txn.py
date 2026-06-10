@@ -329,7 +329,8 @@ def _commit(
                 if peer in reach[key]:
                     continue
                 edits.append(
-                    MsgSend(msg_id, txn.node, peer, key, new_version, value, state.clock + 1)
+                    MsgSend(msg_id, txn.node, peer, key, new_version, value,
+                            state.sender_clock(txn.node) + 1)
                 )
                 msg_id += 1
         else:  # eventual / causal: local write + async replication to the other replicas
@@ -338,7 +339,8 @@ def _commit(
                 if peer == txn.node:
                     continue
                 edits.append(
-                    MsgSend(msg_id, txn.node, peer, key, new_version, value, state.clock + 1)
+                    MsgSend(msg_id, txn.node, peer, key, new_version, value,
+                            state.sender_clock(txn.node) + 1)
                 )
                 msg_id += 1
     edits.extend(lock_releases)

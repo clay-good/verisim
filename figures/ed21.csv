@@ -1,0 +1,9 @@
+panel,skew,value,detail
+timing,-4,-3,converged_after_short=True
+timing,-2,-1,converged_after_short=True
+timing,0,1,converged_after_short=True
+timing,2,3,converged_after_short=False
+timing,4,5,converged_after_short=False
+shift,all,1.0000,deliver_after_shifted_by_exactly_delta
+invariance,all,1.0000,converged_state_clock_independent
+tier_b,all,1.0000,steps=43;skews=5

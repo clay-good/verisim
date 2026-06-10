@@ -71,6 +71,11 @@ def to_canonical(state: DistributedState) -> dict[str, Any]:
         out["locks"] = {
             obj: [list(h) for h in holders] for obj, holders in sorted(state.locks.items())
         }
+    # ``skew`` is included only when non-empty, so a cluster with synchronized clocks serializes to
+    # the exact pre-DS0-incr-14 normal form (per-node clock offsets are purely additive, like
+    # ``locks``/``txns``); a 0 offset is never stored (it is cleared on apply).
+    if state.skew:
+        out["skew"] = {node: off for node, off in sorted(state.skew.items())}
     return out
 
 
@@ -107,6 +112,7 @@ def from_canonical(d: dict[str, Any]) -> DistributedState:
         obj: tuple((t, m) for t, m in holders)
         for obj, holders in d.get("locks", {}).items()
     }
+    skew = {node: off for node, off in d.get("skew", {}).items()}
     return DistributedState(
         replicas=replicas,
         partitions=partitions,
@@ -119,6 +125,7 @@ def from_canonical(d: dict[str, Any]) -> DistributedState:
         last_result=(last[0], last[1]) if last is not None else None,
         txns=txns,
         locks=locks,
+        skew=skew,
     )
 
 

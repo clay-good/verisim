@@ -1,0 +1,8 @@
+{
+  "name": "ed21-clock-skew",
+  "nodes": ["n0", "n1", "n2"],
+  "key": "x",
+  "value": "b",
+  "skews": [-4, -2, 0, 2, 4],
+  "short_advance": 2
+}

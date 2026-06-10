@@ -28,6 +28,7 @@ from verisim.dist.action import DistAction
 from verisim.dist.config import DEFAULT_DIST_CONFIG, DistConfig
 from verisim.dist.delta import (
     ClockSet,
+    ClockSkewSet,
     DistDelta,
     DistEdit,
     EventAppend,
@@ -108,6 +109,18 @@ def timing_fault_edits(
     return [*edits, SetResult("reordered", value)], "reordered", value
 
 
+def clock_skew_edits(action: DistAction) -> tuple[DistDelta, str, str]:
+    """``clock_skew node delta``: set a node's clock offset (DS0 increment 14, §3.4).
+
+    A pure medium change (it sets a per-node offset that shifts only the ``deliver_after`` the node
+    stamps on its future sends, via :meth:`DistributedState.sender_clock`), so -- like ``drop`` and
+    ``delay``/``reorder`` -- Tier-A and Tier-B compute byte-identical deltas. Shared by both oracles
+    so they cannot drift. A 0 offset clears the skew (no residue).
+    """
+    node, delta = action.args[0], int(action.args[1])
+    return [ClockSkewSet(node, delta), SetResult("skewed", str(delta))], "skewed", str(delta)
+
+
 class ReferenceDistOracle:
     """The Tier-A deterministic DES (§5.1). Pure: ``step`` is a function of (state, action)."""
 
@@ -145,6 +158,8 @@ class ReferenceDistOracle:
             return self._drop(state, action)
         if name in ("delay", "reorder"):
             return timing_fault_edits(state, action)
+        if name == "clock_skew":
+            return clock_skew_edits(action)
         if name == "anti_entropy":
             return self._anti_entropy(state, action)
         raise ValueError(f"unhandled action {name!r}")  # pragma: no cover - grammar is closed
@@ -221,7 +236,10 @@ class ReferenceDistOracle:
             for peer in peers:
                 if peer in reachable:
                     continue
-                edits.append(MsgSend(msg_id, node, peer, key, new_version, value, state.clock + 1))
+                edits.append(
+                    MsgSend(msg_id, node, peer, key, new_version, value,
+                            state.sender_clock(node) + 1)
+                )
                 msg_id += 1
             edits.append(SetResult("ok", value))
             return edits, "ok", value
@@ -234,7 +252,8 @@ class ReferenceDistOracle:
             if peer == node:
                 continue
             edits.append(
-                MsgSend(msg_id, node, peer, key, new_version, value, state.clock + 1, deps)
+                MsgSend(msg_id, node, peer, key, new_version, value,
+                        state.sender_clock(node) + 1, deps)
             )
             msg_id += 1
         edits.append(SetResult("ok", value))

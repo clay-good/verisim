@@ -160,6 +160,11 @@ class DistributedState:
     # ``mode ∈ {"S", "X"}``. Held from acquisition (``tget``/``tput``) to ``commit``/``abort``. Empty
     # (and omitted from the canonical form) under the ``occ`` default, so prior hashes are unchanged.
     locks: dict[str, tuple[tuple[str, str], ...]] = field(default_factory=dict)
+    # Per-node clock offset (DS0 increment 14, the ``clock_skew`` fault): a node's local clock is the
+    # global ``clock`` plus its offset, which shifts the ``deliver_after`` it stamps on the messages
+    # it sends (a positive offset = a fast clock, defers its sends; negative = a slow clock, rushes
+    # them). Empty (and omitted from the canonical form) by default, so prior hashes are unchanged.
+    skew: dict[str, int] = field(default_factory=dict)
 
     def __post_init__(self) -> None:
         # ``partitions`` is conceptually a *set* of disjoint groups, but stored as a tuple; keep it
@@ -196,7 +201,17 @@ class DistributedState:
             last_result=self.last_result,
             txns=dict(self.txns),
             locks=dict(self.locks),
+            skew=dict(self.skew),
         )
+
+    def sender_clock(self, node: str) -> int:
+        """``node``'s local clock = the global clock plus its skew offset (DS0 increment 14).
+
+        The one place a node's (possibly skewed) clock is observable: the ``deliver_after`` it stamps
+        on the replication messages it sends. A node with no offset reads the global clock, so the
+        un-skewed path is byte-identical to the pre-increment-14 form.
+        """
+        return self.clock + self.skew.get(node, 0)
 
     def connected(self, a: str, b: str) -> bool:
         """``True`` iff nodes ``a`` and ``b`` share a partition group (can exchange messages)."""

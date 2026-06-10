@@ -68,7 +68,7 @@ from verisim.dist.delta import (
 from verisim.dist.state import DistributedState, Message
 from verisim.dist.txn import txn_step
 from verisim.distoracle.base import DistStepResult
-from verisim.distoracle.reference import causal_deps, timing_fault_edits
+from verisim.distoracle.reference import causal_deps, clock_skew_edits, timing_fault_edits
 
 TIER_SIMULATED = "simulated"
 TIER_THREADED = "threaded"
@@ -247,6 +247,8 @@ class SystemDistOracle:
             # afterward (delayed-but-recoverable convergence / reordered transit) on its own
             # autonomous-actor delivery, exactly as it does for ``drop`` (ED20, §5.2).
             return timing_fault_edits(state, action)
+        if name == "clock_skew":
+            return clock_skew_edits(action)
         if name == "anti_entropy":
             return self._anti_entropy(state, action)
         raise ValueError(f"unhandled action {name!r}")  # pragma: no cover - grammar is closed
@@ -321,7 +323,10 @@ class SystemDistOracle:
             for peer in peers:
                 if peer in reachable:
                     continue
-                edits.append(MsgSend(msg_id, node, peer, key, new_version, value, state.clock + 1))
+                edits.append(
+                    MsgSend(msg_id, node, peer, key, new_version, value,
+                            state.sender_clock(node) + 1)
+                )
                 msg_id += 1
             edits.append(SetResult("ok", value))
             return edits, "ok", value
@@ -335,7 +340,8 @@ class SystemDistOracle:
             if peer == node:
                 continue
             edits.append(
-                MsgSend(msg_id, node, peer, key, new_version, value, state.clock + 1, deps)
+                MsgSend(msg_id, node, peer, key, new_version, value,
+                        state.sender_clock(node) + 1, deps)
             )
             msg_id += 1
         edits.append(SetResult("ok", value))

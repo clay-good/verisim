@@ -235,6 +235,57 @@ def test_golden_reorder_flips_which_write_arrives_first():
     }
 
 
+def test_golden_clock_skew_defers_a_nodes_sends():
+    # The clock-skew golden (SPEC-7 §3.4, DS0 incr 14): skew n0's clock +3, so the messages it sends
+    # are stamped with deliver_after = clock + 3 + 1 = 4. advance 2 cannot deliver them (4 > 2), so
+    # both peers stay stale and the messages are held in flight — clock skew deferring delivery,
+    # with the per-node offset recorded in the (otherwise-omitted) `skew` map.
+    final = _final(["clock_skew n0 3", "put n0 x b", "advance 2"])
+    assert final == {
+        "replicas": [
+            _rep("x", "n0", 1, "b"),    # writer
+            _rep("x", "n1", 0, "nil"),  # deferred: the +3-skewed send is not yet due at clock 2
+            _rep("x", "n2", 0, "nil"),
+            *_boot_y(),
+        ],
+        "log": [{"id": 0, "node": "n0", "op": "put n0 x b", "clock": 0, "happens_before": []}],
+        "inflight": [
+            {"id": 0, "src": "n0", "dst": "n1", "object_id": "x", "version": 1, "value": "b",
+             "deliver_after": 4},
+            {"id": 1, "src": "n0", "dst": "n2", "object_id": "x", "version": 1, "value": "b",
+             "deliver_after": 4},
+        ],
+        "partitions": [["n0", "n1", "n2"]],
+        "down": [],
+        "clock": 2,
+        "next_event_id": 1,
+        "next_msg_id": 2,
+        "last_result": ["advanced", "0"],  # nothing due at clock 2 (both sends deferred to 4)
+        "skew": {"n0": 3},  # the per-node offset, omitted-when-empty (here non-empty)
+    }
+
+
+def test_golden_clock_skew_zero_clears_the_offset():
+    # A 0 offset clears the skew (no residue): re-syncing n0 returns it to the global clock, so its
+    # send is stamped with the normal deliver_after = 1, delivered by advance 2 — and the canonical
+    # form carries no `skew` key, byte-identical to the pre-increment-14 normal form.
+    final = _final(["clock_skew n0 3", "clock_skew n0 0", "put n0 x b", "advance 2"])
+    assert "skew" not in final  # the 0 offset cleared it — no residue
+    assert final == {
+        "replicas": [
+            _rep("x", "n0", 1, "b"), _rep("x", "n1", 1, "b"), _rep("x", "n2", 1, "b"), *_boot_y()
+        ],
+        "log": [{"id": 0, "node": "n0", "op": "put n0 x b", "clock": 0, "happens_before": []}],
+        "inflight": [],  # both sends delivered (deliver_after 1 ≤ clock 2) — re-synced
+        "partitions": [["n0", "n1", "n2"]],
+        "down": [],
+        "clock": 2,
+        "next_event_id": 1,
+        "next_msg_id": 2,
+        "last_result": ["advanced", "2"],
+    }
+
+
 def test_golden_linearizable_replicates_synchronously():
     # A single put commits to *every* replica in the same step — no in-flight, no advance needed,
     # the strong-consistency counterpart of the eventual-consistency async-then-converge golden.

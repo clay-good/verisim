@@ -15,6 +15,7 @@ workload and the fault/time medium (the consensus/admin family arrives with the 
     drop <src> <dst>                # fault: lose every in-flight message from <src> to <dst>
     delay <src> <dst> <dt>          # fault: defer every in-flight <src>-><dst> message by <dt>
     reorder <src> <dst>             # fault: reverse the delivery schedule of <src>-><dst> messages
+    clock_skew <node> <delta>       # fault: offset <node>'s clock by <delta> (signed; 0 clears it)
     anti_entropy <node>             # protocol: read-repair <node> to the latest reachable replica
 
 The fault/time family is the source of all interesting dynamics (stale reads under partition,
@@ -33,7 +34,13 @@ increment 13) are the message-timing faults: ``delay src dst dt`` defers every i
 unrecoverable loss), and ``reorder src dst`` reverses the delivery schedule of that channel's
 messages (the multiset of times preserved, the order flipped). Both only edit the existing
 ``Message.deliver_after`` field, so they add no state and compose with every consistency model;
-they make the §3.4 "reorder/skew is the medium" axis a controllable input (ED20). Transactions and
+they make the §3.4 "reorder/skew is the medium" axis a controllable input (ED20). ``clock_skew``
+(DS0 increment 14) is the last of the §3.4 medium faults: ``clock_skew node delta`` offsets a node's
+local clock by a signed ``delta``, which shifts the ``deliver_after`` it stamps on the messages it
+sends (ahead = its sends are deferred, behind = rushed). Because the protocol resolves conflicts by
+last-writer-wins on ``(version, value)`` -- never on a wall-clock timestamp -- skew shifts *when* a
+write is delivered but never *which* write wins, so the converged state is clock-independent (ED21,
+the property deterministic-simulation testing injects skew to verify). Transactions and
 ``propose``/leader ops are later increments.
 """
 
@@ -55,6 +62,7 @@ _ARITY: dict[str, int | None] = {
     "drop": 2,  # src dst  -- lose every in-flight message from <src> to <dst> (DS0 incr 11)
     "delay": 3,  # src dst dt  -- defer every in-flight <src>-><dst> message by <dt> (DS0 incr 13)
     "reorder": 2,  # src dst  -- reverse the delivery schedule of <src>-><dst> messages (DS0 incr 13)
+    "clock_skew": 2,  # node delta  -- set <node>'s clock offset (signed; DS0 incr 14)
     "anti_entropy": 1,  # node  -- read-repair <node> to the latest reachable replica (DS0 incr 12)
     # Transaction family (DS0 increment 2): a multi-key OCC transaction at a coordinator node.
     "begin": 2,  # node txn  -- open a transaction
@@ -68,7 +76,7 @@ _ARITY: dict[str, int | None] = {
 CLIENT_OPS = frozenset({"put", "get", "cas", "begin", "tget", "tput", "commit", "abort"})
 TXN_OPS = frozenset({"begin", "tget", "tput", "commit", "abort"})
 FAULT_OPS = frozenset(
-    {"advance", "partition", "heal", "crash", "restart", "drop", "delay", "reorder"}
+    {"advance", "partition", "heal", "crash", "restart", "drop", "delay", "reorder", "clock_skew"}
 )
 # Protocol/admin ops (SPEC-7 §3.2, the third action family). ``anti_entropy`` (the read-repair
 # convergence mechanism, DS0 increment 12) is the first; ``propose``/leader ops are later increments.
@@ -112,6 +120,8 @@ def parse_dist_action(raw: str) -> DistAction:
         _parse_positive_int(rest[0], raw)
     if name == "delay":
         _parse_positive_int(rest[2], raw)  # dt: a positive deferral, like advance's
+    if name == "clock_skew":
+        _parse_signed_int(rest[1], raw)  # delta: a signed clock offset (may be negative or 0)
     return DistAction(raw=raw, name=name, args=tuple(rest))
 
 
@@ -148,3 +158,11 @@ def _parse_positive_int(tok: str, raw: str) -> int:
     if value <= 0:
         raise DistParseError(f"dt must be positive, got {value} in {raw!r}")
     return value
+
+
+def _parse_signed_int(tok: str, raw: str) -> int:
+    """Parse a signed integer (the ``clock_skew`` offset may be negative or zero)."""
+    try:
+        return int(tok)
+    except ValueError as exc:
+        raise DistParseError(f"expected an integer, got {tok!r} in {raw!r}") from exc

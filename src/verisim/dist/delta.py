@@ -118,6 +118,19 @@ class ClockSet:
 
 
 @dataclass(frozen=True)
+class ClockSkewSet:
+    """Set node ``node``'s clock offset (the ``clock_skew`` fault, DS0 increment 14).
+
+    A positive ``offset`` is a clock running *ahead* (its sends are stamped later); a negative one is
+    *behind* (stamped earlier). An ``offset`` of 0 **clears** the node's skew, so a synchronized
+    cluster carries no ``skew`` residue and serializes to the pre-increment-14 form.
+    """
+
+    node: str
+    offset: int
+
+
+@dataclass(frozen=True)
 class TxnSet:
     """Upsert an active transaction's buffered state (``begin``/``tget``/``tput`` produce this)."""
 
@@ -162,6 +175,7 @@ DistEdit = (
     | NodeDown
     | NodeUp
     | ClockSet
+    | ClockSkewSet
     | TxnSet
     | TxnDel
     | LockSet
@@ -204,6 +218,11 @@ def apply(state: DistributedState, delta: DistDelta) -> DistributedState:
             s.down = s.down - {edit.node}
         elif isinstance(edit, ClockSet):
             s.clock = edit.clock
+        elif isinstance(edit, ClockSkewSet):
+            if edit.offset == 0:
+                s.skew.pop(edit.node, None)  # a 0 offset clears the skew (no residue)
+            else:
+                s.skew[edit.node] = edit.offset
         elif isinstance(edit, TxnSet):
             s.txns[edit.txn.txn_id] = edit.txn
         elif isinstance(edit, TxnDel):
@@ -250,6 +269,8 @@ def edit_to_dict(edit: DistEdit) -> dict[str, Any]:
         return {"op": "NodeUp", "node": edit.node}
     if isinstance(edit, ClockSet):
         return {"op": "ClockSet", "clock": edit.clock}
+    if isinstance(edit, ClockSkewSet):
+        return {"op": "ClockSkewSet", "node": edit.node, "offset": edit.offset}
     if isinstance(edit, TxnSet):
         return {"op": "TxnSet", "txn_id": edit.txn.txn_id, "node": edit.txn.node,
                 "reads": [list(r) for r in edit.txn.reads],
@@ -290,6 +311,8 @@ def edit_from_dict(d: dict[str, Any]) -> DistEdit:
         return NodeUp(d["node"])
     if op == "ClockSet":
         return ClockSet(d["clock"])
+    if op == "ClockSkewSet":
+        return ClockSkewSet(d["node"], d["offset"])
     if op == "TxnSet":
         return TxnSet(TxnState(
             d["txn_id"], d["node"],
