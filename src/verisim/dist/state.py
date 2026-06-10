@@ -233,6 +233,15 @@ class DistributedState:
     # deploys serializes to the exact pre-increment-22 form (purely additive). Consensus only; the
     # best-effort KV/queue data plane is version-agnostic.
     versions: dict[str, int] = field(default_factory=dict)
+    # The cluster configuration (DS0 increment 24, `config_push`): a per-(node, key) config value,
+    # the spec's headline "will this config push break the cluster?" admin op. Distinct from
+    # `versions` (deploy's node-local software label that gates consensus *compatibility*): config is
+    # a **leader-committed, majority-replicated** setting (a Raft-style config entry). `config_push`
+    # writes the value to every *reachable* voting member, so a push under partition reaches only the
+    # majority side and the partitioned minority retains its **stale** config (config divergence) —
+    # repaired by a re-push after heal. Empty by default and omitted from the canonical form, so a
+    # cluster that never pushes config serializes to the exact pre-increment-24 form (purely additive).
+    config: dict[tuple[str, str], str] = field(default_factory=dict)
     # The embedded SPEC-6 host inside each node (DS0 increment 23, `host`): a per-node `HostState`
     # (process table + per-process fd tables + the embedded v0 filesystem), so a cluster node is not
     # just a bag of KV replicas but a real host running processes — the compositional vision SPEC-7
@@ -293,6 +302,7 @@ class DistributedState:
             members=self.members,
             queues={k: v for k, v in self.queues.items()},
             versions=dict(self.versions),
+            config=dict(self.config),
             hosts={node: h.copy() for node, h in self.hosts.items()},
             lease_until=self.lease_until,
         )

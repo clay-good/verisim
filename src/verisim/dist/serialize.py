@@ -129,6 +129,14 @@ def to_canonical(state: DistributedState) -> dict[str, Any]:
     versions = {node: v for node, v in state.versions.items() if v != 0}
     if versions:
         out["versions"] = {node: versions[node] for node in sorted(versions)}
+    # The cluster configuration (DS0 incr 24, `config_push`): pushed per-(node, key) values, sorted.
+    # Omitted when empty, so a cluster that never pushes config serializes to the exact
+    # pre-increment-24 form (purely additive, like versions/queues/members/lease).
+    if state.config:
+        out["config"] = [
+            {"node": node, "key": key, "value": state.config[(node, key)]}
+            for node, key in sorted(state.config)
+        ]
     # The embedded SPEC-6 hosts (DS0 incr 23): per-node host canonical form (the v0 FS reuses its own
     # canonical verbatim — the composition is visible in serialization). Omitted when no node runs a
     # host op, so a host-free cluster serializes to the exact pre-increment-23 form (purely additive).
@@ -201,6 +209,7 @@ def from_canonical(d: dict[str, Any]) -> DistributedState:
             (q["queue"], q["node"]): tuple(q["items"]) for q in d.get("queues", [])
         },
         versions=dict(d.get("versions", {})),
+        config={(c["node"], c["key"]): c["value"] for c in d.get("config", [])},
         hosts={h["node"]: from_canonical_host(h["host"]) for h in d.get("hosts", [])},
         lease_until=d.get("lease_until", 0),
     )

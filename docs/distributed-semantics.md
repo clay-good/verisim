@@ -205,6 +205,7 @@ A `tget`/`tput`/`commit`/`abort` on an unknown txn (or one opened at a different
 | `add_replica <node>` / `remove_replica <node>` (DS0 increment 20) | **membership change**: reconfigure the consensus voting set `members` (a leader-committed `MemberSet`), so the quorum threshold (`elect`/`propose`/`append`) tracks it. `add_replica` adds a node (restoring the full cluster collapses to the empty "all vote" sentinel); `remove_replica` removes one — shrinking the majority, the lever that **restores availability** after failures. Rejected `("no_leader", "")` (a leader must commit it), `("is_leader", node)` (the active leader cannot be removed), `("last_member", node)`, `("unknown_node", "")`; a no-op is `("already_member"/"not_member", node)`. On success `("added"/"removed", node)`. All config nodes still store replicas; `members` is the voting overlay. Touches no replica. |
 | `deploy <node> <version>` (DS0 increment 22) | **rolling upgrade**: set `node`'s running software `version` (a `VersionSet`). Two nodes share a consensus quorum (`elect`/`propose`/`append`) only if their versions are within `DistConfig.max_version_skew` (default `1`, the N-1 window), so a deploy that creates an incompatible split with no compatible majority loses quorum — *the deploy broke the cluster*. `("deployed", str(version))`; `("unknown_node", "")` for a non-config node. Gates *consensus* only (the KV/queue data plane is version-agnostic). Touches no replica. |
 | `host <node> <syscall...>` (DS0 increment 23) | **embedded host**: run a SPEC-6 syscall (`fork`/`exit`/`setuid`/`open`/`write`/`close`) on `node`'s own embedded host — a process table + per-process fd tables + an embedded v0 filesystem — by delegating to the SPEC-6 `ReferenceHostOracle` and wrapping its bundle delta in a `HostStep`. Per-node isolated; `("unavailable", "")` if the node is down (the cross-layer crash gate); `("ok", stdout)` on a successful syscall (e.g. the new pid / fd), `("host_err", "")` on a syscall failure (EPERM/EBADF/bad pid). The node's host is created lazily on its first host op. Touches no replica (the host is a separate per-node subsystem). |
+| `config_push <node> <key> <val>` (DS0 increment 24) | **config push**: a leader-committed, majority-replicated cluster config value (a `ConfigSet` per reachable voting member). Unlike `deploy` (a node-local version *label* gating consensus *compatibility*), this is a Raft-style config *entry* — leader-fenced like `propose`/`append`: `("not_leader", current_leader)` for a non-leader, `("no_quorum", "")` for a minority-stranded leader (and **no node's config changes** — all-or-nothing at commit). On commit `("committed", val)`, writing the value to the reachable majority — so a push under partition leaves the **partitioned minority with stale config** (config divergence), repaired by a re-push after `heal`. `("unavailable", "")` if the leader is down. Gates nothing in the data plane; the `config` map is observable cluster state. Touches no replica. |
 
 `advance` is the engine of the distributed dynamics — it is where replication actually happens and
 where partition/crash make their effect felt. Delivery is simulated **sequentially within one
@@ -533,14 +534,57 @@ pins both panels (composition + isolation; the crash linkage) with Tier-B agreei
 transition. (Honest scope: only the SPEC-6 HC0 syscall subset — process/fd/cred/FS — is wired here;
 sockets, IPC, the scheduler, and the SPEC-5 network embedded *between* hosts are later increments.)
 
+### 3.7 `config_push` — the leader-committed config change (DS0 increment 24)
+
+The op that answers SPEC-7's *other* headline operational question — *"will this config push break
+the cluster?"* — the sibling of `deploy` (§3.5). The two are deliberately different in *mechanism*,
+which is the point:
+
+- **`deploy`** sets a **node-local** software `version` (no consensus — you restart a node with new
+  code without asking anyone), and the version gates consensus *compatibility* (the N-1 skew window).
+- **`config_push node key val`** is a **leader-committed, majority-replicated** cluster setting — a
+  Raft-style config *entry*. It shares the leader-fence + majority-reachability rule of
+  `propose`/`append`: only the current leader may push, and it commits only on a majority.
+
+The semantics:
+
+- A push by a **non-leader** is `("not_leader", current_leader)`; a push with **no leader** elected
+  is `("not_leader", "")` — config changes go through consensus, not any node that asks.
+- A leader **stranded in the minority** is `("no_quorum", "")`, and **not a single node's config
+  changes** — a config rollout is all-or-nothing at commit (a minority side never installs a value it
+  cannot durably hold). A crashed leader is `("unavailable", "")`.
+- On commit `("committed", val)`, the value is written (`ConfigSet`) to **every reachable voting
+  member**. Under a partition that leaves the leader on the majority side, this reaches only the
+  majority — so the **partitioned minority retains its stale config** (config divergence, the
+  broken-cluster outcome). The repair is a **re-push after `heal`**, which converges every node.
+
+```
+elect n0; config_push n0 feature on        # ("committed","on") — reaches every voting member
+config_push n1 feature off                 # ("not_leader","n0") — only the leader may push
+partition n0 n1 | n2 n3 n4                  # strand the leader n0 in the 2-of-5 minority
+config_push n0 feature off                 # ("no_quorum","") — and no node's config changes
+heal; partition n0 n1 n2 | n3 n4           # n0 now on the 3-of-5 majority
+config_push n0 feature v2                   # ("committed","v2") on n0/n1/n2; n3/n4 keep stale "on"
+heal; config_push n0 feature v2            # the re-push converges all five nodes
+```
+
+The commit quorum is read from the partition/down medium (a coordinator-level decision, not an
+actor's local view), so Tier-A and Tier-B compute byte-identical config deltas via the shared
+`config_push_edits` helper — the divergence-under-partition is reproduced on the autonomous actors
+too. The `config` map joins `cluster_view`, is omitted from the canonical form until the first push
+(purely additive), and gates **nothing** in the data plane (it is observable cluster metadata a model
+must learn to predict, not a control on the KV/queue). ED31
+([`experiments/ed31.py`](../src/verisim/experiments/ed31.py)) pins both panels (the leader-committed
+rollout + fence; the partition divergence + repair) with Tier-B agreeing on every transition.
+
 ## 4. The delta and the `apply == oracle` invariant
 
 The oracle returns the next state **and** the structured delta that produces it
 ([`verisim.dist.delta`](../src/verisim/dist/delta.py)): `ReplicaWrite`, `MsgSend`/`MsgDeliver`/
 `MsgDrop`, `EventAppend`, `PartitionSet`, `NodeDown`/`NodeUp`, `ClockSet`, the consensus
 `ProtocolStep`/`LeaseSet`, the replicated-log `LogSet`/`CommitIndexSet`, the membership `MemberSet`,
-the FIFO-queue `QueueSet`, the per-node `VersionSet`, the embedded-host `HostStep` (DS0 incr 16–23),
-and `SetResult`. The **M1-analogue invariant** holds by construction and is tested on every
+the FIFO-queue `QueueSet`, the per-node `VersionSet`, the embedded-host `HostStep`, the cluster-config
+`ConfigSet` (DS0 incr 16–24), and `SetResult`. The **M1-analogue invariant** holds by construction and is tested on every
 transition:
 
 ```

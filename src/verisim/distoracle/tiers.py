@@ -142,6 +142,12 @@ class TieredOracle:
         for node, ver in predicted.versions.items():
             if node not in set(self.config.nodes) or ver < 0:
                 return True, f"node {node!r} has an invalid version {ver}"
+        # Cluster config (DS0 incr 24, `config_push`) is keyed by known cluster nodes — a config
+        # value attributed to a node outside the cluster is impossible, so a prediction that pushes
+        # config to a phantom node is refuted at the cheapest tier.
+        for (node, _key) in predicted.config:
+            if node not in set(self.config.nodes):
+                return True, f"config pushed to unknown node {node!r}"
         return False, ""
 
     def _cycle(

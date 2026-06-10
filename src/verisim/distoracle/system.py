@@ -73,6 +73,7 @@ from verisim.distoracle.reference import (
     append_edits,
     causal_deps,
     clock_skew_edits,
+    config_push_edits,
     deploy_edits,
     dequeue_edits,
     elect_edits,
@@ -322,6 +323,12 @@ class SystemDistOracle:
             # cluster metadata, so Tier-A and Tier-B compute byte-identical version deltas via the
             # shared helper — the version-compatibility quorum loss is reproduced on the actors too.
             return deploy_edits(state, action, self.config)
+        if name == "config_push":
+            # The config-management admin op (DS0 incr 24): like ``propose``/``append``, the commit
+            # quorum is the coordinator's decision read from the medium and the config delta is
+            # computed byte-identically via the shared helper, so Tier-A ≡ Tier-B — the config-
+            # divergence-under-partition outcome is reproduced on the autonomous actors too.
+            return config_push_edits(state, action, self.config)
         if name == "host":
             # The embedded SPEC-6 host op (DS0 incr 23) is node-local — it delegates to the SPEC-6
             # host oracle on this node's own host state, so Tier-A and Tier-B compute byte-identical

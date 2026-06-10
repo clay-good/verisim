@@ -496,6 +496,42 @@ def test_golden_deploy_breaks_consensus_on_an_incompatible_version() -> None:
     }
 
 
+def test_golden_config_push_commits_on_majority_minority_stays_stale() -> None:
+    # The config-push golden (SPEC-7 §3.2, DS0 incr 24): n0 leads (term 1), then the network splits
+    # {n0,n1} | {n2}. `config_push n0 feature on` from n0 (on the 2-of-3 majority side) commits and
+    # writes the value to the reachable majority (n0, n1) — but n2, partitioned away, never receives
+    # it, so it retains its stale (absent) config. The config map appears in the canonical form
+    # (omitted until the first push); the KV is untouched (config is separate cluster metadata).
+    config = DistConfig(name="golden-config", nodes=("n0", "n1", "n2"), objects=("x", "y"),
+                        consistency_model="quorum")
+    oracle = ReferenceDistOracle(config)
+    state = DistributedState.initial(config)
+    for cmd in ["elect n0", "partition n0 n1 | n2", "config_push n0 feature on"]:
+        state = oracle.step(state, parse_dist_action(cmd)).state
+    final = to_canonical(state)
+    assert final == {
+        "replicas": [
+            _rep("x", "n0", 0, "nil"), _rep("x", "n1", 0, "nil"), _rep("x", "n2", 0, "nil"),
+            *_boot_y(),
+        ],
+        "log": [],
+        "inflight": [],
+        "partitions": [["n0", "n1"], ["n2"]],
+        "down": [],
+        "clock": 0,
+        "next_event_id": 0,
+        "next_msg_id": 0,
+        "last_result": ["committed", "on"],
+        "term": 1,
+        "leader": "n0",
+        # the value reached the majority (n0, n1); n2 (partitioned away) keeps its stale config
+        "config": [
+            {"node": "n0", "key": "feature", "value": "on"},
+            {"node": "n1", "key": "feature", "value": "on"},
+        ],
+    }
+
+
 def test_golden_host_fork_runs_on_the_nodes_embedded_host():
     # The embedded-host golden (SPEC-7 §3.1/§4, DS0 incr 23): `host n0 fork 1` runs a SPEC-6 fork on
     # n0's embedded host, spawning pid 2 (child of pid 1). The host appears in the canonical form

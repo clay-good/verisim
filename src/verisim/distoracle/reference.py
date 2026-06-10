@@ -30,6 +30,7 @@ from verisim.dist.delta import (
     ClockSet,
     ClockSkewSet,
     CommitIndexSet,
+    ConfigSet,
     DistDelta,
     DistEdit,
     EventAppend,
@@ -625,6 +626,54 @@ def deploy_edits(
     return [VersionSet(node, version), SetResult("deployed", v)], "deployed", v
 
 
+def config_push_edits(
+    state: DistributedState, action: DistAction, config: DistConfig
+) -> tuple[DistDelta, str, str]:
+    """``config_push node key val``: a leader-committed cluster config change (DS0 incr 24, §3.2).
+
+    SPEC-7's *other* headline operational question — *"will this config push break the cluster?"*.
+    Unlike ``deploy`` (a node-local version label that gates consensus *compatibility*), a config
+    push is a **leader-committed, majority-replicated** setting — a Raft-style config entry — so it
+    shares the leader-fence + majority-reachability rule of ``propose``/``append``:
+
+      - ``not_leader`` — only the current leader may push config (result carries the current leader,
+        or ``""``), so a deposed/non-leader push is fenced.
+      - ``no_quorum`` — a leader stranded in a minority cannot reach a majority of the voting
+        members, so the push **does not commit** and **no node's config changes** (a config rollout
+        is all-or-nothing at commit; a minority side never installs a value it cannot durably hold).
+      - ``("committed", val)`` — the value is written (``ConfigSet``) to every **reachable** voting
+        member. Under a partition that leaves the leader on the majority side this reaches only the
+        majority, so the **partitioned minority retains its stale config** — the config-divergence
+        outcome (ED31, Panel B), repaired by re-pushing after ``heal``.
+
+    Like ``propose``/``append`` the majority set is read from the partition/down medium (a
+    coordinator-level decision, not an actor's local view), so Tier-A and Tier-B compute byte-
+    identical config deltas via this shared helper; shared by both oracles so they cannot drift.
+    """
+    node, key, val = action.args[0], action.args[1], action.args[2]
+    if not state.is_up(node):
+        return [SetResult("unavailable", "")], "unavailable", ""
+    if state.leader != node:
+        cur = state.leader or ""
+        return [SetResult("not_leader", cur)], "not_leader", cur
+    # The commit quorum is over the *voting members* (DS0 incr 20); the full cluster by default, so
+    # this is byte-identical to the pre-increment-20 form when no membership change has happened.
+    members = active_members(state, config)
+    # reachable: co-partitioned, up, and version-compatible with the leader (DS0 incr 22) — an
+    # incompatible (mid-upgrade) node cannot acknowledge the config commit.
+    reachable = [
+        p for p in members
+        if state.connected(node, p) and state.is_up(p) and _compatible(state, config, node, p)
+    ]
+    if len(reachable) < len(members) // 2 + 1:  # config commits only on a majority of voters
+        return [SetResult("no_quorum", "")], "no_quorum", ""
+    edits: DistDelta = [
+        ConfigSet(p, key, val) for p in reachable if state.config.get((p, key)) != val
+    ]
+    edits.append(SetResult("committed", val))
+    return edits, "committed", val
+
+
 def host_op_edits(
     state: DistributedState, action: DistAction, config: DistConfig
 ) -> tuple[DistDelta, str, str]:
@@ -719,6 +768,8 @@ class ReferenceDistOracle:
             return dequeue_edits(state, action, self.config)
         if name == "deploy":
             return deploy_edits(state, action, self.config)
+        if name == "config_push":
+            return config_push_edits(state, action, self.config)
         if name == "host":
             return host_op_edits(state, action, self.config)
         raise ValueError(f"unhandled action {name!r}")  # pragma: no cover - grammar is closed

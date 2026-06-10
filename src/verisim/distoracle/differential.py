@@ -71,6 +71,10 @@ def cluster_view(state: DistributedState) -> str:
     # Per-node running versions (DS0 incr 22) are observable cluster metadata; empty (all base) for
     # a cluster that never deploys, so the channel is unchanged there.
     versions = sorted((n, v) for n, v in state.versions.items() if v != 0)
+    # The cluster config (DS0 incr 24, `config_push`) is observable cluster metadata — each pushed
+    # (node, key) value, sorted id-independently. Empty for a cluster that never pushes config, so
+    # the channel is unchanged there (and the config-divergence-under-partition is compared too).
+    config = sorted((n, k, v) for (n, k), v in state.config.items())
     # The embedded per-node hosts (DS0 incr 23) are observable cluster state — each node's host
     # canonical form, sorted by node. Empty for a host-free cluster, so the channel is unchanged.
     hosts = sorted((n, to_canonical_host(h)) for n, h in state.hosts.items())
@@ -83,6 +87,7 @@ def cluster_view(state: DistributedState) -> str:
         "last_result": state.last_result,
         "queues": queues,
         "versions": versions,
+        "config": config,
         "hosts": hosts,
     })
 

@@ -35,7 +35,7 @@ def _run(oracle: ReferenceDistOracle, config: DistConfig, cmds: list[str]) -> Di
 
 def test_grammar_parses_deploy() -> None:
     assert parse_dist_action("deploy n0 2").args == ("n0", "2")
-    assert {"deploy"} == ADMIN_OPS
+    assert {"deploy", "config_push"} == ADMIN_OPS  # config_push joined the admin family (incr 24)
 
 
 @pytest.mark.parametrize("bad", ["deploy n0", "deploy n0 2 3", "deploy n0 x", "deploy n0 -1"])

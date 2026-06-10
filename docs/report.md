@@ -1695,12 +1695,31 @@ execution — the distributed world now spans the CAP design space from AP (`eve
 (`linearizable`), with the realistic consensus middle (`quorum`) measured. **The transaction layer is
 now two-disciplined** (ED15 above): OCC and **2PL** (deterministic wound-wait) reach serializability by
 opposite routes and differ only in *when* they pay for a conflict (OCC wastes work late, 2PL fails fast).
+**The §3.4 unreliable-network fault grammar is now complete** (ED18–ED22): `drop` (lost messages),
+`delay`/`reorder` (message timing), and `clock_skew` (a signed per-node offset) join `partition`/`crash`,
+with `anti_entropy` (read-repair) and pairwise `gossip` the convergence ops that repair what `drop`
+breaks — the Dynamo/Cassandra mechanisms that make eventual consistency eventual under an unreliable
+network. **The Raft-subset consensus core now ships** (ED23–ED27): `elect` (majority-only leadership, no
+split-brain), `propose` (leader-fenced majority writes), `step_down` (the voluntary-handoff lifecycle),
+`lease`/`lread` (leader-lease local reads), `append` (the replicated commit-index log with log-matching
+reconciliation), and `add_replica`/`remove_replica` (quorum-tracking membership change) — the full leader
+machinery that earlier was only approximated by the leaderless `quorum` model. **A second data type
+ships** (ED28): a distributed FIFO queue whose delivery guarantee (at-least-once → exactly-once) follows
+the consistency model. **The two change-safety admin ops ship** — the world's named operational
+questions: `deploy` (ED29, "will this deploy break the cluster?": a rolling upgrade loses quorum when the
+version skew exceeds the N-1 window) and **`config_push`** (ED31, "will this config push break the
+cluster?": a leader-committed, majority-replicated config change whose push under partition leaves the
+minority with stale config — *config divergence* — repaired by a re-push after `heal`). **The
+compositional vision is realized** (ED30): each cluster node runs a real **embedded SPEC-6 host**
+(process table + fd tables + an embedded v0 filesystem), `host node <syscall>` delegating to the SPEC-6
+oracle on that node's own host — per-node isolated, gated by the node's up/down, surviving a crash. Every
+one of these is additive (omitted from the canonical form until first used, so all prior goldens/hashes
+hold) and validated bit-for-bit against the autonomous-actor Tier-B execution.
 **Open (the honest deferrals):** a wrapped **external**-binary real-DST runtime
 (madsim/Shadow/Antithesis-class, which need external sandboxes), the structured GNN/RSSM `M_θ` arm
 (where the smart-`π_c` lever the ED2-smart null localizes can be re-tested, now that partial
-observation is defined), the smart-`π_w` (which-tier) scheduler, full Raft leader-election + log-matching
-(the `quorum` model captures the consensus availability/safety without the leader machinery), and the
-embedded SPEC-6 host / SPEC-5 net inside each node.
+observation is defined), the smart-`π_w` (which-tier) scheduler, and the SPEC-5 network embedded
+*between* the per-node hosts (the host inside each node now ships; the net between them does not yet).
 
 # Scale (SPEC-10): the floor+cliff was largely an under-resourcing artifact (H26)
 
@@ -2191,6 +2210,11 @@ python -m verisim.experiments.ed16 --config configs/ed16.json \
     --out figures/ed16.csv --plot figures/ed16.png  # read-committed isolation: lost update + its price (DS0 incr 9)
 python -m verisim.experiments.ed17 --config configs/ed17.json \
     --out figures/ed17.csv --plot figures/ed17.png  # read-uncommitted isolation: dirty read + black-box recovery (DS0 incr 10)
+# DS0 increments 11–24 (ED18–ED31): the complete §3.4 fault grammar (drop/delay/reorder/clock_skew +
+# anti_entropy/gossip), the Raft-subset consensus core (elect/propose/step_down/lease/append/membership),
+# the FIFO queue, the deploy + config_push admin ops, and the embedded SPEC-6 host — see figures/reproduce.sh
+python -m verisim.experiments.ed31 --config configs/ed31.json \
+    --out figures/ed31.csv --plot figures/ed31.png  # config push: leader-committed config + divergence (DS0 incr 24)
 ```
 
 The run-records are git-ignored (regenerable); the figures and their CSVs are

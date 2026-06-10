@@ -275,6 +275,24 @@ class VersionSet:
 
 
 @dataclass(frozen=True)
+class ConfigSet:
+    """Set one node's cluster-config value for ``key`` (DS0 increment 24, `config_push`).
+
+    A leader-committed, majority-replicated cluster configuration entry (a Raft-style config change,
+    distinct from ``deploy``'s node-local version label): ``config_push`` writes ``(node, key) ->
+    value`` to each *reachable voting member*, so a config rollout under partition reaches only the
+    majority side while the partitioned minority retains its **stale** config — the config-divergence
+    the spec's headline question ("will this config push break the cluster?") names. The per-(node,
+    key) ``config`` map is empty by default and omitted from the canonical form, so a cluster that
+    never pushes config is byte-identical to the pre-increment-24 form (purely additive).
+    """
+
+    node: str
+    key: str
+    value: str
+
+
+@dataclass(frozen=True)
 class HostStep:
     """A SPEC-6 host syscall applied to one node's embedded host (DS0 increment 23, the §4 `HostDelta`).
 
@@ -320,6 +338,7 @@ DistEdit = (
     | MemberSet
     | QueueSet
     | VersionSet
+    | ConfigSet
     | HostStep
     | SetResult
 )
@@ -398,6 +417,8 @@ def apply(state: DistributedState, delta: DistDelta) -> DistributedState:
                 s.versions[edit.node] = edit.version
             else:
                 s.versions.pop(edit.node, None)  # the base version leaves no residue
+        elif isinstance(edit, ConfigSet):
+            s.config[(edit.node, edit.key)] = edit.value  # a pushed config value (never the default)
         elif isinstance(edit, HostStep):
             # apply the SPEC-6 host delta to the node's embedded host (created lazily), via the
             # SPEC-6 ``apply`` verbatim — the §4 composition. An untouched host leaves no residue.
@@ -467,6 +488,8 @@ def edit_to_dict(edit: DistEdit) -> dict[str, Any]:
         return {"op": "QueueSet", "queue": edit.queue, "node": edit.node, "items": list(edit.items)}
     if isinstance(edit, VersionSet):
         return {"op": "VersionSet", "node": edit.node, "version": edit.version}
+    if isinstance(edit, ConfigSet):
+        return {"op": "ConfigSet", "node": edit.node, "key": edit.key, "value": edit.value}
     if isinstance(edit, HostStep):
         return {"op": "HostStep", "node": edit.node, "edits": host_delta_to_list(edit.edits)}
     assert isinstance(edit, SetResult)
@@ -526,6 +549,8 @@ def edit_from_dict(d: dict[str, Any]) -> DistEdit:
         return QueueSet(d["queue"], d["node"], tuple(d["items"]))
     if op == "VersionSet":
         return VersionSet(d["node"], d["version"])
+    if op == "ConfigSet":
+        return ConfigSet(d["node"], d["key"], d["value"])
     if op == "HostStep":
         return HostStep(d["node"], host_delta_from_list(d["edits"]))
     if op == "SetResult":

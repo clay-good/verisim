@@ -1,0 +1,7 @@
+{
+  "name": "ed31-config-push",
+  "cluster_sizes": [3, 5, 7],
+  "key": "feature",
+  "val": "on",
+  "val2": "v2"
+}

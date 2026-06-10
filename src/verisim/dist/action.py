@@ -29,6 +29,7 @@ workload and the fault/time medium (the consensus/admin family arrives with the 
     enqueue <node> <queue> <val>    # client: append <val> to the FIFO <queue> (replicated)
     dequeue <node> <queue>          # client: pop the head of <queue> at <node> (delivery per model)
     deploy <node> <version>         # admin: set <node>'s software version (rolling upgrade)
+    config_push <node> <key> <val>  # admin: leader-committed, majority-replicated cluster config
     host <node> <syscall...>        # host: run a SPEC-6 syscall on <node>'s embedded host
 
 The fault/time family is the source of all interesting dynamics (stale reads under partition,
@@ -119,7 +120,16 @@ embedded v0 filesystem), so a cluster node is not just a bag of KV replicas but 
 processes. Each node's host is **isolated** (a ``fork`` on one node does not appear on another), and
 host ops respect the node's up/down status — a crashed node's host is ``unavailable`` (the cross-
 layer crash linkage). The effect delegates to the SPEC-6 ``ReferenceHostOracle``, wrapping its bundle
-delta in a ``HostStep`` edit (ED30).
+delta in a ``HostStep`` edit (ED30). ``config_push`` (DS0 increment 24) is the **config-management**
+admin op that answers SPEC-7's *other* headline question — *"will this config push break the
+cluster?"*: ``config_push node key val`` pushes a cluster-config value, and unlike ``deploy`` (a
+node-local version label that gates consensus *compatibility*) it is a **leader-committed,
+majority-replicated** setting — a Raft-style config entry. It commits (writing the value to every
+*reachable* voting member) only if ``node`` is the current leader and reaches a majority, so a push
+issued by a non-leader is ``not_leader`` and one by a minority-stranded leader is ``no_quorum`` (the
+push cannot commit). When it does commit under a partition it reaches only the majority side, so the
+**partitioned minority retains its stale config** (config divergence) — repaired by re-pushing after
+``heal`` (ED31).
 """
 
 from __future__ import annotations
@@ -155,6 +165,7 @@ _ARITY: dict[str, int | None] = {
     "enqueue": 3,  # node queue val  -- append <val> to the FIFO <queue> (DS0 incr 21)
     "dequeue": 2,  # node queue  -- pop the head of <queue> at <node> (DS0 incr 21)
     "deploy": 2,  # node version  -- set <node>'s software version, a rolling upgrade (DS0 incr 22)
+    "config_push": 3,  # node key val  -- leader-committed, majority-replicated config (DS0 incr 24)
     # ``host`` (variable arity) is in ``_ARITY`` above with value None.
     # Transaction family (DS0 increment 2): a multi-key OCC transaction at a coordinator node.
     "begin": 2,  # node txn  -- open a transaction
@@ -171,7 +182,7 @@ CLIENT_OPS = frozenset({
 })
 TXN_OPS = frozenset({"begin", "tget", "tput", "commit", "abort"})
 QUEUE_OPS = frozenset({"enqueue", "dequeue"})  # the FIFO-queue client ops (DS0 incr 21)
-ADMIN_OPS = frozenset({"deploy"})  # rolling-upgrade / config admin ops (DS0 incr 22)
+ADMIN_OPS = frozenset({"deploy", "config_push"})  # rolling-upgrade / config admin ops (incr 22, 24)
 HOST_OPS = frozenset({"host"})  # the embedded SPEC-6 host syscall op (DS0 incr 23)
 FAULT_OPS = frozenset(
     {"advance", "partition", "heal", "crash", "restart", "drop", "delay", "reorder", "clock_skew"}

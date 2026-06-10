@@ -1,0 +1,8 @@
+panel,metric,value,detail
+rollout,commit_full,1.0000,reaches_all_voters_over_3_clusters
+rollout,nonleader_fenced,1.0000,non_leader_push_not_leader
+rollout,noleader_fenced,1.0000,push_with_no_leader_rejected
+partition,minority_no_quorum,1.0000,minority_leader_cannot_commit
+partition,minority_stale,1.0000,majority_commits_minority_keeps_stale_config
+partition,repush_converges,1.0000,re_push_after_heal_converges_all
+tier_b,all,1.0000,steps=17
