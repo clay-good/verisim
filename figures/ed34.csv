@@ -1,0 +1,7 @@
+panel,metric,value,detail
+sequential,counts_to_k,1.0000,k=3_over_3_clusters
+sequential,all_models,1.0000,eventual_quorum_lin
+cap,eventual_lost_update,1.0000,two_acked_count_short_one
+cap,quorum_no_silent_loss,1.0000,minority_unavailable_no_loss
+cap,linearizable_unavailable,1.0000,cp_rejects_partition
+tier_b,all,1.0000,steps=42

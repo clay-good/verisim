@@ -105,7 +105,8 @@ class TieredOracle:
         """Reference-free invariants any legal state satisfies (cheapest)."""
         vocab = set(self.config.values) | {self.config.default_value, TOMBSTONE}  # incr 26
         for (obj, node), r in predicted.replicas.items():
-            if r.value not in vocab:
+            # A digit string is a legal counter value (DS0 incr 27, `incr`) in any config.
+            if r.value not in vocab and not r.value.isdigit():
                 return True, f"replica ({obj},{node}) has out-of-vocab value {r.value!r}"
             prior = state.replicas.get((obj, node))
             if prior is not None and r.version < prior.version:

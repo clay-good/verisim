@@ -1,0 +1,6 @@
+{
+  "name": "ed34-incr",
+  "cluster_sizes": [3, 5, 7],
+  "key": "c",
+  "k": 3
+}

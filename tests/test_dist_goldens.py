@@ -556,6 +556,36 @@ def test_golden_delete_tombstones_the_key_resurrection_safe():
     assert oracle.step(state, parse_dist_action("get n0 x")).status == "deleted"
 
 
+def test_golden_incr_counts_and_eventual_loses_a_concurrent_increment():
+    # The atomic-counter golden (SPEC-7 §3.2, DS0 incr 27): under linearizable, `incr c` twice
+    # counts c to "2" synchronously on every replica (version 2). The counter is a digit-valued
+    # replica — no new state field, no new edit type (purely additive); a get reads it normally.
+    config = DistConfig(name="golden-incr", nodes=("n0", "n1", "n2"), objects=("c", "y"),
+                        values=("a",), consistency_model="linearizable")
+    oracle = ReferenceDistOracle(config)
+    state = DistributedState.initial(config)
+    for cmd in ["incr n0 c", "incr n0 c"]:
+        state = oracle.step(state, parse_dist_action(cmd)).state
+    final = to_canonical(state)
+    assert final == {
+        "replicas": [
+            _rep("c", "n0", 2, "2"), _rep("c", "n1", 2, "2"), _rep("c", "n2", 2, "2"), *_boot_y(),
+        ],
+        "log": [
+            {"id": 0, "node": "n0", "op": "incr n0 c", "clock": 0, "happens_before": []},
+            {"id": 1, "node": "n0", "op": "incr n0 c", "clock": 0, "happens_before": [0]},
+        ],
+        "inflight": [],
+        "partitions": [["n0", "n1", "n2"]],
+        "down": [],
+        "clock": 0,
+        "next_event_id": 2,
+        "next_msg_id": 0,
+        "last_result": ["ok", "2"],
+    }
+    assert oracle.step(state, parse_dist_action("get n0 c")).value == "2"
+
+
 def test_golden_config_push_commits_on_majority_minority_stays_stale() -> None:
     # The config-push golden (SPEC-7 §3.2, DS0 incr 24): n0 leads (term 1), then the network splits
     # {n0,n1} | {n2}. `config_push n0 feature on` from n0 (on the 2-of-3 majority side) commits and

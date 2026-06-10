@@ -157,6 +157,7 @@ of a real message-passing execution, not just the analytic DES.
 | `get <node> <key>` | return `node`'s **local** replica value — which under partition may be **stale**. `("ok", value)`. |
 | `cas <node> <key> <old> <new>` | if `node`'s local value `== old`, behave as `put node key new`; else no write, `("conflict", local_value)`. |
 | `delete <node> <key>` (DS0 increment 26) | **tombstone delete**: behave as `put node key TOMBSTONE` — a *versioned write of a tombstone*, not a removal of the replica, so it inherits every consistency model and is ordered by version (the resurrection-safe discipline). A `get` on a tombstoned replica reports `("deleted", "")`. The client result is `("deleted", "")`; the replicated value is the `__deleted__` sentinel. Purely additive (no new state field, no new edit). |
+| `incr <node> <key>` (DS0 increment 27) | **atomic counter** (read-modify-write): read `node`'s local counter (a non-numeric/absent value is `0`) and behave as `put node key str(count+1)`. Sequentially correct, but under a partition the consistency model decides whether concurrent increments survive: `eventual` **silently loses** a concurrent increment (two same-version writes, LWW keeps one), `quorum` makes the minority `("unavailable", "")` (no silent loss), `linearizable` rejects under any partition. `("ok", new_count)`. Purely additive (the counter is a digit-valued replica). |
 | `enqueue <node> <queue> <val>` (DS0 incr 21) | append `val` to each reachable replica's FIFO `queue` list (the relative append op). Availability follows the consistency model (linearizable needs every replica, quorum a majority, eventual/causal proceed on the reachable set); else `("unavailable", "")`. `("enqueued", val)`. |
 | `dequeue <node> <queue>` (DS0 incr 21) | return the head of `node`'s local `queue` replica and pop the head from each reachable replica. The delivery semantics follow the model: `eventual` admits **duplicate delivery** under partition (the removal does not cross the split), `linearizable`/`quorum` gate availability for **exactly-once**. `("dequeued", head)`, or `("empty", "")` if the local replica has no items; `("unavailable", "")` if the model's quorum is unreachable. |
 
@@ -636,6 +637,40 @@ tombstone; resurrection under partition + the anti_entropy/gossip repair) with T
 every transition. (Honest scope: the tombstone is never garbage-collected here — real systems expire
 tombstones after a grace period, a Tier-B/operational refinement; keeping them is the conservative,
 always-correct choice for the reference oracle.)
+
+### 3.9 `incr` — the atomic counter and the lost-update problem (DS0 increment 27)
+
+The first **read-modify-write** client op (`put`/`cas`/`delete` are blind or compare writes), and the
+canonical demonstration that **you cannot build a correct counter on last-writer-wins**. An `incr node
+key` reads the coordinator's local counter (a non-numeric/absent value is `0`) and writes `count + 1`
+at a bumped version, reusing the `put` replication path — so it inherits every consistency model.
+
+With no concurrency it is exactly correct (`incr` `k` times → `k`, under every model). The hazard is
+*concurrent* increments, and it is **strictly worse than the blind-write CAP tradeoff** (ED14): a
+blind `put` that loses a race merely leaves a replica *stale* (a value that a newer write or
+anti_entropy will fix), but a lost `incr` is *gone* — the count is permanently short. Under a
+partition, two `incr`s on opposite sides both read the same count `N` and both write `N+1` at the same
+version; the eventual-consistency merge keeps one of the two same-version writes (LWW + tiebreak), so
+**one increment is silently lost** even though both were acknowledged. `quorum` avoids the silent loss
+by making the minority side `unavailable` (only the accepted increment counts), and `linearizable`
+rejects the write under any partition.
+
+```
+incr n0 c; advance 5                          # c = 1 on every replica
+partition n0 n1 n2 | n3 n4
+incr n0 c                                      # ("ok","2") on the majority side
+incr n3 c                                      # ("ok","2") on the minority — both acknowledged
+heal; advance 5; anti_entropy n0; get n0 c     # ("ok","2") — expected 3: one increment was lost
+```
+
+`incr` reuses the `put` write path, so Tier-A and Tier-B compute byte-identical deltas (the lost
+update is reproduced on the autonomous actors too). The counter is just a digit-valued replica — no
+new state field, no new edit type — so the op is purely additive, and the metamorphic tier admits any
+digit string as a legal counter value. ED34
+([`experiments/ed34.py`](../src/verisim/experiments/ed34.py)) pins both panels (sequential
+correctness; the read-modify-write CAP tradeoff across the three models) with Tier-B agreeing on every
+transition. (A loss-free eventual counter is a **CRDT/PN-counter** — per-node sub-counters merged by
+max — a deferred later increment; the point here is the negative the simple model exhibits.)
 
 ## 4. The delta and the `apply == oracle` invariant
 

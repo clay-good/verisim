@@ -8,6 +8,7 @@ workload and the fault/time medium (the consensus/admin family arrives with the 
     get <node> <key>                # client: read <key>'s local replica at <node> (may be stale)
     cas <node> <key> <old> <new>    # client: set <key> to <new> iff <node>'s local value == <old>
     delete <node> <key>             # client: tombstone <key> (a versioned delete; resurrection-safe)
+    incr <node> <key>               # client: atomic +1 (read-modify-write; LWW loses concurrent incrs)
     advance <dt>                    # time: +<dt> clock; deliver in-flight msgs now due & reachable
     partition <nodes> | <nodes>     # fault: split the network into groups (| separates groups)
     heal                            # fault: remove all partitions (one fully-connected group)
@@ -151,7 +152,19 @@ value (the deleted item is "still there" on the minority — the danger), but wh
 propagates (``advance``/``anti_entropy``/``gossip``) its higher version **wins** over the stale value,
 so the key converges to deleted rather than being resurrected — where a naive removal would let the
 stale replica's value reappear. A genuinely newer ``put`` (a higher version than the tombstone) does
-bring the key back, which is a new write, not a resurrection (ED33).
+bring the key back, which is a new write, not a resurrection (ED33). ``incr`` (DS0 increment 27) is
+the **atomic counter** — the first *read-modify-write* client op (``put``/``cas``/``delete`` are blind
+or compare writes), and the canonical case where eventual-consistency last-writer-wins **silently
+loses updates**. ``incr node key`` reads the coordinator's local counter value (a non-numeric/absent
+value is ``0``) and writes ``value + 1`` at a bumped version, reusing the ``put`` replication path.
+Sequentially it is correct (``incr`` ``k`` times → ``k``), but under a partition the consistency model
+decides whether concurrent increments survive: **under ``eventual`` two increments on opposite sides
+both read the same count and both write ``count + 1`` at the same version, so the merge keeps only one
+— a *lost update* (two acknowledged ``incr``s, count short by one)**, where ``quorum`` makes the
+minority side ``unavailable`` (only the accepted increment is counted — no silent loss) and
+``linearizable`` rejects the write under *any* partition. The read-modify-write CAP tradeoff (ED34) —
+harder than the blind-write one (ED14) because LWW loses an RMW update where it merely makes a blind
+write stale. (A loss-free eventual counter needs a CRDT/PN-counter — a deferred later increment.)
 """
 
 from __future__ import annotations
@@ -165,6 +178,7 @@ _ARITY: dict[str, int | None] = {
     "get": 2,  # node key
     "cas": 4,  # node key old new
     "delete": 2,  # node key  -- tombstone <key>, a versioned (resurrection-safe) delete (DS0 incr 26)
+    "incr": 2,  # node key  -- atomic read-modify-write +1 on a counter value (DS0 incr 27)
     "advance": 1,  # dt
     "partition": None,  # <nodes> | <nodes> [| ...]
     "host": None,  # <node> <syscall...>  -- a SPEC-6 host syscall on <node>'s host (DS0 incr 23)
@@ -202,7 +216,8 @@ _ARITY: dict[str, int | None] = {
 # ``begin``/``commit``/``abort`` + the txn-scoped ``tget``/``tput`` are client ops (the workload), as
 # are the ``enqueue``/``dequeue`` FIFO-queue ops (DS0 incr 21).
 CLIENT_OPS = frozenset({
-    "put", "get", "cas", "delete", "begin", "tget", "tput", "commit", "abort", "enqueue", "dequeue",
+    "put", "get", "cas", "delete", "incr",
+    "begin", "tget", "tput", "commit", "abort", "enqueue", "dequeue",
 })
 TXN_OPS = frozenset({"begin", "tget", "tput", "commit", "abort"})
 QUEUE_OPS = frozenset({"enqueue", "dequeue"})  # the FIFO-queue client ops (DS0 incr 21)

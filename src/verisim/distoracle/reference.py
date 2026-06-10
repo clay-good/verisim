@@ -767,7 +767,7 @@ class ReferenceDistOracle:
         self, state: DistributedState, action: DistAction
     ) -> tuple[DistDelta, str, str]:
         name = action.name
-        if name in ("put", "cas", "delete"):
+        if name in ("put", "cas", "delete", "incr"):
             return self._write(state, action)
         if name == "get":
             return self._get(state, action)
@@ -880,6 +880,14 @@ class ReferenceDistOracle:
             # A delete is a versioned write of a tombstone (DS0 incr 26) — same replication path as
             # put, so it inherits every consistency model and is version-ordered (resurrection-safe)
             value = TOMBSTONE
+        elif action.name == "incr":
+            # An atomic counter read-modify-write (DS0 incr 27): read the coordinator's local count
+            # (a non-numeric/absent value is 0) and write count+1. Because it reuses the put path,
+            # two concurrent incrs on partitioned replicas both read the same count and write the
+            # same next version — so eventual LWW keeps only one (a lost update); quorum/lin
+            # gate the minority out (no silent loss). The read-modify-write CAP tradeoff (ED34).
+            cur = int(replica.value) if replica.value.isdigit() else 0
+            value = str(cur + 1)
         else:
             value = action.args[2]
 

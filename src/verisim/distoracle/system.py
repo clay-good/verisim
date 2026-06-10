@@ -245,7 +245,7 @@ class SystemDistOracle:
             # autonomous-actor ``_advance``, exactly where Tier-B's independence does its work.
             return txn_step(state, action, self.config)
         ev = self._event(state, action)
-        if name in ("put", "cas", "delete"):
+        if name in ("put", "cas", "delete", "incr"):
             return self._write(state, action, ev)
         if name == "get":
             return self._get(state, action, ev)
@@ -349,7 +349,7 @@ class SystemDistOracle:
         cluster behavior; the differential compares the observable-cluster channel (replicas +
         in-flight + medium), so this reconstruction is identical by construction and never the
         interesting signal (the host excludes ``last`` for the same orthogonality reason)."""
-        node = action.args[0] if action.name in ("put", "get", "cas", "delete") else ""
+        node = action.args[0] if action.name in ("put", "get", "cas", "delete", "incr") else ""
         prior = tuple(e.id for e in state.log if e.node == node)
         return EventAppend(state.next_event_id, node, action.raw, state.clock, prior)
 
@@ -393,6 +393,9 @@ class SystemDistOracle:
             value = new
         elif action.name == "delete":
             value = TOMBSTONE  # a versioned tombstone write (DS0 incr 26), same path as put
+        elif action.name == "incr":  # atomic counter read-modify-write (DS0 incr 27)
+            count = int(replica.value) if replica.value.isdigit() else 0
+            value = str(count + 1)
         else:
             value = action.args[2]
 

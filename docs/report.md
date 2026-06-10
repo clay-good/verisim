@@ -1721,7 +1721,13 @@ value, not an erasure of the replica), so last-writer-wins orders it against con
 the discipline that makes it **resurrection-safe**: under a partition the minority still reads the
 deleted item, but after heal the tombstone's higher version wins the anti_entropy/gossip merge, so the
 key converges to deleted rather than coming back from the dead (where a naive removal would let the
-stale value win). Every
+stale value win). **The atomic counter ships as a first-class negative** (ED34): `incr` is the first
+read-modify-write op, and it is the textbook case where eventual last-writer-wins **silently loses
+updates** — two concurrent increments across a partition are both acknowledged yet the count ends up
+short by one (where a blind `put` would merely go stale), while `quorum` makes the minority unavailable
+(no silent loss) and `linearizable` rejects under any partition; the read-modify-write CAP tradeoff is
+strictly worse than the blind-write one (ED14), and a loss-free eventual counter needs a CRDT (deferred).
+Every
 one of these is additive (omitted from the canonical form until first used, so all prior goldens/hashes
 hold) and validated bit-for-bit against the autonomous-actor Tier-B execution.
 **Open (the honest deferrals):** a wrapped **external**-binary real-DST runtime
@@ -2219,16 +2225,18 @@ python -m verisim.experiments.ed16 --config configs/ed16.json \
     --out figures/ed16.csv --plot figures/ed16.png  # read-committed isolation: lost update + its price (DS0 incr 9)
 python -m verisim.experiments.ed17 --config configs/ed17.json \
     --out figures/ed17.csv --plot figures/ed17.png  # read-uncommitted isolation: dirty read + black-box recovery (DS0 incr 10)
-# DS0 increments 11–26 (ED18–ED33): the complete §3.4 fault grammar (drop/delay/reorder/clock_skew +
+# DS0 increments 11–27 (ED18–ED34): the complete §3.4 fault grammar (drop/delay/reorder/clock_skew +
 # anti_entropy/gossip), the Raft-subset consensus core (elect/propose/step_down/lease/lread/read_index/
-# append/membership), the FIFO queue, the deploy + config_push admin ops, the embedded SPEC-6 host, and
-# the tombstone delete — see figures/reproduce.sh
+# append/membership), the FIFO queue, the deploy + config_push admin ops, the embedded SPEC-6 host, the
+# tombstone delete, and the atomic counter — see figures/reproduce.sh
 python -m verisim.experiments.ed31 --config configs/ed31.json \
     --out figures/ed31.csv --plot figures/ed31.png  # config push: leader-committed config + divergence (DS0 incr 24)
 python -m verisim.experiments.ed32 --config configs/ed32.json \
     --out figures/ed32.csv --plot figures/ed32.png  # read_index: quorum-confirmed linearizable read (DS0 incr 25)
 python -m verisim.experiments.ed33 --config configs/ed33.json \
     --out figures/ed33.csv --plot figures/ed33.png  # delete: versioned tombstone, resurrection-safe (DS0 incr 26)
+python -m verisim.experiments.ed34 --config configs/ed34.json \
+    --out figures/ed34.csv --plot figures/ed34.png  # incr: atomic counter + the lost-update negative (DS0 incr 27)
 ```
 
 The run-records are git-ignored (regenerable); the figures and their CSVs are
