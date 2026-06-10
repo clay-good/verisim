@@ -73,7 +73,9 @@ from verisim.distoracle.reference import (
     append_edits,
     causal_deps,
     clock_skew_edits,
+    dequeue_edits,
     elect_edits,
+    enqueue_edits,
     gossip_edits,
     lease_edits,
     lread_edits,
@@ -305,6 +307,13 @@ class SystemDistOracle:
             # cluster metadata (like leader/term), read/written from the global membership, not an
             # actor's local view — so Tier-A and Tier-B compute identical deltas via the helpers.
             helper = add_replica_edits if name == "add_replica" else remove_replica_edits
+            return helper(state, action, self.config)
+        if name in ("enqueue", "dequeue"):
+            # The FIFO queue (DS0 incr 21): the reachable set + availability are read from the
+            # medium (a coordinator-level decision, like the KV write), so Tier-A and Tier-B compute
+            # byte-identical queue deltas via the shared helpers — the duplicate-delivery-under-
+            # partition behavior is reproduced on the autonomous actors too.
+            helper = enqueue_edits if name == "enqueue" else dequeue_edits
             return helper(state, action, self.config)
         raise ValueError(f"unhandled action {name!r}")  # pragma: no cover - grammar is closed
 

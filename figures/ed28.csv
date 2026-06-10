@@ -1,0 +1,7 @@
+panel,metric,value,detail
+delivery,eventual_deliveries,2,at_least_once_duplicate
+delivery,quorum_deliveries,1,exactly_once_on_majority
+delivery,linearizable_deliveries,0,cp_unavailable_no_duplicate
+fifo,fifo_preserved,1.0000,dequeue_order_equals_enqueue_order
+fifo,exactly_once_connected,1.0000,each_item_once_then_empty
+tier_b,all,1.0000,steps=19

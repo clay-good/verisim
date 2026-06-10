@@ -214,6 +214,15 @@ class DistributedState:
     # serializes to the exact pre-increment-20 form (purely additive). When non-empty it is a strict
     # subset of the config nodes; use the `active_members` helper to resolve the sentinel.
     members: frozenset[str] = frozenset()
+    # Distributed FIFO queues (DS0 increment 21, `enqueue`/`dequeue`): a per-(queue, node) replica of
+    # an ordered list of values — a second client data type beside the KV store. Queues are created
+    # lazily on first `enqueue` and replicated to every node (full replication, like rf=n). The
+    # delivery semantics follow the `consistency_model`: under `eventual` a dequeue's head-removal is
+    # local to the reachable side, so a partitioned peer can re-dequeue the same item (at-least-once /
+    # duplicate delivery), where `linearizable`/`quorum` gate availability to keep it exactly-once.
+    # Empty queue replicas leave no entry, so a cluster that never enqueues serializes to the exact
+    # pre-increment-21 form (purely additive).
+    queues: dict[tuple[str, str], tuple[str, ...]] = field(default_factory=dict)
     # The leader lease deadline (DS0 increment 18, the Raft leader-lease, `lease`/`lread`): the
     # global-clock instant through which the current `leader` may serve **local linearizable reads
     # without a quorum** (`lread`) and through which a new `elect` is **blocked** (a successor waits
@@ -264,6 +273,7 @@ class DistributedState:
             logs={node: entries for node, entries in self.logs.items()},
             commit_index=self.commit_index,
             members=self.members,
+            queues={k: v for k, v in self.queues.items()},
             lease_until=self.lease_until,
         )
 

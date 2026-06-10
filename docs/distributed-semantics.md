@@ -155,9 +155,13 @@ of a real message-passing execution, not just the analytic DES.
 | `put <node> <key> <val>` | write `node`'s local replica to `(local_version + 1, val)` immediately; enqueue an async `MsgSend` to every other replica of `key` (`deliver_after = clock + 1`). `("ok", val)`. |
 | `get <node> <key>` | return `node`'s **local** replica value — which under partition may be **stale**. `("ok", value)`. |
 | `cas <node> <key> <old> <new>` | if `node`'s local value `== old`, behave as `put node key new`; else no write, `("conflict", local_value)`. |
+| `enqueue <node> <queue> <val>` (DS0 incr 21) | append `val` to each reachable replica's FIFO `queue` list (the relative append op). Availability follows the consistency model (linearizable needs every replica, quorum a majority, eventual/causal proceed on the reachable set); else `("unavailable", "")`. `("enqueued", val)`. |
+| `dequeue <node> <queue>` (DS0 incr 21) | return the head of `node`'s local `queue` replica and pop the head from each reachable replica. The delivery semantics follow the model: `eventual` admits **duplicate delivery** under partition (the removal does not cross the split), `linearizable`/`quorum` gate availability for **exactly-once**. `("dequeued", head)`, or `("empty", "")` if the local replica has no items; `("unavailable", "")` if the model's quorum is unreachable. |
 
 If the coordinator node is **down**, a client op returns `("unavailable", "")` and makes no state
 change beyond logging the attempt; if the node holds no replica of the key, `("no_replica", "")`.
+(The KV ops `put`/`get`/`cas` append a causal-log event; the queue ops `enqueue`/`dequeue` do not
+yet — they are a separate data plane, DS0 increment 21.)
 
 ### Transaction ops (DS0 increment 2 — multi-key OCC; append a causal-log event)
 
@@ -416,14 +420,52 @@ transition. (Honest scope: membership is the *voting* overlay and the change is 
 fiat; real Raft commits a config change as a log entry under joint consensus to make *concurrent*
 reconfigurations safe — deferred.)
 
+### 3.4 `enqueue` / `dequeue` — the distributed FIFO queue (DS0 increment 21)
+
+A **second client data type** beside the KV store: a replicated FIFO queue. `enqueue node queue val`
+appends `val` to each reachable replica's queue list; `dequeue node queue` returns the head of the
+coordinator's local replica and pops the head from each reachable replica. Queues are fully
+replicated (every node), and a queue replica is created lazily on first `enqueue` (omitted from the
+canonical form until then). The headline is that **the queue's delivery guarantee is the consistency
+model's, not the queue's** — the same `_queue_available` gate that decides a KV write's availability
+decides the queue's:
+
+- **`eventual` / `causal`** — proceed on the reachable set. Under a partition a `dequeue`'s
+  head-removal reaches only one side, so a peer on the other side still holds the item and can
+  `dequeue` it **again**: **at-least-once / duplicate delivery**. Available, not exactly-once.
+- **`quorum`** — needs a reachable majority. The majority side serves the `dequeue` (exactly-once);
+  the minority is `unavailable`. The realistic CP middle.
+- **`linearizable`** — needs *every* replica. Under any partition both sides are `unavailable`:
+  never duplicated, but no progress.
+
+So the delivery count of one item, dequeued from both sides of a partition, steps `2 → 1 → 0` as the
+model strengthens — the KV fork-vs-availability tradeoff (§2.3, ED14) restated for a queue. On the
+connected path the queue is a correct FIFO: `enqueue a, b, c` then three `dequeue`s return `a, b, c`
+in order, each exactly once, then `empty`.
+
+```
+enqueue n0 q a (full conn → [a] on every node); partition n0 | n1 n2
+dequeue n0 q → ("dequeued","a")     # eventual: n0 pops its head...
+dequeue n1 q → ("dequeued","a")     # ...and n1 still has [a] → the item is delivered TWICE
+```
+
+Queue ops touch no replica (a separate data plane) and the reachable set is read from the medium (a
+coordinator-level decision), so Tier-A and Tier-B compute byte-identical queue deltas via the shared
+`enqueue_edits`/`dequeue_edits` helpers, and `cluster_view` now includes the queue replicas so the
+differential catches a queue divergence. ED28 ([`experiments/ed28.py`](../src/verisim/experiments/ed28.py))
+pins both panels with Tier-B agreeing on every transition. (Honest scope: queue replication is
+synchronous to the reachable set — no async in-flight medium or anti-entropy for queue ops yet, so a
+divergent replica is reconciled only by a fresh op that reaches it; the consistency model gates
+availability, which is the lever the delivery semantics turn on.)
+
 ## 4. The delta and the `apply == oracle` invariant
 
 The oracle returns the next state **and** the structured delta that produces it
 ([`verisim.dist.delta`](../src/verisim/dist/delta.py)): `ReplicaWrite`, `MsgSend`/`MsgDeliver`/
 `MsgDrop`, `EventAppend`, `PartitionSet`, `NodeDown`/`NodeUp`, `ClockSet`, the consensus
-`ProtocolStep`/`LeaseSet`, the replicated-log `LogSet`/`CommitIndexSet`, the membership `MemberSet`
-(DS0 incr 16–20), and `SetResult`. The **M1-analogue invariant** holds by construction and is tested
-on every transition:
+`ProtocolStep`/`LeaseSet`, the replicated-log `LogSet`/`CommitIndexSet`, the membership `MemberSet`,
+the FIFO-queue `QueueSet` (DS0 incr 16–21), and `SetResult`. The **M1-analogue invariant** holds by
+construction and is tested on every transition:
 
 ```
 apply(state, oracle.step(state, action).delta) == oracle.step(state, action).state

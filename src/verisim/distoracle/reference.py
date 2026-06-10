@@ -44,6 +44,7 @@ from verisim.dist.delta import (
     NodeUp,
     PartitionSet,
     ProtocolStep,
+    QueueSet,
     ReplicaWrite,
     SetResult,
     apply,
@@ -490,6 +491,85 @@ def remove_replica_edits(
     return [MemberSet(new), SetResult("removed", node)], "removed", node
 
 
+def _queue_available(state: DistributedState, config: DistConfig, reachable: list[str]) -> bool:
+    """Whether a queue write may proceed under the configured consistency model (DS0 incr 21).
+
+    Queues are fully replicated (every node), so — mirroring the KV write's availability — a
+    ``linearizable`` op needs *every* replica reachable and a ``quorum`` op a strict majority, while
+    ``eventual``/``causal`` proceed on whatever is reachable. This is the single knob that turns the
+    at-least-once / exactly-once delivery tradeoff (ED28).
+    """
+    model = config.consistency_model
+    if model == "linearizable":
+        return len(reachable) == len(config.nodes)
+    if model == "quorum":
+        return len(reachable) >= len(config.nodes) // 2 + 1
+    return True  # eventual / causal: available on the coordinator + whatever peers are reachable
+
+
+def enqueue_edits(
+    state: DistributedState, action: DistAction, config: DistConfig
+) -> tuple[DistDelta, str, str]:
+    """``enqueue node queue val``: append to a replicated FIFO queue (DS0 increment 21, §3.2).
+
+    Appends ``val`` to **each reachable replica's own** queue list (the relative append op, so
+    in-sync replicas stay in sync and diverged ones each grow by one). Availability follows the
+    consistency model (``_queue_available``): ``linearizable`` needs every replica, ``quorum`` a
+    majority, ``eventual``/``causal`` proceed on the reachable set; an unavailable op is rejected.
+    Queues are fully replicated, so the reachable set is the coordinator's co-partitioned, up peers.
+    A coordinator-level decision (the reachable set is read from the medium), so Tier-A and Tier-B
+    compute byte-identical deltas via this shared helper.
+    """
+    node, queue, val = action.args[0], action.args[1], action.args[2]
+    if not state.is_up(node):
+        return [SetResult("unavailable", "")], "unavailable", ""
+    reachable = [p for p in config.nodes if state.connected(node, p) and state.is_up(p)]
+    if not _queue_available(state, config, reachable):
+        return [SetResult("unavailable", "")], "unavailable", ""
+    edits: DistDelta = [
+        QueueSet(queue, p, (*state.queues.get((queue, p), ()), val)) for p in reachable
+    ]
+    edits.append(SetResult("enqueued", val))
+    return edits, "enqueued", val
+
+
+def dequeue_edits(
+    state: DistributedState, action: DistAction, config: DistConfig
+) -> tuple[DistDelta, str, str]:
+    """``dequeue node queue``: pop the head of a replicated FIFO queue (DS0 increment 21, §3.2).
+
+    Returns the head of the *coordinator's* local queue replica and pops the head from **each
+    reachable replica's own** list. The delivery semantics are exactly the consistency-model knob:
+
+      - ``eventual`` / ``causal`` — proceed on the reachable set, so under a partition the head-
+        removal does **not** reach the other side, and a peer there can ``dequeue`` the **same item
+        again** (at-least-once / **duplicate delivery**) — the queue's availability cost.
+      - ``linearizable`` (every replica) / ``quorum`` (a majority) — gated by ``_queue_available``,
+        so a partitioned ``dequeue`` is ``unavailable`` rather than duplicating: **exactly-once** on
+        the side that can serve it, the queue analogue of the KV CAP tradeoff (ED28).
+
+    ``empty`` if the coordinator's replica has no items. A coordinator-level decision shared by both
+    oracles, so Tier-A ≡ Tier-B compute byte-identical deltas.
+    """
+    node, queue = action.args[0], action.args[1]
+    if not state.is_up(node):
+        return [SetResult("unavailable", "")], "unavailable", ""
+    reachable = [p for p in config.nodes if state.connected(node, p) and state.is_up(p)]
+    if not _queue_available(state, config, reachable):
+        return [SetResult("unavailable", "")], "unavailable", ""
+    items = state.queues.get((queue, node), ())
+    if not items:
+        return [SetResult("empty", "")], "empty", ""
+    head = items[0]
+    edits: DistDelta = []
+    for p in reachable:  # pop each reachable replica's own head (the relative dequeue op)
+        p_items = state.queues.get((queue, p), ())
+        if p_items:
+            edits.append(QueueSet(queue, p, p_items[1:]))
+    edits.append(SetResult("dequeued", head))
+    return edits, "dequeued", head
+
+
 class ReferenceDistOracle:
     """The Tier-A deterministic DES (§5.1). Pure: ``step`` is a function of (state, action)."""
 
@@ -549,6 +629,10 @@ class ReferenceDistOracle:
             return add_replica_edits(state, action, self.config)
         if name == "remove_replica":
             return remove_replica_edits(state, action, self.config)
+        if name == "enqueue":
+            return enqueue_edits(state, action, self.config)
+        if name == "dequeue":
+            return dequeue_edits(state, action, self.config)
         raise ValueError(f"unhandled action {name!r}")  # pragma: no cover - grammar is closed
 
     def _event(self, state: DistributedState, node: str, raw: str) -> EventAppend:

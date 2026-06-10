@@ -61,6 +61,12 @@ def cluster_view(state: DistributedState) -> str:
         for m in state.inflight.values()
     )
     partitions = sorted(sorted(g) for g in state.partitions)
+    # Queue replicas (DS0 incr 21) are part of the observable cluster — each (queue, node) replica's
+    # ordered contents, sorted id-independently. Empty for a KV-only cluster, so the channel is
+    # unchanged where queues are unused.
+    queues = sorted(
+        (q, n, list(items)) for (q, n), items in state.queues.items() if items
+    )
     return repr({
         "replicas": replicas,
         "inflight": inflight,
@@ -68,6 +74,7 @@ def cluster_view(state: DistributedState) -> str:
         "down": sorted(state.down),
         "clock": state.clock,
         "last_result": state.last_result,
+        "queues": queues,
     })
 
 

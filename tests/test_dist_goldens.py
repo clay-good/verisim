@@ -441,6 +441,29 @@ def test_golden_remove_replica_shrinks_the_consensus_quorum():
     }
 
 
+def test_golden_queue_enqueue_replicates_and_dequeue_is_fifo():
+    # The FIFO-queue golden (SPEC-7 §3.2, DS0 incr 21): `enqueue a`, `enqueue b` replicate the queue
+    # to every node ([a, b] on n0/n1/n2), then `dequeue` returns the head `a` (FIFO) and pops it
+    # from each reachable replica, leaving [b] everywhere. The queue replicas appear in the
+    # canonical form (omitted until the first enqueue); the KV is untouched (a separate data plane).
+    final = _final(["enqueue n0 q a", "enqueue n0 q b", "dequeue n0 q"])
+    assert final == {
+        "replicas": [
+            _rep("x", "n0", 0, "nil"), _rep("x", "n1", 0, "nil"), _rep("x", "n2", 0, "nil"),
+            *_boot_y(),
+        ],
+        "log": [],  # queue ops are not (yet) in the causal log
+        "inflight": [],
+        "partitions": [["n0", "n1", "n2"]],
+        "down": [],
+        "clock": 0,
+        "next_event_id": 0,
+        "next_msg_id": 0,
+        "last_result": ["dequeued", "a"],  # FIFO head returned
+        "queues": [{"queue": "q", "node": n, "items": ["b"]} for n in ("n0", "n1", "n2")],
+    }
+
+
 def test_golden_linearizable_replicates_synchronously():
     # A single put commits to *every* replica in the same step — no in-flight, no advance needed,
     # the strong-consistency counterpart of the eventual-consistency async-then-converge golden.

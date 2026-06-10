@@ -241,6 +241,21 @@ class MemberSet:
 
 
 @dataclass(frozen=True)
+class QueueSet:
+    """Set one (queue, node) replica's ordered contents (DS0 increment 21, `enqueue`/`dequeue`).
+
+    ``items`` is the node's full queue replica after the step. ``enqueue`` appends a value to each
+    reachable replica's own list; ``dequeue`` pops each reachable replica's own head. An empty list
+    leaves no entry (it is dropped from the canonical form), so a cluster that never enqueues is
+    byte-identical to the pre-increment-21 form.
+    """
+
+    queue: str
+    node: str
+    items: tuple[str, ...]
+
+
+@dataclass(frozen=True)
 class SetResult:
     """The client-visible result of the step: ``(status, value_token)``."""
 
@@ -268,6 +283,7 @@ DistEdit = (
     | LogSet
     | CommitIndexSet
     | MemberSet
+    | QueueSet
     | SetResult
 )
 DistDelta = list[DistEdit]
@@ -335,6 +351,11 @@ def apply(state: DistributedState, delta: DistDelta) -> DistributedState:
             s.commit_index = edit.index
         elif isinstance(edit, MemberSet):
             s.members = edit.members
+        elif isinstance(edit, QueueSet):
+            if edit.items:
+                s.queues[(edit.queue, edit.node)] = edit.items
+            else:
+                s.queues.pop((edit.queue, edit.node), None)  # an empty queue leaves no residue
         else:
             assert isinstance(edit, SetResult)
             s.last_result = (edit.status, edit.value)
@@ -395,6 +416,8 @@ def edit_to_dict(edit: DistEdit) -> dict[str, Any]:
         return {"op": "CommitIndexSet", "index": edit.index}
     if isinstance(edit, MemberSet):
         return {"op": "MemberSet", "members": sorted(edit.members)}
+    if isinstance(edit, QueueSet):
+        return {"op": "QueueSet", "queue": edit.queue, "node": edit.node, "items": list(edit.items)}
     assert isinstance(edit, SetResult)
     return {"op": "SetResult", "status": edit.status, "value": edit.value}
 
@@ -448,6 +471,8 @@ def edit_from_dict(d: dict[str, Any]) -> DistEdit:
         return CommitIndexSet(d["index"])
     if op == "MemberSet":
         return MemberSet(frozenset(d["members"]))
+    if op == "QueueSet":
+        return QueueSet(d["queue"], d["node"], tuple(d["items"]))
     if op == "SetResult":
         return SetResult(d["status"], d["value"])
     raise ValueError(f"unknown edit op {op!r}")

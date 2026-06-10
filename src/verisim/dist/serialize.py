@@ -113,6 +113,15 @@ def to_canonical(state: DistributedState) -> dict[str, Any]:
     # exact pre-increment-20 form (purely additive). A non-empty (reconfigured) set serializes sorted.
     if state.members:
         out["members"] = sorted(state.members)
+    # Distributed queues (DS0 incr 21): non-empty (queue, node) replicas, sorted, each an ordered
+    # item list. Omitted when no queue has been used, so a KV-only cluster serializes to the exact
+    # pre-increment-21 form (purely additive, like members/logs/lease).
+    queues = {k: v for k, v in state.queues.items() if v}
+    if queues:
+        out["queues"] = [
+            {"queue": q, "node": n, "items": list(queues[(q, n)])}
+            for q, n in sorted(queues)
+        ]
     return out
 
 
@@ -173,6 +182,9 @@ def from_canonical(d: dict[str, Any]) -> DistributedState:
         },
         commit_index=d.get("commit_index", 0),
         members=frozenset(d.get("members", [])),
+        queues={
+            (q["queue"], q["node"]): tuple(q["items"]) for q in d.get("queues", [])
+        },
         lease_until=d.get("lease_until", 0),
     )
 

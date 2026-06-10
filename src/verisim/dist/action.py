@@ -26,6 +26,8 @@ workload and the fault/time medium (the consensus/admin family arrives with the 
     append <node> <key> <val>       # consensus: append <key>=<val> to the replicated log (Raft log)
     add_replica <node>              # consensus: add <node> to the voting membership (quorum grows)
     remove_replica <node>           # consensus: remove <node> from the voting membership (quorum shrinks)
+    enqueue <node> <queue> <val>    # client: append <val> to the FIFO <queue> (replicated)
+    dequeue <node> <queue>          # client: pop the head of <queue> at <node> (delivery per model)
 
 The fault/time family is the source of all interesting dynamics (stale reads under partition,
 convergence after heal+advance) -- the distributed analogue of SPEC-5's ``advance Δt`` and SPEC-6's
@@ -92,7 +94,15 @@ change, so the **majority threshold tracks the membership** — ``remove_replica
 (a smaller majority suffices, the standard way to restore availability after nodes fail) and
 ``add_replica`` grows it. All config nodes still physically store replicas; membership is the voting
 overlay (the empty set is the "all nodes vote" default). The active leader cannot be removed
-(``is_leader`` — step it down first), and the last member cannot be removed (ED27).
+(``is_leader`` — step it down first), and the last member cannot be removed (ED27). ``enqueue``/
+``dequeue`` (DS0 increment 21) are the §3.2 **FIFO-queue** client ops — a second data type beside the
+KV store. ``enqueue node queue val`` appends ``val`` to a replicated queue; ``dequeue node queue``
+pops the head of the coordinator's queue replica. The headline property is that **delivery semantics
+follow the ``consistency_model``**: under ``eventual`` a dequeue's head-removal reaches only the
+reachable side, so a partitioned peer can re-dequeue the same item (**at-least-once / duplicate
+delivery**), where ``linearizable`` (needs every replica) and ``quorum`` (needs a majority) gate
+availability to keep delivery **exactly-once** on the side that can serve it — the queue analogue of
+the KV CAP tradeoff (ED28).
 """
 
 from __future__ import annotations
@@ -124,6 +134,8 @@ _ARITY: dict[str, int | None] = {
     "append": 3,  # node key val  -- append to the Raft replicated log; commit on majority (incr 19)
     "add_replica": 1,  # node  -- add <node> to the voting membership (DS0 incr 20)
     "remove_replica": 1,  # node  -- remove <node> from the voting membership (DS0 incr 20)
+    "enqueue": 3,  # node queue val  -- append <val> to the FIFO <queue> (DS0 incr 21)
+    "dequeue": 2,  # node queue  -- pop the head of <queue> at <node> (DS0 incr 21)
     # Transaction family (DS0 increment 2): a multi-key OCC transaction at a coordinator node.
     "begin": 2,  # node txn  -- open a transaction
     "tget": 3,  # node txn key  -- read <key> within the txn (pins the read version for validation)
@@ -132,9 +144,13 @@ _ARITY: dict[str, int | None] = {
     "abort": 2,  # node txn  -- discard the txn
 }
 
-# ``begin``/``commit``/``abort`` + the txn-scoped ``tget``/``tput`` are client ops (the workload).
-CLIENT_OPS = frozenset({"put", "get", "cas", "begin", "tget", "tput", "commit", "abort"})
+# ``begin``/``commit``/``abort`` + the txn-scoped ``tget``/``tput`` are client ops (the workload), as
+# are the ``enqueue``/``dequeue`` FIFO-queue ops (DS0 incr 21).
+CLIENT_OPS = frozenset({
+    "put", "get", "cas", "begin", "tget", "tput", "commit", "abort", "enqueue", "dequeue",
+})
 TXN_OPS = frozenset({"begin", "tget", "tput", "commit", "abort"})
+QUEUE_OPS = frozenset({"enqueue", "dequeue"})  # the FIFO-queue client ops (DS0 incr 21)
 FAULT_OPS = frozenset(
     {"advance", "partition", "heal", "crash", "restart", "drop", "delay", "reorder", "clock_skew"}
 )
