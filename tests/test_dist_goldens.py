@@ -286,6 +286,30 @@ def test_golden_clock_skew_zero_clears_the_offset():
     }
 
 
+def test_golden_gossip_pairwise_reconciles_a_dropped_write():
+    # The pairwise-gossip golden (SPEC-7 §4, DS0 incr 15): a write is dropped to n1 (n1 stays stale
+    # the way ED18 showed), then `gossip n0 n1` reconciles the pair — n1 adopts the winning
+    # (version, value) of the two replicas with no in-flight message, so the cluster converges (the
+    # Dynamo/Cassandra pairwise anti-entropy, vs anti_entropy's one-directional pull-to-one-node).
+    final = _final(["put n0 x b", "drop n0 n1", "advance 2", "gossip n0 n1"])
+    assert final == {
+        "replicas": [
+            _rep("x", "n0", 1, "b"),   # writer
+            _rep("x", "n1", 1, "b"),   # gossip pulled it up to the winner (was stale post-drop)
+            _rep("x", "n2", 1, "b"),   # the un-dropped peer already had it
+            *_boot_y(),
+        ],
+        "log": [{"id": 0, "node": "n0", "op": "put n0 x b", "clock": 0, "happens_before": []}],
+        "inflight": [],  # gossip reads the replicas directly — no in-flight message left or needed
+        "partitions": [["n0", "n1", "n2"]],
+        "down": [],
+        "clock": 2,
+        "next_event_id": 1,
+        "next_msg_id": 2,
+        "last_result": ["gossiped", "1"],  # one replica (n1) moved
+    }
+
+
 def test_golden_linearizable_replicates_synchronously():
     # A single put commits to *every* replica in the same step — no in-flight, no advance needed,
     # the strong-consistency counterpart of the eventual-consistency async-then-converge golden.

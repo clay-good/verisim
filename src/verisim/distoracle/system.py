@@ -68,7 +68,12 @@ from verisim.dist.delta import (
 from verisim.dist.state import DistributedState, Message
 from verisim.dist.txn import txn_step
 from verisim.distoracle.base import DistStepResult
-from verisim.distoracle.reference import causal_deps, clock_skew_edits, timing_fault_edits
+from verisim.distoracle.reference import (
+    causal_deps,
+    clock_skew_edits,
+    gossip_edits,
+    timing_fault_edits,
+)
 
 TIER_SIMULATED = "simulated"
 TIER_THREADED = "threaded"
@@ -251,6 +256,11 @@ class SystemDistOracle:
             return clock_skew_edits(action)
         if name == "anti_entropy":
             return self._anti_entropy(state, action)
+        if name == "gossip":
+            # Pairwise anti-entropy (DS0 incr 15) is a coordinator-level reconciliation (it reads
+            # both replicas directly, no in-flight message), so — like ``anti_entropy`` — Tier-B
+            # computes the byte-identical reconciliation via the shared helper.
+            return gossip_edits(state, action, self.config)
         raise ValueError(f"unhandled action {name!r}")  # pragma: no cover - grammar is closed
 
     def _event(self, state: DistributedState, action: DistAction) -> EventAppend:

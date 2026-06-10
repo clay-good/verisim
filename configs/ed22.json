@@ -1,0 +1,8 @@
+{
+  "name": "ed22-gossip",
+  "nodes": ["n0", "n1", "n2", "n3"],
+  "key_x": "x",
+  "key_y": "y",
+  "vx": "b",
+  "vy": "c"
+}

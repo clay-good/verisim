@@ -126,10 +126,11 @@ class TieredOracle:
         """History admissibility: a read never mutates state; versions jump by <=1 per step."""
         if action.name == "get" and predicted.replicas != state.replicas:
             return True, "a read (get) mutated a replica -- inadmissible history"
-        if action.name == "anti_entropy":
-            # read-repair (DS0 incr 12) legitimately jumps a stale replica *several* versions at
-            # once (it adopts the latest reachable, skipping the versions it never received), so the
-            # per-step "jump by <=1" admissibility does not apply -- defer to bit-exact.
+        if action.name in ("anti_entropy", "gossip"):
+            # read-repair (DS0 incr 12) and pairwise gossip (incr 15) legitimately jump a stale
+            # replica *several* versions at once (adopting the latest reachable, skipping the
+            # versions it never received), so the "jump by <=1" rule does not apply -- defer to
+            # bit-exact.
             return False, ""
         for (obj, node), r in predicted.replicas.items():
             prior = state.replicas.get((obj, node))
@@ -159,9 +160,10 @@ class TieredOracle:
             if predicted.replicas != state.replicas:
                 return True, f"{name} must not change any replica"
             return False, ""
-        if name == "anti_entropy":
+        if name in ("anti_entropy", "gossip"):
             # read-repair (DS0 incr 12) reconciles a node to the winning ``(version, value)`` among
-            # its reachable replicas; the exact post-state depends on which peers are reachable (the
+            # its reachable replicas, and pairwise ``gossip`` (incr 15) reconciles two nodes to
+            # their mutual winner; the exact post-state depends on which peers are reachable (the
             # medium), which the cheap symbolic tier does not recompute — defer to bit-exact.
             return False, ""
         if name == "commit":

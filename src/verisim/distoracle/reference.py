@@ -121,6 +121,45 @@ def clock_skew_edits(action: DistAction) -> tuple[DistDelta, str, str]:
     return [ClockSkewSet(node, delta), SetResult("skewed", str(delta))], "skewed", str(delta)
 
 
+def gossip_edits(
+    state: DistributedState, action: DistAction, config: DistConfig
+) -> tuple[DistDelta, str, str]:
+    """``gossip a b``: pairwise bidirectional anti-entropy (DS0 increment 15, the §4 converge form).
+
+    The **pairwise, push-pull** sibling of ``anti_entropy`` — the Merkle-tree anti-entropy real
+    eventually-consistent stores (Dynamo, Cassandra) run in the background between *pairs* of nodes,
+    vs ``anti_entropy``'s one-directional pull-to-one-node. For every object both ``a`` and ``b``
+    replicate, **both** adopt the per-object winner of their two replicas by the same last-writer-
+    wins rule (``(version, value)``), emitting a ``ReplicaWrite`` for whichever node is behind. So
+    one pairwise gossip reconciles *both* endpoints fully (where ``anti_entropy`` repairs only the
+    named node), and a chain of pairwise gossips spreads a write across the whole reachable
+    component **epidemically** (ED22). It needs a live link (both up and connected) — a pairwise
+    sync over a real channel — and is otherwise bounded by reachability like ``anti_entropy``. A
+    pure coordinator-level reconciliation (it reads both replicas directly, no in-flight message),
+    so Tier-A and Tier-B compute byte-identical deltas; shared by both oracles so they cannot drift.
+    Reports the number of replicas that moved.
+    """
+    a, b = action.args[0], action.args[1]
+    if not (state.is_up(a) and state.is_up(b) and state.connected(a, b)):
+        return [SetResult("unavailable", "")], "unavailable", ""
+    edits: DistDelta = []
+    synced = 0
+    for obj in config.objects:
+        ra = state.replicas.get((obj, a))
+        rb = state.replicas.get((obj, b))
+        if ra is None or rb is None:
+            continue  # an object one of the pair does not replicate
+        win = max((ra.version, ra.value), (rb.version, rb.value))  # last-writer-wins by (ver, val)
+        if (ra.version, ra.value) != win:
+            edits.append(ReplicaWrite(obj, a, win[0], win[1]))
+            synced += 1
+        if (rb.version, rb.value) != win:
+            edits.append(ReplicaWrite(obj, b, win[0], win[1]))
+            synced += 1
+    value = str(synced)
+    return [*edits, SetResult("gossiped", value)], "gossiped", value
+
+
 class ReferenceDistOracle:
     """The Tier-A deterministic DES (§5.1). Pure: ``step`` is a function of (state, action)."""
 
@@ -162,6 +201,8 @@ class ReferenceDistOracle:
             return clock_skew_edits(action)
         if name == "anti_entropy":
             return self._anti_entropy(state, action)
+        if name == "gossip":
+            return gossip_edits(state, action, self.config)
         raise ValueError(f"unhandled action {name!r}")  # pragma: no cover - grammar is closed
 
     def _event(self, state: DistributedState, node: str, raw: str) -> EventAppend:

@@ -17,6 +17,7 @@ workload and the fault/time medium (the consensus/admin family arrives with the 
     reorder <src> <dst>             # fault: reverse the delivery schedule of <src>-><dst> messages
     clock_skew <node> <delta>       # fault: offset <node>'s clock by <delta> (signed; 0 clears it)
     anti_entropy <node>             # protocol: read-repair <node> to the latest reachable replica
+    gossip <a> <b>                  # protocol: pairwise sync — a and b both adopt the per-obj winner
 
 The fault/time family is the source of all interesting dynamics (stale reads under partition,
 convergence after heal+advance) -- the distributed analogue of SPEC-5's ``advance Δt`` and SPEC-6's
@@ -28,7 +29,12 @@ write -- the lost-message anomaly that breaks the eventual-consistency convergen
 op: the **read-repair / anti-entropy** mechanism real eventually-consistent stores (Dynamo,
 Cassandra) use to converge *despite* lost messages -- a node pulls each object to the latest
 ``(version, value)`` among its reachable replicas, so it repairs a dropped write that ``advance``
-never can, bounded only by what is currently reachable (ED19). ``delay`` and ``reorder`` (DS0
+never can, bounded only by what is currently reachable (ED19). ``gossip`` (DS0 increment 15) is its
+**pairwise, bidirectional** sibling: ``gossip a b`` reconciles *both* ``a`` and ``b`` to the
+per-object winner of their two replicas in one step (the Merkle-tree pairwise anti-entropy of
+Dynamo/Cassandra, vs ``anti_entropy``'s one-directional pull-to-one-node), so a chain of pairwise
+gossips spreads a write across the whole reachable component epidemically (ED22). ``delay`` and
+``reorder`` (DS0
 increment 13) are the message-timing faults: ``delay src dst dt`` defers every in-flight
 ``src``->``dst`` message by ``dt`` (a *recoverable* delay -- the counterpart to ``drop``'s
 unrecoverable loss), and ``reorder src dst`` reverses the delivery schedule of that channel's
@@ -64,6 +70,7 @@ _ARITY: dict[str, int | None] = {
     "reorder": 2,  # src dst  -- reverse the delivery schedule of <src>-><dst> messages (DS0 incr 13)
     "clock_skew": 2,  # node delta  -- set <node>'s clock offset (signed; DS0 incr 14)
     "anti_entropy": 1,  # node  -- read-repair <node> to the latest reachable replica (DS0 incr 12)
+    "gossip": 2,  # a b  -- pairwise bidirectional anti-entropy: both adopt the winner (DS0 incr 15)
     # Transaction family (DS0 increment 2): a multi-key OCC transaction at a coordinator node.
     "begin": 2,  # node txn  -- open a transaction
     "tget": 3,  # node txn key  -- read <key> within the txn (pins the read version for validation)
@@ -80,7 +87,7 @@ FAULT_OPS = frozenset(
 )
 # Protocol/admin ops (SPEC-7 §3.2, the third action family). ``anti_entropy`` (the read-repair
 # convergence mechanism, DS0 increment 12) is the first; ``propose``/leader ops are later increments.
-PROTOCOL_OPS = frozenset({"anti_entropy"})
+PROTOCOL_OPS = frozenset({"anti_entropy", "gossip"})
 
 
 class DistParseError(ValueError):

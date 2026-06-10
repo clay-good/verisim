@@ -1,0 +1,6 @@
+panel,metric,value,detail
+bidirectional,gossip_reconciles_both,1.0000,both_endpoints_synced
+bidirectional,anti_entropy_reconciles_one,1.0000,only_named_node_synced
+epidemic,converged_rate,1.0000,chain_of_pairwise_gossips_over_4_nodes
+epidemic,partition_blocks,1.0000,bounded_by_reachability
+tier_b,all,1.0000,steps=29
