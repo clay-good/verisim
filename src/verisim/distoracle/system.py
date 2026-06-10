@@ -83,6 +83,7 @@ from verisim.distoracle.reference import (
     lease_edits,
     lread_edits,
     propose_edits,
+    read_index_edits,
     remove_replica_edits,
     step_down_edits,
     timing_fault_edits,
@@ -300,6 +301,11 @@ class SystemDistOracle:
             # term), read/written from the global lease deadline, not an actor's local view — so
             # Tier-A and Tier-B compute byte-identical lease/read deltas via the shared helpers.
             return (lease_edits if name == "lease" else lread_edits)(state, action, self.config)
+        if name == "read_index":
+            # The quorum-confirmed linearizable read (DS0 incr 25, Raft ReadIndex): like propose/
+            # append, the majority-confirmation is the coordinator's decision read from the medium,
+            # so Tier-A ≡ Tier-B compute the byte-identical read verdict via the shared helper.
+            return read_index_edits(state, action, self.config)
         if name == "append":
             # The replicated-log append (DS0 incr 19): like ``propose``, the majority set is the
             # coordinator's decision from the medium and the log/commit/KV deltas are computed

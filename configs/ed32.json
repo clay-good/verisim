@@ -1,0 +1,6 @@
+{
+  "name": "ed32-read-index",
+  "cluster_sizes": [3, 5, 7],
+  "key": "x",
+  "val": "b"
+}

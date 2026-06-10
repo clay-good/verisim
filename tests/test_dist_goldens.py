@@ -496,6 +496,32 @@ def test_golden_deploy_breaks_consensus_on_an_incompatible_version() -> None:
     }
 
 
+def test_golden_read_index_confirms_leadership_and_serves_committed():
+    # The ReadIndex golden (SPEC-7 §5.1, DS0 incr 25): n0 leads (term 1) and appends x=a, which
+    # commits on the majority (the KV folds it: x version 1, value a; commit_index 1, one entry).
+    # `read_index n0 x` then confirms leadership via the majority and serves the committed value —
+    # a pure read, so only `last_result` changes (replicas/log/commit_index untouched).
+    log_x = [{"term": 1, "index": 0, "key": "x", "value": "a"}]
+    final = _final(["elect n0", "append n0 x a", "read_index n0 x"])
+    assert final == {
+        "replicas": [
+            _rep("x", "n0", 1, "a"), _rep("x", "n1", 1, "a"), _rep("x", "n2", 1, "a"), *_boot_y()
+        ],
+        "log": [],
+        "inflight": [],
+        "partitions": [["n0", "n1", "n2"]],
+        "down": [],
+        "clock": 0,
+        "next_event_id": 0,
+        "next_msg_id": 0,
+        "last_result": ["ok", "a"],  # the quorum-confirmed linearizable read
+        "term": 1,
+        "leader": "n0",
+        "logs": [{"node": n, "entries": log_x} for n in ("n0", "n1", "n2")],
+        "commit_index": 1,
+    }
+
+
 def test_golden_config_push_commits_on_majority_minority_stays_stale() -> None:
     # The config-push golden (SPEC-7 §3.2, DS0 incr 24): n0 leads (term 1), then the network splits
     # {n0,n1} | {n2}. `config_push n0 feature on` from n0 (on the 2-of-3 majority side) commits and

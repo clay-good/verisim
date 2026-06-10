@@ -1,0 +1,9 @@
+panel,metric,value,detail
+reads,read_index_ok,1.0000,served_at_leader_over_3_clusters
+reads,nonleader_fenced,1.0000,non_leader_read_index_not_leader
+reads,minority_no_quorum,1.0000,minority_leader_cannot_confirm
+reads,lease_serves_where_quorum_refuses,1.0000,lread_ok_in_minority_where_read_index_no_quorum
+safety,reflects_committed,1.0000,read_index_returns_committed
+safety,deposed_fenced,1.0000,deposed_leader_read_index_not_leader_after_heal
+safety,stale_get_vs_safe_read_index,1.0000,get_serves_stale_where_read_index_refuses_and_leader_fresh
+tier_b,all,1.0000,steps=23

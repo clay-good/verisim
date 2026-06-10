@@ -14,9 +14,10 @@ specification to be checked against.
 > makes stale-reads-under-partition the central dynamic). **Tier-B (the system oracle) now ships**
 > (§8 below). Multi-key transactions with the four SQL isolation levels (§9), the OCC/2PL split, the
 > complete §3.4 fault grammar (`drop`/`delay`/`reorder`/`clock_skew`), the `anti_entropy`/`gossip`
-> convergence ops, and the Raft-subset consensus core (`elect`/`propose`/`step_down`/`lease`/`append`/membership, §3.3) have all since shipped
-> as later DS increments. The embedded SPEC-6 host inside each node and the external real-binary DST
-> runtime remain later increments (SPEC-7 §5, §13); each will extend this document.
+> convergence ops, the Raft-subset consensus core (`elect`/`propose`/`step_down`/`lease`/`lread`/`read_index`/`append`/membership, §3.3),
+> the `deploy`/`config_push` admin ops, and the embedded SPEC-6 `host` inside each node have all since
+> shipped as later DS increments. The external real-binary DST runtime and the SPEC-5 net embedded
+> *between* nodes remain later increments (SPEC-7 §5, §13); each will extend this document.
 
 ## 1. State
 
@@ -201,6 +202,7 @@ A `tget`/`tput`/`commit`/`abort` on an unknown txn (or one opened at a different
 | `step_down <node>` (DS0 increment 17) | **voluntary relinquishment**: clear `leader` (`→ None`) **at the same `term`** iff `node` is the current leader — the graceful counterpart to `elect`'s higher-term deposition, leaving the cluster leaderless until a fresh `elect`. Rejected `("not_leader", current_leader)` if `node` is not the leader (so a non-leader or a second `step_down` is a no-op reject — idempotently safe); `("unavailable", "")` if crashed. Needs **no quorum** (it reads only the node's own leadership), so a minority-stranded leader can relinquish where its `propose` is `no_quorum`. On success `("stepped_down", str(term))`. Also **releases the lease** (DS0 incr 18). Touches no replica. |
 | `lease <node> <dt>` (DS0 increment 18) | **leader read lease**: iff `node` is the current leader, set the global-clock lease deadline `lease_until = clock + dt` (a `LeaseSet`). Through that deadline the leader may serve `lread` without a quorum and a new `elect` is fenced. Rejected `("not_leader", current_leader)` / `("unavailable", "")`. On success `("leased", str(until))`. Touches no replica. |
 | `lread <node> <key>` (DS0 increment 18) | **leader-lease local read**: iff `node` is the current leader **and** `clock < lease_until` and up, return `node`'s local replica value with **no quorum round-trip** — linearizable w.r.t. consensus (`propose`) writes (the leader is always in a propose's commit majority, and a live lease guarantees its term is uncontested). So a minority-stranded leader can still `lread` where its `propose` is `no_quorum`. Rejected `("lease_expired", "")` if no live lease; `("not_leader", current_leader)` if not the leader (a deposed leader cannot read off a stale lease); `("unavailable"/"no_replica", "")` otherwise. On success `("ok", value)`. A pure read. |
+| `read_index <node> <key>` (DS0 increment 25) | **quorum-confirmed linearizable read** (Raft ReadIndex, the partner to `lread`): iff `node` is the current leader **and** a **majority** of the voting members is reachable (the leadership-confirmation round), return `node`'s local replica value — linearizable with no clock/lease assumption. The two reads' availability is opposite: a minority-stranded leader is `("no_quorum", "")` here (it cannot confirm leadership) where a live-lease `lread` still serves locally; a deposed leader is `("not_leader", current_leader)` even after `heal` (no stale read off a stale leader, where a plain `get` would serve it). `("unavailable"/"no_replica", "")` otherwise. On success `("ok", value)`. A pure read — no state field, no edit. |
 | `append <node> <key> <val>` (DS0 increment 19) | **replicated-log append**: iff `node` is the current leader, append a `LogEntry(term, index, key, value)` to its log and replicate to the reachable followers, who **adopt the leader's prefix** (a `LogSet` per node — overwriting any divergent *uncommitted* tail, the log-matching reconciliation). It **commits iff a majority holds it** (advancing the monotone `commit_index` and folding the committed prefix into the KV — a key's version is the count of its committed writes — which backfills a rejoined follower): `("appended", str(index))`. A minority-stranded leader still appends locally but `("uncommitted", str(index))` — not applied to the KV, overwritable by a higher-term leader. Rejected `("not_leader", current_leader)` / `("unavailable", "")`. |
 | `add_replica <node>` / `remove_replica <node>` (DS0 increment 20) | **membership change**: reconfigure the consensus voting set `members` (a leader-committed `MemberSet`), so the quorum threshold (`elect`/`propose`/`append`) tracks it. `add_replica` adds a node (restoring the full cluster collapses to the empty "all vote" sentinel); `remove_replica` removes one — shrinking the majority, the lever that **restores availability** after failures. Rejected `("no_leader", "")` (a leader must commit it), `("is_leader", node)` (the active leader cannot be removed), `("last_member", node)`, `("unknown_node", "")`; a no-op is `("already_member"/"not_member", node)`. On success `("added"/"removed", node)`. All config nodes still store replicas; `members` is the voting overlay. Touches no replica. |
 | `deploy <node> <version>` (DS0 increment 22) | **rolling upgrade**: set `node`'s running software `version` (a `VersionSet`). Two nodes share a consensus quorum (`elect`/`propose`/`append`) only if their versions are within `DistConfig.max_version_skew` (default `1`, the N-1 window), so a deploy that creates an incompatible split with no compatible majority loses quorum — *the deploy broke the cluster*. `("deployed", str(version))`; `("unknown_node", "")` for a non-config node. Gates *consensus* only (the KV/queue data plane is version-agnostic). Touches no replica. |
@@ -266,7 +268,7 @@ and leaves every prior golden, hash, and tokenization unchanged. ED19
 ([`experiments/ed19.py`](../src/verisim/experiments/ed19.py)) pins both findings; Tier-B reproduces the
 read-repair bit-for-bit.
 
-### 3.3 `elect` / `propose` / `step_down` / `lease` / `append` / membership — the Raft-subset consensus core (DS0 increments 16–20)
+### 3.3 `elect` / `propose` / `step_down` / `lease` / `lread` / `read_index` / `append` / membership — the Raft-subset consensus core (DS0 increments 16–20, 25)
 
 `elect` and `propose` are the **consensus** family — the third action family (SPEC-7 §3.2) and the
 §4 `ProtocolStep` the spec named. They add the one safety property a leaderless `quorum` write
@@ -370,6 +372,29 @@ linearizable with respect to consensus writes. The real per-node lease timer und
 *drift* is a Tier-B refinement; our `clock_skew` fault is a constant offset, not a rate, so it shifts
 neither the grant nor the expiry here.) ED25 ([`experiments/ed25.py`](../src/verisim/experiments/ed25.py))
 pins both panels with Tier-B agreeing on every transition.
+
+**`read_index node key` — the quorum-confirmed linearizable read (DS0 increment 25).** The *other* way
+Raft serves a linearizable read, and the deliberate counterpoint to `lread`. Where `lread` trades a
+quorum round-trip for a **time lease**, `read_index` keeps **no clock assumption** and instead
+**confirms leadership with a majority** (the Raft ReadIndex heartbeat round) before serving the
+leader's local replica. The two reads' availability profiles are opposite, and that is the lesson: a
+leader **stranded in a minority** is `no_quorum` on `read_index` (it cannot confirm it is still leader)
+exactly where a live-lease `lread` *does* serve locally — the lease buys minority read-availability,
+the quorum read buys freedom from the clock. Both refuse the stale read a deposed leader would
+otherwise serve: a leader fenced by a higher-term election is `not_leader` even after `heal`, where a
+plain `get` from that node returns its now-stale local replica. `read_index` touches no replica (a pure
+read) and reads its majority confirmation from the medium, so Tier-A ≡ Tier-B compute the identical
+verdict; it adds no state field and no edit type (purely additive).
+
+```
+elect n0; append n0 x a; read_index n0 x           # ("ok","a") — leadership confirmed by a majority
+read_index n1 x                                     # ("not_leader","n0") — only the leader serves it
+partition n0 n1 | n2 n3 n4; read_index n0 x         # ("no_quorum","") — minority leader cannot confirm
+lease n0 9; lread n0 x; read_index n0 x             # lread ("ok","a") | read_index ("no_quorum","")
+```
+
+ED32 ([`experiments/ed32.py`](../src/verisim/experiments/ed32.py)) pins both panels (the two reads'
+opposite availability; the no-stale-read safety) with Tier-B agreeing on every read verdict.
 
 **`append node key val` — the replicated log (DS0 increment 19).** Where increment 16's `propose`
 was a *one-shot* leader-fenced commit, `append` adds the explicit **Raft log** underneath: the

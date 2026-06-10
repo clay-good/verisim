@@ -53,7 +53,7 @@ def test_grammar_parses_elect_and_propose() -> None:
     assert parse_dist_action("add_replica n3").args == ("n3",)
     assert parse_dist_action("remove_replica n1").args == ("n1",)
     assert sorted(CONSENSUS_OPS) == ["add_replica", "append", "elect", "lease", "lread", "propose",
-                                     "remove_replica", "step_down"]
+                                     "read_index", "remove_replica", "step_down"]
     assert CONSENSUS_OPS <= PROTOCOL_OPS
 
 

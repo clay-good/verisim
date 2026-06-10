@@ -1699,11 +1699,14 @@ opposite routes and differ only in *when* they pay for a conflict (OCC wastes wo
 `delay`/`reorder` (message timing), and `clock_skew` (a signed per-node offset) join `partition`/`crash`,
 with `anti_entropy` (read-repair) and pairwise `gossip` the convergence ops that repair what `drop`
 breaks — the Dynamo/Cassandra mechanisms that make eventual consistency eventual under an unreliable
-network. **The Raft-subset consensus core now ships** (ED23–ED27): `elect` (majority-only leadership, no
+network. **The Raft-subset consensus core now ships** (ED23–ED27, ED32): `elect` (majority-only leadership, no
 split-brain), `propose` (leader-fenced majority writes), `step_down` (the voluntary-handoff lifecycle),
-`lease`/`lread` (leader-lease local reads), `append` (the replicated commit-index log with log-matching
-reconciliation), and `add_replica`/`remove_replica` (quorum-tracking membership change) — the full leader
-machinery that earlier was only approximated by the leaderless `quorum` model. **A second data type
+the **two linearizable reads** — `lease`/`lread` (the lease-based local read) and `read_index` (ED32, the
+quorum-confirmed Raft *ReadIndex*, with the opposite availability profile: a minority leader serves
+`lread` under a live lease but is `no_quorum` on `read_index`, which in turn needs no clock and refuses
+the stale read a deposed leader's `get` would serve), `append` (the replicated commit-index log with
+log-matching reconciliation), and `add_replica`/`remove_replica` (quorum-tracking membership change) — the
+full leader machinery that earlier was only approximated by the leaderless `quorum` model. **A second data type
 ships** (ED28): a distributed FIFO queue whose delivery guarantee (at-least-once → exactly-once) follows
 the consistency model. **The two change-safety admin ops ship** — the world's named operational
 questions: `deploy` (ED29, "will this deploy break the cluster?": a rolling upgrade loses quorum when the
@@ -2210,11 +2213,14 @@ python -m verisim.experiments.ed16 --config configs/ed16.json \
     --out figures/ed16.csv --plot figures/ed16.png  # read-committed isolation: lost update + its price (DS0 incr 9)
 python -m verisim.experiments.ed17 --config configs/ed17.json \
     --out figures/ed17.csv --plot figures/ed17.png  # read-uncommitted isolation: dirty read + black-box recovery (DS0 incr 10)
-# DS0 increments 11–24 (ED18–ED31): the complete §3.4 fault grammar (drop/delay/reorder/clock_skew +
-# anti_entropy/gossip), the Raft-subset consensus core (elect/propose/step_down/lease/append/membership),
-# the FIFO queue, the deploy + config_push admin ops, and the embedded SPEC-6 host — see figures/reproduce.sh
+# DS0 increments 11–25 (ED18–ED32): the complete §3.4 fault grammar (drop/delay/reorder/clock_skew +
+# anti_entropy/gossip), the Raft-subset consensus core (elect/propose/step_down/lease/lread/read_index/
+# append/membership), the FIFO queue, the deploy + config_push admin ops, and the embedded SPEC-6 host
+# — see figures/reproduce.sh
 python -m verisim.experiments.ed31 --config configs/ed31.json \
     --out figures/ed31.csv --plot figures/ed31.png  # config push: leader-committed config + divergence (DS0 incr 24)
+python -m verisim.experiments.ed32 --config configs/ed32.json \
+    --out figures/ed32.csv --plot figures/ed32.png  # read_index: quorum-confirmed linearizable read (DS0 incr 25)
 ```
 
 The run-records are git-ignored (regenerable); the figures and their CSVs are

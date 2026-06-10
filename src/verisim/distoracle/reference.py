@@ -399,6 +399,54 @@ def lread_edits(
     return [SetResult("ok", replica.value)], "ok", replica.value
 
 
+def read_index_edits(
+    state: DistributedState, action: DistAction, config: DistConfig
+) -> tuple[DistDelta, str, str]:
+    """``read_index node key``: a quorum-confirmed linearizable read (DS0 incr 25, Raft ReadIndex).
+
+    The **partner to the lease read** (``lread``, incr 18) — the *other* way Raft serves a
+    linearizable read. Where ``lread`` skips the quorum round-trip by relying on a time **lease**,
+    ``read_index`` keeps no clock assumption and instead **confirms leadership with a majority**
+    before serving the read (the Raft ReadIndex heartbeat round): the leader is always in a
+    ``propose``/``append`` commit majority, so once a majority still acknowledges it as leader its
+    own replica holds every committed value and the local read is linearizable. The two reads have
+    **opposite availability profiles**:
+
+      - ``not_leader`` — only the leader may serve it (a deposed leader is fenced even after a
+        ``heal``: leader-completeness reaches the read path, so no stale read off a stale leader);
+        the result carries the current leader.
+      - ``no_quorum`` — a leader **stranded in a minority** cannot confirm it is still leader, so it
+        **refuses** the read (where ``lread`` with a live lease would still serve it locally — the
+        availability the lease buys and the quorum read declines, the safety it buys in return).
+      - ``("ok", value)`` — leadership confirmed by a majority; the leader's committed replica.
+      - ``unavailable`` (crashed) / ``no_replica`` as usual.
+
+    Like ``lread``/``propose`` it touches no replica (a pure read) and reads the majority from the
+    partition/down medium (a coordinator-level decision), so Tier-A and Tier-B compute the
+    byte-identical verdict via this shared helper.
+    """
+    node, key = action.args[0], action.args[1]
+    if not state.is_up(node):
+        return [SetResult("unavailable", "")], "unavailable", ""
+    if state.leader != node:
+        cur = state.leader or ""
+        return [SetResult("not_leader", cur)], "not_leader", cur
+    # Confirm leadership via a majority of the voting members (the ReadIndex heartbeat round); the
+    # leader is always co-partitioned/up/compatible with itself, so a single-node cluster confirms
+    # trivially and this is byte-identical to the propose/append majority rule.
+    members = active_members(state, config)
+    reachable = [
+        p for p in members
+        if state.connected(node, p) and state.is_up(p) and _compatible(state, config, node, p)
+    ]
+    if len(reachable) < len(members) // 2 + 1:  # cannot confirm leadership -> refuse the read
+        return [SetResult("no_quorum", "")], "no_quorum", ""
+    replica = state.replicas.get((key, node))
+    if replica is None:
+        return [SetResult("no_replica", "")], "no_replica", ""
+    return [SetResult("ok", replica.value)], "ok", replica.value
+
+
 def append_edits(
     state: DistributedState, action: DistAction, config: DistConfig
 ) -> tuple[DistDelta, str, str]:
@@ -756,6 +804,8 @@ class ReferenceDistOracle:
             return lease_edits(state, action, self.config)
         if name == "lread":
             return lread_edits(state, action, self.config)
+        if name == "read_index":
+            return read_index_edits(state, action, self.config)
         if name == "append":
             return append_edits(state, action, self.config)
         if name == "add_replica":

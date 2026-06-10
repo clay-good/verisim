@@ -23,6 +23,7 @@ workload and the fault/time medium (the consensus/admin family arrives with the 
     step_down <node>                # consensus: the current leader relinquishes (leaderless, same term)
     lease <node> <dt>               # consensus: the leader takes a read lease until clock+<dt>
     lread <node> <key>              # consensus: a leader-lease local linearizable read (no quorum)
+    read_index <node> <key>         # consensus: a quorum-confirmed linearizable read (Raft ReadIndex)
     append <node> <key> <val>       # consensus: append <key>=<val> to the replicated log (Raft log)
     add_replica <node>              # consensus: add <node> to the voting membership (quorum grows)
     remove_replica <node>           # consensus: remove <node> from the voting membership (quorum shrinks)
@@ -129,7 +130,16 @@ majority-replicated** setting — a Raft-style config entry. It commits (writing
 issued by a non-leader is ``not_leader`` and one by a minority-stranded leader is ``no_quorum`` (the
 push cannot commit). When it does commit under a partition it reaches only the majority side, so the
 **partitioned minority retains its stale config** (config divergence) — repaired by re-pushing after
-``heal`` (ED31).
+``heal`` (ED31). ``read_index`` (DS0 increment 25) is the **quorum-confirmed linearizable read** — the
+Raft *ReadIndex* method, the partner to the lease read ``lread`` (incr 18). ``read_index node key``
+serves ``key`` from the leader's replica **only after confirming leadership via a majority** of the
+voting members (the heartbeat round), so a leader stranded in the minority is ``no_quorum`` (it cannot
+confirm it is still leader, so it refuses the read — no stale read from a possibly-deposed leader), and
+a deposed leader is ``not_leader`` even after ``heal``. The two linearizable reads have **opposite
+availability profiles**: ``lread`` trades a quorum round-trip for a clock (a live lease serves a *local*
+read, available even in the minority), while ``read_index`` trades the clock dependence for a quorum
+round-trip (no lease/clock assumption, but unavailable without a majority) — the two standard ways Raft
+serves a linearizable read, and the operational choice between them (ED32).
 """
 
 from __future__ import annotations
@@ -159,6 +169,7 @@ _ARITY: dict[str, int | None] = {
     "step_down": 1,  # node  -- the current leader relinquishes; leaderless at the same term (incr 17)
     "lease": 2,  # node dt  -- the leader takes a read lease until clock+dt (DS0 incr 18)
     "lread": 2,  # node key  -- a leader-lease local linearizable read, no quorum (DS0 incr 18)
+    "read_index": 2,  # node key  -- a quorum-confirmed linearizable read, Raft ReadIndex (DS0 incr 25)
     "append": 3,  # node key val  -- append to the Raft replicated log; commit on majority (incr 19)
     "add_replica": 1,  # node  -- add <node> to the voting membership (DS0 incr 20)
     "remove_replica": 1,  # node  -- remove <node> from the voting membership (DS0 incr 20)
@@ -192,7 +203,8 @@ FAULT_OPS = frozenset(
 # convergence ops; ``elect``/``propose`` (the Raft-subset consensus core, incr 16) are the consensus
 # ops. ``CONSENSUS_OPS`` is the subset that reads/writes the leader/term metadata.
 CONSENSUS_OPS = frozenset({
-    "elect", "propose", "step_down", "lease", "lread", "append", "add_replica", "remove_replica",
+    "elect", "propose", "step_down", "lease", "lread", "read_index", "append",
+    "add_replica", "remove_replica",
 })
 PROTOCOL_OPS = frozenset({"anti_entropy", "gossip"}) | CONSENSUS_OPS
 
