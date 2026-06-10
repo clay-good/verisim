@@ -12,8 +12,11 @@ specification to be checked against.
 > **Scope — DS0 increment 1.** This covers the shipped slice: a **fully-replicated key-value store
 > under asynchronous replication and the fault/time medium** (the eventual-consistency core that
 > makes stale-reads-under-partition the central dynamic). **Tier-B (the system oracle) now ships**
-> (§8 below). The Raft-subset consensus group, transactions/locks, and the embedded SPEC-6 host
-> inside each node are later DS increments (SPEC-7 §5, §13); each will extend this document.
+> (§8 below). Multi-key transactions with the four SQL isolation levels (§9), the OCC/2PL split, the
+> complete §3.4 fault grammar (`drop`/`delay`/`reorder`/`clock_skew`), the `anti_entropy`/`gossip`
+> convergence ops, and the Raft-subset consensus core (`elect`/`propose`, §3.3) have all since shipped
+> as later DS increments. The embedded SPEC-6 host inside each node and the external real-binary DST
+> runtime remain later increments (SPEC-7 §5, §13); each will extend this document.
 
 ## 1. State
 
@@ -179,12 +182,18 @@ A `tget`/`tput`/`commit`/`abort` on an unknown txn (or one opened at a different
 | `crash <node>` | `node` goes down: it stops delivering/applying messages until restarted. `("ok", "")`. |
 | `restart <node>` | `node` comes back up (its replicas are whatever they were when it crashed; pending messages can now deliver). `("ok", "")`. |
 | `drop <src> <dst>` (DS0 increment 11) | **lose** every in-flight message from `src` to `dst` (a `MsgDrop` per lost message). Unconditional — the drop does not require the link to be currently connected (a message can be lost whether or not it would have been delivered). `("dropped", str(num_dropped))`; a channel with no in-flight message is a no-op `("dropped", "0")`. |
+| `delay <src> <dst> <dt>` (DS0 increment 13) | defer every in-flight `src`→`dst` message by `dt` (`deliver_after += dt`, a `MsgReschedule` per message) — a *recoverable* delay (the message still arrives, just later), the counterpart to `drop`'s loss. `("delayed", str(num_moved))`. |
+| `reorder <src> <dst>` (DS0 increment 13) | reverse the channel's delivery schedule (reassign the sorted delivery times in reverse, a `MsgReschedule` per moved message). Last-writer-wins makes the *converged* state invariant, but it flips which write a peer sees *in transit*. `("reordered", str(num_moved))`. |
+| `clock_skew <node> <delta>` (DS0 increment 14) | set `node`'s signed clock offset (a `ClockSkewSet`); it shifts only the `deliver_after` the node stamps on its future sends. Because LWW resolves by `(version, value)` and never by timestamp, the converged state is clock-independent. `delta == 0` clears the skew. `("skewed", str(delta))`. |
 
-### Protocol ops (the convergence machinery — no causal-log event)
+### Protocol ops (the convergence + consensus machinery — no causal-log event)
 
 | Action | Semantics |
 |---|---|
 | `anti_entropy <node>` (DS0 increment 12) | **read-repair** `node`: for every object it replicates, adopt the winning `(version, value)` (last-writer-wins) among its **reachable** replicas (itself + co-partitioned, up peers), emitting a `ReplicaWrite` per object that moves. A crashed node is `("unavailable", "")`. `("repaired", str(num_repaired))`; nothing to repair is `("repaired", "0")`. |
+| `gossip <a> <b>` (DS0 increment 15) | **pairwise, bidirectional** anti-entropy: for every object both `a` and `b` replicate, *both* adopt their mutual per-object winner (a `ReplicaWrite` for whichever is behind). Needs a live link (both up + connected), else `("unavailable", "")`. One gossip reconciles both endpoints; a chain spreads a write epidemically. `("gossiped", str(num_moved))`. |
+| `elect <node>` (DS0 increment 16) | **leader election**: `node` becomes the cluster leader iff the *live* nodes in its partition group are a strict majority of all nodes (`> n//2`), bumping the monotone `term` and installing the global `leader` (a `ProtocolStep`). A crashed candidate is `("unavailable", "")`; one without a live majority is `("no_quorum", "")`. On success `("elected", str(new_term))`. Touches no replica. |
+| `propose <node> <key> <val>` (DS0 increment 16) | **leader-fenced write**: commit `val` to `key` iff `node` is the current `leader` and can reach a majority of `key`'s replicas (the consensus quorum, regardless of `consistency_model`) — synchronous to the reachable majority, async catch-up to the minority, exactly like a `quorum` `put`. Rejected `("not_leader", current_leader)` if `node` is not the leader (a deposed leader stays fenced even after `heal`); `("no_quorum", "")` if no reachable majority. `("ok", val)` on commit. |
 
 `advance` is the engine of the distributed dynamics — it is where replication actually happens and
 where partition/crash make their effect felt. Delivery is simulated **sequentially within one
@@ -244,6 +253,56 @@ reuses the `ReplicaWrite` edit and adds no state field, so it composes with ever
 and leaves every prior golden, hash, and tokenization unchanged. ED19
 ([`experiments/ed19.py`](../src/verisim/experiments/ed19.py)) pins both findings; Tier-B reproduces the
 read-repair bit-for-bit.
+
+### 3.3 `elect` / `propose` — the Raft-subset consensus core (DS0 increment 16)
+
+`elect` and `propose` are the **consensus** family — the third action family (SPEC-7 §3.2) and the
+§4 `ProtocolStep` the spec named. They add the one safety property a leaderless `quorum` write
+*cannot* provide: a single, fenced writer. Two state fields appear (`term: int`, `leader: str | None`),
+both at their boot defaults (`0` / `None`) until the first election, so a cluster that never runs
+consensus serializes to the exact pre-increment-16 form — every prior golden and hash is unchanged.
+
+**`elect node` — the majority rule.** A candidate becomes leader iff the **live** nodes in its
+partition group are a strict majority of the whole cluster (`> n // 2`). Because two disjoint groups
+can never each hold a majority, **at most one leader can be elected** — split-brain at the leadership
+level is structurally impossible, not merely unlikely. The even-split edge is the sharpest case: a
+`2 | 2` in a 4-node cluster leaves *neither* side a strict majority, so neither can elect — the
+cluster is **leaderless rather than forked** (the CAP-availability price consensus pays to never
+fork). A successful election bumps the monotone `term` and installs the global `leader`:
+
+```
+elect n0                       # full connectivity → ("elected","1"), leader n0, term 1
+partition n0 | n1 n2           # n0 into the minority
+elect n0                       # ("no_quorum","") — a minority side cannot elect (no split-brain)
+elect n1                       # {n1,n2} is 2 of 3 → ("elected","2"), leader n1, term 2
+```
+
+**`propose node key val` — the fence.** A leader-fenced majority write: it commits only if `node` is
+the *current* `leader` and can reach a majority of `key`'s replicas (synchronous to the reachable
+majority, async catch-up to the minority — exactly a `quorum` `put`), regardless of the configured KV
+`consistency_model`, because consensus *is* majority-quorum. The two rejections encode the safety:
+
+- `("not_leader", current_leader)` — `node` is not the leader. The headline property: a leader
+  deposed by a higher-term election is fenced **even after the partition heals**, because the global
+  `leader` already moved on — the Raft *leader-completeness* guarantee. A leaderless `quorum` put,
+  available to any coordinator that reaches a majority, would happily commit that stale write.
+- `("no_quorum", "")` — the leader cannot reach a majority (a leader stranded in the minority cannot
+  commit), so a write never proceeds on a side that cannot durably hold it.
+
+```
+elect n0; partition n0 | n1 n2; elect n1; heal   # n0 deposed by n1 (term 2), then the network heals
+propose n0 x d                                    # ("not_leader","n1") — fenced after heal
+propose n1 x d                                    # ("ok","d") — the legitimate leader commits
+```
+
+Both ops are **coordinator-level decisions** (the quorum is read from the partition/down medium, not
+an actor's local view, exactly like a `quorum` write's reachability), so Tier-A and Tier-B compute
+byte-identical leader/term/replica deltas via the shared `elect_edits` / `propose_edits` helpers —
+the W1-retirement guarantee holds for consensus too. The cheap oracle tiers defer the election logic
+to bit-exact (the `metamorphic` tier adds two reference-free invariants — *term is monotone* and
+*leader is a known node* — so a backward-term or bogus-leader prediction is still refuted cheaply).
+ED23 ([`experiments/ed23.py`](../src/verisim/experiments/ed23.py)) pins both panels (no split-brain;
+term-fencing vs the unfenced-`put` control); Tier-B reproduces every transition bit-for-bit.
 
 ## 4. The delta and the `apply == oracle` invariant
 

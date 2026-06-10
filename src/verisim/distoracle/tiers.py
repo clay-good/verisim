@@ -118,6 +118,14 @@ class TieredOracle:
             return True, f"clock ran backward {state.clock}->{predicted.clock}"
         if not predicted.down <= set(self.config.nodes):
             return True, "down set contains an unknown node"
+        # Consensus metadata (DS0 incr 16): the election term is monotone (a term can never go
+        # backward) and the leader is always a known cluster node or unset — reference-free
+        # invariants any legal protocol step satisfies, so a bogus-leader or backward-term
+        # prediction is refuted at the cheapest tier.
+        if predicted.term < state.term:
+            return True, f"election term went backward {state.term}->{predicted.term}"
+        if predicted.leader is not None and predicted.leader not in set(self.config.nodes):
+            return True, f"leader {predicted.leader!r} is not a cluster node"
         return False, ""
 
     def _cycle(
@@ -149,13 +157,14 @@ class TieredOracle:
         """
         name = action.name
         no_write = ("get", "partition", "heal", "crash", "restart", "drop", "delay", "reorder",
-                    "clock_skew", "begin", "tget", "tput", "abort")
+                    "clock_skew", "begin", "tget", "tput", "abort", "elect")
         if name in no_write:
             # none of these write replicas; the replica map must be unchanged. ``drop`` (DS0 inc 11)
             # and ``delay``/``reorder`` (DS0 inc 13) only touch the in-flight set; the txn ops
             # begin/tget/tput/abort only touch the
             # (consistency-invisible) txn buffer — a committed write reaches replicas only via
-            # ``commit`` (handled below); a read/drop/buffer/abort that mutated a replica is an
+            # ``commit`` (handled below); ``elect`` (DS0 inc 16) writes only leader/term metadata
+            # (defer that to bit-exact). A read/drop/buffer/abort/elect that mutated a replica is an
             # inadmissible transition the cheap symbolic tier can refute.
             if predicted.replicas != state.replicas:
                 return True, f"{name} must not change any replica"
@@ -170,6 +179,12 @@ class TieredOracle:
             # ``commit`` applies the txn's buffered writes (an MVCC bump per key) or aborts on a
             # read-set conflict; the exact post-state depends on the buffered writes the symbolic
             # tier does not track, so it defers to bit-exact (no cheap-tier refutation here).
+            return False, ""
+        if name == "propose":
+            # ``propose`` (DS0 incr 16) is a leader-fenced write: whether it commits at all
+            # depends on leadership + the reachable majority, and on commit it writes *several*
+            # replicas synchronously (the majority) — the exact post-state depends on the medium the
+            # symbolic tier does not recompute, so it defers to bit-exact (like the quorum ``put``).
             return False, ""
         if name in ("put", "cas"):
             node, key = action.args[0], action.args[1]

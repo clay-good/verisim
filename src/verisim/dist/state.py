@@ -165,6 +165,16 @@ class DistributedState:
     # it sends (a positive offset = a fast clock, defers its sends; negative = a slow clock, rushes
     # them). Empty (and omitted from the canonical form) by default, so prior hashes are unchanged.
     skew: dict[str, int] = field(default_factory=dict)
+    # The consensus leader + term (DS0 increment 16, the Raft-subset ``elect``/``propose`` core). A
+    # leader is elected (``elect``) by a partition group holding a strict majority of *live* cluster
+    # nodes — so two majorities cannot coexist and there is never a second leader (no split-brain).
+    # ``term`` is the monotone election epoch that *fences* a deposed leader: a new election bumps the
+    # global term and sets the global ``leader``, so an old leader's ``propose`` is rejected (it is no
+    # longer ``leader``) even after the partition heals — the Raft leader-completeness safety property
+    # plain ``quorum`` writes lack. Both at default (``term == 0``, ``leader is None``) until the first
+    # ``elect``, and omitted from the canonical form there, so every pre-increment-16 hash is unchanged.
+    term: int = 0
+    leader: str | None = None
 
     def __post_init__(self) -> None:
         # ``partitions`` is conceptually a *set* of disjoint groups, but stored as a tuple; keep it
@@ -202,7 +212,16 @@ class DistributedState:
             txns=dict(self.txns),
             locks=dict(self.locks),
             skew=dict(self.skew),
+            term=self.term,
+            leader=self.leader,
         )
+
+    def group_of(self, node: str) -> frozenset[str]:
+        """The partition group ``node`` belongs to (a singleton if it is mentioned by no group)."""
+        for group in self.partitions:
+            if node in group:
+                return group
+        return frozenset({node})
 
     def sender_clock(self, node: str) -> int:
         """``node``'s local clock = the global clock plus its skew offset (DS0 increment 14).

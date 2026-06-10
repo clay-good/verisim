@@ -18,6 +18,8 @@ workload and the fault/time medium (the consensus/admin family arrives with the 
     clock_skew <node> <delta>       # fault: offset <node>'s clock by <delta> (signed; 0 clears it)
     anti_entropy <node>             # protocol: read-repair <node> to the latest reachable replica
     gossip <a> <b>                  # protocol: pairwise sync — a and b both adopt the per-obj winner
+    elect <node>                    # consensus: <node> becomes leader iff its side holds a majority
+    propose <node> <key> <val>      # consensus: leader-only write to a majority (term-fenced)
 
 The fault/time family is the source of all interesting dynamics (stale reads under partition,
 convergence after heal+advance) -- the distributed analogue of SPEC-5's ``advance Δt`` and SPEC-6's
@@ -46,8 +48,15 @@ local clock by a signed ``delta``, which shifts the ``deliver_after`` it stamps 
 sends (ahead = its sends are deferred, behind = rushed). Because the protocol resolves conflicts by
 last-writer-wins on ``(version, value)`` -- never on a wall-clock timestamp -- skew shifts *when* a
 write is delivered but never *which* write wins, so the converged state is clock-independent (ED21,
-the property deterministic-simulation testing injects skew to verify). Transactions and
-``propose``/leader ops are later increments.
+the property deterministic-simulation testing injects skew to verify). ``elect``/``propose`` (DS0
+increment 16) are the **consensus** family — the third action family (SPEC-7 §3.2), a Raft-subset
+leader-election core. ``elect node`` makes ``node`` the cluster leader **iff its partition side holds
+a strict majority of the live nodes** (so two majorities — hence two leaders — can never coexist: no
+split-brain), bumping the monotone ``term``. ``propose node key val`` is a **leader-fenced** write:
+it commits a synchronous majority write (the consensus quorum, regardless of the KV
+``consistency_model``) only if ``node`` is the *current* leader, so a leader deposed by a higher-term
+election cannot commit even after the partition heals — the Raft leader-completeness safety property
+plain ``quorum`` writes lack (ED23).
 """
 
 from __future__ import annotations
@@ -71,6 +80,8 @@ _ARITY: dict[str, int | None] = {
     "clock_skew": 2,  # node delta  -- set <node>'s clock offset (signed; DS0 incr 14)
     "anti_entropy": 1,  # node  -- read-repair <node> to the latest reachable replica (DS0 incr 12)
     "gossip": 2,  # a b  -- pairwise bidirectional anti-entropy: both adopt the winner (DS0 incr 15)
+    "elect": 1,  # node  -- <node> becomes leader iff its side holds a majority (DS0 incr 16)
+    "propose": 3,  # node key val  -- leader-only term-fenced majority write (DS0 incr 16)
     # Transaction family (DS0 increment 2): a multi-key OCC transaction at a coordinator node.
     "begin": 2,  # node txn  -- open a transaction
     "tget": 3,  # node txn key  -- read <key> within the txn (pins the read version for validation)
@@ -86,8 +97,11 @@ FAULT_OPS = frozenset(
     {"advance", "partition", "heal", "crash", "restart", "drop", "delay", "reorder", "clock_skew"}
 )
 # Protocol/admin ops (SPEC-7 §3.2, the third action family). ``anti_entropy`` (the read-repair
-# convergence mechanism, DS0 increment 12) is the first; ``propose``/leader ops are later increments.
-PROTOCOL_OPS = frozenset({"anti_entropy", "gossip"})
+# convergence mechanism, DS0 increment 12) and ``gossip`` (pairwise anti-entropy, incr 15) are the
+# convergence ops; ``elect``/``propose`` (the Raft-subset consensus core, incr 16) are the consensus
+# ops. ``CONSENSUS_OPS`` is the subset that reads/writes the leader/term metadata.
+CONSENSUS_OPS = frozenset({"elect", "propose"})
+PROTOCOL_OPS = frozenset({"anti_entropy", "gossip"}) | CONSENSUS_OPS
 
 
 class DistParseError(ValueError):

@@ -39,6 +39,7 @@ from verisim.dist.delta import (
     NodeDown,
     NodeUp,
     PartitionSet,
+    ProtocolStep,
     ReplicaWrite,
     SetResult,
     apply,
@@ -160,6 +161,87 @@ def gossip_edits(
     return [*edits, SetResult("gossiped", value)], "gossiped", value
 
 
+def elect_edits(
+    state: DistributedState, action: DistAction, config: DistConfig
+) -> tuple[DistDelta, str, str]:
+    """``elect node``: leader election (DS0 increment 16, the Raft-subset consensus core, §3.2).
+
+    ``node`` becomes the cluster leader **iff its partition side holds a strict majority of the live
+    cluster nodes** — the Raft quorum a candidate needs to win an election. The voters are the *up*
+    nodes in ``node``'s partition group (a node can only collect votes from peers it can reach), and
+    a strict majority is ``> len(nodes) // 2``. Because two disjoint partition groups can never each
+    hold a majority, **at most one leader can be elected** — split-brain at the leadership level
+    is structurally impossible (ED23, Panel A). On success the monotone ``term`` bumps and the
+    global ``leader`` is installed; the new, higher term **fences** the previous leader (its
+    ``propose`` is now rejected — Panel B). A crashed candidate is ``unavailable``; a candidate
+    without a live majority is ``no_quorum``. Election touches no replica (leadership is cluster
+    metadata, not data), so — like ``gossip``/``anti_entropy`` — it is a coordinator-level decision
+    Tier-A and Tier-B compute byte-identically; shared by both oracles so they cannot drift.
+    """
+    node = action.args[0]
+    if not state.is_up(node):
+        return [SetResult("unavailable", "")], "unavailable", ""
+    voters = [n for n in state.group_of(node) if state.is_up(n)]
+    if len(voters) <= len(config.nodes) // 2:  # a strict majority of the whole cluster is required
+        return [SetResult("no_quorum", "")], "no_quorum", ""
+    new_term = state.term + 1
+    return (
+        [ProtocolStep("elect", new_term, node), SetResult("elected", str(new_term))],
+        "elected",
+        str(new_term),
+    )
+
+
+def propose_edits(
+    state: DistributedState, action: DistAction, config: DistConfig
+) -> tuple[DistDelta, str, str]:
+    """``propose node key val``: a leader-fenced consensus write (DS0 increment 16, §3.2).
+
+    The consensus counterpart of ``put``: it commits ``val`` to ``key`` only if ``node`` is the
+    **current cluster leader** and can reach a **majority** of the replicas — the Raft commit
+    rule, applied regardless of the KV ``consistency_model`` because consensus *is* majority-quorum.
+    Two rejections encode the safety property plain ``quorum`` writes lack:
+
+      - ``not_leader`` — ``node`` is not the leader. A leader deposed by a higher-term election
+        (e.g. partitioned into the minority while the majority side elected a new leader) is fenced
+        here **even after the partition heals**, because the global leader already moved on — the
+        Raft leader-completeness property (ED23, Panel B). The result value carries the *current*
+        leader (or ``""`` if none), so the rejection is diagnostic.
+      - ``no_quorum`` — the leader cannot reach a majority of the replicas (a leader stranded in
+        a minority cannot commit), so a write never proceeds on a side that cannot durably hold it.
+
+    On commit it writes the reachable majority synchronously and queues async catch-up messages to
+    the unreachable minority (delivered later by ``advance``), exactly as a ``quorum`` ``put`` does,
+    so it commits once and never forks. A coordinator-level decision (the majority set is read
+    from the medium, not an actor's local view), so Tier-A and Tier-B compute byte-identical deltas;
+    shared by both oracles so they cannot drift.
+    """
+    node, key, val = action.args[0], action.args[1], action.args[2]
+    if not state.is_up(node):
+        return [SetResult("unavailable", "")], "unavailable", ""
+    if state.leader != node:
+        cur = state.leader or ""
+        return [SetResult("not_leader", cur)], "not_leader", cur
+    replica = state.replicas.get((key, node))
+    if replica is None:
+        return [SetResult("no_replica", "")], "no_replica", ""
+    peers = config.replicas_of(key)
+    reachable = [p for p in peers if state.connected(node, p) and state.is_up(p)]
+    if len(reachable) < len(peers) // 2 + 1:  # consensus commits only on a majority of replicas
+        return [SetResult("no_quorum", "")], "no_quorum", ""
+    new_version = replica.version + 1
+    edits: DistDelta = [ReplicaWrite(key, peer, new_version, val) for peer in reachable]
+    msg_id = state.next_msg_id
+    deliver_at = state.sender_clock(node) + 1
+    for peer in peers:
+        if peer in reachable:
+            continue
+        edits.append(MsgSend(msg_id, node, peer, key, new_version, val, deliver_at))
+        msg_id += 1
+    edits.append(SetResult("ok", val))
+    return edits, "ok", val
+
+
 class ReferenceDistOracle:
     """The Tier-A deterministic DES (§5.1). Pure: ``step`` is a function of (state, action)."""
 
@@ -203,6 +285,10 @@ class ReferenceDistOracle:
             return self._anti_entropy(state, action)
         if name == "gossip":
             return gossip_edits(state, action, self.config)
+        if name == "elect":
+            return elect_edits(state, action, self.config)
+        if name == "propose":
+            return propose_edits(state, action, self.config)
         raise ValueError(f"unhandled action {name!r}")  # pragma: no cover - grammar is closed
 
     def _event(self, state: DistributedState, node: str, raw: str) -> EventAppend:

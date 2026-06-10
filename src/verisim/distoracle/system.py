@@ -71,7 +71,9 @@ from verisim.distoracle.base import DistStepResult
 from verisim.distoracle.reference import (
     causal_deps,
     clock_skew_edits,
+    elect_edits,
     gossip_edits,
+    propose_edits,
     timing_fault_edits,
 )
 
@@ -261,6 +263,21 @@ class SystemDistOracle:
             # both replicas directly, no in-flight message), so — like ``anti_entropy`` — Tier-B
             # computes the byte-identical reconciliation via the shared helper.
             return gossip_edits(state, action, self.config)
+        if name == "elect":
+            # Leader election (DS0 incr 16) is a coordinator-level consensus decision — the quorum
+            # is read from the medium (partition/down), not an actor's local view (exactly like
+            # ``_write``'s majority reachability) — so Tier-A and Tier-B compute byte-identical
+            # leader/term deltas via the shared helper. The genuinely-distributed property Tier-B
+            # then reproduces is that the elected leader's writes replicate over the autonomous
+            # actors and the deposed leader is fenced (ED23).
+            return elect_edits(state, action, self.config)
+        if name == "propose":
+            # A leader-fenced majority write (DS0 incr 16): like the quorum ``put``, the majority
+            # set is the coordinator's decision from the medium, so the write edits are computed
+            # byte-identically via the shared helper; the async catch-up to the minority lands
+            # later by this oracle's own autonomous-actor ``_advance`` (where Tier-B's independence
+            # does its work).
+            return propose_edits(state, action, self.config)
         raise ValueError(f"unhandled action {name!r}")  # pragma: no cover - grammar is closed
 
     def _event(self, state: DistributedState, action: DistAction) -> EventAppend:

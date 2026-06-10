@@ -1,0 +1,8 @@
+panel,metric,value,detail
+split_brain,minority_elect_blocked,1.0000,over_3_odd_clusters
+split_brain,majority_elect,1.0000,over_3_odd_clusters
+split_brain,even_split_leaderless,1.0000,over_1_even_clusters
+fencing,deposed_propose_fenced,1.0000,not_leader_after_heal
+fencing,unfenced_put_commits,1.0000,the_stale_write_the_fence_stops
+fencing,new_leader_commits,1.0000,legitimate_leader_ok
+tier_b,all,1.0000,steps=27

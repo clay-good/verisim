@@ -1,0 +1,7 @@
+{
+  "name": "ed23-consensus",
+  "cluster_sizes": [3, 4, 5, 7],
+  "key": "x",
+  "v_old": "b",
+  "v_new": "c"
+}

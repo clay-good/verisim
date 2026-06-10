@@ -157,6 +157,23 @@ class LockSet:
 
 
 @dataclass(frozen=True)
+class ProtocolStep:
+    """A consensus protocol step: set the cluster ``leader`` + ``term`` (DS0 increment 16, §4).
+
+    The SPEC-7 §4 ``ProtocolStep(kind, term, index, leader?)`` edit, specialized to the Raft-subset
+    leader-election core: ``kind == "elect"`` installs ``leader`` at the new ``term`` (a strict
+    monotone bump). It changes no replica — leadership is cluster metadata, separate from the data
+    plane — so it composes with every consistency model and applies to the protocol layer alone. The
+    fields ``term``/``leader`` are at their boot defaults (``0``/``None``) until the first election,
+    so a cluster that never elects serializes to the exact pre-increment-16 form.
+    """
+
+    kind: str
+    term: int
+    leader: str | None
+
+
+@dataclass(frozen=True)
 class SetResult:
     """The client-visible result of the step: ``(status, value_token)``."""
 
@@ -179,6 +196,7 @@ DistEdit = (
     | TxnSet
     | TxnDel
     | LockSet
+    | ProtocolStep
     | SetResult
 )
 DistDelta = list[DistEdit]
@@ -232,6 +250,9 @@ def apply(state: DistributedState, delta: DistDelta) -> DistributedState:
                 s.locks[edit.object_id] = edit.holders
             else:
                 s.locks.pop(edit.object_id, None)
+        elif isinstance(edit, ProtocolStep):
+            s.term = edit.term
+            s.leader = edit.leader
         else:
             assert isinstance(edit, SetResult)
             s.last_result = (edit.status, edit.value)
@@ -281,6 +302,8 @@ def edit_to_dict(edit: DistEdit) -> dict[str, Any]:
     if isinstance(edit, LockSet):
         return {"op": "LockSet", "object_id": edit.object_id,
                 "holders": [list(h) for h in edit.holders]}
+    if isinstance(edit, ProtocolStep):
+        return {"op": "ProtocolStep", "kind": edit.kind, "term": edit.term, "leader": edit.leader}
     assert isinstance(edit, SetResult)
     return {"op": "SetResult", "status": edit.status, "value": edit.value}
 
@@ -324,6 +347,8 @@ def edit_from_dict(d: dict[str, Any]) -> DistEdit:
         return TxnDel(d["txn_id"])
     if op == "LockSet":
         return LockSet(d["object_id"], tuple((t, m) for t, m in d["holders"]))
+    if op == "ProtocolStep":
+        return ProtocolStep(d["kind"], d["term"], d["leader"])
     if op == "SetResult":
         return SetResult(d["status"], d["value"])
     raise ValueError(f"unknown edit op {op!r}")

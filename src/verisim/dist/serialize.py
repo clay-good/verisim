@@ -76,6 +76,12 @@ def to_canonical(state: DistributedState) -> dict[str, Any]:
     # ``locks``/``txns``); a 0 offset is never stored (it is cleared on apply).
     if state.skew:
         out["skew"] = {node: off for node, off in sorted(state.skew.items())}
+    # ``term``/``leader`` are included only once an election has happened, so a cluster that never
+    # runs consensus serializes to the exact pre-DS0-incr-16 normal form (the Raft-subset
+    # leader/term metadata is purely additive, like ``skew``/``locks``/``txns``).
+    if state.term != 0 or state.leader is not None:
+        out["term"] = state.term
+        out["leader"] = state.leader
     return out
 
 
@@ -126,6 +132,8 @@ def from_canonical(d: dict[str, Any]) -> DistributedState:
         txns=txns,
         locks=locks,
         skew=skew,
+        term=d.get("term", 0),
+        leader=d.get("leader"),
     )
 
 

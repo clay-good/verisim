@@ -310,6 +310,32 @@ def test_golden_gossip_pairwise_reconciles_a_dropped_write():
     }
 
 
+def test_golden_consensus_elect_then_propose_under_partition():
+    # The consensus golden (SPEC-7 §3.2, DS0 incr 16): elect n1 (term 1, leader n1), partition n0
+    # off, then `propose n1 x b` — the leader commits to the reachable majority and queues
+    # async catch-up to the stranded n0; heal + advance delivers it, so it converges and the
+    # leader/term metadata appears in the canonical form (omitted until the first election).
+    final = _final(["elect n1", "partition n0 | n1 n2", "propose n1 x b", "heal", "advance 5"])
+    assert final == {
+        "replicas": [
+            _rep("x", "n0", 1, "b"),   # minority replica, caught up after heal+advance
+            _rep("x", "n1", 1, "b"),   # leader: synchronous majority write
+            _rep("x", "n2", 1, "b"),   # majority side: synchronous
+            *_boot_y(),
+        ],
+        "log": [],  # consensus ops (elect/propose) are protocol-layer; they append no causal event
+        "inflight": [],  # the async catch-up to n0 was delivered on advance
+        "partitions": [["n0", "n1", "n2"]],
+        "down": [],
+        "clock": 5,
+        "next_event_id": 0,
+        "next_msg_id": 1,
+        "last_result": ["advanced", "1"],
+        "term": 1,        # one election happened
+        "leader": "n1",   # ...installing n1 as the cluster leader
+    }
+
+
 def test_golden_linearizable_replicates_synchronously():
     # A single put commits to *every* replica in the same step — no in-flight, no advance needed,
     # the strong-consistency counterpart of the eventual-consistency async-then-converge golden.
