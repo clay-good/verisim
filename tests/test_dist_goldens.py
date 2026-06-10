@@ -496,6 +496,46 @@ def test_golden_deploy_breaks_consensus_on_an_incompatible_version() -> None:
     }
 
 
+def test_golden_host_fork_runs_on_the_nodes_embedded_host():
+    # The embedded-host golden (SPEC-7 §3.1/§4, DS0 incr 23): `host n0 fork 1` runs a SPEC-6 fork on
+    # n0's embedded host, spawning pid 2 (child of pid 1). The host appears in the canonical form
+    # (omitted until the first host op) with its process table, an empty fd table, and the boot v0
+    # filesystem (just the root dir) reused verbatim — the composition is visible in serialization.
+    # No other node has a host (per-node isolation); the KV is untouched (a separate subsystem).
+    boot_fs = {
+        "fs": [["/", {"type": "dir", "mode": 493}]],
+        "cwd": "/", "env": {},
+        "last": {"exit_code": 0,
+                 "stdout_hash": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"},
+    }
+    n0_host = {
+        "procs": [
+            {"pid": 1, "ppid": 0, "state": "RUNNING", "uid": 0, "exit_code": None},
+            {"pid": 2, "ppid": 1, "state": "RUNNING", "uid": 0, "exit_code": None},
+        ],
+        "fds": [],
+        "fs": boot_fs,
+        "next_pid": 3,
+        "last_exit": 0,
+    }
+    final = _final(["host n0 fork 1"])
+    assert final == {
+        "replicas": [
+            _rep("x", "n0", 0, "nil"), _rep("x", "n1", 0, "nil"), _rep("x", "n2", 0, "nil"),
+            *_boot_y(),
+        ],
+        "log": [],
+        "inflight": [],
+        "partitions": [["n0", "n1", "n2"]],
+        "down": [],
+        "clock": 0,
+        "next_event_id": 0,
+        "next_msg_id": 0,
+        "last_result": ["ok", "2"],  # the new pid
+        "hosts": [{"node": "n0", "host": n0_host}],  # only n0 has a host (per-node isolation)
+    }
+
+
 def test_golden_linearizable_replicates_synchronously():
     # A single put commits to *every* replica in the same step — no in-flight, no advance needed,
     # the strong-consistency counterpart of the eventual-consistency async-then-converge golden.

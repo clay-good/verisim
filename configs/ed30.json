@@ -1,0 +1,7 @@
+{
+  "name": "ed30-host",
+  "cluster_sizes": [3, 4, 5],
+  "key": "x",
+  "path": "/f",
+  "token": "a"
+}

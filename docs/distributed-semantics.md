@@ -204,6 +204,7 @@ A `tget`/`tput`/`commit`/`abort` on an unknown txn (or one opened at a different
 | `append <node> <key> <val>` (DS0 increment 19) | **replicated-log append**: iff `node` is the current leader, append a `LogEntry(term, index, key, value)` to its log and replicate to the reachable followers, who **adopt the leader's prefix** (a `LogSet` per node — overwriting any divergent *uncommitted* tail, the log-matching reconciliation). It **commits iff a majority holds it** (advancing the monotone `commit_index` and folding the committed prefix into the KV — a key's version is the count of its committed writes — which backfills a rejoined follower): `("appended", str(index))`. A minority-stranded leader still appends locally but `("uncommitted", str(index))` — not applied to the KV, overwritable by a higher-term leader. Rejected `("not_leader", current_leader)` / `("unavailable", "")`. |
 | `add_replica <node>` / `remove_replica <node>` (DS0 increment 20) | **membership change**: reconfigure the consensus voting set `members` (a leader-committed `MemberSet`), so the quorum threshold (`elect`/`propose`/`append`) tracks it. `add_replica` adds a node (restoring the full cluster collapses to the empty "all vote" sentinel); `remove_replica` removes one — shrinking the majority, the lever that **restores availability** after failures. Rejected `("no_leader", "")` (a leader must commit it), `("is_leader", node)` (the active leader cannot be removed), `("last_member", node)`, `("unknown_node", "")`; a no-op is `("already_member"/"not_member", node)`. On success `("added"/"removed", node)`. All config nodes still store replicas; `members` is the voting overlay. Touches no replica. |
 | `deploy <node> <version>` (DS0 increment 22) | **rolling upgrade**: set `node`'s running software `version` (a `VersionSet`). Two nodes share a consensus quorum (`elect`/`propose`/`append`) only if their versions are within `DistConfig.max_version_skew` (default `1`, the N-1 window), so a deploy that creates an incompatible split with no compatible majority loses quorum — *the deploy broke the cluster*. `("deployed", str(version))`; `("unknown_node", "")` for a non-config node. Gates *consensus* only (the KV/queue data plane is version-agnostic). Touches no replica. |
+| `host <node> <syscall...>` (DS0 increment 23) | **embedded host**: run a SPEC-6 syscall (`fork`/`exit`/`setuid`/`open`/`write`/`close`) on `node`'s own embedded host — a process table + per-process fd tables + an embedded v0 filesystem — by delegating to the SPEC-6 `ReferenceHostOracle` and wrapping its bundle delta in a `HostStep`. Per-node isolated; `("unavailable", "")` if the node is down (the cross-layer crash gate); `("ok", stdout)` on a successful syscall (e.g. the new pid / fd), `("host_err", "")` on a syscall failure (EPERM/EBADF/bad pid). The node's host is created lazily on its first host op. Touches no replica (the host is a separate per-node subsystem). |
 
 `advance` is the engine of the distributed dynamics — it is where replication actually happens and
 where partition/crash make their effect felt. Delivery is simulated **sequentially within one
@@ -495,14 +496,52 @@ transition. (Honest scope: version compatibility is a symmetric within-skew rela
 is a node-local label; a real upgrade's per-feature compatibility matrix and staged migrations are a
 deeper refinement.)
 
+### 3.6 `host` — the embedded SPEC-6 host (DS0 increment 23)
+
+The compositional vision SPEC-7 names since increment 1 (§3.1/§4: a `HostDelta` on an embedded
+subsystem), realized: each cluster node runs a real **SPEC-6 host** — a process table, per-process
+file-descriptor tables, and an embedded **v0 filesystem** (composed verbatim, as SPEC-6 itself
+composes the v0 FS). `host node <syscall...>` runs a SPEC-6 syscall on `node`'s own host by
+delegating to the SPEC-6 `ReferenceHostOracle`, and wraps its bundle delta in a `HostStep(node,
+edits)` — so the dist `apply` reproduces the embedded host through the SPEC-6 `apply` verbatim, which
+in turn reproduces the embedded filesystem through the v0 `apply`. The composition is three layers
+deep and visible right down to serialization (a node's host canonical contains the v0 FS canonical).
+
+Three properties:
+
+- **Composition** — a node is no longer just a bag of KV replicas: it serves a KV `put` *and* a host
+  `fork` independently, and a `host open` + `write` materializes a file in that node's embedded FS.
+- **Per-node isolation** — a node's host is created lazily on its first host op and is entirely its
+  own; a `fork` on `n0` never appears on `n1`'s host.
+- **The cross-layer crash linkage** — host ops obey the *same* up/down gate the KV client ops do: a
+  `host` syscall on a crashed node is `unavailable`, and `restart` resumes it. The host state
+  **survives** the crash (a crash pauses the node, it does not wipe its process table or FS).
+
+```
+host n0 fork 1            # ("ok","2") — pid 2 on n0's host; n1's host is untouched (isolation)
+put n0 x b               # the KV subsystem, independent, on the same node
+host n0 open 1 /f; host n0 write 1 0 a   # the file /f lands in n0's embedded v0 filesystem
+crash n0; host n0 fork 1  # ("unavailable","") — the crash gate reaches the host
+restart n0; host n0 fork 1  # ("ok","3") — host ops resume; the process table survived the crash
+```
+
+`host` delegates to the SPEC-6 oracle on the node's own state (a node-local computation, no medium
+interaction), so Tier-A and Tier-B compute byte-identical host deltas via the shared `host_op_edits`
+helper; the embedded hosts join `cluster_view`, and the `hosts` map is omitted from the canonical
+form until the first `host` op. ED30 ([`experiments/ed30.py`](../src/verisim/experiments/ed30.py))
+pins both panels (composition + isolation; the crash linkage) with Tier-B agreeing on every
+transition. (Honest scope: only the SPEC-6 HC0 syscall subset — process/fd/cred/FS — is wired here;
+sockets, IPC, the scheduler, and the SPEC-5 network embedded *between* hosts are later increments.)
+
 ## 4. The delta and the `apply == oracle` invariant
 
 The oracle returns the next state **and** the structured delta that produces it
 ([`verisim.dist.delta`](../src/verisim/dist/delta.py)): `ReplicaWrite`, `MsgSend`/`MsgDeliver`/
 `MsgDrop`, `EventAppend`, `PartitionSet`, `NodeDown`/`NodeUp`, `ClockSet`, the consensus
 `ProtocolStep`/`LeaseSet`, the replicated-log `LogSet`/`CommitIndexSet`, the membership `MemberSet`,
-the FIFO-queue `QueueSet`, the per-node `VersionSet` (DS0 incr 16–22), and `SetResult`. The
-**M1-analogue invariant** holds by construction and is tested on every transition:
+the FIFO-queue `QueueSet`, the per-node `VersionSet`, the embedded-host `HostStep` (DS0 incr 16–23),
+and `SetResult`. The **M1-analogue invariant** holds by construction and is tested on every
+transition:
 
 ```
 apply(state, oracle.step(state, action).delta) == oracle.step(state, action).state

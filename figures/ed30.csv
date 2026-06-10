@@ -1,0 +1,8 @@
+panel,metric,value,detail
+compose,fork_isolated,1.0000,per_node_over_3_clusters
+compose,kv_and_host_coexist,1.0000,kv_put_plus_host_fork
+compose,embedded_fs_works,1.0000,open_write_into_host_fs
+crash,crashed_host_unavailable,1.0000,host_op_gated_by_up_down
+crash,restart_restores,1.0000,host_ops_work_after_restart
+crash,host_state_survives_crash,1.0000,proc_table_persists
+tier_b,all,1.0000,steps=12

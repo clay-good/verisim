@@ -25,6 +25,11 @@ from verisim.dist.state import (
     ReplicaState,
     TxnState,
 )
+from verisim.host.delta import HostEdit
+from verisim.host.delta import apply as host_apply
+from verisim.host.delta import delta_from_list as host_delta_from_list
+from verisim.host.delta import delta_to_list as host_delta_to_list
+from verisim.host.state import HostState
 
 
 @dataclass(frozen=True)
@@ -270,6 +275,22 @@ class VersionSet:
 
 
 @dataclass(frozen=True)
+class HostStep:
+    """A SPEC-6 host syscall applied to one node's embedded host (DS0 increment 23, the §4 `HostDelta`).
+
+    ``node`` is the cluster node; ``edits`` is the SPEC-6 host bundle delta (process/fd/cred/FS edits)
+    the embedded :class:`~verisim.host.state.HostState` applies via the SPEC-6 ``apply`` verbatim —
+    the compositional structure §4 prescribes (``HostDelta(...) on embedded subsystems``). A node's
+    host is created lazily (``HostState.initial()``) on its first host op. Empty `hosts` is omitted
+    from the canonical form, so a cluster that runs no host ops is byte-identical to the pre-incr-23
+    form.
+    """
+
+    node: str
+    edits: list[HostEdit]
+
+
+@dataclass(frozen=True)
 class SetResult:
     """The client-visible result of the step: ``(status, value_token)``."""
 
@@ -299,6 +320,7 @@ DistEdit = (
     | MemberSet
     | QueueSet
     | VersionSet
+    | HostStep
     | SetResult
 )
 DistDelta = list[DistEdit]
@@ -376,6 +398,11 @@ def apply(state: DistributedState, delta: DistDelta) -> DistributedState:
                 s.versions[edit.node] = edit.version
             else:
                 s.versions.pop(edit.node, None)  # the base version leaves no residue
+        elif isinstance(edit, HostStep):
+            # apply the SPEC-6 host delta to the node's embedded host (created lazily), via the
+            # SPEC-6 ``apply`` verbatim — the §4 composition. An untouched host leaves no residue.
+            base = s.hosts.get(edit.node, HostState.initial())
+            s.hosts[edit.node] = host_apply(base, edit.edits)
         else:
             assert isinstance(edit, SetResult)
             s.last_result = (edit.status, edit.value)
@@ -440,6 +467,8 @@ def edit_to_dict(edit: DistEdit) -> dict[str, Any]:
         return {"op": "QueueSet", "queue": edit.queue, "node": edit.node, "items": list(edit.items)}
     if isinstance(edit, VersionSet):
         return {"op": "VersionSet", "node": edit.node, "version": edit.version}
+    if isinstance(edit, HostStep):
+        return {"op": "HostStep", "node": edit.node, "edits": host_delta_to_list(edit.edits)}
     assert isinstance(edit, SetResult)
     return {"op": "SetResult", "status": edit.status, "value": edit.value}
 
@@ -497,6 +526,8 @@ def edit_from_dict(d: dict[str, Any]) -> DistEdit:
         return QueueSet(d["queue"], d["node"], tuple(d["items"]))
     if op == "VersionSet":
         return VersionSet(d["node"], d["version"])
+    if op == "HostStep":
+        return HostStep(d["node"], host_delta_from_list(d["edits"]))
     if op == "SetResult":
         return SetResult(d["status"], d["value"])
     raise ValueError(f"unknown edit op {op!r}")

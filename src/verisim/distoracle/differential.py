@@ -32,6 +32,7 @@ from dataclasses import dataclass
 from verisim.dist.action import DistAction
 from verisim.dist.state import DistributedState
 from verisim.distoracle.base import DistOracle, DistStepResult
+from verisim.host.state import to_canonical_host
 
 AGREE = "agree"
 # The one named modeling boundary the KV semantics admits: a converged replica whose value depends
@@ -70,6 +71,9 @@ def cluster_view(state: DistributedState) -> str:
     # Per-node running versions (DS0 incr 22) are observable cluster metadata; empty (all base) for
     # a cluster that never deploys, so the channel is unchanged there.
     versions = sorted((n, v) for n, v in state.versions.items() if v != 0)
+    # The embedded per-node hosts (DS0 incr 23) are observable cluster state — each node's host
+    # canonical form, sorted by node. Empty for a host-free cluster, so the channel is unchanged.
+    hosts = sorted((n, to_canonical_host(h)) for n, h in state.hosts.items())
     return repr({
         "replicas": replicas,
         "inflight": inflight,
@@ -79,6 +83,7 @@ def cluster_view(state: DistributedState) -> str:
         "last_result": state.last_result,
         "queues": queues,
         "versions": versions,
+        "hosts": hosts,
     })
 
 

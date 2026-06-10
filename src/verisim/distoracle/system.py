@@ -78,6 +78,7 @@ from verisim.distoracle.reference import (
     elect_edits,
     enqueue_edits,
     gossip_edits,
+    host_op_edits,
     lease_edits,
     lread_edits,
     propose_edits,
@@ -321,6 +322,11 @@ class SystemDistOracle:
             # cluster metadata, so Tier-A and Tier-B compute byte-identical version deltas via the
             # shared helper — the version-compatibility quorum loss is reproduced on the actors too.
             return deploy_edits(state, action, self.config)
+        if name == "host":
+            # The embedded SPEC-6 host op (DS0 incr 23) is node-local — it delegates to the SPEC-6
+            # host oracle on this node's own host state, so Tier-A and Tier-B compute byte-identical
+            # host deltas via the shared helper (the composition is deterministic and node-local).
+            return host_op_edits(state, action, self.config)
         raise ValueError(f"unhandled action {name!r}")  # pragma: no cover - grammar is closed
 
     def _event(self, state: DistributedState, action: DistAction) -> EventAppend:

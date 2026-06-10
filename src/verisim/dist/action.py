@@ -29,6 +29,7 @@ workload and the fault/time medium (the consensus/admin family arrives with the 
     enqueue <node> <queue> <val>    # client: append <val> to the FIFO <queue> (replicated)
     dequeue <node> <queue>          # client: pop the head of <queue> at <node> (delivery per model)
     deploy <node> <version>         # admin: set <node>'s software version (rolling upgrade)
+    host <node> <syscall...>        # host: run a SPEC-6 syscall on <node>'s embedded host
 
 The fault/time family is the source of all interesting dynamics (stale reads under partition,
 convergence after heal+advance) -- the distributed analogue of SPEC-5's ``advance Δt`` and SPEC-6's
@@ -111,6 +112,14 @@ compatibility window). A rolling upgrade that stays inside the window keeps quor
 but a deploy that creates an **incompatible version split with no compatible majority** loses quorum
 — ``propose``/``elect`` become ``no_quorum`` mid-deploy — the deploy broke the cluster (ED29).
 Compatibility gates *consensus* only; the best-effort KV/queue data plane is version-agnostic.
+``host`` (DS0 increment 23) is the **embedded SPEC-6 host** op — the compositional vision §3.1/§4
+name: ``host node <syscall...>`` runs a SPEC-6 syscall (``fork``/``exit``/``setuid``/``open``/
+``write``/``close``) on ``node``'s own embedded host (a process table + per-process fd tables + an
+embedded v0 filesystem), so a cluster node is not just a bag of KV replicas but a real host running
+processes. Each node's host is **isolated** (a ``fork`` on one node does not appear on another), and
+host ops respect the node's up/down status — a crashed node's host is ``unavailable`` (the cross-
+layer crash linkage). The effect delegates to the SPEC-6 ``ReferenceHostOracle``, wrapping its bundle
+delta in a ``HostStep`` edit (ED30).
 """
 
 from __future__ import annotations
@@ -125,6 +134,7 @@ _ARITY: dict[str, int | None] = {
     "cas": 4,  # node key old new
     "advance": 1,  # dt
     "partition": None,  # <nodes> | <nodes> [| ...]
+    "host": None,  # <node> <syscall...>  -- a SPEC-6 host syscall on <node>'s host (DS0 incr 23)
     "heal": 0,
     "crash": 1,  # node
     "restart": 1,  # node
@@ -145,6 +155,7 @@ _ARITY: dict[str, int | None] = {
     "enqueue": 3,  # node queue val  -- append <val> to the FIFO <queue> (DS0 incr 21)
     "dequeue": 2,  # node queue  -- pop the head of <queue> at <node> (DS0 incr 21)
     "deploy": 2,  # node version  -- set <node>'s software version, a rolling upgrade (DS0 incr 22)
+    # ``host`` (variable arity) is in ``_ARITY`` above with value None.
     # Transaction family (DS0 increment 2): a multi-key OCC transaction at a coordinator node.
     "begin": 2,  # node txn  -- open a transaction
     "tget": 3,  # node txn key  -- read <key> within the txn (pins the read version for validation)
@@ -161,6 +172,7 @@ CLIENT_OPS = frozenset({
 TXN_OPS = frozenset({"begin", "tget", "tput", "commit", "abort"})
 QUEUE_OPS = frozenset({"enqueue", "dequeue"})  # the FIFO-queue client ops (DS0 incr 21)
 ADMIN_OPS = frozenset({"deploy"})  # rolling-upgrade / config admin ops (DS0 incr 22)
+HOST_OPS = frozenset({"host"})  # the embedded SPEC-6 host syscall op (DS0 incr 23)
 FAULT_OPS = frozenset(
     {"advance", "partition", "heal", "crash", "restart", "drop", "delay", "reorder", "clock_skew"}
 )
@@ -202,6 +214,19 @@ def parse_dist_action(raw: str) -> DistAction:
     if name == "partition":
         groups = _parse_partition_groups(rest, raw)
         return DistAction(raw=raw, name=name, args=tuple(rest), groups=groups)
+
+    if name == "host":
+        # ``host <node> <syscall...>`` (DS0 incr 23): a SPEC-6 host syscall on <node>'s embedded host.
+        # ``args[0]`` is the node; ``args[1:]`` is the host syscall, validated by the SPEC-6 parser.
+        if len(rest) < 2:
+            raise DistParseError(f"host needs a node and a syscall: {raw!r}")
+        from verisim.host.action import HostParseError, parse_host_action
+
+        try:
+            parse_host_action(" ".join(rest[1:]))
+        except HostParseError as exc:
+            raise DistParseError(f"host: invalid syscall in {raw!r}: {exc}") from exc
+        return DistAction(raw=raw, name=name, args=tuple(rest))
 
     arity = _ARITY[name]
     assert arity is not None

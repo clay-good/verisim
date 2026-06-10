@@ -22,6 +22,8 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING
 
+from verisim.host.state import HostState
+
 if TYPE_CHECKING:
     from verisim.dist.config import DistConfig
 
@@ -231,6 +233,14 @@ class DistributedState:
     # deploys serializes to the exact pre-increment-22 form (purely additive). Consensus only; the
     # best-effort KV/queue data plane is version-agnostic.
     versions: dict[str, int] = field(default_factory=dict)
+    # The embedded SPEC-6 host inside each node (DS0 increment 23, `host`): a per-node `HostState`
+    # (process table + per-process fd tables + the embedded v0 filesystem), so a cluster node is not
+    # just a bag of KV replicas but a real host running processes — the compositional vision SPEC-7
+    # §3.1/§4 names (the `HostDelta` on an embedded subsystem). A node's host is created lazily on its
+    # first `host` syscall (`HostState.initial()`) and is per-node isolated; host ops respect the
+    # node's up/down status (a crashed node's host is unavailable). Empty by default and omitted from
+    # the canonical form, so a cluster that runs no host ops serializes to the exact pre-incr-23 form.
+    hosts: dict[str, HostState] = field(default_factory=dict)
     # The leader lease deadline (DS0 increment 18, the Raft leader-lease, `lease`/`lread`): the
     # global-clock instant through which the current `leader` may serve **local linearizable reads
     # without a quorum** (`lread`) and through which a new `elect` is **blocked** (a successor waits
@@ -283,6 +293,7 @@ class DistributedState:
             members=self.members,
             queues={k: v for k, v in self.queues.items()},
             versions=dict(self.versions),
+            hosts={node: h.copy() for node, h in self.hosts.items()},
             lease_until=self.lease_until,
         )
 

@@ -33,6 +33,7 @@ from verisim.dist.delta import (
     DistDelta,
     DistEdit,
     EventAppend,
+    HostStep,
     LeaseSet,
     LogSet,
     MemberSet,
@@ -53,6 +54,14 @@ from verisim.dist.delta import (
 from verisim.dist.state import DistributedState, LogEntry, Message
 from verisim.dist.txn import txn_step
 from verisim.distoracle.base import DistStepResult
+from verisim.host.action import parse_host_action
+from verisim.host.state import HostState
+from verisim.hostoracle.base import EXIT_OK
+from verisim.hostoracle.reference import ReferenceHostOracle
+
+# A single stateless host sub-oracle, shared across nodes (it owns only a stateless FS sub-oracle):
+# the embedded SPEC-6 host (DS0 incr 23) is computed per-node from the node's own ``HostState``.
+_HOST_ORACLE = ReferenceHostOracle()
 
 
 def causal_deps(state: DistributedState, node: str, key: str) -> tuple[tuple[str, int], ...]:
@@ -616,6 +625,35 @@ def deploy_edits(
     return [VersionSet(node, version), SetResult("deployed", v)], "deployed", v
 
 
+def host_op_edits(
+    state: DistributedState, action: DistAction, config: DistConfig
+) -> tuple[DistDelta, str, str]:
+    """``host node <syscall...>``: a SPEC-6 syscall on a node's embedded host (incr 23, §3.1/§4).
+
+    The compositional vision: each cluster node runs a real SPEC-6 host (process table + fd tables +
+    an embedded v0 filesystem), so a node is not just a bag of KV replicas. The syscall is delegated
+    to the SPEC-6 :class:`~verisim.hostoracle.reference.ReferenceHostOracle` on **this node's** host
+    state (created lazily, ``HostState.initial()``), and its bundle delta is wrapped in a
+    ``HostStep`` edit — the §4 ``HostDelta`` on an embedded subsystem. Per-node **isolated** (a
+    ``fork`` on one node never touches another's host), and host ops respect the node's up/down
+    status: a crashed node's host is ``unavailable`` (the cross-layer crash linkage). The host
+    result maps to ``("ok", stdout)`` on success and ``("host_err", "")`` on a syscall failure
+    (EPERM/EBADF/bad pid). A node-local computation, so Tier-A and Tier-B compute identical host
+    deltas via this shared helper.
+    """
+    node = action.args[0]
+    if node not in config.nodes:
+        return [SetResult("unknown_node", "")], "unknown_node", ""
+    if not state.is_up(node):
+        return [SetResult("unavailable", "")], "unavailable", ""
+    host_state = state.hosts.get(node, HostState.initial())
+    host_action = parse_host_action(" ".join(action.args[1:]))
+    result = _HOST_ORACLE.step(host_state, host_action)
+    status = "ok" if result.exit_code == EXIT_OK else "host_err"
+    value = result.stdout
+    return [HostStep(node, result.delta), SetResult(status, value)], status, value
+
+
 class ReferenceDistOracle:
     """The Tier-A deterministic DES (§5.1). Pure: ``step`` is a function of (state, action)."""
 
@@ -681,6 +719,8 @@ class ReferenceDistOracle:
             return dequeue_edits(state, action, self.config)
         if name == "deploy":
             return deploy_edits(state, action, self.config)
+        if name == "host":
+            return host_op_edits(state, action, self.config)
         raise ValueError(f"unhandled action {name!r}")  # pragma: no cover - grammar is closed
 
     def _event(self, state: DistributedState, node: str, raw: str) -> EventAppend:

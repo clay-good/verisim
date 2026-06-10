@@ -21,6 +21,7 @@ from verisim.dist.state import (
     ReplicaState,
     TxnState,
 )
+from verisim.host.state import from_canonical_host, to_canonical_host
 
 
 def _msg_canonical(m: Message) -> dict[str, Any]:
@@ -128,6 +129,14 @@ def to_canonical(state: DistributedState) -> dict[str, Any]:
     versions = {node: v for node, v in state.versions.items() if v != 0}
     if versions:
         out["versions"] = {node: versions[node] for node in sorted(versions)}
+    # The embedded SPEC-6 hosts (DS0 incr 23): per-node host canonical form (the v0 FS reuses its own
+    # canonical verbatim — the composition is visible in serialization). Omitted when no node runs a
+    # host op, so a host-free cluster serializes to the exact pre-increment-23 form (purely additive).
+    if state.hosts:
+        out["hosts"] = [
+            {"node": node, "host": to_canonical_host(state.hosts[node])}
+            for node in sorted(state.hosts)
+        ]
     return out
 
 
@@ -192,6 +201,7 @@ def from_canonical(d: dict[str, Any]) -> DistributedState:
             (q["queue"], q["node"]): tuple(q["items"]) for q in d.get("queues", [])
         },
         versions=dict(d.get("versions", {})),
+        hosts={h["node"]: from_canonical_host(h["host"]) for h in d.get("hosts", [])},
         lease_until=d.get("lease_until", 0),
     )
 
