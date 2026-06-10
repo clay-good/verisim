@@ -69,6 +69,7 @@ from verisim.dist.state import DistributedState, Message
 from verisim.dist.txn import txn_step
 from verisim.distoracle.base import DistStepResult
 from verisim.distoracle.reference import (
+    append_edits,
     causal_deps,
     clock_skew_edits,
     elect_edits,
@@ -292,6 +293,11 @@ class SystemDistOracle:
             # term), read/written from the global lease deadline, not an actor's local view — so
             # Tier-A and Tier-B compute byte-identical lease/read deltas via the shared helpers.
             return (lease_edits if name == "lease" else lread_edits)(state, action, self.config)
+        if name == "append":
+            # The replicated-log append (DS0 incr 19): like ``propose``, the majority set is the
+            # coordinator's decision from the medium and the log/commit/KV deltas are computed
+            # byte-identically via the shared helper, so Tier-A ≡ Tier-B on the observable channel.
+            return append_edits(state, action, self.config)
         raise ValueError(f"unhandled action {name!r}")  # pragma: no cover - grammar is closed
 
     def _event(self, state: DistributedState, action: DistAction) -> EventAppend:

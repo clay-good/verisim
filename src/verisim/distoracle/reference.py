@@ -29,10 +29,12 @@ from verisim.dist.config import DEFAULT_DIST_CONFIG, DistConfig
 from verisim.dist.delta import (
     ClockSet,
     ClockSkewSet,
+    CommitIndexSet,
     DistDelta,
     DistEdit,
     EventAppend,
     LeaseSet,
+    LogSet,
     MsgDeliver,
     MsgDrop,
     MsgReschedule,
@@ -45,7 +47,7 @@ from verisim.dist.delta import (
     SetResult,
     apply,
 )
-from verisim.dist.state import DistributedState, Message
+from verisim.dist.state import DistributedState, LogEntry, Message
 from verisim.dist.txn import txn_step
 from verisim.distoracle.base import DistStepResult
 
@@ -345,6 +347,70 @@ def lread_edits(
     return [SetResult("ok", replica.value)], "ok", replica.value
 
 
+def append_edits(
+    state: DistributedState, action: DistAction, config: DistConfig
+) -> tuple[DistDelta, str, str]:
+    """``append node key val``: Raft replicated-log append + majority commit (DS0 incr 19, §5.1).
+
+    The replicated-log path the spec named since increment 1 — what the one-shot ``propose`` (incr
+    16) elided. The current leader appends a ``LogEntry(term, index, key, value)`` to its log and
+    replicates it to the **reachable** followers, who **adopt the leader's full log** in one step —
+    appending the new entry and, where their tail diverged, truncating the conflicting *uncommitted*
+    entries (the **log-matching reconciliation**: a follower's log always becomes a prefix-
+    consistent copy of the leader's). The entry **commits iff a majority holds it**, advancing
+    the monotone ``commit_index``; the committed prefix is then folded into the KV state machine on
+    every reachable node — a key's version is the count of its committed writes, value the last —
+    which also **backfills a rejoined follower** that missed committed entries while partitioned.
+
+    Two rejections + two outcomes:
+
+      - ``unavailable`` (crashed) / ``not_leader`` (only the leader appends; result carries leader).
+      - ``("appended", str(index))`` — the entry reached a majority and committed (applied to KV).
+      - ``("uncommitted", str(index))`` — a minority-stranded leader appended the entry to its (and
+        the reachable followers') log, but it did **not** commit, so it is **not** applied to the KV
+        and may be overwritten by a higher-term leader's entry at the same index (the safety the
+        one-shot ``propose`` could not express — ED26).
+
+    Like ``propose``, the majority set is read from the partition/down medium (a coordinator-level
+    decision), so Tier-A and Tier-B compute byte-identical deltas via this shared helper.
+    """
+    node, key, val = action.args[0], action.args[1], action.args[2]
+    if not state.is_up(node):
+        return [SetResult("unavailable", "")], "unavailable", ""
+    if state.leader != node:
+        cur = state.leader or ""
+        return [SetResult("not_leader", cur)], "not_leader", cur
+    leader_log = state.logs.get(node, ())
+    index = len(leader_log)
+    new_log = (*leader_log, LogEntry(state.term, index, key, val))
+    reachable = [p for p in config.nodes if state.connected(node, p) and state.is_up(p)]
+    committed = len(reachable) >= len(config.nodes) // 2 + 1
+    edits: DistDelta = []
+    # every reachable node adopts the leader's log (reconciling any divergent uncommitted tail)
+    for p in reachable:
+        if state.logs.get(p, ()) != new_log:
+            edits.append(LogSet(p, new_log))
+    if not committed:
+        edits.append(SetResult("uncommitted", str(index)))
+        return edits, "uncommitted", str(index)
+    new_commit = index + 1
+    edits.append(CommitIndexSet(new_commit))
+    # fold the committed prefix into the KV state machine: a key's version is the count of its
+    # committed writes, its value the last. Applied to every reachable node, backfilling any that
+    # missed committed entries while partitioned (so the KV never diverges from the committed log).
+    folded: dict[str, tuple[int, str]] = {}
+    for e in new_log[:new_commit]:
+        prev = folded.get(e.key)
+        folded[e.key] = ((prev[0] + 1) if prev else 1, e.value)
+    for p in reachable:
+        for k, (ver, value) in folded.items():
+            rep = state.replicas.get((k, p))
+            if rep is None or (rep.version, rep.value) != (ver, value):
+                edits.append(ReplicaWrite(k, p, ver, value))
+    edits.append(SetResult("appended", str(index)))
+    return edits, "appended", str(index)
+
+
 class ReferenceDistOracle:
     """The Tier-A deterministic DES (§5.1). Pure: ``step`` is a function of (state, action)."""
 
@@ -398,6 +464,8 @@ class ReferenceDistOracle:
             return lease_edits(state, action, self.config)
         if name == "lread":
             return lread_edits(state, action, self.config)
+        if name == "append":
+            return append_edits(state, action, self.config)
         raise ValueError(f"unhandled action {name!r}")  # pragma: no cover - grammar is closed
 
     def _event(self, state: DistributedState, node: str, raw: str) -> EventAppend:

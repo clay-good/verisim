@@ -14,7 +14,7 @@ specification to be checked against.
 > makes stale-reads-under-partition the central dynamic). **Tier-B (the system oracle) now ships**
 > (§8 below). Multi-key transactions with the four SQL isolation levels (§9), the OCC/2PL split, the
 > complete §3.4 fault grammar (`drop`/`delay`/`reorder`/`clock_skew`), the `anti_entropy`/`gossip`
-> convergence ops, and the Raft-subset consensus core (`elect`/`propose`/`step_down`/`lease`, §3.3) have all since shipped
+> convergence ops, and the Raft-subset consensus core (`elect`/`propose`/`step_down`/`lease`/`append`, §3.3) have all since shipped
 > as later DS increments. The embedded SPEC-6 host inside each node and the external real-binary DST
 > runtime remain later increments (SPEC-7 §5, §13); each will extend this document.
 
@@ -197,6 +197,7 @@ A `tget`/`tput`/`commit`/`abort` on an unknown txn (or one opened at a different
 | `step_down <node>` (DS0 increment 17) | **voluntary relinquishment**: clear `leader` (`→ None`) **at the same `term`** iff `node` is the current leader — the graceful counterpart to `elect`'s higher-term deposition, leaving the cluster leaderless until a fresh `elect`. Rejected `("not_leader", current_leader)` if `node` is not the leader (so a non-leader or a second `step_down` is a no-op reject — idempotently safe); `("unavailable", "")` if crashed. Needs **no quorum** (it reads only the node's own leadership), so a minority-stranded leader can relinquish where its `propose` is `no_quorum`. On success `("stepped_down", str(term))`. Also **releases the lease** (DS0 incr 18). Touches no replica. |
 | `lease <node> <dt>` (DS0 increment 18) | **leader read lease**: iff `node` is the current leader, set the global-clock lease deadline `lease_until = clock + dt` (a `LeaseSet`). Through that deadline the leader may serve `lread` without a quorum and a new `elect` is fenced. Rejected `("not_leader", current_leader)` / `("unavailable", "")`. On success `("leased", str(until))`. Touches no replica. |
 | `lread <node> <key>` (DS0 increment 18) | **leader-lease local read**: iff `node` is the current leader **and** `clock < lease_until` and up, return `node`'s local replica value with **no quorum round-trip** — linearizable w.r.t. consensus (`propose`) writes (the leader is always in a propose's commit majority, and a live lease guarantees its term is uncontested). So a minority-stranded leader can still `lread` where its `propose` is `no_quorum`. Rejected `("lease_expired", "")` if no live lease; `("not_leader", current_leader)` if not the leader (a deposed leader cannot read off a stale lease); `("unavailable"/"no_replica", "")` otherwise. On success `("ok", value)`. A pure read. |
+| `append <node> <key> <val>` (DS0 increment 19) | **replicated-log append**: iff `node` is the current leader, append a `LogEntry(term, index, key, value)` to its log and replicate to the reachable followers, who **adopt the leader's prefix** (a `LogSet` per node — overwriting any divergent *uncommitted* tail, the log-matching reconciliation). It **commits iff a majority holds it** (advancing the monotone `commit_index` and folding the committed prefix into the KV — a key's version is the count of its committed writes — which backfills a rejoined follower): `("appended", str(index))`. A minority-stranded leader still appends locally but `("uncommitted", str(index))` — not applied to the KV, overwritable by a higher-term leader. Rejected `("not_leader", current_leader)` / `("unavailable", "")`. |
 
 `advance` is the engine of the distributed dynamics — it is where replication actually happens and
 where partition/crash make their effect felt. Delivery is simulated **sequentially within one
@@ -257,7 +258,7 @@ and leaves every prior golden, hash, and tokenization unchanged. ED19
 ([`experiments/ed19.py`](../src/verisim/experiments/ed19.py)) pins both findings; Tier-B reproduces the
 read-repair bit-for-bit.
 
-### 3.3 `elect` / `propose` / `step_down` / `lease` — the Raft-subset consensus core (DS0 increments 16–18)
+### 3.3 `elect` / `propose` / `step_down` / `lease` / `append` — the Raft-subset consensus core (DS0 increments 16–19)
 
 `elect` and `propose` are the **consensus** family — the third action family (SPEC-7 §3.2) and the
 §4 `ProtocolStep` the spec named. They add the one safety property a leaderless `quorum` write
@@ -362,12 +363,39 @@ linearizable with respect to consensus writes. The real per-node lease timer und
 neither the grant nor the expiry here.) ED25 ([`experiments/ed25.py`](../src/verisim/experiments/ed25.py))
 pins both panels with Tier-B agreeing on every transition.
 
+**`append node key val` — the replicated log (DS0 increment 19).** Where increment 16's `propose`
+was a *one-shot* leader-fenced commit, `append` adds the explicit **Raft log** underneath: the
+leader appends a `LogEntry(term, index, key, value)` to its log and replicates it to the reachable
+followers, who **adopt the leader's prefix** in one step (overwriting any divergent *uncommitted*
+tail — the log-matching reconciliation). The entry **commits iff a majority holds it**, advancing the
+monotone `commit_index` and folding the committed prefix into the KV state machine (a key's version
+is the count of its committed writes, its value the last) — which also **backfills a rejoined
+follower** that missed committed entries while partitioned, so the KV never diverges from the
+committed log. Two safety properties the one-shot `propose` could not express: a committed entry is
+**permanent** (the commit index is monotone — the metamorphic tier refutes any backward move), and an
+**uncommitted** entry (a minority leader appended it but could not reach a majority) is never applied
+to the KV and may be **overwritten** by a higher-term leader's entry at the same index.
+
+```
+elect n0; append n0 x a                            # committed a@0 (majority): commit_index 1, KV x=a
+partition n0 | n1 n2; append n0 x b                # ("uncommitted","1") — b@1 on n0's log, NOT in KV
+elect n1; append n1 x c                            # term 2 commits c@1 on {n1,n2}: commit_index 2
+heal; append n1 x d                                # n0 reconciles: b@1 overwritten by c@1, then d@2
+```
+
+`append` reads the majority from the partition/down medium (a coordinator-level decision, like
+`propose`), so Tier-A and Tier-B compute byte-identical log/commit/KV deltas via the shared
+`append_edits` helper; the `logs`/`commit_index` are omitted from the canonical form until the first
+`append`. ED26 ([`experiments/ed26.py`](../src/verisim/experiments/ed26.py)) pins both panels
+(commit-requires-a-majority; log-matching reconciliation) with Tier-B agreeing on every transition.
+
 ## 4. The delta and the `apply == oracle` invariant
 
 The oracle returns the next state **and** the structured delta that produces it
 ([`verisim.dist.delta`](../src/verisim/dist/delta.py)): `ReplicaWrite`, `MsgSend`/`MsgDeliver`/
-`MsgDrop`, `EventAppend`, `PartitionSet`, `NodeDown`/`NodeUp`, `ClockSet`, `SetResult`. The
-**M1-analogue invariant** holds by construction and is tested on every transition:
+`MsgDrop`, `EventAppend`, `PartitionSet`, `NodeDown`/`NodeUp`, `ClockSet`, the consensus
+`ProtocolStep`/`LeaseSet` and the replicated-log `LogSet`/`CommitIndexSet` (DS0 incr 16–19), and
+`SetResult`. The **M1-analogue invariant** holds by construction and is tested on every transition:
 
 ```
 apply(state, oracle.step(state, action).delta) == oracle.step(state, action).state

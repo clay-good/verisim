@@ -23,6 +23,7 @@ workload and the fault/time medium (the consensus/admin family arrives with the 
     step_down <node>                # consensus: the current leader relinquishes (leaderless, same term)
     lease <node> <dt>               # consensus: the leader takes a read lease until clock+<dt>
     lread <node> <key>              # consensus: a leader-lease local linearizable read (no quorum)
+    append <node> <key> <val>       # consensus: append <key>=<val> to the replicated log (Raft log)
 
 The fault/time family is the source of all interesting dynamics (stale reads under partition,
 convergence after heal+advance) -- the distributed analogue of SPEC-5's ``advance Δt`` and SPEC-6's
@@ -76,6 +77,13 @@ partitioned into the minority can still ``lread`` (local, no quorum) where its `
 rejected ``lease_held`` until the incumbent's lease expires (a successor waits it out), so leadership
 cannot change hands under a live lease — but ``step_down`` *releases* the lease immediately, so a
 graceful handoff needs no wait where a crashed leader forces the cluster to wait the lease out (ED25).
+``append`` (DS0 increment 19) is the **replicated-log** path the spec named since increment 1:
+``append node key val`` appends a ``(term, index, key, value)`` entry to the leader's log and
+replicates it to the reachable followers (who adopt the leader's prefix, **overwriting any divergent
+uncommitted tail** — the log-matching reconciliation), committing it (and applying it to the KV)
+**iff a majority holds it**. A minority-stranded leader still appends locally (``uncommitted``) but
+does not commit, so its entry can be overwritten by a higher-term leader — the Raft log-matching
+safety the one-shot ``propose`` could not express (ED26).
 """
 
 from __future__ import annotations
@@ -104,6 +112,7 @@ _ARITY: dict[str, int | None] = {
     "step_down": 1,  # node  -- the current leader relinquishes; leaderless at the same term (incr 17)
     "lease": 2,  # node dt  -- the leader takes a read lease until clock+dt (DS0 incr 18)
     "lread": 2,  # node key  -- a leader-lease local linearizable read, no quorum (DS0 incr 18)
+    "append": 3,  # node key val  -- append to the Raft replicated log; commit on majority (incr 19)
     # Transaction family (DS0 increment 2): a multi-key OCC transaction at a coordinator node.
     "begin": 2,  # node txn  -- open a transaction
     "tget": 3,  # node txn key  -- read <key> within the txn (pins the read version for validation)
@@ -122,7 +131,7 @@ FAULT_OPS = frozenset(
 # convergence mechanism, DS0 increment 12) and ``gossip`` (pairwise anti-entropy, incr 15) are the
 # convergence ops; ``elect``/``propose`` (the Raft-subset consensus core, incr 16) are the consensus
 # ops. ``CONSENSUS_OPS`` is the subset that reads/writes the leader/term metadata.
-CONSENSUS_OPS = frozenset({"elect", "propose", "step_down", "lease", "lread"})
+CONSENSUS_OPS = frozenset({"elect", "propose", "step_down", "lease", "lread", "append"})
 PROTOCOL_OPS = frozenset({"anti_entropy", "gossip"}) | CONSENSUS_OPS
 
 

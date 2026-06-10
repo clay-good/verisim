@@ -104,6 +104,25 @@ class TxnState:
 
 
 @dataclass(frozen=True)
+class LogEntry:
+    """One entry in a node's replicated consensus log (SPEC-7 §5.1, DS0 increment 19, Raft log).
+
+    A Raft log entry: the ``(term, index)`` that stamps when and by which leader it was proposed,
+    plus the ``(key, value)`` command it carries. ``index`` is the entry's 0-based position in the
+    log. The **log-matching property** holds: if two nodes' logs hold an entry with the same
+    ``(term, index)`` they agree on every entry up to it, because a follower always adopts the
+    leader's prefix (overwriting any divergent, uncommitted tail). A committed entry (index <
+    ``DistributedState.commit_index``) is permanent; an uncommitted one (a leader appended it but
+    could not reach a majority) may be overwritten by a higher-term leader's entry at the same index.
+    """
+
+    term: int
+    index: int
+    key: str
+    value: str
+
+
+@dataclass(frozen=True)
 class Message:
     """An in-flight replication message: a write the coordinator is propagating to a peer replica.
 
@@ -178,6 +197,15 @@ class DistributedState:
     # hash is unchanged.
     term: int = 0
     leader: str | None = None
+    # The Raft replicated log (DS0 increment 19, `append`): per-node logs of `LogEntry`s, keyed by
+    # node_id, and `commit_index` — the length of the committed prefix (entries `0..commit_index-1`
+    # are committed, i.e. held by a majority and applied to the KV state machine; entries beyond it
+    # are uncommitted and may be overwritten by a higher-term leader). The leader's log is
+    # authoritative; followers adopt its prefix (the log-matching property). Both at their empty/0
+    # defaults until the first `append`, and omitted from the canonical form there, so a cluster that
+    # never uses the replicated log serializes to the exact pre-increment-19 form (purely additive).
+    logs: dict[str, tuple[LogEntry, ...]] = field(default_factory=dict)
+    commit_index: int = 0
     # The leader lease deadline (DS0 increment 18, the Raft leader-lease, `lease`/`lread`): the
     # global-clock instant through which the current `leader` may serve **local linearizable reads
     # without a quorum** (`lread`) and through which a new `elect` is **blocked** (a successor waits
@@ -225,6 +253,8 @@ class DistributedState:
             skew=dict(self.skew),
             term=self.term,
             leader=self.leader,
+            logs={node: entries for node, entries in self.logs.items()},
+            commit_index=self.commit_index,
             lease_until=self.lease_until,
         )
 

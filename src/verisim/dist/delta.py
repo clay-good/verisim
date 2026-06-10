@@ -17,7 +17,14 @@ from __future__ import annotations
 from dataclasses import dataclass, replace
 from typing import Any
 
-from verisim.dist.state import DistributedState, Event, Message, ReplicaState, TxnState
+from verisim.dist.state import (
+    DistributedState,
+    Event,
+    LogEntry,
+    Message,
+    ReplicaState,
+    TxnState,
+)
 
 
 @dataclass(frozen=True)
@@ -193,6 +200,33 @@ class LeaseSet:
 
 
 @dataclass(frozen=True)
+class LogSet:
+    """Set one node's replicated log to ``entries`` (DS0 increment 19, the Raft log, `append`).
+
+    Setting the whole log (rather than an incremental append) makes a follower **adopt the leader's
+    prefix in one edit** — appending the new entry and, when the follower's tail diverged, truncating
+    the conflicting uncommitted entries in the same step (the log-matching reconciliation). ``entries``
+    is the node's full log after the step. Empty logs are omitted from the canonical form, so a
+    cluster that never appends is byte-identical to the pre-increment-19 form.
+    """
+
+    node: str
+    entries: tuple[LogEntry, ...]
+
+
+@dataclass(frozen=True)
+class CommitIndexSet:
+    """Advance the committed-prefix length (DS0 increment 19): entries ``0..index-1`` are committed.
+
+    The commit index is **monotone** — committed entries are permanent (a Raft safety invariant the
+    metamorphic tier enforces). It advances only when a log entry reaches a majority of nodes. ``0``
+    (nothing committed) is the default and is omitted from the canonical form.
+    """
+
+    index: int
+
+
+@dataclass(frozen=True)
 class SetResult:
     """The client-visible result of the step: ``(status, value_token)``."""
 
@@ -217,6 +251,8 @@ DistEdit = (
     | LockSet
     | ProtocolStep
     | LeaseSet
+    | LogSet
+    | CommitIndexSet
     | SetResult
 )
 DistDelta = list[DistEdit]
@@ -275,6 +311,13 @@ def apply(state: DistributedState, delta: DistDelta) -> DistributedState:
             s.leader = edit.leader
         elif isinstance(edit, LeaseSet):
             s.lease_until = edit.until
+        elif isinstance(edit, LogSet):
+            if edit.entries:
+                s.logs[edit.node] = edit.entries
+            else:
+                s.logs.pop(edit.node, None)  # an empty log leaves no residue in the canonical form
+        elif isinstance(edit, CommitIndexSet):
+            s.commit_index = edit.index
         else:
             assert isinstance(edit, SetResult)
             s.last_result = (edit.status, edit.value)
@@ -328,6 +371,11 @@ def edit_to_dict(edit: DistEdit) -> dict[str, Any]:
         return {"op": "ProtocolStep", "kind": edit.kind, "term": edit.term, "leader": edit.leader}
     if isinstance(edit, LeaseSet):
         return {"op": "LeaseSet", "until": edit.until}
+    if isinstance(edit, LogSet):
+        return {"op": "LogSet", "node": edit.node,
+                "entries": [[e.term, e.index, e.key, e.value] for e in edit.entries]}
+    if isinstance(edit, CommitIndexSet):
+        return {"op": "CommitIndexSet", "index": edit.index}
     assert isinstance(edit, SetResult)
     return {"op": "SetResult", "status": edit.status, "value": edit.value}
 
@@ -375,6 +423,10 @@ def edit_from_dict(d: dict[str, Any]) -> DistEdit:
         return ProtocolStep(d["kind"], d["term"], d["leader"])
     if op == "LeaseSet":
         return LeaseSet(d["until"])
+    if op == "LogSet":
+        return LogSet(d["node"], tuple(LogEntry(t, i, k, v) for t, i, k, v in d["entries"]))
+    if op == "CommitIndexSet":
+        return CommitIndexSet(d["index"])
     if op == "SetResult":
         return SetResult(d["status"], d["value"])
     raise ValueError(f"unknown edit op {op!r}")

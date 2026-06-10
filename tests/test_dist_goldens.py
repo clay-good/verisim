@@ -384,6 +384,36 @@ def test_golden_lease_serves_a_local_read_and_pins_the_deadline():
     }
 
 
+def test_golden_append_replicates_the_log_and_commits_on_majority():
+    # The Raft-log golden (SPEC-7 §5.1, DS0 incr 19): n0 leads (term 1) and appends x=a then x=b to
+    # the replicated log. With full connectivity both commit on the majority — every node holds an
+    # identical 2-entry log (log-matching), commit_index = 2, and the KV folds the committed log
+    # (x's version is the count of committed writes = 2, value the last = b). The log + commit_index
+    # appear in the canonical form (omitted until the first append).
+    log_x = [
+        {"term": 1, "index": 0, "key": "x", "value": "a"},
+        {"term": 1, "index": 1, "key": "x", "value": "b"},
+    ]
+    final = _final(["elect n0", "append n0 x a", "append n0 x b"])
+    assert final == {
+        "replicas": [
+            _rep("x", "n0", 2, "b"), _rep("x", "n1", 2, "b"), _rep("x", "n2", 2, "b"), *_boot_y()
+        ],
+        "log": [],  # consensus/log ops are protocol-layer; no causal event
+        "inflight": [],
+        "partitions": [["n0", "n1", "n2"]],
+        "down": [],
+        "clock": 0,
+        "next_event_id": 0,
+        "next_msg_id": 0,
+        "last_result": ["appended", "1"],
+        "term": 1,
+        "leader": "n0",
+        "logs": [{"node": n, "entries": log_x} for n in ("n0", "n1", "n2")],  # log-matching
+        "commit_index": 2,
+    }
+
+
 def test_golden_linearizable_replicates_synchronously():
     # A single put commits to *every* replica in the same step — no in-flight, no advance needed,
     # the strong-consistency counterpart of the eventual-consistency async-then-converge golden.

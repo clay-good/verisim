@@ -13,7 +13,14 @@ import hashlib
 import json
 from typing import Any
 
-from verisim.dist.state import DistributedState, Event, Message, ReplicaState, TxnState
+from verisim.dist.state import (
+    DistributedState,
+    Event,
+    LogEntry,
+    Message,
+    ReplicaState,
+    TxnState,
+)
 
 
 def _msg_canonical(m: Message) -> dict[str, Any]:
@@ -87,6 +94,20 @@ def to_canonical(state: DistributedState) -> dict[str, Any]:
     # exact pre-increment-18 form (purely additive, like ``skew``/``term``/``leader``).
     if state.lease_until != 0:
         out["lease_until"] = state.lease_until
+    # The Raft log (DS0 incr 19): nodes with a non-empty log, sorted, each as an ordered entry list;
+    # ``commit_index`` when non-zero. Both omitted at their empty/0 defaults, so a cluster that never
+    # appends serializes to the exact pre-increment-19 form (purely additive, like term/leader/lease).
+    logs = {node: entries for node, entries in state.logs.items() if entries}
+    if logs:
+        out["logs"] = [
+            {"node": node, "entries": [
+                {"term": e.term, "index": e.index, "key": e.key, "value": e.value}
+                for e in logs[node]
+            ]}
+            for node in sorted(logs)
+        ]
+    if state.commit_index != 0:
+        out["commit_index"] = state.commit_index
     return out
 
 
@@ -139,6 +160,13 @@ def from_canonical(d: dict[str, Any]) -> DistributedState:
         skew=skew,
         term=d.get("term", 0),
         leader=d.get("leader"),
+        logs={
+            entry["node"]: tuple(
+                LogEntry(e["term"], e["index"], e["key"], e["value"]) for e in entry["entries"]
+            )
+            for entry in d.get("logs", [])
+        },
+        commit_index=d.get("commit_index", 0),
         lease_until=d.get("lease_until", 0),
     )
 

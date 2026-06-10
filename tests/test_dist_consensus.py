@@ -18,8 +18,9 @@ import pytest
 
 from verisim.dist import DistConfig, DistributedState, apply, parse_dist_action
 from verisim.dist.action import CONSENSUS_OPS, PROTOCOL_OPS, DistParseError
-from verisim.dist.delta import LeaseSet, ProtocolStep
+from verisim.dist.delta import CommitIndexSet, LeaseSet, LogSet, ProtocolStep
 from verisim.dist.serialize import from_canonical, state_hash, to_canonical
+from verisim.dist.state import LogEntry
 from verisim.distoracle.differential import cluster_view
 from verisim.distoracle.reference import ReferenceDistOracle
 from verisim.distoracle.system import SystemDistOracle
@@ -48,13 +49,15 @@ def test_grammar_parses_elect_and_propose() -> None:
     assert parse_dist_action("step_down n0").name == "step_down"
     assert parse_dist_action("lease n0 5").args == ("n0", "5")
     assert parse_dist_action("lread n0 x").args == ("n0", "x")
-    assert sorted(CONSENSUS_OPS) == ["elect", "lease", "lread", "propose", "step_down"]
+    assert parse_dist_action("append n0 x b").args == ("n0", "x", "b")
+    assert sorted(CONSENSUS_OPS) == ["append", "elect", "lease", "lread", "propose", "step_down"]
     assert CONSENSUS_OPS <= PROTOCOL_OPS
 
 
 @pytest.mark.parametrize("bad", ["elect", "elect n0 n1", "propose n0 x", "propose n0 x b c",
                                  "step_down", "step_down n0 n1", "lease n0", "lease n0 0",
-                                 "lease n0 -1", "lread n0", "lread n0 x y"])
+                                 "lease n0 -1", "lread n0", "lread n0 x y", "append n0 x",
+                                 "append n0 x b c"])
 def test_grammar_rejects_bad_arity(bad: str) -> None:
     with pytest.raises(DistParseError):
         parse_dist_action(bad)
@@ -322,6 +325,90 @@ def test_canonical_form_omits_lease_until_until_first_lease() -> None:
     assert to_canonical(leased)["lease_until"] == 5  # appears only after a lease
 
 
+# --- append: the Raft replicated log (DS0 increment 19) -----------------------------------------
+
+def test_append_by_leader_commits_on_majority_and_grows_the_log() -> None:
+    s = _run(_ref(), ["elect n0", "append n0 x a"])
+    assert s.last_result == ("appended", "0")
+    assert s.commit_index == 1  # the entry committed (a majority holds it)
+    assert all(s.logs[n] == (LogEntry(1, 0, "x", "a"),) for n in CONFIG.nodes)  # log-matching
+    assert all(s.replicas[("x", n)].value == "a" for n in CONFIG.nodes)  # applied to the KV
+
+
+def test_append_by_non_leader_is_not_leader() -> None:
+    s = _run(_ref(), ["elect n0"])
+    r = _ref().step(s, parse_dist_action("append n1 x a"))
+    assert (r.status, r.value) == ("not_leader", "n0")
+
+
+def test_minority_leader_append_is_uncommitted_but_retained_on_its_log() -> None:
+    # A leader stranded in the minority appends to its own log, but does not commit (no majority),
+    # so it is not applied to the KV and may later be overwritten.
+    s = _run(_ref(), ["elect n0", "append n0 x a", "partition n0 | n1 n2", "append n0 x b"])
+    assert s.last_result == ("uncommitted", "1")
+    assert s.commit_index == 1  # unchanged: b did not commit
+    assert s.logs["n0"][1] == LogEntry(1, 1, "x", "b")  # b is on n0's log...
+    assert s.replicas[("x", "n0")].value == "a"  # ...but NOT applied to the KV (still committed a)
+
+
+def test_commit_index_is_monotone_and_log_matching_holds() -> None:
+    s = _run(_ref(), ["elect n0", "append n0 x a", "append n0 x b", "append n0 x c"])
+    assert s.commit_index == 3
+    # all nodes share an identical committed log (the log-matching property)
+    expected = (LogEntry(1, 0, "x", "a"), LogEntry(1, 1, "x", "b"), LogEntry(1, 2, "x", "c"))
+    assert all(s.logs[n] == expected for n in CONFIG.nodes)
+    # the KV folds the committed log: x's version is the count of committed writes (3), value last
+    assert all((s.replicas[("x", n)].version, s.replicas[("x", n)].value) == (3, "c")
+               for n in CONFIG.nodes)
+
+
+def test_log_matching_reconciliation_overwrites_a_deposed_leaders_uncommitted_tail() -> None:
+    # The headline safety property: n0 appends an uncommitted entry in the minority, is deposed by
+    # n1 (higher term) which commits a conflicting entry at the same index; after heal, n0's
+    # uncommitted entry is overwritten and every live log is identical.
+    s = _run(_ref(), [
+        "elect n0", "append n0 x a",          # committed a@0
+        "partition n0 | n1 n2", "append n0 x b",  # uncommitted b@1 on n0
+        "elect n1", "append n1 x c",          # committed c@1 (term 2) on the majority
+        "heal", "append n1 x d",              # n0 reconciles: b@1 overwritten by c@1, then d@2
+    ])
+    # n0's uncommitted b is gone; index 1 holds the committed c (term 2); logs are identical
+    assert all(e.value != "b" for e in s.logs["n0"])
+    assert s.logs["n0"][1] == LogEntry(2, 1, "x", "c")
+    assert s.logs["n0"] == s.logs["n1"] == s.logs["n2"]
+    assert s.commit_index == 3
+    assert s.replicas[("x", "n0")].value == "d"  # n0's KV converged to the committed value
+
+
+def test_append_crashed_leader_is_unavailable() -> None:
+    s = _run(_ref(), ["elect n0", "crash n0"])
+    assert _ref().step(s, parse_dist_action("append n0 x a")).status == "unavailable"
+
+
+def test_log_set_and_commit_index_apply_and_round_trip() -> None:
+    s = DistributedState.initial(CONFIG)
+    s2 = apply(s, [LogSet("n0", (LogEntry(1, 0, "x", "a"),)), CommitIndexSet(1)])
+    assert s2.logs["n0"] == (LogEntry(1, 0, "x", "a"),) and s2.commit_index == 1
+    assert from_canonical(to_canonical(s2)) == s2
+
+
+def test_canonical_form_omits_log_and_commit_index_until_first_append() -> None:
+    s = _run(_ref(), ["elect n0"])
+    canon = to_canonical(s)
+    assert "logs" not in canon and "commit_index" not in canon
+    appended = _ref().step(s, parse_dist_action("append n0 x a")).state
+    canon2 = to_canonical(appended)
+    assert canon2["commit_index"] == 1 and len(canon2["logs"]) == len(CONFIG.nodes)
+
+
+def test_metamorphic_refutes_backward_commit_index() -> None:
+    tiers = TieredOracle(CONFIG)
+    s = _run(_ref(), ["elect n0", "append n0 x a", "append n0 x b"])  # commit_index 2
+    backward = apply(s, [CommitIndexSet(1)])  # un-commits an entry
+    v = tiers.check("metamorphic", s, parse_dist_action("append n0 x c"), backward)
+    assert v.refuted and "commit index went backward" in v.reason
+
+
 # --- delta + serialization ----------------------------------------------------------------------
 
 def test_protocol_step_applies_and_round_trips() -> None:
@@ -403,6 +490,10 @@ def test_tier_a_equals_tier_b_over_a_consensus_trajectory() -> None:
         "partition n0 | n1 n2", "lread n0 y",   # minority leader still reads locally (no quorum)
         "heal", "advance 6", "lread n0 y",      # lease expired -> lease_expired
         "elect n1", "advance 2",                # lease expired, so the election now succeeds
+        "append n1 x a",                        # replicated-log append, committed on the majority
+        "partition n0 n1 | n2", "append n1 x b",  # committed on {n0,n1}; n2 stranded
+        "elect n2",                             # n2 cannot elect (minority) -> stays n1's term
+        "heal", "append n1 x c",                # n2 reconciles + backfills on the next append
     ]
     for cmd in script:
         a = parse_dist_action(cmd)

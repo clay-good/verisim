@@ -1,0 +1,10 @@
+panel,metric,value,detail
+commit,majority_commit,1.0000,commit_index_grows_over_3_clusters
+commit,minority_uncommitted,1.0000,commit_index_unchanged_in_minority
+commit,minority_entry_retained,1.0000,on_the_leader_log_not_lost
+commit,commit_index_monotone,1.0000,never_backward
+reconcile,uncommitted_not_applied,1.0000,kv_only_reflects_committed
+reconcile,deposed_entry_overwritten,1.0000,stale_tail_replaced
+reconcile,log_matching_after_heal,1.0000,all_live_logs_identical
+reconcile,kv_reflects_committed_log,1.0000,rejoined_node_converges
+tier_b,all,1.0000,steps=20

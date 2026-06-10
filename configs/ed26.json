@@ -1,0 +1,9 @@
+{
+  "name": "ed26-log",
+  "cluster_sizes": [3, 5, 7],
+  "key": "x",
+  "v_a": "a",
+  "v_b": "b",
+  "v_c": "c",
+  "v_d": "d"
+}

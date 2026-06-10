@@ -126,6 +126,12 @@ class TieredOracle:
             return True, f"election term went backward {state.term}->{predicted.term}"
         if predicted.leader is not None and predicted.leader not in set(self.config.nodes):
             return True, f"leader {predicted.leader!r} is not a cluster node"
+        # The Raft commit index (DS0 incr 19) is monotone — a committed entry is permanent, so the
+        # committed-prefix length can never shrink. A reference-free safety invariant any legal log
+        # step satisfies, so a prediction that "un-commits" an entry is refuted at the cheap tier.
+        if predicted.commit_index < state.commit_index:
+            return True, (f"commit index went backward "
+                          f"{state.commit_index}->{predicted.commit_index}")
         return False, ""
 
     def _cycle(
@@ -134,11 +140,11 @@ class TieredOracle:
         """History admissibility: a read never mutates state; versions jump by <=1 per step."""
         if action.name == "get" and predicted.replicas != state.replicas:
             return True, "a read (get) mutated a replica -- inadmissible history"
-        if action.name in ("anti_entropy", "gossip"):
-            # read-repair (DS0 incr 12) and pairwise gossip (incr 15) legitimately jump a stale
-            # replica *several* versions at once (adopting the latest reachable, skipping the
-            # versions it never received), so the "jump by <=1" rule does not apply -- defer to
-            # bit-exact.
+        if action.name in ("anti_entropy", "gossip", "append"):
+            # read-repair (DS0 incr 12), pairwise gossip (incr 15), and the committed-log fold of
+            # ``append`` (incr 19 — a rejoined follower backfills several missed committed entries
+            # at once) legitimately jump a stale replica *several* versions in one step, so the
+            # "jump by <=1" rule does not apply -- defer to bit-exact.
             return False, ""
         for (obj, node), r in predicted.replicas.items():
             prior = state.replicas.get((obj, node))
@@ -182,11 +188,12 @@ class TieredOracle:
             # read-set conflict; the exact post-state depends on the buffered writes the symbolic
             # tier does not track, so it defers to bit-exact (no cheap-tier refutation here).
             return False, ""
-        if name == "propose":
-            # ``propose`` (DS0 incr 16) is a leader-fenced write: whether it commits at all
-            # depends on leadership + the reachable majority, and on commit it writes *several*
-            # replicas synchronously (the majority) — the exact post-state depends on the medium the
-            # symbolic tier does not recompute, so it defers to bit-exact (like the quorum ``put``).
+        if name in ("propose", "append"):
+            # ``propose`` (DS0 incr 16) is a leader-fenced write and ``append`` (incr 19) a
+            # replicated-log append: whether either commits depends on leadership + the reachable
+            # majority, and on commit each writes *several* replicas (and ``append`` also rewrites
+            # logs + the commit index) — the exact post-state depends on the medium the symbolic
+            # does not recompute, so both defer to bit-exact (like the quorum ``put``).
             return False, ""
         if name in ("put", "cas"):
             node, key = action.args[0], action.args[1]
