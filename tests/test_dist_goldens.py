@@ -360,6 +360,30 @@ def test_golden_step_down_handoff_leaderless_gap_then_successor():
     }
 
 
+def test_golden_lease_serves_a_local_read_and_pins_the_deadline():
+    # The leader-lease golden (SPEC-7 §3.2/§4, DS0 incr 18): n0 leads (term 1), commits `x=b`, takes
+    # a lease through clock+5, then `lread n0 x` serves the local value with no quorum round-trip.
+    # The canonical form pins `lease_until = 5` (omitted until the first lease) and that lease/lread
+    # touch no replica — the data plane is exactly the propose's committed write.
+    final = _final(["elect n0", "propose n0 x b", "lease n0 5", "lread n0 x"])
+    assert final == {
+        "replicas": [
+            _rep("x", "n0", 1, "b"), _rep("x", "n1", 1, "b"), _rep("x", "n2", 1, "b"), *_boot_y()
+        ],
+        "log": [],  # consensus + lease ops are protocol-layer; no causal event
+        "inflight": [],  # full connectivity -> the majority write reached every replica in sync
+        "partitions": [["n0", "n1", "n2"]],
+        "down": [],
+        "clock": 0,
+        "next_event_id": 0,
+        "next_msg_id": 0,
+        "last_result": ["ok", "b"],  # the local lease read
+        "term": 1,
+        "leader": "n0",
+        "lease_until": 5,  # the lease deadline (clock 0 + dt 5)
+    }
+
+
 def test_golden_linearizable_replicates_synchronously():
     # A single put commits to *every* replica in the same step — no in-flight, no advance needed,
     # the strong-consistency counterpart of the eventual-consistency async-then-converge golden.

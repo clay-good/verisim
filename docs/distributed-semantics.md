@@ -14,7 +14,7 @@ specification to be checked against.
 > makes stale-reads-under-partition the central dynamic). **Tier-B (the system oracle) now ships**
 > (§8 below). Multi-key transactions with the four SQL isolation levels (§9), the OCC/2PL split, the
 > complete §3.4 fault grammar (`drop`/`delay`/`reorder`/`clock_skew`), the `anti_entropy`/`gossip`
-> convergence ops, and the Raft-subset consensus core (`elect`/`propose`/`step_down`, §3.3) have all since shipped
+> convergence ops, and the Raft-subset consensus core (`elect`/`propose`/`step_down`/`lease`, §3.3) have all since shipped
 > as later DS increments. The embedded SPEC-6 host inside each node and the external real-binary DST
 > runtime remain later increments (SPEC-7 §5, §13); each will extend this document.
 
@@ -194,7 +194,9 @@ A `tget`/`tput`/`commit`/`abort` on an unknown txn (or one opened at a different
 | `gossip <a> <b>` (DS0 increment 15) | **pairwise, bidirectional** anti-entropy: for every object both `a` and `b` replicate, *both* adopt their mutual per-object winner (a `ReplicaWrite` for whichever is behind). Needs a live link (both up + connected), else `("unavailable", "")`. One gossip reconciles both endpoints; a chain spreads a write epidemically. `("gossiped", str(num_moved))`. |
 | `elect <node>` (DS0 increment 16) | **leader election**: `node` becomes the cluster leader iff the *live* nodes in its partition group are a strict majority of all nodes (`> n//2`), bumping the monotone `term` and installing the global `leader` (a `ProtocolStep`). A crashed candidate is `("unavailable", "")`; one without a live majority is `("no_quorum", "")`. On success `("elected", str(new_term))`. Touches no replica. |
 | `propose <node> <key> <val>` (DS0 increment 16) | **leader-fenced write**: commit `val` to `key` iff `node` is the current `leader` and can reach a majority of `key`'s replicas (the consensus quorum, regardless of `consistency_model`) — synchronous to the reachable majority, async catch-up to the minority, exactly like a `quorum` `put`. Rejected `("not_leader", current_leader)` if `node` is not the leader (a deposed leader stays fenced even after `heal`); `("no_quorum", "")` if no reachable majority. `("ok", val)` on commit. |
-| `step_down <node>` (DS0 increment 17) | **voluntary relinquishment**: clear `leader` (`→ None`) **at the same `term`** iff `node` is the current leader — the graceful counterpart to `elect`'s higher-term deposition, leaving the cluster leaderless until a fresh `elect`. Rejected `("not_leader", current_leader)` if `node` is not the leader (so a non-leader or a second `step_down` is a no-op reject — idempotently safe); `("unavailable", "")` if crashed. Needs **no quorum** (it reads only the node's own leadership), so a minority-stranded leader can relinquish where its `propose` is `no_quorum`. On success `("stepped_down", str(term))`. Touches no replica. |
+| `step_down <node>` (DS0 increment 17) | **voluntary relinquishment**: clear `leader` (`→ None`) **at the same `term`** iff `node` is the current leader — the graceful counterpart to `elect`'s higher-term deposition, leaving the cluster leaderless until a fresh `elect`. Rejected `("not_leader", current_leader)` if `node` is not the leader (so a non-leader or a second `step_down` is a no-op reject — idempotently safe); `("unavailable", "")` if crashed. Needs **no quorum** (it reads only the node's own leadership), so a minority-stranded leader can relinquish where its `propose` is `no_quorum`. On success `("stepped_down", str(term))`. Also **releases the lease** (DS0 incr 18). Touches no replica. |
+| `lease <node> <dt>` (DS0 increment 18) | **leader read lease**: iff `node` is the current leader, set the global-clock lease deadline `lease_until = clock + dt` (a `LeaseSet`). Through that deadline the leader may serve `lread` without a quorum and a new `elect` is fenced. Rejected `("not_leader", current_leader)` / `("unavailable", "")`. On success `("leased", str(until))`. Touches no replica. |
+| `lread <node> <key>` (DS0 increment 18) | **leader-lease local read**: iff `node` is the current leader **and** `clock < lease_until` and up, return `node`'s local replica value with **no quorum round-trip** — linearizable w.r.t. consensus (`propose`) writes (the leader is always in a propose's commit majority, and a live lease guarantees its term is uncontested). So a minority-stranded leader can still `lread` where its `propose` is `no_quorum`. Rejected `("lease_expired", "")` if no live lease; `("not_leader", current_leader)` if not the leader (a deposed leader cannot read off a stale lease); `("unavailable"/"no_replica", "")` otherwise. On success `("ok", value)`. A pure read. |
 
 `advance` is the engine of the distributed dynamics — it is where replication actually happens and
 where partition/crash make their effect felt. Delivery is simulated **sequentially within one
@@ -255,7 +257,7 @@ and leaves every prior golden, hash, and tokenization unchanged. ED19
 ([`experiments/ed19.py`](../src/verisim/experiments/ed19.py)) pins both findings; Tier-B reproduces the
 read-repair bit-for-bit.
 
-### 3.3 `elect` / `propose` / `step_down` — the Raft-subset consensus core (DS0 increments 16–17)
+### 3.3 `elect` / `propose` / `step_down` / `lease` — the Raft-subset consensus core (DS0 increments 16–18)
 
 `elect` and `propose` are the **consensus** family — the third action family (SPEC-7 §3.2) and the
 §4 `ProtocolStep` the spec named. They add the one safety property a leaderless `quorum` write
@@ -330,6 +332,35 @@ byte-identically by Tier-A and Tier-B via the shared `step_down_edits` helper an
 `ProtocolStep` edit (`leader → None`). ED24 ([`experiments/ed24.py`](../src/verisim/experiments/ed24.py))
 pins both panels (the handoff lifecycle; authority + partition-independence) with Tier-B agreeing on
 every transition.
+
+**`lease node dt` / `lread node key` — the leader lease (DS0 increment 18).** The Raft read
+optimization: `lease` lets the *current* leader take a read lease through the global-clock deadline
+`clock + dt` (a `LeaseSet(until)`), and while that lease holds `lread` serves the leader's local
+replica value with **no quorum round-trip**. It is linearizable w.r.t. consensus (`propose`) writes
+because (i) the leader is always in a `propose`'s commit majority, so its local replica holds every
+committed value, and (ii) the live lease guarantees no other leader has been elected. So a leader
+**partitioned into the minority can still `lread`** locally where its `propose` is `no_quorum` — the
+read-availability the lease buys. The safety mechanism is a coupling with `elect`: a new election is
+**fenced** (`lease_held`) until the incumbent's lease expires, so leadership cannot change hands
+under a live lease (which is what makes the local read safe) — but a voluntary `step_down` **releases
+the lease immediately**, so a graceful handoff needs no wait where a *crashed* leader forces the
+cluster to outlast the lease. The lease is global cluster metadata (like `term`/`leader`), so `lease`
+and `lread` are coordinator-level decisions computed byte-identically by Tier-A and Tier-B; the
+deadline is omitted from the canonical form until the first `lease`.
+
+```
+elect n0; propose n0 x b; lease n0 5               # n0 leads, commits x=b, takes a lease through clock 5
+lread n0 x                                          # ("ok","b") — local read, no quorum contacted
+elect n1                                            # ("lease_held","5") — a successor waits out the lease
+partition n0 | n1 n2; lread n0 x                    # ("ok","b") — minority leader still reads locally
+advance 6; lread n0 x                               # ("lease_expired","") — past the deadline, must renew
+```
+
+(Honest scope: the lease deadline is a global-clock instant read as cluster metadata, and `lread` is
+linearizable with respect to consensus writes. The real per-node lease timer under bounded clock
+*drift* is a Tier-B refinement; our `clock_skew` fault is a constant offset, not a rate, so it shifts
+neither the grant nor the expiry here.) ED25 ([`experiments/ed25.py`](../src/verisim/experiments/ed25.py))
+pins both panels with Tier-B agreeing on every transition.
 
 ## 4. The delta and the `apply == oracle` invariant
 

@@ -1,0 +1,9 @@
+panel,metric,value,detail
+local_read,valid_lease_read,1.0000,served_over_3_clusters
+local_read,minority_lread,1.0000,minority_leader_reads_locally
+local_read,minority_propose_blocked,1.0000,propose_no_quorum_control
+local_read,expired_lease_read,1.0000,rejected_after_expiry
+safety,elect_blocked_under_lease,1.0000,lease_held_wait_it_out
+safety,elect_after_expiry,1.0000,unblocked_past_deadline
+safety,stepdown_releases_lease,1.0000,fast_handoff_no_wait
+tier_b,all,1.0000,steps=39

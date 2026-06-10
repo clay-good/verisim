@@ -73,6 +73,8 @@ from verisim.distoracle.reference import (
     clock_skew_edits,
     elect_edits,
     gossip_edits,
+    lease_edits,
+    lread_edits,
     propose_edits,
     step_down_edits,
     timing_fault_edits,
@@ -285,6 +287,11 @@ class SystemDistOracle:
             # byte-identically via the shared helper — the partition-independence ED24 Panel B turns
             # on (a minority-stranded leader steps down where its ``propose`` is ``no_quorum``).
             return step_down_edits(state, action, self.config)
+        if name in ("lease", "lread"):
+            # The leader lease (DS0 incr 18) is coordinator-level cluster metadata (like leader/
+            # term), read/written from the global lease deadline, not an actor's local view — so
+            # Tier-A and Tier-B compute byte-identical lease/read deltas via the shared helpers.
+            return (lease_edits if name == "lease" else lread_edits)(state, action, self.config)
         raise ValueError(f"unhandled action {name!r}")  # pragma: no cover - grammar is closed
 
     def _event(self, state: DistributedState, action: DistAction) -> EventAppend:

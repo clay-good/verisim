@@ -178,6 +178,14 @@ class DistributedState:
     # hash is unchanged.
     term: int = 0
     leader: str | None = None
+    # The leader lease deadline (DS0 increment 18, the Raft leader-lease, `lease`/`lread`): the
+    # global-clock instant through which the current `leader` may serve **local linearizable reads
+    # without a quorum** (`lread`) and through which a new `elect` is **blocked** (a successor waits
+    # out the incumbent's lease — the leader-lease safety property). `lease` grants/extends it;
+    # `elect` and `step_down` clear it (a new term / a leaderless cluster holds no lease). `0` is the
+    # boot/no-lease default and is omitted from the canonical form, so a cluster that never leases
+    # serializes to the exact pre-increment-18 form — every prior golden/hash is unchanged.
+    lease_until: int = 0
 
     def __post_init__(self) -> None:
         # ``partitions`` is conceptually a *set* of disjoint groups, but stored as a tuple; keep it
@@ -217,6 +225,7 @@ class DistributedState:
             skew=dict(self.skew),
             term=self.term,
             leader=self.leader,
+            lease_until=self.lease_until,
         )
 
     def group_of(self, node: str) -> frozenset[str]:

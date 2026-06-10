@@ -21,6 +21,8 @@ workload and the fault/time medium (the consensus/admin family arrives with the 
     elect <node>                    # consensus: <node> becomes leader iff its side holds a majority
     propose <node> <key> <val>      # consensus: leader-only write to a majority (term-fenced)
     step_down <node>                # consensus: the current leader relinquishes (leaderless, same term)
+    lease <node> <dt>               # consensus: the leader takes a read lease until clock+<dt>
+    lread <node> <key>              # consensus: a leader-lease local linearizable read (no quorum)
 
 The fault/time family is the source of all interesting dynamics (stale reads under partition,
 convergence after heal+advance) -- the distributed analogue of SPEC-5's ``advance Δt`` and SPEC-6's
@@ -64,7 +66,16 @@ higher-term deposition. Until a fresh ``elect`` installs a successor every ``pro
 ``not_leader``, so a clean handoff is ``step_down`` then ``elect <successor>`` and no leaderless
 window ever commits. Relinquishing needs no quorum (it reads only the node's own leadership), so a
 leader stranded in a minority can step down where its ``propose`` is ``no_quorum`` — giving up
-authority is always safe, committing under it is not (ED24).
+authority is always safe, committing under it is not (ED24). ``lease``/``lread`` (DS0 increment 18)
+are the **leader lease** — the Raft read optimization. ``lease node dt`` lets the *current* leader
+take a read lease through global clock ``+ dt``; while that lease holds, ``lread node key`` serves a
+**local linearizable read without a quorum round-trip** (safe because the lease guarantees the
+leader's term is uncontested — a new ``elect`` is *blocked* until the lease expires). So a leader
+partitioned into the minority can still ``lread`` (local, no quorum) where its ``propose`` is
+``no_quorum`` — the lease's whole purpose. The safety tension it resolves: a new ``elect`` is
+rejected ``lease_held`` until the incumbent's lease expires (a successor waits it out), so leadership
+cannot change hands under a live lease — but ``step_down`` *releases* the lease immediately, so a
+graceful handoff needs no wait where a crashed leader forces the cluster to wait the lease out (ED25).
 """
 
 from __future__ import annotations
@@ -91,6 +102,8 @@ _ARITY: dict[str, int | None] = {
     "elect": 1,  # node  -- <node> becomes leader iff its side holds a majority (DS0 incr 16)
     "propose": 3,  # node key val  -- leader-only term-fenced majority write (DS0 incr 16)
     "step_down": 1,  # node  -- the current leader relinquishes; leaderless at the same term (incr 17)
+    "lease": 2,  # node dt  -- the leader takes a read lease until clock+dt (DS0 incr 18)
+    "lread": 2,  # node key  -- a leader-lease local linearizable read, no quorum (DS0 incr 18)
     # Transaction family (DS0 increment 2): a multi-key OCC transaction at a coordinator node.
     "begin": 2,  # node txn  -- open a transaction
     "tget": 3,  # node txn key  -- read <key> within the txn (pins the read version for validation)
@@ -109,7 +122,7 @@ FAULT_OPS = frozenset(
 # convergence mechanism, DS0 increment 12) and ``gossip`` (pairwise anti-entropy, incr 15) are the
 # convergence ops; ``elect``/``propose`` (the Raft-subset consensus core, incr 16) are the consensus
 # ops. ``CONSENSUS_OPS`` is the subset that reads/writes the leader/term metadata.
-CONSENSUS_OPS = frozenset({"elect", "propose", "step_down"})
+CONSENSUS_OPS = frozenset({"elect", "propose", "step_down", "lease", "lread"})
 PROTOCOL_OPS = frozenset({"anti_entropy", "gossip"}) | CONSENSUS_OPS
 
 
@@ -150,6 +163,8 @@ def parse_dist_action(raw: str) -> DistAction:
         _parse_positive_int(rest[0], raw)
     if name == "delay":
         _parse_positive_int(rest[2], raw)  # dt: a positive deferral, like advance's
+    if name == "lease":
+        _parse_positive_int(rest[1], raw)  # dt: a positive lease duration, like advance's
     if name == "clock_skew":
         _parse_signed_int(rest[1], raw)  # delta: a signed clock offset (may be negative or 0)
     return DistAction(raw=raw, name=name, args=tuple(rest))

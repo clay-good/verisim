@@ -1,0 +1,7 @@
+{
+  "name": "ed25-lease",
+  "cluster_sizes": [3, 5, 7],
+  "key": "x",
+  "val": "b",
+  "lease_dt": 5
+}

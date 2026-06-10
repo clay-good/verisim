@@ -18,7 +18,7 @@ import pytest
 
 from verisim.dist import DistConfig, DistributedState, apply, parse_dist_action
 from verisim.dist.action import CONSENSUS_OPS, PROTOCOL_OPS, DistParseError
-from verisim.dist.delta import ProtocolStep
+from verisim.dist.delta import LeaseSet, ProtocolStep
 from verisim.dist.serialize import from_canonical, state_hash, to_canonical
 from verisim.distoracle.differential import cluster_view
 from verisim.distoracle.reference import ReferenceDistOracle
@@ -46,12 +46,15 @@ def test_grammar_parses_elect_and_propose() -> None:
     p = parse_dist_action("propose n0 x b")
     assert p.name == "propose" and p.args == ("n0", "x", "b")
     assert parse_dist_action("step_down n0").name == "step_down"
-    assert sorted(CONSENSUS_OPS) == ["elect", "propose", "step_down"]
+    assert parse_dist_action("lease n0 5").args == ("n0", "5")
+    assert parse_dist_action("lread n0 x").args == ("n0", "x")
+    assert sorted(CONSENSUS_OPS) == ["elect", "lease", "lread", "propose", "step_down"]
     assert CONSENSUS_OPS <= PROTOCOL_OPS
 
 
 @pytest.mark.parametrize("bad", ["elect", "elect n0 n1", "propose n0 x", "propose n0 x b c",
-                                 "step_down", "step_down n0 n1"])
+                                 "step_down", "step_down n0 n1", "lease n0", "lease n0 0",
+                                 "lease n0 -1", "lread n0", "lread n0 x y"])
 def test_grammar_rejects_bad_arity(bad: str) -> None:
     with pytest.raises(DistParseError):
         parse_dist_action(bad)
@@ -229,6 +232,96 @@ def test_step_down_protocol_step_round_trips() -> None:
     assert from_canonical(to_canonical(stepped)) == stepped
 
 
+# --- lease / lread: the leader lease (DS0 increment 18) -----------------------------------------
+
+def test_lease_by_leader_sets_the_deadline() -> None:
+    s = _run(_ref(), ["elect n0", "lease n0 5"])  # clock 0 + 5
+    r = _ref().step(_run(_ref(), ["elect n0"]), parse_dist_action("lease n0 5"))
+    assert (r.status, r.value) == ("leased", "5")
+    assert s.lease_until == 5 and s.replicas == DistributedState.initial(CONFIG).replicas
+
+
+def test_lease_by_non_leader_is_rejected() -> None:
+    s = _run(_ref(), ["elect n0"])
+    r = _ref().step(s, parse_dist_action("lease n1 5"))
+    assert (r.status, r.value) == ("not_leader", "n0")
+    assert r.state.lease_until == 0
+
+
+def test_lread_under_a_live_lease_serves_the_local_value() -> None:
+    s = _run(_ref(), ["elect n0", "propose n0 x b", "lease n0 5"])
+    r = _ref().step(s, parse_dist_action("lread n0 x"))
+    assert (r.status, r.value) == ("ok", "b")  # local read, no quorum contacted
+    assert r.state.replicas == s.replicas  # a read mutates nothing
+
+
+def test_lread_after_expiry_is_rejected() -> None:
+    s = _run(_ref(), ["elect n0", "propose n0 x b", "lease n0 5", "advance 6"])  # clock 6 > 5
+    r = _ref().step(s, parse_dist_action("lread n0 x"))
+    assert r.status == "lease_expired"
+
+
+def test_lread_by_non_leader_is_not_leader() -> None:
+    s = _run(_ref(), ["elect n0", "lease n0 5"])
+    r = _ref().step(s, parse_dist_action("lread n1 x"))
+    assert (r.status, r.value) == ("not_leader", "n0")
+
+
+def test_minority_leader_can_lread_where_propose_is_no_quorum() -> None:
+    # The lease's payoff: a leader stranded in the minority serves a local read with no quorum,
+    # where its propose (which needs a majority) is no_quorum.
+    s = _run(_ref(), ["elect n0", "propose n0 x b", "lease n0 5", "partition n0 | n1 n2"])
+    assert _ref().step(s, parse_dist_action("propose n0 x c")).status == "no_quorum"
+    r = _ref().step(s, parse_dist_action("lread n0 x"))
+    assert (r.status, r.value) == ("ok", "b")  # local linearizable read survives the partition
+
+
+def test_elect_is_blocked_while_a_lease_is_live() -> None:
+    # Leader-lease safety: a successor must wait out the incumbent's unexpired lease.
+    s = _run(_ref(), ["elect n0", "lease n0 5"])
+    r = _ref().step(s, parse_dist_action("elect n1"))
+    assert (r.status, r.value) == ("lease_held", "5")
+    assert r.state.leader == "n0" and r.state.term == 1  # leadership unchanged
+
+
+def test_elect_succeeds_once_the_lease_expires_and_clears_it() -> None:
+    s = _run(_ref(), ["elect n0", "lease n0 5", "advance 6"])  # clock 6 > 5
+    r = _ref().step(s, parse_dist_action("elect n1"))
+    assert r.status == "elected" and r.state.leader == "n1" and r.state.term == 2
+    assert r.state.lease_until == 0  # a new term starts with no lease
+
+
+def test_step_down_releases_the_lease_for_an_immediate_handoff() -> None:
+    # The fast-handoff path: a voluntary step_down releases the lease, so a successor elects with
+    # no wait (vs a crashed leader, whose lease the cluster must outlast).
+    s = _run(_ref(), ["elect n0", "lease n0 5", "step_down n0"])
+    assert s.lease_until == 0 and s.leader is None
+    r = _ref().step(s, parse_dist_action("elect n1"))  # clock still 0, but lease was released
+    assert r.status == "elected" and r.state.leader == "n1"
+
+
+def test_deposed_leader_cannot_lread_off_a_stale_lease() -> None:
+    # After the lease expires, n1 is elected (clearing the lease); the old leader n0 is now fenced,
+    # so even if it imagines a lease it gets not_leader, never a stale read.
+    s = _run(_ref(), ["elect n0", "lease n0 5", "advance 6", "elect n1"])
+    r = _ref().step(s, parse_dist_action("lread n0 x"))
+    assert r.status == "not_leader"
+
+
+def test_lease_set_applies_and_round_trips() -> None:
+    s = _run(_ref(), ["elect n0"])
+    leased = apply(s, [LeaseSet(7)])
+    assert leased.lease_until == 7
+    assert from_canonical(to_canonical(leased)) == leased
+
+
+def test_canonical_form_omits_lease_until_until_first_lease() -> None:
+    s = _run(_ref(), ["elect n0"])
+    assert "lease_until" not in to_canonical(s)  # no lease yet
+    leased = _ref().step(s, parse_dist_action("lease n0 5")).state
+    assert to_canonical(leased)["lease_until"] == 5  # appears only after a lease
+
+
 # --- delta + serialization ----------------------------------------------------------------------
 
 def test_protocol_step_applies_and_round_trips() -> None:
@@ -305,6 +398,11 @@ def test_tier_a_equals_tier_b_over_a_consensus_trajectory() -> None:
         "step_down n1",                         # the leader voluntarily relinquishes -> leaderless
         "propose n1 y b",                       # not_leader (no leader to commit through)
         "elect n0", "propose n0 y b", "advance 5",  # a clean handoff: re-elect, then commit
+        "lease n0 5", "lread n0 y",             # the leader takes a lease + a local read
+        "elect n1",                             # lease_held (n0's lease is live)
+        "partition n0 | n1 n2", "lread n0 y",   # minority leader still reads locally (no quorum)
+        "heal", "advance 6", "lread n0 y",      # lease expired -> lease_expired
+        "elect n1", "advance 2",                # lease expired, so the election now succeeds
     ]
     for cmd in script:
         a = parse_dist_action(cmd)

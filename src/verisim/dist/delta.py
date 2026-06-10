@@ -176,6 +176,23 @@ class ProtocolStep:
 
 
 @dataclass(frozen=True)
+class LeaseSet:
+    """Set the cluster's leader lease deadline (DS0 increment 18, the `ProtocolStep` lease form, §4).
+
+    The §4 `ProtocolStep(kind, ..., lease)` lease/view-change form, specialized to the Raft leader-
+    lease: ``until`` is the global-clock deadline through which the current leader may serve **local
+    linearizable reads without a quorum** (`lread`), and through which a new election is **blocked**
+    (a successor must wait out the incumbent's lease — the leader-lease safety property). ``lease``
+    grants/extends it; ``elect`` and ``step_down`` clear it (``until == 0``) so a new leader starts
+    with no lease and a leaderless cluster holds none. ``until == 0`` is the boot/no-lease default and
+    is **omitted from the canonical form**, so a cluster that never leases serializes to the exact
+    pre-increment-18 form and every prior golden/hash is unchanged.
+    """
+
+    until: int
+
+
+@dataclass(frozen=True)
 class SetResult:
     """The client-visible result of the step: ``(status, value_token)``."""
 
@@ -199,6 +216,7 @@ DistEdit = (
     | TxnDel
     | LockSet
     | ProtocolStep
+    | LeaseSet
     | SetResult
 )
 DistDelta = list[DistEdit]
@@ -255,6 +273,8 @@ def apply(state: DistributedState, delta: DistDelta) -> DistributedState:
         elif isinstance(edit, ProtocolStep):
             s.term = edit.term
             s.leader = edit.leader
+        elif isinstance(edit, LeaseSet):
+            s.lease_until = edit.until
         else:
             assert isinstance(edit, SetResult)
             s.last_result = (edit.status, edit.value)
@@ -306,6 +326,8 @@ def edit_to_dict(edit: DistEdit) -> dict[str, Any]:
                 "holders": [list(h) for h in edit.holders]}
     if isinstance(edit, ProtocolStep):
         return {"op": "ProtocolStep", "kind": edit.kind, "term": edit.term, "leader": edit.leader}
+    if isinstance(edit, LeaseSet):
+        return {"op": "LeaseSet", "until": edit.until}
     assert isinstance(edit, SetResult)
     return {"op": "SetResult", "status": edit.status, "value": edit.value}
 
@@ -351,6 +373,8 @@ def edit_from_dict(d: dict[str, Any]) -> DistEdit:
         return LockSet(d["object_id"], tuple((t, m) for t, m in d["holders"]))
     if op == "ProtocolStep":
         return ProtocolStep(d["kind"], d["term"], d["leader"])
+    if op == "LeaseSet":
+        return LeaseSet(d["until"])
     if op == "SetResult":
         return SetResult(d["status"], d["value"])
     raise ValueError(f"unknown edit op {op!r}")

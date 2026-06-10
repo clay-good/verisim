@@ -82,6 +82,11 @@ def to_canonical(state: DistributedState) -> dict[str, Any]:
     if state.term != 0 or state.leader is not None:
         out["term"] = state.term
         out["leader"] = state.leader
+    # ``lease_until`` (DS0 incr 18, the leader lease) is included only once a lease has been granted;
+    # ``0`` (the boot/no-lease default) is omitted, so a cluster that never leases serializes to the
+    # exact pre-increment-18 form (purely additive, like ``skew``/``term``/``leader``).
+    if state.lease_until != 0:
+        out["lease_until"] = state.lease_until
     return out
 
 
@@ -134,6 +139,7 @@ def from_canonical(d: dict[str, Any]) -> DistributedState:
         skew=skew,
         term=d.get("term", 0),
         leader=d.get("leader"),
+        lease_until=d.get("lease_until", 0),
     )
 
 

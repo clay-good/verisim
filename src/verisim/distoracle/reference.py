@@ -32,6 +32,7 @@ from verisim.dist.delta import (
     DistDelta,
     DistEdit,
     EventAppend,
+    LeaseSet,
     MsgDeliver,
     MsgDrop,
     MsgReschedule,
@@ -181,15 +182,22 @@ def elect_edits(
     node = action.args[0]
     if not state.is_up(node):
         return [SetResult("unavailable", "")], "unavailable", ""
+    # Leader-lease safety (DS0 incr 18): a successor must wait out the incumbent's *unexpired*
+    # lease — leadership cannot change hands while a lease is live, which is exactly what makes a
+    # leader's lease read (`lread`) safe. A voluntary `step_down` releases the lease, so this only
+    # blocks the crash/contested path; once the lease expires (or was never taken) elect proceeds.
+    if state.lease_until > 0 and state.clock < state.lease_until:
+        until = str(state.lease_until)
+        return [SetResult("lease_held", until)], "lease_held", until
     voters = [n for n in state.group_of(node) if state.is_up(n)]
     if len(voters) <= len(config.nodes) // 2:  # a strict majority of the whole cluster is required
         return [SetResult("no_quorum", "")], "no_quorum", ""
     new_term = state.term + 1
-    return (
-        [ProtocolStep("elect", new_term, node), SetResult("elected", str(new_term))],
-        "elected",
-        str(new_term),
-    )
+    edits: DistDelta = [ProtocolStep("elect", new_term, node)]
+    if state.lease_until != 0:  # a new term starts fresh: clear any (now-expired) incumbent lease
+        edits.append(LeaseSet(0))
+    edits.append(SetResult("elected", str(new_term)))
+    return edits, "elected", str(new_term)
 
 
 def propose_edits(
@@ -276,11 +284,65 @@ def step_down_edits(
         cur = state.leader or ""
         return [SetResult("not_leader", cur)], "not_leader", cur
     # Relinquish: clear the leader, hold the term (a successor's `elect` bumps it strictly higher).
-    return (
-        [ProtocolStep("step_down", state.term, None), SetResult("stepped_down", str(state.term))],
-        "stepped_down",
-        str(state.term),
-    )
+    # A voluntary handoff also *releases* the lease immediately (DS0 incr 18), so a successor need
+    # not wait it out — the fast-handoff path, vs a crashed leader whose lease the cluster outlasts.
+    edits: DistDelta = [ProtocolStep("step_down", state.term, None)]
+    if state.lease_until != 0:
+        edits.append(LeaseSet(0))
+    edits.append(SetResult("stepped_down", str(state.term)))
+    return edits, "stepped_down", str(state.term)
+
+
+def lease_edits(
+    state: DistributedState, action: DistAction, config: DistConfig
+) -> tuple[DistDelta, str, str]:
+    """``lease node dt``: the leader takes a read lease through clock+dt (DS0 increment 18, §4).
+
+    The Raft **leader lease** — a read optimization. Only the *current* leader may take one; it sets
+    the global-clock deadline ``state.clock + dt`` through which the leader may serve local reads
+    without a quorum (`lread`) and through which a new election is fenced (`elect` → `lease_held`).
+    A non-leader is ``not_leader``; a crashed node is ``unavailable``. Renewing simply re-stamps the
+    deadline from *now*. Leadership/lease are coordinator-level cluster metadata in this model (like
+    ``term``/``leader``), so Tier-A and Tier-B compute byte-identical deltas via this shared helper.
+    """
+    node = action.args[0]
+    dt = int(action.args[1])
+    if not state.is_up(node):
+        return [SetResult("unavailable", "")], "unavailable", ""
+    if state.leader != node:
+        cur = state.leader or ""
+        return [SetResult("not_leader", cur)], "not_leader", cur
+    until = state.clock + dt
+    return [LeaseSet(until), SetResult("leased", str(until))], "leased", str(until)
+
+
+def lread_edits(
+    state: DistributedState, action: DistAction, config: DistConfig
+) -> tuple[DistDelta, str, str]:
+    """``lread node key``: a leader-lease local linearizable read (DS0 increment 18, §4).
+
+    The payoff of the lease: the leader serves ``key`` from its *own* replica with **no quorum
+    round-trip**, linearizable w.r.t. consensus (`propose`) writes because (i) the leader is always
+    in a `propose`'s commit majority, so its local replica holds every committed value, and (ii) a
+    live lease guarantees no other leader was elected (a new `elect` is blocked until expiry). So
+    a leader **partitioned into the minority can still `lread`** while its lease holds — where its
+    `propose` is ``no_quorum`` — the read-availability the lease buys. Rejections: ``not_leader`` if
+    ``node`` is not the leader (a deposed leader is fenced, so it cannot serve a stale read off a
+    stale lease); ``lease_expired`` if no live lease (the leader must renew or fall back to a quorum
+    read); ``unavailable``/``no_replica`` as usual. Touches no replica — a pure read.
+    """
+    node, key = action.args[0], action.args[1]
+    if not state.is_up(node):
+        return [SetResult("unavailable", "")], "unavailable", ""
+    if state.leader != node:
+        cur = state.leader or ""
+        return [SetResult("not_leader", cur)], "not_leader", cur
+    if not (state.lease_until > 0 and state.clock < state.lease_until):
+        return [SetResult("lease_expired", "")], "lease_expired", ""
+    replica = state.replicas.get((key, node))
+    if replica is None:
+        return [SetResult("no_replica", "")], "no_replica", ""
+    return [SetResult("ok", replica.value)], "ok", replica.value
 
 
 class ReferenceDistOracle:
@@ -332,6 +394,10 @@ class ReferenceDistOracle:
             return propose_edits(state, action, self.config)
         if name == "step_down":
             return step_down_edits(state, action, self.config)
+        if name == "lease":
+            return lease_edits(state, action, self.config)
+        if name == "lread":
+            return lread_edits(state, action, self.config)
         raise ValueError(f"unhandled action {name!r}")  # pragma: no cover - grammar is closed
 
     def _event(self, state: DistributedState, node: str, raw: str) -> EventAppend:
