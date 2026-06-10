@@ -67,6 +67,9 @@ def cluster_view(state: DistributedState) -> str:
     queues = sorted(
         (q, n, list(items)) for (q, n), items in state.queues.items() if items
     )
+    # Per-node running versions (DS0 incr 22) are observable cluster metadata; empty (all base) for
+    # a cluster that never deploys, so the channel is unchanged there.
+    versions = sorted((n, v) for n, v in state.versions.items() if v != 0)
     return repr({
         "replicas": replicas,
         "inflight": inflight,
@@ -75,6 +78,7 @@ def cluster_view(state: DistributedState) -> str:
         "clock": state.clock,
         "last_result": state.last_result,
         "queues": queues,
+        "versions": versions,
     })
 
 

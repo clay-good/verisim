@@ -28,6 +28,7 @@ workload and the fault/time medium (the consensus/admin family arrives with the 
     remove_replica <node>           # consensus: remove <node> from the voting membership (quorum shrinks)
     enqueue <node> <queue> <val>    # client: append <val> to the FIFO <queue> (replicated)
     dequeue <node> <queue>          # client: pop the head of <queue> at <node> (delivery per model)
+    deploy <node> <version>         # admin: set <node>'s software version (rolling upgrade)
 
 The fault/time family is the source of all interesting dynamics (stale reads under partition,
 convergence after heal+advance) -- the distributed analogue of SPEC-5's ``advance Δt`` and SPEC-6's
@@ -102,7 +103,14 @@ follow the ``consistency_model``**: under ``eventual`` a dequeue's head-removal 
 reachable side, so a partitioned peer can re-dequeue the same item (**at-least-once / duplicate
 delivery**), where ``linearizable`` (needs every replica) and ``quorum`` (needs a majority) gate
 availability to keep delivery **exactly-once** on the side that can serve it — the queue analogue of
-the KV CAP tradeoff (ED28).
+the KV CAP tradeoff (ED28). ``deploy`` (DS0 increment 22) is the **rolling-upgrade** admin op that
+answers SPEC-7's headline question — *"will this deploy break the cluster?"*: ``deploy node version``
+sets a node's running software version, and two nodes can participate in the same consensus quorum
+only if their versions are within ``DistConfig.max_version_skew`` (``1`` = the standard N-1
+compatibility window). A rolling upgrade that stays inside the window keeps quorum throughout (safe),
+but a deploy that creates an **incompatible version split with no compatible majority** loses quorum
+— ``propose``/``elect`` become ``no_quorum`` mid-deploy — the deploy broke the cluster (ED29).
+Compatibility gates *consensus* only; the best-effort KV/queue data plane is version-agnostic.
 """
 
 from __future__ import annotations
@@ -136,6 +144,7 @@ _ARITY: dict[str, int | None] = {
     "remove_replica": 1,  # node  -- remove <node> from the voting membership (DS0 incr 20)
     "enqueue": 3,  # node queue val  -- append <val> to the FIFO <queue> (DS0 incr 21)
     "dequeue": 2,  # node queue  -- pop the head of <queue> at <node> (DS0 incr 21)
+    "deploy": 2,  # node version  -- set <node>'s software version, a rolling upgrade (DS0 incr 22)
     # Transaction family (DS0 increment 2): a multi-key OCC transaction at a coordinator node.
     "begin": 2,  # node txn  -- open a transaction
     "tget": 3,  # node txn key  -- read <key> within the txn (pins the read version for validation)
@@ -151,6 +160,7 @@ CLIENT_OPS = frozenset({
 })
 TXN_OPS = frozenset({"begin", "tget", "tput", "commit", "abort"})
 QUEUE_OPS = frozenset({"enqueue", "dequeue"})  # the FIFO-queue client ops (DS0 incr 21)
+ADMIN_OPS = frozenset({"deploy"})  # rolling-upgrade / config admin ops (DS0 incr 22)
 FAULT_OPS = frozenset(
     {"advance", "partition", "heal", "crash", "restart", "drop", "delay", "reorder", "clock_skew"}
 )
@@ -203,6 +213,8 @@ def parse_dist_action(raw: str) -> DistAction:
         _parse_positive_int(rest[2], raw)  # dt: a positive deferral, like advance's
     if name == "lease":
         _parse_positive_int(rest[1], raw)  # dt: a positive lease duration, like advance's
+    if name == "deploy":
+        _parse_nonneg_int(rest[1], raw)  # version: a non-negative software version (0 = base)
     if name == "clock_skew":
         _parse_signed_int(rest[1], raw)  # delta: a signed clock offset (may be negative or 0)
     return DistAction(raw=raw, name=name, args=tuple(rest))
@@ -240,6 +252,17 @@ def _parse_positive_int(tok: str, raw: str) -> int:
         raise DistParseError(f"expected an integer, got {tok!r} in {raw!r}") from exc
     if value <= 0:
         raise DistParseError(f"dt must be positive, got {value} in {raw!r}")
+    return value
+
+
+def _parse_nonneg_int(tok: str, raw: str) -> int:
+    """Parse a non-negative integer (the ``deploy`` software version; ``0`` is the base)."""
+    try:
+        value = int(tok)
+    except ValueError as exc:
+        raise DistParseError(f"expected an integer, got {tok!r} in {raw!r}") from exc
+    if value < 0:
+        raise DistParseError(f"version must be >= 0, got {value} in {raw!r}")
     return value
 
 

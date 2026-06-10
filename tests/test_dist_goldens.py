@@ -464,6 +464,38 @@ def test_golden_queue_enqueue_replicates_and_dequeue_is_fifo():
     }
 
 
+def test_golden_deploy_breaks_consensus_on_an_incompatible_version() -> None:
+    # The rolling-upgrade golden (SPEC-7 §3.2, DS0 incr 22): n0 leads (term 1), `deploy n0 2` moves
+    # it to v2 while n1/n2 stay at the base v0. Under skew 1, n0 is now version-incompatible with
+    # peers, so its `propose` can reach only itself (1 of 3) — `no_quorum`: the deploy broke n0's
+    # ability to commit. The version appears in the canonical form (omitted until the first deploy);
+    # the KV is untouched (the write never committed).
+    config = DistConfig(name="golden-deploy", nodes=("n0", "n1", "n2"), objects=("x", "y"),
+                        consistency_model="quorum")
+    oracle = ReferenceDistOracle(config)
+    state = DistributedState.initial(config)
+    for cmd in ["elect n0", "deploy n0 2", "propose n0 x b"]:
+        state = oracle.step(state, parse_dist_action(cmd)).state
+    final = to_canonical(state)
+    assert final == {
+        "replicas": [
+            _rep("x", "n0", 0, "nil"), _rep("x", "n1", 0, "nil"), _rep("x", "n2", 0, "nil"),
+            *_boot_y(),
+        ],
+        "log": [],
+        "inflight": [],
+        "partitions": [["n0", "n1", "n2"]],
+        "down": [],
+        "clock": 0,
+        "next_event_id": 0,
+        "next_msg_id": 0,
+        "last_result": ["no_quorum", ""],  # the deploy stranded the leader: no compatible majority
+        "term": 1,
+        "leader": "n0",
+        "versions": {"n0": 2},  # n0 on v2; n1/n2 on the base v0 (omitted)
+    }
+
+
 def test_golden_linearizable_replicates_synchronously():
     # A single put commits to *every* replica in the same step — no in-flight, no advance needed,
     # the strong-consistency counterpart of the eventual-consistency async-then-converge golden.

@@ -47,6 +47,7 @@ from verisim.dist.delta import (
     QueueSet,
     ReplicaWrite,
     SetResult,
+    VersionSet,
     apply,
 )
 from verisim.dist.state import DistributedState, LogEntry, Message
@@ -176,6 +177,19 @@ def active_members(state: DistributedState, config: DistConfig) -> frozenset[str
     return state.members if state.members else frozenset(config.nodes)
 
 
+def _compatible(state: DistributedState, config: DistConfig, a: str, b: str) -> bool:
+    """Whether nodes ``a`` and ``b`` may share a consensus quorum (DS0 increment 22, `deploy`).
+
+    Two nodes interoperate in consensus iff their running versions are within
+    ``config.max_version_skew`` (``1`` = the standard N-1 rolling-upgrade window). When no node has
+    deployed (every version is the base ``0``) every pair is compatible, so this is byte-identical
+    to the pre-increment-22 form. Gates *consensus* only — the KV/queue data plane ignores versions.
+    """
+    va = state.versions.get(a, 0)
+    vb = state.versions.get(b, 0)
+    return abs(va - vb) <= config.max_version_skew
+
+
 def elect_edits(
     state: DistributedState, action: DistAction, config: DistConfig
 ) -> tuple[DistDelta, str, str]:
@@ -209,7 +223,10 @@ def elect_edits(
     # The quorum is a strict majority of the *voting membership* (DS0 incr 20), which equals the
     # full cluster until `remove_replica`/`add_replica` reconfigures it — so this is byte-identical
     # to the pre-increment-20 form when no membership change has happened.
-    voters = [n for n in state.group_of(node) if state.is_up(n) and n in members]
+    # voters: reachable (same partition group), up, voting members within the version-compatibility
+    # window of the candidate (DS0 incr 22) — an incompatible (mid-upgrade) node cannot vote.
+    voters = [n for n in state.group_of(node)
+              if state.is_up(n) and n in members and _compatible(state, config, node, n)]
     if len(voters) <= len(members) // 2:  # a strict majority of the voting members is required
         return [SetResult("no_quorum", "")], "no_quorum", ""
     new_term = state.term + 1
@@ -256,7 +273,12 @@ def propose_edits(
     # The consensus quorum is over the *voting members* that replicate the key (DS0 incr 20); when
     # membership is the full cluster (the default) this is byte-identical to the pre-incr-20 form.
     peers = [p for p in config.replicas_of(key) if p in active_members(state, config)]
-    reachable = [p for p in peers if state.connected(node, p) and state.is_up(p)]
+    # reachable: co-partitioned, up, and within the version-compatibility window of the leader
+    # (DS0 incr 22) — an incompatible node cannot acknowledge the consensus write.
+    reachable = [
+        p for p in peers
+        if state.connected(node, p) and state.is_up(p) and _compatible(state, config, node, p)
+    ]
     if len(reachable) < len(peers) // 2 + 1:  # consensus commits only on a majority of replicas
         return [SetResult("no_quorum", "")], "no_quorum", ""
     new_version = replica.version + 1
@@ -406,7 +428,11 @@ def append_edits(
     # Replicate to / commit on the *voting members* (DS0 incr 20); the full cluster by default, so
     # this is byte-identical to the pre-increment-20 form when no membership change has happened.
     members = active_members(state, config)
-    reachable = [p for p in members if state.connected(node, p) and state.is_up(p)]
+    # reachable: co-partitioned, up, and version-compatible with the leader (DS0 incr 22).
+    reachable = [
+        p for p in members
+        if state.connected(node, p) and state.is_up(p) and _compatible(state, config, node, p)
+    ]
     committed = len(reachable) >= len(members) // 2 + 1
     edits: DistDelta = []
     # every reachable node adopts the leader's log (reconciling any divergent uncommitted tail)
@@ -570,6 +596,26 @@ def dequeue_edits(
     return edits, "dequeued", head
 
 
+def deploy_edits(
+    state: DistributedState, action: DistAction, config: DistConfig
+) -> tuple[DistDelta, str, str]:
+    """``deploy node version``: a rolling-upgrade admin op (DS0 increment 22, §3.2).
+
+    Sets ``node``'s running software version (a node-local change — no consensus needed to restart a
+    node with new code). The consequence is in the consensus quorum: two nodes interoperate only if
+    their versions are within ``config.max_version_skew`` (`_compatible`), so a deploy that makes an
+    **incompatible version split with no compatible majority** turns the next `elect`/`propose`/
+    `append` into `no_quorum` — *the deploy broke the cluster* (ED29). A rolling upgrade that stays
+    inside the window keeps a compatible majority and never breaks. ``unknown_node`` if ``node`` is
+    not a config node. A pure metadata change touching no replica, so Tier-A ≡ Tier-B bit-for-bit.
+    """
+    node, version = action.args[0], int(action.args[1])
+    if node not in config.nodes:
+        return [SetResult("unknown_node", "")], "unknown_node", ""
+    v = str(version)
+    return [VersionSet(node, version), SetResult("deployed", v)], "deployed", v
+
+
 class ReferenceDistOracle:
     """The Tier-A deterministic DES (§5.1). Pure: ``step`` is a function of (state, action)."""
 
@@ -633,6 +679,8 @@ class ReferenceDistOracle:
             return enqueue_edits(state, action, self.config)
         if name == "dequeue":
             return dequeue_edits(state, action, self.config)
+        if name == "deploy":
+            return deploy_edits(state, action, self.config)
         raise ValueError(f"unhandled action {name!r}")  # pragma: no cover - grammar is closed
 
     def _event(self, state: DistributedState, node: str, raw: str) -> EventAppend:

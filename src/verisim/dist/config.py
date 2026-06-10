@@ -83,6 +83,14 @@ class DistConfig:
     default_value: str = "nil"  # the boot value of every replica (version 0)
     txn_isolation: str = "serializable"  # DS0 incr 3: serializable (read-set OCC) | snapshot (SI)
     concurrency_control: str = "occ"  # DS0 incr 8: occ (optimistic) | 2pl (pessimistic wound-wait)
+    # The protocol-version compatibility window for consensus (DS0 incr 22, `deploy`): two nodes may
+    # participate in the same consensus quorum (election / propose / append) iff their running
+    # software versions differ by at most ``max_version_skew``. ``1`` models the standard N-1
+    # rolling-upgrade compatibility every real system guarantees; ``0`` forbids any mixed-version
+    # agreement. Default ``1`` and omitted from the hash, so pre-increment-22 config hashes are
+    # unchanged. (Compatibility gates *consensus* only; the best-effort KV/queue data plane is
+    # version-agnostic.)
+    max_version_skew: int = 1
 
     def __post_init__(self) -> None:
         if self.consistency_model not in CONSISTENCY_MODELS:
@@ -107,6 +115,8 @@ class DistConfig:
             )
         if len(set(self.nodes)) != len(self.nodes):
             raise ValueError("node ids must be unique")
+        if self.max_version_skew < 0:
+            raise ValueError(f"max_version_skew must be >= 0, got {self.max_version_skew}")
 
     def replicas_of(self, object_id: str) -> tuple[str, ...]:
         """The nodes holding a replica of ``object_id`` -- the first ``replication_factor`` nodes.
@@ -130,6 +140,9 @@ class DistConfig:
         # Omit the default so an ``occ`` config's hash is unchanged from before DS0 increment 8.
         if self.concurrency_control != "occ":
             out["concurrency_control"] = self.concurrency_control
+        # Omit the default (1, the N-1 window) so a pre-increment-22 config's hash is unchanged.
+        if self.max_version_skew != 1:
+            out["max_version_skew"] = self.max_version_skew
         return out
 
     def config_hash(self) -> str:

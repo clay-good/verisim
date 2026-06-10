@@ -256,6 +256,20 @@ class QueueSet:
 
 
 @dataclass(frozen=True)
+class VersionSet:
+    """Set one node's running software version (DS0 increment 22, `deploy`).
+
+    ``version`` is the node's protocol version after a deploy. Version ``0`` (the base) leaves no
+    entry (dropped from the canonical form), so a cluster that never deploys is byte-identical to the
+    pre-increment-22 form. Two nodes participate in the same consensus quorum iff their versions are
+    within ``DistConfig.max_version_skew``.
+    """
+
+    node: str
+    version: int
+
+
+@dataclass(frozen=True)
 class SetResult:
     """The client-visible result of the step: ``(status, value_token)``."""
 
@@ -284,6 +298,7 @@ DistEdit = (
     | CommitIndexSet
     | MemberSet
     | QueueSet
+    | VersionSet
     | SetResult
 )
 DistDelta = list[DistEdit]
@@ -356,6 +371,11 @@ def apply(state: DistributedState, delta: DistDelta) -> DistributedState:
                 s.queues[(edit.queue, edit.node)] = edit.items
             else:
                 s.queues.pop((edit.queue, edit.node), None)  # an empty queue leaves no residue
+        elif isinstance(edit, VersionSet):
+            if edit.version != 0:
+                s.versions[edit.node] = edit.version
+            else:
+                s.versions.pop(edit.node, None)  # the base version leaves no residue
         else:
             assert isinstance(edit, SetResult)
             s.last_result = (edit.status, edit.value)
@@ -418,6 +438,8 @@ def edit_to_dict(edit: DistEdit) -> dict[str, Any]:
         return {"op": "MemberSet", "members": sorted(edit.members)}
     if isinstance(edit, QueueSet):
         return {"op": "QueueSet", "queue": edit.queue, "node": edit.node, "items": list(edit.items)}
+    if isinstance(edit, VersionSet):
+        return {"op": "VersionSet", "node": edit.node, "version": edit.version}
     assert isinstance(edit, SetResult)
     return {"op": "SetResult", "status": edit.status, "value": edit.value}
 
@@ -473,6 +495,8 @@ def edit_from_dict(d: dict[str, Any]) -> DistEdit:
         return MemberSet(frozenset(d["members"]))
     if op == "QueueSet":
         return QueueSet(d["queue"], d["node"], tuple(d["items"]))
+    if op == "VersionSet":
+        return VersionSet(d["node"], d["version"])
     if op == "SetResult":
         return SetResult(d["status"], d["value"])
     raise ValueError(f"unknown edit op {op!r}")

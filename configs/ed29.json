@@ -1,0 +1,6 @@
+{
+  "name": "ed29-deploy",
+  "cluster_sizes": [3, 4, 5],
+  "key": "x",
+  "val": "a"
+}

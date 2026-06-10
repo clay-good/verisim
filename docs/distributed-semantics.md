@@ -203,6 +203,7 @@ A `tget`/`tput`/`commit`/`abort` on an unknown txn (or one opened at a different
 | `lread <node> <key>` (DS0 increment 18) | **leader-lease local read**: iff `node` is the current leader **and** `clock < lease_until` and up, return `node`'s local replica value with **no quorum round-trip** — linearizable w.r.t. consensus (`propose`) writes (the leader is always in a propose's commit majority, and a live lease guarantees its term is uncontested). So a minority-stranded leader can still `lread` where its `propose` is `no_quorum`. Rejected `("lease_expired", "")` if no live lease; `("not_leader", current_leader)` if not the leader (a deposed leader cannot read off a stale lease); `("unavailable"/"no_replica", "")` otherwise. On success `("ok", value)`. A pure read. |
 | `append <node> <key> <val>` (DS0 increment 19) | **replicated-log append**: iff `node` is the current leader, append a `LogEntry(term, index, key, value)` to its log and replicate to the reachable followers, who **adopt the leader's prefix** (a `LogSet` per node — overwriting any divergent *uncommitted* tail, the log-matching reconciliation). It **commits iff a majority holds it** (advancing the monotone `commit_index` and folding the committed prefix into the KV — a key's version is the count of its committed writes — which backfills a rejoined follower): `("appended", str(index))`. A minority-stranded leader still appends locally but `("uncommitted", str(index))` — not applied to the KV, overwritable by a higher-term leader. Rejected `("not_leader", current_leader)` / `("unavailable", "")`. |
 | `add_replica <node>` / `remove_replica <node>` (DS0 increment 20) | **membership change**: reconfigure the consensus voting set `members` (a leader-committed `MemberSet`), so the quorum threshold (`elect`/`propose`/`append`) tracks it. `add_replica` adds a node (restoring the full cluster collapses to the empty "all vote" sentinel); `remove_replica` removes one — shrinking the majority, the lever that **restores availability** after failures. Rejected `("no_leader", "")` (a leader must commit it), `("is_leader", node)` (the active leader cannot be removed), `("last_member", node)`, `("unknown_node", "")`; a no-op is `("already_member"/"not_member", node)`. On success `("added"/"removed", node)`. All config nodes still store replicas; `members` is the voting overlay. Touches no replica. |
+| `deploy <node> <version>` (DS0 increment 22) | **rolling upgrade**: set `node`'s running software `version` (a `VersionSet`). Two nodes share a consensus quorum (`elect`/`propose`/`append`) only if their versions are within `DistConfig.max_version_skew` (default `1`, the N-1 window), so a deploy that creates an incompatible split with no compatible majority loses quorum — *the deploy broke the cluster*. `("deployed", str(version))`; `("unknown_node", "")` for a non-config node. Gates *consensus* only (the KV/queue data plane is version-agnostic). Touches no replica. |
 
 `advance` is the engine of the distributed dynamics — it is where replication actually happens and
 where partition/crash make their effect felt. Delivery is simulated **sequentially within one
@@ -458,14 +459,50 @@ synchronous to the reachable set — no async in-flight medium or anti-entropy f
 divergent replica is reconciled only by a fresh op that reaches it; the consistency model gates
 availability, which is the lever the delivery semantics turn on.)
 
+### 3.5 `deploy` — the rolling upgrade (DS0 increment 22)
+
+The op that answers SPEC-7's headline operational question, *"will this deploy break the cluster?"*
+`deploy node version` sets a node's running software `version` (a node-local change — restarting a
+node with new code needs no consensus). The consequence lives in the quorum: every consensus
+computation (`elect`/`propose`/`append`) routes its reachable/voter set through `_compatible`, which
+admits a peer only if its version is within `DistConfig.max_version_skew` of the coordinator's
+(default `1` — the N-1 rolling-upgrade window every real system guarantees). So:
+
+- A **rolling upgrade** that advances nodes one at a time keeps the version spread inside the window
+  (`v0` and `v1` coexisting is spread `1 ≤ 1`), so a compatible majority always exists and consensus
+  never stalls — the deploy is safe.
+- A deploy that creates an **incompatible split with no compatible majority** (e.g. half the cluster
+  at `v0`, half at `v2`, spread `2 > 1`) leaves no version cohort able to form a quorum, so the next
+  `elect`/`propose` is `no_quorum` — *the deploy broke the cluster.*
+
+The diagnostic that pins the cause: the *same* version assignment is safe at a smaller spread, or
+under a wider configured `max_version_skew` — it is the spread **exceeding the compatibility window**
+that breaks consensus, not the mere presence of mixed versions.
+
+```
+elect n0; deploy n0 1; propose n0 x a    # spread 1 ≤ skew 1 → ("ok","a"), the rolling step is safe
+deploy n0 2; deploy n1 2                  # 2×v2 | 2×v0 in a 4-node cluster: spread 2 > skew 1
+propose n0 x b                            # ("no_quorum","") — no compatible majority: the deploy broke it
+```
+
+Compatibility gates *consensus* only — the best-effort KV/queue data plane (`put`/`get`/`enqueue`)
+ignores versions. A node's version is observable cluster metadata read coordinator-side, so Tier-A
+and Tier-B compute byte-identical version deltas via the shared `deploy_edits` helper, and
+`cluster_view` includes the versions; the version map is omitted from the canonical form until the
+first `deploy`. ED29 ([`experiments/ed29.py`](../src/verisim/experiments/ed29.py)) pins both panels
+(the safe rolling upgrade; the break + the spread-vs-window diagnostic) with Tier-B agreeing on every
+transition. (Honest scope: version compatibility is a symmetric within-skew relation and the deploy
+is a node-local label; a real upgrade's per-feature compatibility matrix and staged migrations are a
+deeper refinement.)
+
 ## 4. The delta and the `apply == oracle` invariant
 
 The oracle returns the next state **and** the structured delta that produces it
 ([`verisim.dist.delta`](../src/verisim/dist/delta.py)): `ReplicaWrite`, `MsgSend`/`MsgDeliver`/
 `MsgDrop`, `EventAppend`, `PartitionSet`, `NodeDown`/`NodeUp`, `ClockSet`, the consensus
 `ProtocolStep`/`LeaseSet`, the replicated-log `LogSet`/`CommitIndexSet`, the membership `MemberSet`,
-the FIFO-queue `QueueSet` (DS0 incr 16–21), and `SetResult`. The **M1-analogue invariant** holds by
-construction and is tested on every transition:
+the FIFO-queue `QueueSet`, the per-node `VersionSet` (DS0 incr 16–22), and `SetResult`. The
+**M1-analogue invariant** holds by construction and is tested on every transition:
 
 ```
 apply(state, oracle.step(state, action).delta) == oracle.step(state, action).state

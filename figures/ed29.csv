@@ -1,0 +1,6 @@
+panel,metric,value,detail
+rolling,rolling_commit_rate,1.0000,commits_over_12_upgrade_steps
+break,incompatible_split_breaks,1.0000,spread2_skew1_no_quorum
+break,within_window_commits,1.0000,spread_1_skew_1_ok
+break,wider_window_commits,1.0000,spread_2_skew_2_ok
+tier_b,all,1.0000,steps=39

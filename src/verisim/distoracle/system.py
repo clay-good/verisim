@@ -73,6 +73,7 @@ from verisim.distoracle.reference import (
     append_edits,
     causal_deps,
     clock_skew_edits,
+    deploy_edits,
     dequeue_edits,
     elect_edits,
     enqueue_edits,
@@ -315,6 +316,11 @@ class SystemDistOracle:
             # partition behavior is reproduced on the autonomous actors too.
             helper = enqueue_edits if name == "enqueue" else dequeue_edits
             return helper(state, action, self.config)
+        if name == "deploy":
+            # The rolling-upgrade admin op (DS0 incr 22) is a node-local version label read as
+            # cluster metadata, so Tier-A and Tier-B compute byte-identical version deltas via the
+            # shared helper — the version-compatibility quorum loss is reproduced on the actors too.
+            return deploy_edits(state, action, self.config)
         raise ValueError(f"unhandled action {name!r}")  # pragma: no cover - grammar is closed
 
     def _event(self, state: DistributedState, action: DistAction) -> EventAppend:

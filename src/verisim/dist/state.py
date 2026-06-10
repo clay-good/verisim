@@ -223,6 +223,14 @@ class DistributedState:
     # Empty queue replicas leave no entry, so a cluster that never enqueues serializes to the exact
     # pre-increment-21 form (purely additive).
     queues: dict[tuple[str, str], tuple[str, ...]] = field(default_factory=dict)
+    # Per-node running software version (DS0 increment 22, `deploy`): the protocol version a node is
+    # running. Two nodes may participate in the same consensus quorum iff their versions differ by at
+    # most `DistConfig.max_version_skew` — so a rolling upgrade that creates an *incompatible* version
+    # split (no version cohort holding a majority) loses quorum: "the deploy broke the cluster." The
+    # base version `0` is the default and is omitted from the canonical form, so a cluster that never
+    # deploys serializes to the exact pre-increment-22 form (purely additive). Consensus only; the
+    # best-effort KV/queue data plane is version-agnostic.
+    versions: dict[str, int] = field(default_factory=dict)
     # The leader lease deadline (DS0 increment 18, the Raft leader-lease, `lease`/`lread`): the
     # global-clock instant through which the current `leader` may serve **local linearizable reads
     # without a quorum** (`lread`) and through which a new `elect` is **blocked** (a successor waits
@@ -274,6 +282,7 @@ class DistributedState:
             commit_index=self.commit_index,
             members=self.members,
             queues={k: v for k, v in self.queues.items()},
+            versions=dict(self.versions),
             lease_until=self.lease_until,
         )
 

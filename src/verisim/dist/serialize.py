@@ -122,6 +122,12 @@ def to_canonical(state: DistributedState) -> dict[str, Any]:
             {"queue": q, "node": n, "items": list(queues[(q, n)])}
             for q, n in sorted(queues)
         ]
+    # Per-node running versions (DS0 incr 22): non-base versions, sorted by node. Omitted when every
+    # node is at the base version 0, so a cluster that never deploys serializes to the exact
+    # pre-increment-22 form (purely additive, like queues/members/lease).
+    versions = {node: v for node, v in state.versions.items() if v != 0}
+    if versions:
+        out["versions"] = {node: versions[node] for node in sorted(versions)}
     return out
 
 
@@ -185,6 +191,7 @@ def from_canonical(d: dict[str, Any]) -> DistributedState:
         queues={
             (q["queue"], q["node"]): tuple(q["items"]) for q in d.get("queues", [])
         },
+        versions=dict(d.get("versions", {})),
         lease_until=d.get("lease_until", 0),
     )
 

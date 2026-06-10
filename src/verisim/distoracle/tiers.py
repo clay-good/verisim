@@ -137,6 +137,11 @@ class TieredOracle:
         # sentinel), so a membership naming an unknown node is refuted at the cheapest tier.
         if predicted.members and not predicted.members <= set(self.config.nodes):
             return True, "voting membership contains an unknown node"
+        # Node versions (DS0 incr 22) are non-negative and belong to known cluster nodes — a
+        # reference-free invariant any legal `deploy` satisfies.
+        for node, ver in predicted.versions.items():
+            if node not in set(self.config.nodes) or ver < 0:
+                return True, f"node {node!r} has an invalid version {ver}"
         return False, ""
 
     def _cycle(
@@ -169,7 +174,8 @@ class TieredOracle:
         name = action.name
         no_write = ("get", "partition", "heal", "crash", "restart", "drop", "delay", "reorder",
                     "clock_skew", "begin", "tget", "tput", "abort", "elect", "step_down",
-                    "lease", "lread", "add_replica", "remove_replica", "enqueue", "dequeue")
+                    "lease", "lread", "add_replica", "remove_replica", "enqueue", "dequeue",
+                    "deploy")
         if name in no_write:
             # none of these write replicas; the replica map must be unchanged. ``drop`` (DS0 inc 11)
             # and ``delay``/``reorder`` (DS0 inc 13) only touch the in-flight set; the txn ops
