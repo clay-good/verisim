@@ -20,6 +20,7 @@ workload and the fault/time medium (the consensus/admin family arrives with the 
     gossip <a> <b>                  # protocol: pairwise sync — a and b both adopt the per-obj winner
     elect <node>                    # consensus: <node> becomes leader iff its side holds a majority
     propose <node> <key> <val>      # consensus: leader-only write to a majority (term-fenced)
+    step_down <node>                # consensus: the current leader relinquishes (leaderless, same term)
 
 The fault/time family is the source of all interesting dynamics (stale reads under partition,
 convergence after heal+advance) -- the distributed analogue of SPEC-5's ``advance Δt`` and SPEC-6's
@@ -56,7 +57,14 @@ split-brain), bumping the monotone ``term``. ``propose node key val`` is a **lea
 it commits a synchronous majority write (the consensus quorum, regardless of the KV
 ``consistency_model``) only if ``node`` is the *current* leader, so a leader deposed by a higher-term
 election cannot commit even after the partition heals — the Raft leader-completeness safety property
-plain ``quorum`` writes lack (ED23).
+plain ``quorum`` writes lack (ED23). ``step_down`` (DS0 increment 17) completes the leadership
+lifecycle: ``step_down node`` lets the *current* leader **voluntarily relinquish** power, leaving the
+cluster **leaderless at the same term** — the graceful counterpart to ``elect``'s involuntary,
+higher-term deposition. Until a fresh ``elect`` installs a successor every ``propose`` is rejected
+``not_leader``, so a clean handoff is ``step_down`` then ``elect <successor>`` and no leaderless
+window ever commits. Relinquishing needs no quorum (it reads only the node's own leadership), so a
+leader stranded in a minority can step down where its ``propose`` is ``no_quorum`` — giving up
+authority is always safe, committing under it is not (ED24).
 """
 
 from __future__ import annotations
@@ -82,6 +90,7 @@ _ARITY: dict[str, int | None] = {
     "gossip": 2,  # a b  -- pairwise bidirectional anti-entropy: both adopt the winner (DS0 incr 15)
     "elect": 1,  # node  -- <node> becomes leader iff its side holds a majority (DS0 incr 16)
     "propose": 3,  # node key val  -- leader-only term-fenced majority write (DS0 incr 16)
+    "step_down": 1,  # node  -- the current leader relinquishes; leaderless at the same term (incr 17)
     # Transaction family (DS0 increment 2): a multi-key OCC transaction at a coordinator node.
     "begin": 2,  # node txn  -- open a transaction
     "tget": 3,  # node txn key  -- read <key> within the txn (pins the read version for validation)
@@ -100,7 +109,7 @@ FAULT_OPS = frozenset(
 # convergence mechanism, DS0 increment 12) and ``gossip`` (pairwise anti-entropy, incr 15) are the
 # convergence ops; ``elect``/``propose`` (the Raft-subset consensus core, incr 16) are the consensus
 # ops. ``CONSENSUS_OPS`` is the subset that reads/writes the leader/term metadata.
-CONSENSUS_OPS = frozenset({"elect", "propose"})
+CONSENSUS_OPS = frozenset({"elect", "propose", "step_down"})
 PROTOCOL_OPS = frozenset({"anti_entropy", "gossip"}) | CONSENSUS_OPS
 
 

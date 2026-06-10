@@ -157,15 +157,15 @@ class TieredOracle:
         """
         name = action.name
         no_write = ("get", "partition", "heal", "crash", "restart", "drop", "delay", "reorder",
-                    "clock_skew", "begin", "tget", "tput", "abort", "elect")
+                    "clock_skew", "begin", "tget", "tput", "abort", "elect", "step_down")
         if name in no_write:
             # none of these write replicas; the replica map must be unchanged. ``drop`` (DS0 inc 11)
             # and ``delay``/``reorder`` (DS0 inc 13) only touch the in-flight set; the txn ops
             # begin/tget/tput/abort only touch the
             # (consistency-invisible) txn buffer — a committed write reaches replicas only via
-            # ``commit`` (handled below); ``elect`` (DS0 inc 16) writes only leader/term metadata
-            # (defer that to bit-exact). A read/drop/buffer/abort/elect that mutated a replica is an
-            # inadmissible transition the cheap symbolic tier can refute.
+            # ``commit`` (handled below); ``elect`` (DS0 inc 16) and ``step_down`` (DS0 inc 17)
+            # write only leader/term metadata (defer that to bit-exact). A read/drop/buffer/abort/
+            # elect/step_down that mutated a replica is an inadmissible transition the tier refutes.
             if predicted.replicas != state.replicas:
                 return True, f"{name} must not change any replica"
             return False, ""

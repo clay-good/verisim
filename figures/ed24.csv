@@ -1,0 +1,9 @@
+panel,metric,value,detail
+handoff,handoff_leaderless,1.0000,propose_rejected_after_step_down_over_3_clusters
+handoff,reelect_higher_term,1.0000,successor_term_strictly_higher_over_3_clusters
+handoff,new_leader_commits,1.0000,successor_commits_over_3_clusters
+authority,nonleader_rejected,1.0000,only_leader_steps_down
+authority,second_rejected,1.0000,idempotently_safe
+partition,minority_steps_down,1.0000,relinquish_no_quorum
+partition,minority_propose_blocked,1.0000,commit_needs_quorum_ctl
+tier_b,all,1.0000,steps=26

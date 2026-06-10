@@ -1,0 +1,7 @@
+{
+  "name": "ed24-step-down",
+  "cluster_sizes": [3, 5, 7],
+  "key": "x",
+  "v1": "b",
+  "v2": "c"
+}

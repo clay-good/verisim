@@ -14,7 +14,7 @@ specification to be checked against.
 > makes stale-reads-under-partition the central dynamic). **Tier-B (the system oracle) now ships**
 > (§8 below). Multi-key transactions with the four SQL isolation levels (§9), the OCC/2PL split, the
 > complete §3.4 fault grammar (`drop`/`delay`/`reorder`/`clock_skew`), the `anti_entropy`/`gossip`
-> convergence ops, and the Raft-subset consensus core (`elect`/`propose`, §3.3) have all since shipped
+> convergence ops, and the Raft-subset consensus core (`elect`/`propose`/`step_down`, §3.3) have all since shipped
 > as later DS increments. The embedded SPEC-6 host inside each node and the external real-binary DST
 > runtime remain later increments (SPEC-7 §5, §13); each will extend this document.
 
@@ -194,6 +194,7 @@ A `tget`/`tput`/`commit`/`abort` on an unknown txn (or one opened at a different
 | `gossip <a> <b>` (DS0 increment 15) | **pairwise, bidirectional** anti-entropy: for every object both `a` and `b` replicate, *both* adopt their mutual per-object winner (a `ReplicaWrite` for whichever is behind). Needs a live link (both up + connected), else `("unavailable", "")`. One gossip reconciles both endpoints; a chain spreads a write epidemically. `("gossiped", str(num_moved))`. |
 | `elect <node>` (DS0 increment 16) | **leader election**: `node` becomes the cluster leader iff the *live* nodes in its partition group are a strict majority of all nodes (`> n//2`), bumping the monotone `term` and installing the global `leader` (a `ProtocolStep`). A crashed candidate is `("unavailable", "")`; one without a live majority is `("no_quorum", "")`. On success `("elected", str(new_term))`. Touches no replica. |
 | `propose <node> <key> <val>` (DS0 increment 16) | **leader-fenced write**: commit `val` to `key` iff `node` is the current `leader` and can reach a majority of `key`'s replicas (the consensus quorum, regardless of `consistency_model`) — synchronous to the reachable majority, async catch-up to the minority, exactly like a `quorum` `put`. Rejected `("not_leader", current_leader)` if `node` is not the leader (a deposed leader stays fenced even after `heal`); `("no_quorum", "")` if no reachable majority. `("ok", val)` on commit. |
+| `step_down <node>` (DS0 increment 17) | **voluntary relinquishment**: clear `leader` (`→ None`) **at the same `term`** iff `node` is the current leader — the graceful counterpart to `elect`'s higher-term deposition, leaving the cluster leaderless until a fresh `elect`. Rejected `("not_leader", current_leader)` if `node` is not the leader (so a non-leader or a second `step_down` is a no-op reject — idempotently safe); `("unavailable", "")` if crashed. Needs **no quorum** (it reads only the node's own leadership), so a minority-stranded leader can relinquish where its `propose` is `no_quorum`. On success `("stepped_down", str(term))`. Touches no replica. |
 
 `advance` is the engine of the distributed dynamics — it is where replication actually happens and
 where partition/crash make their effect felt. Delivery is simulated **sequentially within one
@@ -254,7 +255,7 @@ and leaves every prior golden, hash, and tokenization unchanged. ED19
 ([`experiments/ed19.py`](../src/verisim/experiments/ed19.py)) pins both findings; Tier-B reproduces the
 read-repair bit-for-bit.
 
-### 3.3 `elect` / `propose` — the Raft-subset consensus core (DS0 increment 16)
+### 3.3 `elect` / `propose` / `step_down` — the Raft-subset consensus core (DS0 increments 16–17)
 
 `elect` and `propose` are the **consensus** family — the third action family (SPEC-7 §3.2) and the
 §4 `ProtocolStep` the spec named. They add the one safety property a leaderless `quorum` write
@@ -303,6 +304,32 @@ to bit-exact (the `metamorphic` tier adds two reference-free invariants — *ter
 *leader is a known node* — so a backward-term or bogus-leader prediction is still refuted cheaply).
 ED23 ([`experiments/ed23.py`](../src/verisim/experiments/ed23.py)) pins both panels (no split-brain;
 term-fencing vs the unfenced-`put` control); Tier-B reproduces every transition bit-for-bit.
+
+**`step_down node` — the voluntary handoff (DS0 increment 17).** Where `elect` *deposes* a leader by
+a higher term, `step_down` lets the *current* leader hand back power on its own, leaving the cluster
+**leaderless at the same `term`** (`leader → None`, `term` held). The term machinery then closes the
+gap the same way it fences a deposed leader: until a fresh `elect` installs a successor at a strictly
+higher term, every `propose` is `("not_leader", "")` — so a clean handoff is `step_down` then
+`elect <successor>`, and **no leaderless window ever commits a consensus write**. Only the current
+leader may relinquish — a non-leader (or a second `step_down` on an already-leaderless cluster) is a
+no-op reject `("not_leader", current_leader)`, so it is idempotently safe; a crashed leader is
+`("unavailable", "")`. The asymmetry it exposes: relinquishing power reads only the node's own
+leadership, never the medium, so a **minority-stranded leader can still step down** where its `propose`
+there is `no_quorum` — *giving up* authority is always safe, *exercising* it needs a quorum.
+
+```
+elect n0; propose n0 x b                          # ("ok","b") — n0 leads (term 1) and commits
+step_down n0                                       # ("stepped_down","1") — leaderless, term held at 1
+propose n0 x c                                     # ("not_leader","") — no leaderless commit window
+elect n1; propose n1 x c                           # successor at term 2 commits — the clean handoff
+partition n0 | n1 n2; step_down n0                 # a minority leader still relinquishes (no quorum needed)
+```
+
+Like `elect`/`propose`, `step_down` is a coordinator-level decision touching no replica, computed
+byte-identically by Tier-A and Tier-B via the shared `step_down_edits` helper and reusing the
+`ProtocolStep` edit (`leader → None`). ED24 ([`experiments/ed24.py`](../src/verisim/experiments/ed24.py))
+pins both panels (the handoff lifecycle; authority + partition-independence) with Tier-B agreeing on
+every transition.
 
 ## 4. The delta and the `apply == oracle` invariant
 

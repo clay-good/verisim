@@ -162,10 +162,12 @@ class ProtocolStep:
 
     The SPEC-7 §4 ``ProtocolStep(kind, term, index, leader?)`` edit, specialized to the Raft-subset
     leader-election core: ``kind == "elect"`` installs ``leader`` at the new ``term`` (a strict
-    monotone bump). It changes no replica — leadership is cluster metadata, separate from the data
-    plane — so it composes with every consistency model and applies to the protocol layer alone. The
-    fields ``term``/``leader`` are at their boot defaults (``0``/``None``) until the first election,
-    so a cluster that never elects serializes to the exact pre-increment-16 form.
+    monotone bump); ``kind == "step_down"`` (DS0 increment 17) clears ``leader`` (``→ None``) at the
+    *same* ``term`` — voluntary relinquishment leaving the cluster leaderless until a fresh election.
+    It changes no replica — leadership is cluster metadata, separate from the data plane — so it
+    composes with every consistency model and applies to the protocol layer alone. The fields
+    ``term``/``leader`` are at their boot defaults (``0``/``None``) until the first election, so a
+    cluster that never elects serializes to the exact pre-increment-16 form.
     """
 
     kind: str

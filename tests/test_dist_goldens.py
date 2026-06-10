@@ -336,6 +336,30 @@ def test_golden_consensus_elect_then_propose_under_partition():
     }
 
 
+def test_golden_step_down_handoff_leaderless_gap_then_successor():
+    # The voluntary-step-down golden (SPEC-7 §3.2, DS0 incr 17): n0 leads (term 1) and commits
+    # `x=b`, then `step_down n0` leaves the cluster leaderless at the same term; a fresh `elect n1`
+    # installs a successor at the strictly higher term 2, who commits `x=c`. The canonical form pins
+    # the clean handoff — term 2, leader n1 — and that step_down touched no replica/log (only the
+    # final propose did), so the data plane is exactly the successor's write.
+    final = _final(["elect n0", "propose n0 x b", "step_down n0", "elect n1", "propose n1 x c"])
+    assert final == {
+        "replicas": [
+            _rep("x", "n0", 2, "c"), _rep("x", "n1", 2, "c"), _rep("x", "n2", 2, "c"), *_boot_y()
+        ],
+        "log": [],  # consensus ops (elect/step_down/propose) are protocol-layer; no causal event
+        "inflight": [],  # full connectivity -> the majority write reached every replica in sync
+        "partitions": [["n0", "n1", "n2"]],
+        "down": [],
+        "clock": 0,
+        "next_event_id": 0,
+        "next_msg_id": 0,
+        "last_result": ["ok", "c"],
+        "term": 2,        # elect n0 (1) -> step_down (held) -> elect n1 (2)
+        "leader": "n1",   # the successor after the voluntary handoff
+    }
+
+
 def test_golden_linearizable_replicates_synchronously():
     # A single put commits to *every* replica in the same step — no in-flight, no advance needed,
     # the strong-consistency counterpart of the eventual-consistency async-then-converge golden.

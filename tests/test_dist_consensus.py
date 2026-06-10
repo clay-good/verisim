@@ -45,11 +45,13 @@ def test_grammar_parses_elect_and_propose() -> None:
     assert parse_dist_action("elect n0").name == "elect"
     p = parse_dist_action("propose n0 x b")
     assert p.name == "propose" and p.args == ("n0", "x", "b")
-    assert sorted(CONSENSUS_OPS) == ["elect", "propose"]
+    assert parse_dist_action("step_down n0").name == "step_down"
+    assert sorted(CONSENSUS_OPS) == ["elect", "propose", "step_down"]
     assert CONSENSUS_OPS <= PROTOCOL_OPS
 
 
-@pytest.mark.parametrize("bad", ["elect", "elect n0 n1", "propose n0 x", "propose n0 x b c"])
+@pytest.mark.parametrize("bad", ["elect", "elect n0 n1", "propose n0 x", "propose n0 x b c",
+                                 "step_down", "step_down n0 n1"])
 def test_grammar_rejects_bad_arity(bad: str) -> None:
     with pytest.raises(DistParseError):
         parse_dist_action(bad)
@@ -165,6 +167,68 @@ def test_propose_in_majority_partition_writes_majority_async_to_minority() -> No
     assert healed.replicas[("x", "n0")].value == "b"  # converges after heal
 
 
+# --- step_down: voluntary relinquishment (DS0 increment 17) -------------------------------------
+
+def test_step_down_by_leader_leaves_cluster_leaderless_at_same_term() -> None:
+    s = _run(_ref(), ["elect n0"])  # term 1, leader n0
+    r = _ref().step(s, parse_dist_action("step_down n0"))
+    assert (r.status, r.value) == ("stepped_down", "1")
+    assert r.state.leader is None and r.state.term == 1  # leaderless, term held
+
+
+def test_propose_after_step_down_is_not_leader_no_commit_window() -> None:
+    # The leaderless gap admits no consensus write — even from the node that just stepped down.
+    s = _run(_ref(), ["elect n0", "step_down n0"])
+    r = _ref().step(s, parse_dist_action("propose n0 x b"))
+    assert (r.status, r.value) == ("not_leader", "")  # no leader to fence the write through
+
+
+def test_step_down_by_non_leader_is_rejected() -> None:
+    s = _run(_ref(), ["elect n0"])
+    r = _ref().step(s, parse_dist_action("step_down n1"))  # n1 is not the leader
+    assert (r.status, r.value) == ("not_leader", "n0")
+    assert r.state.leader == "n0" and r.state.term == 1  # unchanged
+
+
+def test_second_step_down_is_idempotent_no_op_reject() -> None:
+    s = _run(_ref(), ["elect n0", "step_down n0"])  # already leaderless
+    r = _ref().step(s, parse_dist_action("step_down n0"))
+    assert r.status == "not_leader"  # nothing to relinquish
+
+
+def test_step_down_crashed_node_is_unavailable() -> None:
+    s = _run(_ref(), ["elect n0", "crash n0"])
+    r = _ref().step(s, parse_dist_action("step_down n0"))
+    assert r.status == "unavailable"
+
+
+def test_minority_leader_can_step_down_where_propose_is_no_quorum() -> None:
+    # Relinquishing needs no quorum (it reads only the node's own leadership); committing does.
+    s = _run(_ref(), ["elect n0", "partition n0 | n1 n2"])
+    assert _ref().step(s, parse_dist_action("propose n0 x b")).status == "no_quorum"
+    r = _ref().step(s, parse_dist_action("step_down n0"))
+    assert (r.status, r.value) == ("stepped_down", "1")
+    assert r.state.leader is None
+
+
+def test_handoff_successor_election_bumps_term_strictly() -> None:
+    s = _run(_ref(), ["elect n0", "step_down n0", "elect n1"])
+    assert s.term == 2 and s.leader == "n1"  # the successor lands at a strictly higher term
+
+
+def test_step_down_changes_no_replica() -> None:
+    s = _run(_ref(), ["elect n0", "propose n0 x b"])
+    r = _ref().step(s, parse_dist_action("step_down n0"))
+    assert r.state.replicas == s.replicas  # leadership is metadata, not data
+
+
+def test_step_down_protocol_step_round_trips() -> None:
+    s = _run(_ref(), ["elect n0"])
+    stepped = apply(s, [ProtocolStep("step_down", s.term, None)])
+    assert stepped.leader is None and stepped.term == 1
+    assert from_canonical(to_canonical(stepped)) == stepped
+
+
 # --- delta + serialization ----------------------------------------------------------------------
 
 def test_protocol_step_applies_and_round_trips() -> None:
@@ -238,6 +302,9 @@ def test_tier_a_equals_tier_b_over_a_consensus_trajectory() -> None:
         "heal", "advance 2",
         "propose n0 y a",                       # not_leader (fenced)
         "propose n1 y a", "advance 5",          # the new leader commits
+        "step_down n1",                         # the leader voluntarily relinquishes -> leaderless
+        "propose n1 y b",                       # not_leader (no leader to commit through)
+        "elect n0", "propose n0 y b", "advance 5",  # a clean handoff: re-elect, then commit
     ]
     for cmd in script:
         a = parse_dist_action(cmd)

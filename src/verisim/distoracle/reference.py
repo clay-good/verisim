@@ -242,6 +242,47 @@ def propose_edits(
     return edits, "ok", val
 
 
+def step_down_edits(
+    state: DistributedState, action: DistAction, config: DistConfig
+) -> tuple[DistDelta, str, str]:
+    """``step_down node``: voluntary leadership relinquishment (DS0 increment 17, §3.2).
+
+    The **graceful** counterpart of ED23's term-fencing: where ``elect`` *deposes* a leader by a
+    higher term (an involuntary loss of power, fenced after heal — ED23 Panel B), ``step_down`` lets
+    the *current* leader hand back power on its own, leaving the cluster **leaderless at the same
+    term** (``leader → None``, ``term`` unchanged). The term machinery then closes the gap the same
+    way it fences a deposed leader: until a fresh ``elect`` bumps the term and installs a successor,
+    every ``propose`` is rejected (``not_leader``) — even one issued by the node that just stepped
+    down. So a voluntary handoff is `step_down` then `elect <successor>` (a strictly higher term),
+    and there is no window in which a leaderless cluster commits a consensus write (ED24, Panel A).
+
+    Two properties distinguish it from the data-plane ops:
+
+      - ``not_leader`` — only the *current* leader can step down; any other node (including one in a
+        cluster that already has no leader) is rejected, the result carrying the current leader (or
+        ``""``) for diagnosis. So ``step_down`` is idempotently safe: a second is a no-op reject.
+      - **partition-independent** — relinquishing power needs no quorum, so a leader **stranded in a
+        minority can still step down** (it reads only its own leadership, never the medium), where
+        the same leader's ``propose`` there is ``no_quorum``. Giving up authority is always safe;
+        committing under it is not (ED24, Panel B). A crashed leader is ``unavailable``.
+
+    Like ``elect``, it touches no replica — leadership is cluster metadata — so Tier-A and Tier-B
+    compute byte-identical leader/term deltas; shared by both oracles so they cannot drift.
+    """
+    node = action.args[0]
+    if not state.is_up(node):
+        return [SetResult("unavailable", "")], "unavailable", ""
+    if state.leader != node:
+        cur = state.leader or ""
+        return [SetResult("not_leader", cur)], "not_leader", cur
+    # Relinquish: clear the leader, hold the term (a successor's `elect` bumps it strictly higher).
+    return (
+        [ProtocolStep("step_down", state.term, None), SetResult("stepped_down", str(state.term))],
+        "stepped_down",
+        str(state.term),
+    )
+
+
 class ReferenceDistOracle:
     """The Tier-A deterministic DES (§5.1). Pure: ``step`` is a function of (state, action)."""
 
@@ -289,6 +330,8 @@ class ReferenceDistOracle:
             return elect_edits(state, action, self.config)
         if name == "propose":
             return propose_edits(state, action, self.config)
+        if name == "step_down":
+            return step_down_edits(state, action, self.config)
         raise ValueError(f"unhandled action {name!r}")  # pragma: no cover - grammar is closed
 
     def _event(self, state: DistributedState, node: str, raw: str) -> EventAppend:

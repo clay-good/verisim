@@ -171,8 +171,11 @@ class DistributedState:
     # ``term`` is the monotone election epoch that *fences* a deposed leader: a new election bumps the
     # global term and sets the global ``leader``, so an old leader's ``propose`` is rejected (it is no
     # longer ``leader``) even after the partition heals — the Raft leader-completeness safety property
-    # plain ``quorum`` writes lack. Both at default (``term == 0``, ``leader is None``) until the first
-    # ``elect``, and omitted from the canonical form there, so every pre-increment-16 hash is unchanged.
+    # plain ``quorum`` writes lack. ``step_down`` (DS0 increment 17) clears ``leader`` (``→ None``) at
+    # the *same* ``term`` — voluntary relinquishment, the graceful counterpart to deposition — so the
+    # cluster is leaderless until a fresh ``elect``. Both at default (``term == 0``, ``leader is None``)
+    # until the first ``elect``, and omitted from the canonical form there, so every pre-increment-16
+    # hash is unchanged.
     term: int = 0
     leader: str | None = None
 

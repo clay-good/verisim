@@ -74,6 +74,7 @@ from verisim.distoracle.reference import (
     elect_edits,
     gossip_edits,
     propose_edits,
+    step_down_edits,
     timing_fault_edits,
 )
 
@@ -278,6 +279,12 @@ class SystemDistOracle:
             # later by this oracle's own autonomous-actor ``_advance`` (where Tier-B's independence
             # does its work).
             return propose_edits(state, action, self.config)
+        if name == "step_down":
+            # Voluntary relinquishment (DS0 incr 17) reads only the cluster's leadership metadata,
+            # never the medium or an actor's replicas, so Tier-A and Tier-B clear the leader
+            # byte-identically via the shared helper — the partition-independence ED24 Panel B turns
+            # on (a minority-stranded leader steps down where its ``propose`` is ``no_quorum``).
+            return step_down_edits(state, action, self.config)
         raise ValueError(f"unhandled action {name!r}")  # pragma: no cover - grammar is closed
 
     def _event(self, state: DistributedState, action: DistAction) -> EventAppend:
