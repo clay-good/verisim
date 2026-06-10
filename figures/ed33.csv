@@ -1,0 +1,8 @@
+panel,metric,value,detail
+tombstone,delete_removes,1.0000,deleted_on_all_over_3_clusters
+tombstone,outversions_put,1.0000,tombstone_version_gt_put
+tombstone,newer_put_resurrects,1.0000,higher_version_write_back
+resurrection,minority_reads_item,1.0000,partitioned_minority_still_reads_old_value
+resurrection,anti_entropy_repairs,1.0000,tombstone_wins_no_resurrection
+resurrection,gossip_repairs,1.0000,pairwise_repair_no_resurrection
+tier_b,all,1.0000,steps=43

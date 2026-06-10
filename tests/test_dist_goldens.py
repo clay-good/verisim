@@ -522,6 +522,40 @@ def test_golden_read_index_confirms_leadership_and_serves_committed():
     }
 
 
+def test_golden_delete_tombstones_the_key_resurrection_safe():
+    # The tombstone-delete golden (SPEC-7 §3.2, DS0 incr 26): under linearizable, `put x a` (ver 1
+    # on all) then `delete x` writes the tombstone synchronously to every replica at version 2 — a
+    # versioned removal, not an erasure. The replica value is the `__deleted__` sentinel; a `get`
+    # reads `("deleted","")`. The version bump is what makes it resurrection-safe (a stale lower-
+    # version write loses the LWW merge). Purely additive: no new state field, no new edit type.
+    config = DistConfig(name="golden-del", nodes=("n0", "n1", "n2"), objects=("x", "y"),
+                        values=("a", "b"), consistency_model="linearizable")
+    oracle = ReferenceDistOracle(config)
+    state = DistributedState.initial(config)
+    for cmd in ["put n0 x a", "delete n0 x"]:
+        state = oracle.step(state, parse_dist_action(cmd)).state
+    final = to_canonical(state)
+    assert final == {
+        "replicas": [
+            _rep("x", "n0", 2, "__deleted__"), _rep("x", "n1", 2, "__deleted__"),
+            _rep("x", "n2", 2, "__deleted__"), *_boot_y(),
+        ],
+        "log": [
+            {"id": 0, "node": "n0", "op": "put n0 x a", "clock": 0, "happens_before": []},
+            {"id": 1, "node": "n0", "op": "delete n0 x", "clock": 0, "happens_before": [0]},
+        ],
+        "inflight": [],
+        "partitions": [["n0", "n1", "n2"]],
+        "down": [],
+        "clock": 0,
+        "next_event_id": 2,
+        "next_msg_id": 0,
+        "last_result": ["deleted", ""],
+    }
+    # the tombstoned key reads as deleted; the boot key y is untouched.
+    assert oracle.step(state, parse_dist_action("get n0 x")).status == "deleted"
+
+
 def test_golden_config_push_commits_on_majority_minority_stays_stale() -> None:
     # The config-push golden (SPEC-7 §3.2, DS0 incr 24): n0 leads (term 1), then the network splits
     # {n0,n1} | {n2}. `config_push n0 feature on` from n0 (on the 2-of-3 majority side) commits and

@@ -28,6 +28,16 @@ if TYPE_CHECKING:
     from verisim.dist.config import DistConfig
 
 
+# The tombstone marker a ``delete`` writes (DS0 increment 26). A delete is a *versioned write of a
+# tombstone* (the Dynamo/Cassandra discipline), not a removal of the replica: the deleted key keeps a
+# replica whose value is this sentinel at a bumped version, so last-writer-wins orders the delete
+# against concurrent/stale writes by version — which is exactly what prevents the **resurrection
+# problem** (a removed key reappearing because a stale replica's old value out-versions an absence).
+# A ``get`` on a tombstoned replica reports ``("deleted", "")``. The sentinel is outside the user
+# value vocab, so it never collides with a real value; the metamorphic tier admits it explicitly.
+TOMBSTONE = "__deleted__"
+
+
 @dataclass(frozen=True)
 class ReplicaState:
     """One node's copy of a logical object: an MVCC ``(version, value)`` pair.

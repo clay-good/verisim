@@ -156,6 +156,7 @@ of a real message-passing execution, not just the analytic DES.
 | `put <node> <key> <val>` | write `node`'s local replica to `(local_version + 1, val)` immediately; enqueue an async `MsgSend` to every other replica of `key` (`deliver_after = clock + 1`). `("ok", val)`. |
 | `get <node> <key>` | return `node`'s **local** replica value — which under partition may be **stale**. `("ok", value)`. |
 | `cas <node> <key> <old> <new>` | if `node`'s local value `== old`, behave as `put node key new`; else no write, `("conflict", local_value)`. |
+| `delete <node> <key>` (DS0 increment 26) | **tombstone delete**: behave as `put node key TOMBSTONE` — a *versioned write of a tombstone*, not a removal of the replica, so it inherits every consistency model and is ordered by version (the resurrection-safe discipline). A `get` on a tombstoned replica reports `("deleted", "")`. The client result is `("deleted", "")`; the replicated value is the `__deleted__` sentinel. Purely additive (no new state field, no new edit). |
 | `enqueue <node> <queue> <val>` (DS0 incr 21) | append `val` to each reachable replica's FIFO `queue` list (the relative append op). Availability follows the consistency model (linearizable needs every replica, quorum a majority, eventual/causal proceed on the reachable set); else `("unavailable", "")`. `("enqueued", val)`. |
 | `dequeue <node> <queue>` (DS0 incr 21) | return the head of `node`'s local `queue` replica and pop the head from each reachable replica. The delivery semantics follow the model: `eventual` admits **duplicate delivery** under partition (the removal does not cross the split), `linearizable`/`quorum` gate availability for **exactly-once**. `("dequeued", head)`, or `("empty", "")` if the local replica has no items; `("unavailable", "")` if the model's quorum is unreachable. |
 
@@ -601,6 +602,40 @@ too. The `config` map joins `cluster_view`, is omitted from the canonical form u
 must learn to predict, not a control on the KV/queue). ED31
 ([`experiments/ed31.py`](../src/verisim/experiments/ed31.py)) pins both panels (the leader-committed
 rollout + fence; the partition divergence + repair) with Tier-B agreeing on every transition.
+
+### 3.8 `delete` — the tombstone delete and the resurrection problem (DS0 increment 26)
+
+The fundamental KV **remove** — and a canonical distributed hazard the design must get right. The key
+decision: a `delete node key` is a **versioned write of a tombstone**, *not* a removal of the replica.
+It reuses the `put` write path with the sentinel `TOMBSTONE` value (`__deleted__`), so it inherits
+every consistency model (eventual/causal/quorum/linearizable), bumps the version like any write, and a
+`get` on a tombstoned replica reports `("deleted", "")`.
+
+Why a tombstone and not an erasure? Because erasure causes the **resurrection problem**. If a delete
+simply removed the replica, then under a partition the deleted key still exists on the unreachable
+side, and when the network heals the merge has no way to tell "deleted" from "never seen" — the stale
+replica's old value wins and the key **comes back from the dead** (the classic Dynamo/Cassandra bug
+tombstones exist to prevent). With a *versioned* tombstone, the delete is just another write ordered
+by version: its higher version **wins the last-writer-wins merge** over any older value, so
+`anti_entropy`/`gossip` converge a lagging replica to `deleted`, not to the resurrected value.
+
+```
+put n0 x a; advance 5                       # x=a (version 1) on every replica
+partition n0 n1 n2 | n3 n4; delete n0 x      # ("deleted","") — tombstone (version 2) on the majority
+advance 5; get n3 x                          # ("ok","a") — the partitioned minority still reads it!
+heal; anti_entropy n3; get n3 x              # ("deleted","") — the tombstone's higher version wins
+put n0 x b; advance 5; get n3 x              # ("ok","b") — a genuinely newer write legitimately returns
+```
+
+`delete` reuses the `put` write path, so Tier-A and Tier-B compute byte-identical deltas (the
+divergence-under-partition and the version-ordered convergence are reproduced on the autonomous actors
+too). The tombstone is just a replica value — it adds no state field and no edit type, so the op is
+purely additive (every prior golden/hash holds). ED33
+([`experiments/ed33.py`](../src/verisim/experiments/ed33.py)) pins both panels (the versioned
+tombstone; resurrection under partition + the anti_entropy/gossip repair) with Tier-B agreeing on
+every transition. (Honest scope: the tombstone is never garbage-collected here — real systems expire
+tombstones after a grace period, a Tier-B/operational refinement; keeping them is the conservative,
+always-correct choice for the reference oracle.)
 
 ## 4. The delta and the `apply == oracle` invariant
 

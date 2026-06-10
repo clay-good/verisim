@@ -33,7 +33,7 @@ from dataclasses import dataclass
 
 from verisim.dist.action import DistAction
 from verisim.dist.config import DEFAULT_DIST_CONFIG, DistConfig
-from verisim.dist.state import DistributedState
+from verisim.dist.state import TOMBSTONE, DistributedState
 from verisim.distoracle.reference import ReferenceDistOracle
 
 # Relative tier costs (nominal; any monotone schedule preserves the cheapest-refutation policy).
@@ -103,7 +103,7 @@ class TieredOracle:
         self, state: DistributedState, action: DistAction, predicted: DistributedState
     ) -> tuple[bool, str]:
         """Reference-free invariants any legal state satisfies (cheapest)."""
-        vocab = set(self.config.values) | {self.config.default_value}
+        vocab = set(self.config.values) | {self.config.default_value, TOMBSTONE}  # incr 26
         for (obj, node), r in predicted.replicas.items():
             if r.value not in vocab:
                 return True, f"replica ({obj},{node}) has out-of-vocab value {r.value!r}"

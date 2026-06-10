@@ -52,7 +52,7 @@ from verisim.dist.delta import (
     VersionSet,
     apply,
 )
-from verisim.dist.state import DistributedState, LogEntry, Message
+from verisim.dist.state import TOMBSTONE, DistributedState, LogEntry, Message
 from verisim.dist.txn import txn_step
 from verisim.distoracle.base import DistStepResult
 from verisim.host.action import parse_host_action
@@ -767,7 +767,7 @@ class ReferenceDistOracle:
         self, state: DistributedState, action: DistAction
     ) -> tuple[DistDelta, str, str]:
         name = action.name
-        if name in ("put", "cas"):
+        if name in ("put", "cas", "delete"):
             return self._write(state, action)
         if name == "get":
             return self._get(state, action)
@@ -876,16 +876,23 @@ class ReferenceDistOracle:
             if replica.value != old:
                 return [ev, SetResult("conflict", replica.value)], "conflict", replica.value
             value = new
+        elif action.name == "delete":
+            # A delete is a versioned write of a tombstone (DS0 incr 26) — same replication path as
+            # put, so it inherits every consistency model and is version-ordered (resurrection-safe)
+            value = TOMBSTONE
         else:
             value = action.args[2]
 
         new_version = replica.version + 1
+        # The client-visible result: a delete reports ``("deleted", "")`` rather than leaking the
+        # tombstone sentinel; the *replicated value* is still the tombstone (the wire/state form).
+        rstatus, rvalue = ("deleted", "") if action.name == "delete" else ("ok", value)
         if model == "linearizable":
             # synchronous: every replica gets the new version now; no in-flight, no staleness.
             edits: list[DistEdit] = [ev]
             edits.extend(ReplicaWrite(key, peer, new_version, value) for peer in peers)
-            edits.append(SetResult("ok", value))
-            return edits, "ok", value
+            edits.append(SetResult(rstatus, rvalue))
+            return edits, rstatus, rvalue
 
         if model == "quorum":
             # synchronous to the reachable majority; async catch-up (MsgSend) to the unreachable
@@ -901,8 +908,8 @@ class ReferenceDistOracle:
                             state.sender_clock(node) + 1)
                 )
                 msg_id += 1
-            edits.append(SetResult("ok", value))
-            return edits, "ok", value
+            edits.append(SetResult(rstatus, rvalue))
+            return edits, rstatus, rvalue
 
         # eventual / causal: local write now + async replication to every other replica.
         edits = [ev, ReplicaWrite(key, node, new_version, value)]
@@ -916,8 +923,8 @@ class ReferenceDistOracle:
                         state.sender_clock(node) + 1, deps)
             )
             msg_id += 1
-        edits.append(SetResult("ok", value))
-        return edits, "ok", value
+        edits.append(SetResult(rstatus, rvalue))
+        return edits, rstatus, rvalue
 
     def _get(
         self, state: DistributedState, action: DistAction
@@ -928,6 +935,8 @@ class ReferenceDistOracle:
         if not state.is_up(node) or replica is None:
             status = "unavailable" if not state.is_up(node) else "no_replica"
             return [ev, SetResult(status, "")], status, ""
+        if replica.value == TOMBSTONE:  # a deleted key reads as deleted (DS0 incr 26); see the
+            return [ev, SetResult("deleted", "")], "deleted", ""  # resurrection note in `delete`
         return [ev, SetResult("ok", replica.value)], "ok", replica.value
 
     def _advance(

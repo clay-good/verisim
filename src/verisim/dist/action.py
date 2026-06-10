@@ -7,6 +7,7 @@ workload and the fault/time medium (the consensus/admin family arrives with the 
     put <node> <key> <val>          # client: write <val> to <key> at <node> (async repl)
     get <node> <key>                # client: read <key>'s local replica at <node> (may be stale)
     cas <node> <key> <old> <new>    # client: set <key> to <new> iff <node>'s local value == <old>
+    delete <node> <key>             # client: tombstone <key> (a versioned delete; resurrection-safe)
     advance <dt>                    # time: +<dt> clock; deliver in-flight msgs now due & reachable
     partition <nodes> | <nodes>     # fault: split the network into groups (| separates groups)
     heal                            # fault: remove all partitions (one fully-connected group)
@@ -139,7 +140,18 @@ a deposed leader is ``not_leader`` even after ``heal``. The two linearizable rea
 availability profiles**: ``lread`` trades a quorum round-trip for a clock (a live lease serves a *local*
 read, available even in the minority), while ``read_index`` trades the clock dependence for a quorum
 round-trip (no lease/clock assumption, but unavailable without a majority) — the two standard ways Raft
-serves a linearizable read, and the operational choice between them (ED32).
+serves a linearizable read, and the operational choice between them (ED32). ``delete`` (DS0 increment
+26) is the **tombstone delete** — the fundamental KV remove, and a canonical distributed hazard.
+``delete node key`` is a *versioned write of a tombstone* (it reuses the ``put`` replication path with
+the ``TOMBSTONE`` value), **not** a removal of the replica: the deleted key keeps a replica at a
+bumped version, so last-writer-wins orders the delete against concurrent writes by version. A ``get``
+on a tombstoned replica reports ``("deleted", "")``. This is exactly what avoids the **resurrection
+problem**: under ``eventual`` a delete on one side leaves a partitioned peer still reading the old
+value (the deleted item is "still there" on the minority — the danger), but when the tombstone
+propagates (``advance``/``anti_entropy``/``gossip``) its higher version **wins** over the stale value,
+so the key converges to deleted rather than being resurrected — where a naive removal would let the
+stale replica's value reappear. A genuinely newer ``put`` (a higher version than the tombstone) does
+bring the key back, which is a new write, not a resurrection (ED33).
 """
 
 from __future__ import annotations
@@ -152,6 +164,7 @@ _ARITY: dict[str, int | None] = {
     "put": 3,  # node key val
     "get": 2,  # node key
     "cas": 4,  # node key old new
+    "delete": 2,  # node key  -- tombstone <key>, a versioned (resurrection-safe) delete (DS0 incr 26)
     "advance": 1,  # dt
     "partition": None,  # <nodes> | <nodes> [| ...]
     "host": None,  # <node> <syscall...>  -- a SPEC-6 host syscall on <node>'s host (DS0 incr 23)
@@ -189,7 +202,7 @@ _ARITY: dict[str, int | None] = {
 # ``begin``/``commit``/``abort`` + the txn-scoped ``tget``/``tput`` are client ops (the workload), as
 # are the ``enqueue``/``dequeue`` FIFO-queue ops (DS0 incr 21).
 CLIENT_OPS = frozenset({
-    "put", "get", "cas", "begin", "tget", "tput", "commit", "abort", "enqueue", "dequeue",
+    "put", "get", "cas", "delete", "begin", "tget", "tput", "commit", "abort", "enqueue", "dequeue",
 })
 TXN_OPS = frozenset({"begin", "tget", "tput", "commit", "abort"})
 QUEUE_OPS = frozenset({"enqueue", "dequeue"})  # the FIFO-queue client ops (DS0 incr 21)

@@ -1715,7 +1715,13 @@ cluster?": a leader-committed, majority-replicated config change whose push unde
 minority with stale config — *config divergence* — repaired by a re-push after `heal`). **The
 compositional vision is realized** (ED30): each cluster node runs a real **embedded SPEC-6 host**
 (process table + fd tables + an embedded v0 filesystem), `host node <syscall>` delegating to the SPEC-6
-oracle on that node's own host — per-node isolated, gated by the node's up/down, surviving a crash. Every
+oracle on that node's own host — per-node isolated, gated by the node's up/down, surviving a crash. **The
+fundamental KV remove ships** (ED33): `delete` is a **versioned tombstone** (a write of a tombstone
+value, not an erasure of the replica), so last-writer-wins orders it against concurrent/stale writes —
+the discipline that makes it **resurrection-safe**: under a partition the minority still reads the
+deleted item, but after heal the tombstone's higher version wins the anti_entropy/gossip merge, so the
+key converges to deleted rather than coming back from the dead (where a naive removal would let the
+stale value win). Every
 one of these is additive (omitted from the canonical form until first used, so all prior goldens/hashes
 hold) and validated bit-for-bit against the autonomous-actor Tier-B execution.
 **Open (the honest deferrals):** a wrapped **external**-binary real-DST runtime
@@ -2213,14 +2219,16 @@ python -m verisim.experiments.ed16 --config configs/ed16.json \
     --out figures/ed16.csv --plot figures/ed16.png  # read-committed isolation: lost update + its price (DS0 incr 9)
 python -m verisim.experiments.ed17 --config configs/ed17.json \
     --out figures/ed17.csv --plot figures/ed17.png  # read-uncommitted isolation: dirty read + black-box recovery (DS0 incr 10)
-# DS0 increments 11–25 (ED18–ED32): the complete §3.4 fault grammar (drop/delay/reorder/clock_skew +
+# DS0 increments 11–26 (ED18–ED33): the complete §3.4 fault grammar (drop/delay/reorder/clock_skew +
 # anti_entropy/gossip), the Raft-subset consensus core (elect/propose/step_down/lease/lread/read_index/
-# append/membership), the FIFO queue, the deploy + config_push admin ops, and the embedded SPEC-6 host
-# — see figures/reproduce.sh
+# append/membership), the FIFO queue, the deploy + config_push admin ops, the embedded SPEC-6 host, and
+# the tombstone delete — see figures/reproduce.sh
 python -m verisim.experiments.ed31 --config configs/ed31.json \
     --out figures/ed31.csv --plot figures/ed31.png  # config push: leader-committed config + divergence (DS0 incr 24)
 python -m verisim.experiments.ed32 --config configs/ed32.json \
     --out figures/ed32.csv --plot figures/ed32.png  # read_index: quorum-confirmed linearizable read (DS0 incr 25)
+python -m verisim.experiments.ed33 --config configs/ed33.json \
+    --out figures/ed33.csv --plot figures/ed33.png  # delete: versioned tombstone, resurrection-safe (DS0 incr 26)
 ```
 
 The run-records are git-ignored (regenerable); the figures and their CSVs are

@@ -65,7 +65,7 @@ from verisim.dist.delta import (
     SetResult,
     apply,
 )
-from verisim.dist.state import DistributedState, Message
+from verisim.dist.state import TOMBSTONE, DistributedState, Message
 from verisim.dist.txn import txn_step
 from verisim.distoracle.base import DistStepResult
 from verisim.distoracle.reference import (
@@ -245,7 +245,7 @@ class SystemDistOracle:
             # autonomous-actor ``_advance``, exactly where Tier-B's independence does its work.
             return txn_step(state, action, self.config)
         ev = self._event(state, action)
-        if name in ("put", "cas"):
+        if name in ("put", "cas", "delete"):
             return self._write(state, action, ev)
         if name == "get":
             return self._get(state, action, ev)
@@ -349,7 +349,7 @@ class SystemDistOracle:
         cluster behavior; the differential compares the observable-cluster channel (replicas +
         in-flight + medium), so this reconstruction is identical by construction and never the
         interesting signal (the host excludes ``last`` for the same orthogonality reason)."""
-        node = action.args[0] if action.name in ("put", "get", "cas") else ""
+        node = action.args[0] if action.name in ("put", "get", "cas", "delete") else ""
         prior = tuple(e.id for e in state.log if e.node == node)
         return EventAppend(state.next_event_id, node, action.raw, state.clock, prior)
 
@@ -391,18 +391,22 @@ class SystemDistOracle:
             if cur_val != old:
                 return [ev, SetResult("conflict", cur_val)], "conflict", cur_val
             value = new
+        elif action.name == "delete":
+            value = TOMBSTONE  # a versioned tombstone write (DS0 incr 26), same path as put
         else:
             value = action.args[2]
 
         new_version = replica.version + 1
+        # client result: a delete reports ("deleted", ""); the replicated value is a tombstone.
+        rstatus, rvalue = ("deleted", "") if action.name == "delete" else ("ok", value)
         coordinator = self._actor_for(state, node)
         self._dispatch(coordinator, ("write", key, new_version, value))  # local write at the actor
 
         if model == "linearizable":
             edits: list[DistEdit] = [ev]
             edits.extend(ReplicaWrite(key, peer, new_version, value) for peer in peers)
-            edits.append(SetResult("ok", value))
-            return edits, "ok", value
+            edits.append(SetResult(rstatus, rvalue))
+            return edits, rstatus, rvalue
 
         if model == "quorum":
             # synchronous to the reachable majority; async catch-up to the unreachable minority.
@@ -417,8 +421,8 @@ class SystemDistOracle:
                             state.sender_clock(node) + 1)
                 )
                 msg_id += 1
-            edits.append(SetResult("ok", value))
-            return edits, "ok", value
+            edits.append(SetResult(rstatus, rvalue))
+            return edits, rstatus, rvalue
 
         edits = [ev, ReplicaWrite(key, node, new_version, value)]
         # The causal context the replication carries — the *shared* helper, so Tier-A and Tier-B
@@ -433,8 +437,8 @@ class SystemDistOracle:
                         state.sender_clock(node) + 1, deps)
             )
             msg_id += 1
-        edits.append(SetResult("ok", value))
-        return edits, "ok", value
+        edits.append(SetResult(rstatus, rvalue))
+        return edits, rstatus, rvalue
 
     def _get(
         self, state: DistributedState, action: DistAction, ev: EventAppend
@@ -447,6 +451,8 @@ class SystemDistOracle:
         actor = self._actor_for(state, node)
         cur = self._dispatch(actor, ("read", key, 0, ""))
         val = cur[1] if cur is not None else self.config.default_value
+        if val == TOMBSTONE:  # a deleted key reads as deleted (DS0 incr 26)
+            return [ev, SetResult("deleted", "")], "deleted", ""
         return [ev, SetResult("ok", val)], "ok", val
 
     def _advance(
