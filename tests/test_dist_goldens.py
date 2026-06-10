@@ -414,6 +414,33 @@ def test_golden_append_replicates_the_log_and_commits_on_majority():
     }
 
 
+def test_golden_remove_replica_shrinks_the_consensus_quorum():
+    # The membership-change golden (SPEC-7 §3.2, DS0 incr 20): n0 leads (term 1), `remove_replica`
+    # of n2 shrinks the voting set to {n0, n1} (a strict subset, so it shows in the canonical form);
+    # `propose n0 x b` then commits over the *members* only — a majority of {n0, n1} reaches both,
+    # the non-member n2 keeps its boot replica (consensus replication follows the voting set).
+    final = _final(["elect n0", "remove_replica n2", "propose n0 x b"])
+    assert final == {
+        "replicas": [
+            _rep("x", "n0", 1, "b"),   # member: committed
+            _rep("x", "n1", 1, "b"),   # member: committed
+            _rep("x", "n2", 0, "nil"),  # non-member: untouched by the consensus write
+            *_boot_y(),
+        ],
+        "log": [],  # consensus/membership ops are protocol-layer; no causal event
+        "inflight": [],
+        "partitions": [["n0", "n1", "n2"]],
+        "down": [],
+        "clock": 0,
+        "next_event_id": 0,
+        "next_msg_id": 0,
+        "last_result": ["ok", "b"],
+        "term": 1,
+        "leader": "n0",
+        "members": ["n0", "n1"],  # the reconfigured voting set (a strict subset)
+    }
+
+
 def test_golden_linearizable_replicates_synchronously():
     # A single put commits to *every* replica in the same step — no in-flight, no advance needed,
     # the strong-consistency counterpart of the eventual-consistency async-then-converge golden.

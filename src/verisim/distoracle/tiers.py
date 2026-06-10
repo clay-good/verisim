@@ -132,6 +132,11 @@ class TieredOracle:
         if predicted.commit_index < state.commit_index:
             return True, (f"commit index went backward "
                           f"{state.commit_index}->{predicted.commit_index}")
+        # The voting membership (DS0 incr 20) is always a subset of the configured cluster — a
+        # reference-free invariant any legal reconfiguration satisfies (empty = the "all vote"
+        # sentinel), so a membership naming an unknown node is refuted at the cheapest tier.
+        if predicted.members and not predicted.members <= set(self.config.nodes):
+            return True, "voting membership contains an unknown node"
         return False, ""
 
     def _cycle(
@@ -164,7 +169,7 @@ class TieredOracle:
         name = action.name
         no_write = ("get", "partition", "heal", "crash", "restart", "drop", "delay", "reorder",
                     "clock_skew", "begin", "tget", "tput", "abort", "elect", "step_down",
-                    "lease", "lread")
+                    "lease", "lread", "add_replica", "remove_replica")
         if name in no_write:
             # none of these write replicas; the replica map must be unchanged. ``drop`` (DS0 inc 11)
             # and ``delay``/``reorder`` (DS0 inc 13) only touch the in-flight set; the txn ops

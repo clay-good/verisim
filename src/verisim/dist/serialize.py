@@ -108,6 +108,11 @@ def to_canonical(state: DistributedState) -> dict[str, Any]:
         ]
     if state.commit_index != 0:
         out["commit_index"] = state.commit_index
+    # The consensus voting membership (DS0 incr 20): the empty frozenset (the "all config nodes vote"
+    # sentinel / boot default) is omitted, so a cluster that never reconfigures serializes to the
+    # exact pre-increment-20 form (purely additive). A non-empty (reconfigured) set serializes sorted.
+    if state.members:
+        out["members"] = sorted(state.members)
     return out
 
 
@@ -167,6 +172,7 @@ def from_canonical(d: dict[str, Any]) -> DistributedState:
             for entry in d.get("logs", [])
         },
         commit_index=d.get("commit_index", 0),
+        members=frozenset(d.get("members", [])),
         lease_until=d.get("lease_until", 0),
     )
 

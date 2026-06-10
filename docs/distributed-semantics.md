@@ -14,7 +14,7 @@ specification to be checked against.
 > makes stale-reads-under-partition the central dynamic). **Tier-B (the system oracle) now ships**
 > (§8 below). Multi-key transactions with the four SQL isolation levels (§9), the OCC/2PL split, the
 > complete §3.4 fault grammar (`drop`/`delay`/`reorder`/`clock_skew`), the `anti_entropy`/`gossip`
-> convergence ops, and the Raft-subset consensus core (`elect`/`propose`/`step_down`/`lease`/`append`, §3.3) have all since shipped
+> convergence ops, and the Raft-subset consensus core (`elect`/`propose`/`step_down`/`lease`/`append`/membership, §3.3) have all since shipped
 > as later DS increments. The embedded SPEC-6 host inside each node and the external real-binary DST
 > runtime remain later increments (SPEC-7 §5, §13); each will extend this document.
 
@@ -198,6 +198,7 @@ A `tget`/`tput`/`commit`/`abort` on an unknown txn (or one opened at a different
 | `lease <node> <dt>` (DS0 increment 18) | **leader read lease**: iff `node` is the current leader, set the global-clock lease deadline `lease_until = clock + dt` (a `LeaseSet`). Through that deadline the leader may serve `lread` without a quorum and a new `elect` is fenced. Rejected `("not_leader", current_leader)` / `("unavailable", "")`. On success `("leased", str(until))`. Touches no replica. |
 | `lread <node> <key>` (DS0 increment 18) | **leader-lease local read**: iff `node` is the current leader **and** `clock < lease_until` and up, return `node`'s local replica value with **no quorum round-trip** — linearizable w.r.t. consensus (`propose`) writes (the leader is always in a propose's commit majority, and a live lease guarantees its term is uncontested). So a minority-stranded leader can still `lread` where its `propose` is `no_quorum`. Rejected `("lease_expired", "")` if no live lease; `("not_leader", current_leader)` if not the leader (a deposed leader cannot read off a stale lease); `("unavailable"/"no_replica", "")` otherwise. On success `("ok", value)`. A pure read. |
 | `append <node> <key> <val>` (DS0 increment 19) | **replicated-log append**: iff `node` is the current leader, append a `LogEntry(term, index, key, value)` to its log and replicate to the reachable followers, who **adopt the leader's prefix** (a `LogSet` per node — overwriting any divergent *uncommitted* tail, the log-matching reconciliation). It **commits iff a majority holds it** (advancing the monotone `commit_index` and folding the committed prefix into the KV — a key's version is the count of its committed writes — which backfills a rejoined follower): `("appended", str(index))`. A minority-stranded leader still appends locally but `("uncommitted", str(index))` — not applied to the KV, overwritable by a higher-term leader. Rejected `("not_leader", current_leader)` / `("unavailable", "")`. |
+| `add_replica <node>` / `remove_replica <node>` (DS0 increment 20) | **membership change**: reconfigure the consensus voting set `members` (a leader-committed `MemberSet`), so the quorum threshold (`elect`/`propose`/`append`) tracks it. `add_replica` adds a node (restoring the full cluster collapses to the empty "all vote" sentinel); `remove_replica` removes one — shrinking the majority, the lever that **restores availability** after failures. Rejected `("no_leader", "")` (a leader must commit it), `("is_leader", node)` (the active leader cannot be removed), `("last_member", node)`, `("unknown_node", "")`; a no-op is `("already_member"/"not_member", node)`. On success `("added"/"removed", node)`. All config nodes still store replicas; `members` is the voting overlay. Touches no replica. |
 
 `advance` is the engine of the distributed dynamics — it is where replication actually happens and
 where partition/crash make their effect felt. Delivery is simulated **sequentially within one
@@ -258,7 +259,7 @@ and leaves every prior golden, hash, and tokenization unchanged. ED19
 ([`experiments/ed19.py`](../src/verisim/experiments/ed19.py)) pins both findings; Tier-B reproduces the
 read-repair bit-for-bit.
 
-### 3.3 `elect` / `propose` / `step_down` / `lease` / `append` — the Raft-subset consensus core (DS0 increments 16–19)
+### 3.3 `elect` / `propose` / `step_down` / `lease` / `append` / membership — the Raft-subset consensus core (DS0 increments 16–20)
 
 `elect` and `propose` are the **consensus** family — the third action family (SPEC-7 §3.2) and the
 §4 `ProtocolStep` the spec named. They add the one safety property a leaderless `quorum` write
@@ -389,13 +390,40 @@ heal; append n1 x d                                # n0 reconciles: b@1 overwrit
 `append`. ED26 ([`experiments/ed26.py`](../src/verisim/experiments/ed26.py)) pins both panels
 (commit-requires-a-majority; log-matching reconciliation) with Tier-B agreeing on every transition.
 
+**`add_replica node` / `remove_replica node` — membership change (DS0 increment 20).** The voting
+set that defines a quorum is itself reconfigurable. `add_replica`/`remove_replica` install a new
+`members` set (a leader-committed `MemberSet`), and every quorum computation — election votes,
+`propose`/`append` majority — routes through it (`active_members` resolves the empty "all config
+nodes vote" sentinel). So the **majority threshold tracks the membership**: shrinking the voting set
+lowers it (a minority becomes a majority — the lever an operator pulls to **restore availability**
+after losing nodes: a lone survivor of a 3-node cluster commits again once the two dead are removed),
+and growing it raises the threshold back. The change is fenced for safety — the *active leader*
+cannot be removed (`is_leader`), the *last* member cannot be removed, and a change needs a current
+leader to commit it. All config nodes still physically store replicas; `members` is the voting
+overlay, omitted from the canonical form until the first change.
+
+```
+elect n0; partition n0 | n1 n2; propose n0 x a    # ("no_quorum","") — n0 alone is 1 of 3 members
+remove_replica n1; remove_replica n2              # members → {n0}; the threshold drops to 1
+propose n0 x a                                    # ("ok","a") — a majority of one, availability restored
+add_replica n1                                    # members → {n0,n1}; the threshold rises to 2
+```
+
+Membership is coordinator-level cluster metadata, so `add_replica`/`remove_replica` are computed
+byte-identically by Tier-A and Tier-B. ED27 ([`experiments/ed27.py`](../src/verisim/experiments/ed27.py))
+pins both panels (the threshold tracks the votes; restore-availability) with Tier-B agreeing on every
+transition. (Honest scope: membership is the *voting* overlay and the change is committed by leader
+fiat; real Raft commits a config change as a log entry under joint consensus to make *concurrent*
+reconfigurations safe — deferred.)
+
 ## 4. The delta and the `apply == oracle` invariant
 
 The oracle returns the next state **and** the structured delta that produces it
 ([`verisim.dist.delta`](../src/verisim/dist/delta.py)): `ReplicaWrite`, `MsgSend`/`MsgDeliver`/
 `MsgDrop`, `EventAppend`, `PartitionSet`, `NodeDown`/`NodeUp`, `ClockSet`, the consensus
-`ProtocolStep`/`LeaseSet` and the replicated-log `LogSet`/`CommitIndexSet` (DS0 incr 16–19), and
-`SetResult`. The **M1-analogue invariant** holds by construction and is tested on every transition:
+`ProtocolStep`/`LeaseSet`, the replicated-log `LogSet`/`CommitIndexSet`, the membership `MemberSet`
+(DS0 incr 16–20), and `SetResult`. The **M1-analogue invariant** holds by construction and is tested
+on every transition:
 
 ```
 apply(state, oracle.step(state, action).delta) == oracle.step(state, action).state

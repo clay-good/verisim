@@ -24,6 +24,8 @@ workload and the fault/time medium (the consensus/admin family arrives with the 
     lease <node> <dt>               # consensus: the leader takes a read lease until clock+<dt>
     lread <node> <key>              # consensus: a leader-lease local linearizable read (no quorum)
     append <node> <key> <val>       # consensus: append <key>=<val> to the replicated log (Raft log)
+    add_replica <node>              # consensus: add <node> to the voting membership (quorum grows)
+    remove_replica <node>           # consensus: remove <node> from the voting membership (quorum shrinks)
 
 The fault/time family is the source of all interesting dynamics (stale reads under partition,
 convergence after heal+advance) -- the distributed analogue of SPEC-5's ``advance Δt`` and SPEC-6's
@@ -83,7 +85,14 @@ replicates it to the reachable followers (who adopt the leader's prefix, **overw
 uncommitted tail** — the log-matching reconciliation), committing it (and applying it to the KV)
 **iff a majority holds it**. A minority-stranded leader still appends locally (``uncommitted``) but
 does not commit, so its entry can be overwritten by a higher-term leader — the Raft log-matching
-safety the one-shot ``propose`` could not express (ED26).
+safety the one-shot ``propose`` could not express (ED26). ``add_replica``/``remove_replica`` (DS0
+increment 20) are the **membership-change** admin ops the §3.2 grammar named: they reconfigure the
+*consensus voting set* (the nodes that count toward an election/commit quorum), a leader-committed
+change, so the **majority threshold tracks the membership** — ``remove_replica`` shrinks the cluster
+(a smaller majority suffices, the standard way to restore availability after nodes fail) and
+``add_replica`` grows it. All config nodes still physically store replicas; membership is the voting
+overlay (the empty set is the "all nodes vote" default). The active leader cannot be removed
+(``is_leader`` — step it down first), and the last member cannot be removed (ED27).
 """
 
 from __future__ import annotations
@@ -113,6 +122,8 @@ _ARITY: dict[str, int | None] = {
     "lease": 2,  # node dt  -- the leader takes a read lease until clock+dt (DS0 incr 18)
     "lread": 2,  # node key  -- a leader-lease local linearizable read, no quorum (DS0 incr 18)
     "append": 3,  # node key val  -- append to the Raft replicated log; commit on majority (incr 19)
+    "add_replica": 1,  # node  -- add <node> to the voting membership (DS0 incr 20)
+    "remove_replica": 1,  # node  -- remove <node> from the voting membership (DS0 incr 20)
     # Transaction family (DS0 increment 2): a multi-key OCC transaction at a coordinator node.
     "begin": 2,  # node txn  -- open a transaction
     "tget": 3,  # node txn key  -- read <key> within the txn (pins the read version for validation)
@@ -131,7 +142,9 @@ FAULT_OPS = frozenset(
 # convergence mechanism, DS0 increment 12) and ``gossip`` (pairwise anti-entropy, incr 15) are the
 # convergence ops; ``elect``/``propose`` (the Raft-subset consensus core, incr 16) are the consensus
 # ops. ``CONSENSUS_OPS`` is the subset that reads/writes the leader/term metadata.
-CONSENSUS_OPS = frozenset({"elect", "propose", "step_down", "lease", "lread", "append"})
+CONSENSUS_OPS = frozenset({
+    "elect", "propose", "step_down", "lease", "lread", "append", "add_replica", "remove_replica",
+})
 PROTOCOL_OPS = frozenset({"anti_entropy", "gossip"}) | CONSENSUS_OPS
 
 

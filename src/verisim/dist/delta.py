@@ -227,6 +227,20 @@ class CommitIndexSet:
 
 
 @dataclass(frozen=True)
+class MemberSet:
+    """Set the consensus voting membership (DS0 increment 20, `add_replica`/`remove_replica`).
+
+    ``members`` is the new voting set — the nodes that count toward an election or commit quorum.
+    The **empty frozenset is the sentinel for "all config nodes vote"** (the boot default), so
+    ``add_replica`` restoring full membership emits ``MemberSet(frozenset())`` and a cluster that
+    never reconfigures serializes to the exact pre-increment-20 form. When non-empty it is a strict
+    subset of the config nodes.
+    """
+
+    members: frozenset[str]
+
+
+@dataclass(frozen=True)
 class SetResult:
     """The client-visible result of the step: ``(status, value_token)``."""
 
@@ -253,6 +267,7 @@ DistEdit = (
     | LeaseSet
     | LogSet
     | CommitIndexSet
+    | MemberSet
     | SetResult
 )
 DistDelta = list[DistEdit]
@@ -318,6 +333,8 @@ def apply(state: DistributedState, delta: DistDelta) -> DistributedState:
                 s.logs.pop(edit.node, None)  # an empty log leaves no residue in the canonical form
         elif isinstance(edit, CommitIndexSet):
             s.commit_index = edit.index
+        elif isinstance(edit, MemberSet):
+            s.members = edit.members
         else:
             assert isinstance(edit, SetResult)
             s.last_result = (edit.status, edit.value)
@@ -376,6 +393,8 @@ def edit_to_dict(edit: DistEdit) -> dict[str, Any]:
                 "entries": [[e.term, e.index, e.key, e.value] for e in edit.entries]}
     if isinstance(edit, CommitIndexSet):
         return {"op": "CommitIndexSet", "index": edit.index}
+    if isinstance(edit, MemberSet):
+        return {"op": "MemberSet", "members": sorted(edit.members)}
     assert isinstance(edit, SetResult)
     return {"op": "SetResult", "status": edit.status, "value": edit.value}
 
@@ -427,6 +446,8 @@ def edit_from_dict(d: dict[str, Any]) -> DistEdit:
         return LogSet(d["node"], tuple(LogEntry(t, i, k, v) for t, i, k, v in d["entries"]))
     if op == "CommitIndexSet":
         return CommitIndexSet(d["index"])
+    if op == "MemberSet":
+        return MemberSet(frozenset(d["members"]))
     if op == "SetResult":
         return SetResult(d["status"], d["value"])
     raise ValueError(f"unknown edit op {op!r}")

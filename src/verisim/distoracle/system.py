@@ -69,6 +69,7 @@ from verisim.dist.state import DistributedState, Message
 from verisim.dist.txn import txn_step
 from verisim.distoracle.base import DistStepResult
 from verisim.distoracle.reference import (
+    add_replica_edits,
     append_edits,
     causal_deps,
     clock_skew_edits,
@@ -77,6 +78,7 @@ from verisim.distoracle.reference import (
     lease_edits,
     lread_edits,
     propose_edits,
+    remove_replica_edits,
     step_down_edits,
     timing_fault_edits,
 )
@@ -298,6 +300,12 @@ class SystemDistOracle:
             # coordinator's decision from the medium and the log/commit/KV deltas are computed
             # byte-identically via the shared helper, so Tier-A ≡ Tier-B on the observable channel.
             return append_edits(state, action, self.config)
+        if name in ("add_replica", "remove_replica"):
+            # Membership change (DS0 incr 20) reconfigures the voting set — coordinator-level
+            # cluster metadata (like leader/term), read/written from the global membership, not an
+            # actor's local view — so Tier-A and Tier-B compute identical deltas via the helpers.
+            helper = add_replica_edits if name == "add_replica" else remove_replica_edits
+            return helper(state, action, self.config)
         raise ValueError(f"unhandled action {name!r}")  # pragma: no cover - grammar is closed
 
     def _event(self, state: DistributedState, action: DistAction) -> EventAppend:

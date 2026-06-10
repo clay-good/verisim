@@ -18,7 +18,7 @@ import pytest
 
 from verisim.dist import DistConfig, DistributedState, apply, parse_dist_action
 from verisim.dist.action import CONSENSUS_OPS, PROTOCOL_OPS, DistParseError
-from verisim.dist.delta import CommitIndexSet, LeaseSet, LogSet, ProtocolStep
+from verisim.dist.delta import CommitIndexSet, LeaseSet, LogSet, MemberSet, ProtocolStep
 from verisim.dist.serialize import from_canonical, state_hash, to_canonical
 from verisim.dist.state import LogEntry
 from verisim.distoracle.differential import cluster_view
@@ -50,14 +50,18 @@ def test_grammar_parses_elect_and_propose() -> None:
     assert parse_dist_action("lease n0 5").args == ("n0", "5")
     assert parse_dist_action("lread n0 x").args == ("n0", "x")
     assert parse_dist_action("append n0 x b").args == ("n0", "x", "b")
-    assert sorted(CONSENSUS_OPS) == ["append", "elect", "lease", "lread", "propose", "step_down"]
+    assert parse_dist_action("add_replica n3").args == ("n3",)
+    assert parse_dist_action("remove_replica n1").args == ("n1",)
+    assert sorted(CONSENSUS_OPS) == ["add_replica", "append", "elect", "lease", "lread", "propose",
+                                     "remove_replica", "step_down"]
     assert CONSENSUS_OPS <= PROTOCOL_OPS
 
 
 @pytest.mark.parametrize("bad", ["elect", "elect n0 n1", "propose n0 x", "propose n0 x b c",
                                  "step_down", "step_down n0 n1", "lease n0", "lease n0 0",
                                  "lease n0 -1", "lread n0", "lread n0 x y", "append n0 x",
-                                 "append n0 x b c"])
+                                 "append n0 x b c", "add_replica", "add_replica n0 n1",
+                                 "remove_replica", "remove_replica n0 n1"])
 def test_grammar_rejects_bad_arity(bad: str) -> None:
     with pytest.raises(DistParseError):
         parse_dist_action(bad)
@@ -409,6 +413,81 @@ def test_metamorphic_refutes_backward_commit_index() -> None:
     assert v.refuted and "commit index went backward" in v.reason
 
 
+# --- add_replica / remove_replica: membership change (DS0 increment 20) -------------------------
+
+def test_remove_replica_shrinks_the_majority_threshold() -> None:
+    # A lone leader is a minority of 3; after removing the other two, it is the sole member and a
+    # majority of 1 — the quorum threshold tracked the voting set down.
+    s = _run(_ref(), ["elect n0", "partition n0 | n1 n2"])
+    assert _ref().step(s, parse_dist_action("propose n0 x a")).status == "no_quorum"  # 1 of 3
+    s = _run(_ref(), ["elect n0", "partition n0 | n1 n2", "remove_replica n1", "remove_replica n2"])
+    assert s.members == frozenset({"n0"})
+    assert _ref().step(s, parse_dist_action("propose n0 x a")).status == "ok"  # 1 of 1
+
+
+def test_add_replica_raises_the_threshold_and_round_trips_the_sentinel() -> None:
+    # remove then add-back collapses to the empty "all vote" sentinel (clean canonical form).
+    s = _run(_ref(), ["elect n0", "remove_replica n1"])
+    assert s.members == frozenset({"n0", "n2"})
+    s2 = _ref().step(s, parse_dist_action("add_replica n1"))
+    assert s2.status == "added" and s2.state.members == frozenset()  # back to "all vote"
+
+
+def test_remove_replica_rejections() -> None:
+    base = _run(_ref(), ["elect n0"])
+    # the active leader cannot be removed (step it down first)
+    assert _ref().step(base, parse_dist_action("remove_replica n0")).status == "is_leader"
+    # an unknown node / a non-member is a no-op reject
+    assert _ref().step(base, parse_dist_action("remove_replica ghost")).status == "unknown_node"
+    once = _run(_ref(), ["elect n0", "remove_replica n1"])
+    assert _ref().step(once, parse_dist_action("remove_replica n1")).status == "not_member"
+
+
+def test_membership_change_requires_a_leader() -> None:
+    s = DistributedState.initial(CONFIG)  # no election yet
+    assert _ref().step(s, parse_dist_action("add_replica n1")).status == "no_leader"
+    assert _ref().step(s, parse_dist_action("remove_replica n1")).status == "no_leader"
+
+
+def test_remove_replica_refuses_to_drop_the_last_member() -> None:
+    # Craft a one-member voting set whose sole member is NOT the leader (so `is_leader` does not
+    # fire first), and confirm the final member is protected.
+    s = apply(DistributedState.initial(CONFIG),
+              [MemberSet(frozenset({"n1"})), ProtocolStep("elect", 1, "n0")])
+    assert _ref().step(s, parse_dist_action("remove_replica n1")).status == "last_member"
+
+
+def test_elect_requires_membership_and_uses_the_member_majority() -> None:
+    # After removing n2, the voting set is {n0, n1} (majority 2). n2 (a non-member) cannot be
+    # elected, and a re-election needs a majority of the *members*, not the full cluster.
+    s = _run(_ref(), ["elect n0", "remove_replica n2"])
+    assert _ref().step(s, parse_dist_action("elect n2")).status == "not_member"
+    # {n0, n1} both live → a 2-of-2 majority elects n1
+    assert _ref().step(s, parse_dist_action("elect n1")).status == "elected"
+
+
+def test_member_set_applies_and_round_trips() -> None:
+    s = _run(_ref(), ["elect n0"])
+    reduced = apply(s, [MemberSet(frozenset({"n0", "n1"}))])
+    assert reduced.members == frozenset({"n0", "n1"})
+    assert from_canonical(to_canonical(reduced)) == reduced
+
+
+def test_canonical_form_omits_members_until_first_change() -> None:
+    s = _run(_ref(), ["elect n0"])
+    assert "members" not in to_canonical(s)  # the "all vote" sentinel is omitted
+    reduced = _ref().step(s, parse_dist_action("remove_replica n1")).state
+    assert sorted(to_canonical(reduced)["members"]) == ["n0", "n2"]
+
+
+def test_metamorphic_refutes_unknown_voting_member() -> None:
+    tiers = TieredOracle(CONFIG)
+    s = _run(_ref(), ["elect n0"])
+    bogus = apply(s, [MemberSet(frozenset({"n0", "ghost"}))])
+    v = tiers.check("metamorphic", s, parse_dist_action("add_replica n1"), bogus)
+    assert v.refuted and "unknown node" in v.reason
+
+
 # --- delta + serialization ----------------------------------------------------------------------
 
 def test_protocol_step_applies_and_round_trips() -> None:
@@ -494,6 +573,10 @@ def test_tier_a_equals_tier_b_over_a_consensus_trajectory() -> None:
         "partition n0 n1 | n2", "append n1 x b",  # committed on {n0,n1}; n2 stranded
         "elect n2",                             # n2 cannot elect (minority) -> stays n1's term
         "heal", "append n1 x c",                # n2 reconciles + backfills on the next append
+        "remove_replica n2",                    # shrink the voting set: members {n0,n1}, majority 2
+        "partition n0 | n1 n2", "append n1 x m",  # n1 reaches {n1} of members {n0,n1} -> no_quorum
+        "heal", "append n1 x p",                # reachable again -> commits on the 2-member quorum
+        "add_replica n2",                       # restore membership (back to the all-vote sentinel)
     ]
     for cmd in script:
         a = parse_dist_action(cmd)

@@ -1,0 +1,8 @@
+panel,metric,value,detail
+threshold,alone_blocked_at_full,1.0000,minority_of_full_cluster_over_3
+threshold,sole_member_commits,1.0000,majority_of_one_after_shrink
+threshold,regrow_reblocks,1.0000,add_replica_raises_threshold
+availability,stuck_before_removal,1.0000,one_live_of_three_no_quorum
+availability,restored_after_removal,1.0000,commits_after_removing_dead
+availability,active_leader_remove_blocked,1.0000,is_leader_fence
+tier_b,all,1.0000,steps=39

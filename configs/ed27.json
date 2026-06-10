@@ -1,0 +1,6 @@
+{
+  "name": "ed27-membership",
+  "cluster_sizes": [3, 5, 7],
+  "key": "x",
+  "val": "a"
+}

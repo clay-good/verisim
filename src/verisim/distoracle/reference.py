@@ -35,6 +35,7 @@ from verisim.dist.delta import (
     EventAppend,
     LeaseSet,
     LogSet,
+    MemberSet,
     MsgDeliver,
     MsgDrop,
     MsgReschedule,
@@ -164,6 +165,16 @@ def gossip_edits(
     return [*edits, SetResult("gossiped", value)], "gossiped", value
 
 
+def active_members(state: DistributedState, config: DistConfig) -> frozenset[str]:
+    """The consensus voting set (DS0 increment 20): ``state.members`` resolved against the sentinel.
+
+    The empty ``state.members`` is the "every config node votes" default, so a cluster that never
+    reconfigures resolves to the full node set and every quorum computation is byte-identical to the
+    pre-increment-20 form. ``add_replica``/``remove_replica`` install a non-empty reconfigured set.
+    """
+    return state.members if state.members else frozenset(config.nodes)
+
+
 def elect_edits(
     state: DistributedState, action: DistAction, config: DistConfig
 ) -> tuple[DistDelta, str, str]:
@@ -191,8 +202,14 @@ def elect_edits(
     if state.lease_until > 0 and state.clock < state.lease_until:
         until = str(state.lease_until)
         return [SetResult("lease_held", until)], "lease_held", until
-    voters = [n for n in state.group_of(node) if state.is_up(n)]
-    if len(voters) <= len(config.nodes) // 2:  # a strict majority of the whole cluster is required
+    members = active_members(state, config)
+    if node not in members:  # a non-member (removed from the voting set) cannot be elected leader
+        return [SetResult("not_member", "")], "not_member", ""
+    # The quorum is a strict majority of the *voting membership* (DS0 incr 20), which equals the
+    # full cluster until `remove_replica`/`add_replica` reconfigures it — so this is byte-identical
+    # to the pre-increment-20 form when no membership change has happened.
+    voters = [n for n in state.group_of(node) if state.is_up(n) and n in members]
+    if len(voters) <= len(members) // 2:  # a strict majority of the voting members is required
         return [SetResult("no_quorum", "")], "no_quorum", ""
     new_term = state.term + 1
     edits: DistDelta = [ProtocolStep("elect", new_term, node)]
@@ -235,7 +252,9 @@ def propose_edits(
     replica = state.replicas.get((key, node))
     if replica is None:
         return [SetResult("no_replica", "")], "no_replica", ""
-    peers = config.replicas_of(key)
+    # The consensus quorum is over the *voting members* that replicate the key (DS0 incr 20); when
+    # membership is the full cluster (the default) this is byte-identical to the pre-incr-20 form.
+    peers = [p for p in config.replicas_of(key) if p in active_members(state, config)]
     reachable = [p for p in peers if state.connected(node, p) and state.is_up(p)]
     if len(reachable) < len(peers) // 2 + 1:  # consensus commits only on a majority of replicas
         return [SetResult("no_quorum", "")], "no_quorum", ""
@@ -383,8 +402,11 @@ def append_edits(
     leader_log = state.logs.get(node, ())
     index = len(leader_log)
     new_log = (*leader_log, LogEntry(state.term, index, key, val))
-    reachable = [p for p in config.nodes if state.connected(node, p) and state.is_up(p)]
-    committed = len(reachable) >= len(config.nodes) // 2 + 1
+    # Replicate to / commit on the *voting members* (DS0 incr 20); the full cluster by default, so
+    # this is byte-identical to the pre-increment-20 form when no membership change has happened.
+    members = active_members(state, config)
+    reachable = [p for p in members if state.connected(node, p) and state.is_up(p)]
+    committed = len(reachable) >= len(members) // 2 + 1
     edits: DistDelta = []
     # every reachable node adopts the leader's log (reconciling any divergent uncommitted tail)
     for p in reachable:
@@ -409,6 +431,63 @@ def append_edits(
                 edits.append(ReplicaWrite(k, p, ver, value))
     edits.append(SetResult("appended", str(index)))
     return edits, "appended", str(index)
+
+
+def add_replica_edits(
+    state: DistributedState, action: DistAction, config: DistConfig
+) -> tuple[DistDelta, str, str]:
+    """``add_replica node``: grow the consensus voting membership (DS0 increment 20, §3.2).
+
+    A leader-committed reconfiguration: ``node`` joins the voting set, so the **majority threshold
+    grows** (a 3-member cluster needs 2 to commit; a 4-member cluster needs 3). All config nodes
+    already store replicas, so this is purely a *voting-set* change. Rejections: ``unknown_node`` if
+    ``node`` is not a config node; ``no_leader`` if there is no current leader to commit the change
+    (membership goes through the leader, like a Raft config entry); ``already_member`` (a no-op) if
+    ``node`` already votes. On success the new set is installed via ``MemberSet`` — restoring the
+    full cluster stores the empty sentinel, so the canonical form stays clean. Touches no replica.
+    """
+    node = action.args[0]
+    if node not in config.nodes:
+        return [SetResult("unknown_node", "")], "unknown_node", ""
+    if state.leader is None:
+        return [SetResult("no_leader", "")], "no_leader", ""
+    members = active_members(state, config)
+    if node in members:
+        return [SetResult("already_member", node)], "already_member", node
+    new = members | {node}
+    # restoring the full cluster collapses back to the empty "all vote" sentinel (clean canonical)
+    installed = frozenset() if new == frozenset(config.nodes) else new
+    return [MemberSet(installed), SetResult("added", node)], "added", node
+
+
+def remove_replica_edits(
+    state: DistributedState, action: DistAction, config: DistConfig
+) -> tuple[DistDelta, str, str]:
+    """``remove_replica node``: shrink the consensus voting membership (DS0 increment 20, §3.2).
+
+    The availability lever: removing a (typically failed) node from the voting set **shrinks the
+    majority threshold**, so the surviving members can keep committing — the standard way to restore
+    progress after losing nodes (a 3-member cluster with 2 down is stuck at majority 2; remove the 2
+    dead and the lone survivor is a majority of 1). Rejections: ``unknown_node``; ``no_leader``;
+    ``not_member`` (a no-op) if ``node`` does not vote; ``is_leader`` — the *active leader* cannot
+    be removed (step it down first), so a reconfiguration never strands the cluster leaderless
+    mid-write; ``last_member`` — the final member cannot be removed. Touches no replica (a removed
+    node keeps its now-non-voting replicas). A leader-committed change, identical Tier-A/Tier-B.
+    """
+    node = action.args[0]
+    if node not in config.nodes:
+        return [SetResult("unknown_node", "")], "unknown_node", ""
+    if state.leader is None:
+        return [SetResult("no_leader", "")], "no_leader", ""
+    if node == state.leader:
+        return [SetResult("is_leader", node)], "is_leader", node
+    members = active_members(state, config)
+    if node not in members:
+        return [SetResult("not_member", node)], "not_member", node
+    new = members - {node}
+    if not new:
+        return [SetResult("last_member", node)], "last_member", node
+    return [MemberSet(new), SetResult("removed", node)], "removed", node
 
 
 class ReferenceDistOracle:
@@ -466,6 +545,10 @@ class ReferenceDistOracle:
             return lread_edits(state, action, self.config)
         if name == "append":
             return append_edits(state, action, self.config)
+        if name == "add_replica":
+            return add_replica_edits(state, action, self.config)
+        if name == "remove_replica":
+            return remove_replica_edits(state, action, self.config)
         raise ValueError(f"unhandled action {name!r}")  # pragma: no cover - grammar is closed
 
     def _event(self, state: DistributedState, node: str, raw: str) -> EventAppend:

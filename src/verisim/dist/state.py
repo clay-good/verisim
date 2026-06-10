@@ -206,6 +206,14 @@ class DistributedState:
     # never uses the replicated log serializes to the exact pre-increment-19 form (purely additive).
     logs: dict[str, tuple[LogEntry, ...]] = field(default_factory=dict)
     commit_index: int = 0
+    # The consensus voting membership (DS0 increment 20, `add_replica`/`remove_replica`): the set of
+    # nodes that count toward a consensus quorum (election votes + propose/append majority). All
+    # config nodes physically store replicas; `members` is the *voting* overlay that `add_replica` /
+    # `remove_replica` reconfigure (a leader-committed change). The **empty frozenset is the sentinel
+    # for "every config node votes"** — the boot default — so a cluster that never reconfigures
+    # serializes to the exact pre-increment-20 form (purely additive). When non-empty it is a strict
+    # subset of the config nodes; use the `active_members` helper to resolve the sentinel.
+    members: frozenset[str] = frozenset()
     # The leader lease deadline (DS0 increment 18, the Raft leader-lease, `lease`/`lread`): the
     # global-clock instant through which the current `leader` may serve **local linearizable reads
     # without a quorum** (`lread`) and through which a new `elect` is **blocked** (a successor waits
@@ -255,6 +263,7 @@ class DistributedState:
             leader=self.leader,
             logs={node: entries for node, entries in self.logs.items()},
             commit_index=self.commit_index,
+            members=self.members,
             lease_until=self.lease_until,
         )
 
