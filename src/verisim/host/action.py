@@ -13,17 +13,19 @@ pid** explicitly (the scheduler/"current process" is a later HC increment). The 
     write <pid> <fd> <token>       # files: write <token> through <fd> (delegated to the FS oracle)
     read <pid> <fd>                # files: read <fd>'s content back (delegated to the FS oracle)
     close <pid> <fd>               # files: release <fd>
+    dup <pid> <fd>                 # files: duplicate <fd> to the smallest free fd (same path)
 
 ``fork``/``exit``/``kill``/``wait`` are the long-range, branching, compounding-state process core
 (SPEC-6 §3.2): ``fork`` spawns, ``exit``/``kill`` zombify (``kill`` **permission-gated** like a
 real OS -- a process may terminate another only if it is root or shares the target's uid, the EPERM
 rule), and ``wait`` **reaps** -- a parent collects a dead child's exit status and frees the table
 entry, so zombies do not accumulate forever (the lifecycle is now spawn -> run -> die -> reap).
-``setuid`` makes privilege state first-class; ``open``/``write``/``read``/``close`` exercise the
-per-process fd table over the embedded v0 filesystem -- ``read`` closing the write/read round trip.
-Without a per-fd offset
-(a later increment), ``read`` returns the file's whole content, read-only. Sockets, IPC,
-``dup``/``lseek``, ``chdir``, the scheduler (``yield``/``advance``) are later increments.
+``setuid`` makes privilege state first-class; ``open``/``write``/``read``/``close``/``dup`` exercise
+the per-process fd table over the embedded v0 filesystem -- ``read`` closing the write/read round
+trip and ``dup`` **aliasing** an fd (two fds onto one path, the shared-file coupling the factored
+model leans on). ``dup`` reuses the ``FdOpen`` delta -- no new edit type (the ``kill`` pattern).
+Without a per-fd offset (a later increment), ``read`` returns the file's whole content, read-only.
+Sockets, IPC, ``lseek``, ``chdir``, the scheduler (``yield``/``advance``) are later increments.
 """
 
 from __future__ import annotations
@@ -40,6 +42,7 @@ _ARITY: dict[str, int] = {
     "write": 3,  # pid fd token
     "read": 2,  # pid fd
     "close": 2,  # pid fd
+    "dup": 2,  # pid fd
 }
 
 

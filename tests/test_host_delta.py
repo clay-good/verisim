@@ -22,6 +22,7 @@ _TRAJECTORY = [
     "fork 1",          # ProcSpawn
     "open 2 /etc/cfg", # FdOpen
     "write 2 0 alpha", # FsDelta (delegated to the v0 FS sub-oracle)
+    "dup 2 0",         # FdOpen via dup (alias fd 1 onto fd 0's path -- no new edit type)
     "setuid 1 1000",   # CredChange
     "close 2 0",       # FdClose
     "fork 1",          # ProcSpawn (another child)

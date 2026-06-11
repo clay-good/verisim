@@ -175,6 +175,36 @@ def test_read_on_a_dead_pid_fails() -> None:
     assert oracle.step(dead, parse_host_action("read 1 0")).exit_code == EXIT_ERR  # pid 1 zombie
 
 
+def test_dup_aliases_an_fd_onto_the_same_path() -> None:
+    # `dup` duplicates an open fd to the smallest free fd, both pointing at the same path: the two
+    # fds alias one file (the shared-file coupling). The new fd reads back what the original wrote.
+    oracle = ReferenceHostOracle()
+    state = _run(oracle, HostState.initial(), ["open 1 /f", "write 1 0 alpha"])
+    result = oracle.step(state, parse_host_action("dup 1 0"))
+    assert result.exit_code == EXIT_OK
+    assert result.stdout == "1"  # the smallest free fd (0 is taken)
+    state = result.state
+    assert state.fds[(1, 0)].path == state.fds[(1, 1)].path == "/f"  # both fds alias /f
+    assert oracle.step(state, parse_host_action("read 1 1")).stdout == "alpha"  # the alias reads it
+
+
+def test_dup_picks_the_smallest_free_fd_after_a_gap() -> None:
+    # Opening 0,1,2 then closing 1 leaves a gap; `dup` fills the smallest free slot (1) like `open`.
+    oracle = ReferenceHostOracle()
+    state = _run(oracle, HostState.initial(), ["open 1 /a", "open 1 /b", "open 1 /c", "close 1 1"])
+    result = oracle.step(state, parse_host_action("dup 1 2"))
+    assert result.stdout == "1"  # the freed slot, not fd 3
+    assert result.state.fds[(1, 1)].path == "/c"  # aliases fd 2's path
+
+
+def test_dup_bad_fd_and_dead_pid_are_ebadf() -> None:
+    oracle = ReferenceHostOracle()
+    s0 = HostState.initial()
+    assert oracle.step(s0, parse_host_action("dup 1 7")).exit_code == EXIT_ERR  # never opened
+    dead = _run(oracle, HostState.initial(), ["open 1 /f", "exit 1 0"])
+    assert oracle.step(dead, parse_host_action("dup 1 0")).exit_code == EXIT_ERR  # pid 1 zombie
+
+
 def test_oracle_is_pure_and_deterministic() -> None:
     oracle = ReferenceHostOracle()
     cmds = ["fork 1", "open 2 /a", "write 2 0 hello", "setuid 1 1000", "exit 2 0"]

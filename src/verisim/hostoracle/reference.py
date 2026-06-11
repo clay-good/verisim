@@ -50,6 +50,7 @@ class ReferenceHostOracle(HostOracle):
             "fork": self._fork, "exit": self._exit, "kill": self._kill, "wait": self._wait,
             "setuid": self._setuid,
             "open": self._open, "write": self._write, "read": self._read, "close": self._close,
+            "dup": self._dup,
         }[action.name]
         delta, exit_code, stdout = handler(state, action)
         return HostStepResult(
@@ -190,3 +191,22 @@ class ReferenceHostOracle(HostOracle):
         if (action.pid, fd) not in state.fds:  # EBADF
             return self._fail()
         return [FdClose(pid=action.pid, fd=fd), SetExit(EXIT_OK)], EXIT_OK, ""
+
+    def _dup(self, state: HostState, action: HostAction) -> _Outcome:
+        if not self._running(state, action.pid):
+            return self._fail()
+        try:
+            fd = int(action.args[0])
+        except ValueError:
+            return self._fail()
+        entry = state.fds.get((action.pid, fd))
+        if entry is None:  # EBADF: cannot duplicate an fd that is not open
+            return self._fail()
+        # Allocate the smallest free fd (the standard ``dup`` contract, same rule as ``open``) and
+        # bind it to the *source fd's path* -- the new fd aliases the same file. Reuses ``FdOpen``
+        # (no new delta type, the ``kill``-reuses-``ProcExit`` pattern): two fds onto one path is
+        # the shared-file coupling the factored model's edges fold onto the process spine (§6.2).
+        used = {f for (pid, f) in state.fds if pid == action.pid}
+        new_fd = next(i for i in range(len(used) + 1) if i not in used)
+        delta: HostDelta = [FdOpen(pid=action.pid, fd=new_fd, path=entry.path), SetExit(EXIT_OK)]
+        return delta, EXIT_OK, str(new_fd)
