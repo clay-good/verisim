@@ -161,6 +161,16 @@ class TieredOracle:
         for (_key, holder, owner), count in predicted.ncounters.items():
             if count < 0 or holder not in nodeset or owner not in nodeset:
                 return True, f"invalid pn-counter decrement {count} at ({holder!r},{owner!r})"
+        # The CRDT OR-Set (DS0 incr 30): every dot is held and owned by a known node,
+        # with a positive sequence — a phantom holder/owner or a non-positive dot seq is impossible.
+        for (_key, holder), dots in predicted.orset_adds.items():
+            for (_elem, owner, seq) in dots:
+                if holder not in nodeset or owner not in nodeset or seq < 1:
+                    return True, f"invalid orset add-dot ({owner!r},{seq}) at holder {holder!r}"
+        for (_key, holder), tombs in predicted.orset_tombs.items():
+            for (owner, seq) in tombs:
+                if holder not in nodeset or owner not in nodeset or seq < 1:
+                    return True, f"invalid orset tomb-dot ({owner!r},{seq}) at holder {holder!r}"
         return False, ""
 
     def _cycle(

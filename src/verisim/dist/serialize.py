@@ -155,6 +155,25 @@ def to_canonical(state: DistributedState) -> dict[str, Any]:
             {"key": key, "holder": holder, "owner": owner, "count": ncounters[(key, holder, owner)]}
             for key, holder, owner in sorted(ncounters)
         ]
+    # The CRDT OR-Set (DS0 incr 30, `sadd`/`srem`/`smembers`): per (key, holder), the observed add-dots
+    # and tombstoned dots, flattened and sorted id-independently. Omitted when empty, so a cluster that
+    # never uses a set serializes to the exact pre-increment-30 form (purely additive).
+    adds = sorted((key, holder, elem, owner, seq)
+                  for (key, holder), dots in state.orset_adds.items() if dots
+                  for (elem, owner, seq) in dots)
+    if adds:
+        out["orset_adds"] = [
+            {"key": key, "holder": holder, "elem": elem, "owner": owner, "seq": seq}
+            for key, holder, elem, owner, seq in adds
+        ]
+    tombs = sorted((key, holder, owner, seq)
+                   for (key, holder), dots in state.orset_tombs.items() if dots
+                   for (owner, seq) in dots)
+    if tombs:
+        out["orset_tombs"] = [
+            {"key": key, "holder": holder, "owner": owner, "seq": seq}
+            for key, holder, owner, seq in tombs
+        ]
     # The embedded SPEC-6 hosts (DS0 incr 23): per-node host canonical form (the v0 FS reuses its own
     # canonical verbatim — the composition is visible in serialization). Omitted when no node runs a
     # host op, so a host-free cluster serializes to the exact pre-increment-23 form (purely additive).
@@ -164,6 +183,22 @@ def to_canonical(state: DistributedState) -> dict[str, Any]:
             for node in sorted(state.hosts)
         ]
     return out
+
+
+def _group_orset_adds(rows: list[dict[str, Any]]) -> dict[tuple[str, str], frozenset[tuple[str, str, int]]]:
+    """Re-group the flattened OR-Set add-dot rows (DS0 incr 30) into the per-(key, holder) frozensets."""
+    grouped: dict[tuple[str, str], set[tuple[str, str, int]]] = {}
+    for r in rows:
+        grouped.setdefault((r["key"], r["holder"]), set()).add((r["elem"], r["owner"], r["seq"]))
+    return {k: frozenset(v) for k, v in grouped.items()}
+
+
+def _group_orset_tombs(rows: list[dict[str, Any]]) -> dict[tuple[str, str], frozenset[tuple[str, int]]]:
+    """Re-group the flattened OR-Set tombstone rows (DS0 incr 30) into the per-(key, holder) frozensets."""
+    grouped: dict[tuple[str, str], set[tuple[str, int]]] = {}
+    for r in rows:
+        grouped.setdefault((r["key"], r["holder"]), set()).add((r["owner"], r["seq"]))
+    return {k: frozenset(v) for k, v in grouped.items()}
 
 
 def from_canonical(d: dict[str, Any]) -> DistributedState:
@@ -234,6 +269,8 @@ def from_canonical(d: dict[str, Any]) -> DistributedState:
         ncounters={
             (g["key"], g["holder"], g["owner"]): g["count"] for g in d.get("ncounters", [])
         },
+        orset_adds=_group_orset_adds(d.get("orset_adds", [])),
+        orset_tombs=_group_orset_tombs(d.get("orset_tombs", [])),
         hosts={h["node"]: from_canonical_host(h["host"]) for h in d.get("hosts", [])},
         lease_until=d.get("lease_until", 0),
     )

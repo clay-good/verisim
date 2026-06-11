@@ -12,6 +12,9 @@ workload and the fault/time medium (the consensus/admin family arrives with the 
     cincr <node> <key>              # client: CRDT G-counter +1 (loss-free, always available; sums on merge)
     cdecr <node> <key>              # client: CRDT PN-counter -1 (decrementable; may go negative; loss-free)
     cget <node> <key>               # client: read a CRDT counter (G-counter sum, minus PN decrements)
+    sadd <node> <key> <elem>        # client: CRDT OR-Set add (add-wins, re-addable; unique-dot tagged)
+    srem <node> <key> <elem>        # client: CRDT OR-Set remove (observed-remove; tombstones seen dots)
+    smembers <node> <key>           # client: read a CRDT OR-Set (elements with a non-tombstoned dot)
     advance <dt>                    # time: +<dt> clock; deliver in-flight msgs now due & reachable
     partition <nodes> | <nodes>     # fault: split the network into groups (| separates groups)
     heal                            # fault: remove all partitions (one fully-connected group)
@@ -184,7 +187,16 @@ pairs *two* G-counters, P (the ``cincr`` half) and N (the ``cdecr`` half), and `
 node-local and always available, concurrent decrements never conflict, and the per-(key, owner) max
 join merges *both* halves — so the PN-counter still converges loss-free under partition, and its
 value may now go **negative** (the property the grow-only G-counter lacks). ``cincr``/``cdecr``/``cget``
-together are the full decrementable CRDT counter (ED36).
+together are the full decrementable CRDT counter (ED36). ``sadd``/``srem``/``smembers`` (DS0 increment
+30) are the **CRDT OR-Set** — the canonical *interesting* CRDT, a replicated set that a naive
+implementation gets wrong. The trick is the **unique dot**: ``sadd n key elem`` tags the element with
+``(owner=n, seq)`` (a per-(key, owner) monotone sequence) and adds it to ``n``'s observed add-set;
+``srem n key elem`` moves the dots ``n`` has *observed* into ``n``'s tombstone-set (the *observed*-
+remove); ``smembers n key`` is the elements with at least one **non-tombstoned** dot. The join is
+**set union** of both halves (commutative/associative/idempotent), so a concurrent ``sadd`` (a fresh
+dot the remover never saw) **survives** a concurrent ``srem`` (**add wins**), and a removed element is
+**re-addable** (a new dot is not in the tombstone-set) — the two properties an element-level 2P-Set
+(remove-wins, never re-addable) lacks (ED37).
 """
 
 from __future__ import annotations
@@ -202,6 +214,9 @@ _ARITY: dict[str, int | None] = {
     "cincr": 2,  # node key  -- CRDT G-counter +1 (node-local, loss-free, always available; incr 28)
     "cdecr": 2,  # node key  -- CRDT PN-counter -1 (decrementable; may go negative; DS0 incr 29)
     "cget": 2,  # node key  -- read a CRDT counter: G-counter sum minus PN decrements (incr 28/29)
+    "sadd": 3,  # node key elem  -- CRDT OR-Set add (add-wins, re-addable; DS0 incr 30)
+    "srem": 3,  # node key elem  -- CRDT OR-Set observed-remove (tombstones seen dots; DS0 incr 30)
+    "smembers": 2,  # node key  -- read a CRDT OR-Set: non-tombstoned elements (DS0 incr 30)
     "advance": 1,  # dt
     "partition": None,  # <nodes> | <nodes> [| ...]
     "host": None,  # <node> <syscall...>  -- a SPEC-6 host syscall on <node>'s host (DS0 incr 23)
@@ -240,6 +255,7 @@ _ARITY: dict[str, int | None] = {
 # are the ``enqueue``/``dequeue`` FIFO-queue ops (DS0 incr 21).
 CLIENT_OPS = frozenset({
     "put", "get", "cas", "delete", "incr", "cincr", "cdecr", "cget",
+    "sadd", "srem", "smembers",
     "begin", "tget", "tput", "commit", "abort", "enqueue", "dequeue",
 })
 TXN_OPS = frozenset({"begin", "tget", "tput", "commit", "abort"})

@@ -48,6 +48,8 @@ from verisim.dist.delta import (
     NCounterSet,
     NodeDown,
     NodeUp,
+    ORSetAdd,
+    ORSetTomb,
     PartitionSet,
     ProtocolStep,
     QueueSet,
@@ -182,8 +184,11 @@ def gossip_edits(
     # G-counter P and the PN-counter's decrement N). Disjoint from the LWW replica merge above and a
     # no-op when no CRDT counter is used (so the pre-incr-28 form is unchanged).
     edits.extend(_gcounter_merge_edits(state, [a, b], [a, b]))
+    # The CRDT OR-Set join (DS0 incr 30): both endpoints adopt the union of their add/tomb sets.
+    edits.extend(_orset_merge_edits(state, [a, b], [a, b]))
     synced = sum(1 for e in edits
-                 if isinstance(e, (ReplicaWrite, GCounterSet, NCounterSet)))  # all moves
+                 if isinstance(e, (ReplicaWrite, GCounterSet, NCounterSet,
+                                   ORSetAdd, ORSetTomb)))  # all moves
     value = str(synced)
     return [*edits, SetResult("gossiped", value)], "gossiped", value
 
@@ -286,6 +291,94 @@ def cget_edits(
         return [SetResult("unavailable", "")], "unavailable", ""
     total = str(state.pncounter_value(key, node))
     return [SetResult("ok", total)], "ok", total
+
+
+def _orset_merge_edits(
+    state: DistributedState, into: list[str], among: list[str]
+) -> list[DistEdit]:
+    """**Set-union** join of the CRDT OR-Set copies (DS0 incr 30, the CRDT join over both halves).
+
+    For each node in ``into``, raise its observed add-set and tombstone-set to the **union** held
+    by any node in ``among`` (the reachable set), emitting one ``ORSetAdd``/``ORSetTomb`` per dot it
+    it is missing. Union is commutative, associative, and idempotent, so applying it in any order
+    converges every node to the same set. A no-op when no OR-Set is used (the pre-incr-30 form is
+    unchanged). ``anti_entropy`` pulls one node; ``gossip`` a pair.
+    """
+    edits: list[DistEdit] = []
+    keys = {key for (key, _h) in state.orset_adds} | {key for (key, _h) in state.orset_tombs}
+    for key in sorted(keys):
+        union_adds: set[tuple[str, str, int]] = set()
+        union_tombs: set[tuple[str, int]] = set()
+        for h in among:
+            union_adds |= state.orset_adds.get((key, h), frozenset())
+            union_tombs |= state.orset_tombs.get((key, h), frozenset())
+        for holder in into:
+            have_a = state.orset_adds.get((key, holder), frozenset())
+            for elem, owner, seq in sorted(union_adds - have_a):
+                edits.append(ORSetAdd(key, holder, elem, owner, seq))
+            have_t = state.orset_tombs.get((key, holder), frozenset())
+            for owner, seq in sorted(union_tombs - have_t):
+                edits.append(ORSetTomb(key, holder, owner, seq))
+    return edits
+
+
+def sadd_edits(
+    state: DistributedState, action: DistAction, config: DistConfig
+) -> tuple[DistDelta, str, str]:
+    """``sadd node key elem``: CRDT OR-Set add (DS0 increment 30, add-wins, re-addable).
+
+    ``node`` tags ``elem`` with a **unique dot** ``(owner=node, seq)`` — its next monotone sequence
+    for ``key`` — and stores it in its own observed add-set (``ORSetAdd``). Purely node-local (no
+    replication, no message), so it is **always available** (a partitioned-alone node still adds);
+    a fresh dot **survives** a concurrent ``srem`` that never observed it (add wins),
+    and re-adding a removed element makes a new dot that is not tombstoned (re-addable). The union
+    join in ``anti_entropy``/``gossip`` spreads it. Deterministic, so Tier-A ≡ Tier-B bit-for-bit. A
+    crashed node is ``unavailable``. Reports the added element.
+    """
+    node, key, elem = action.args[0], action.args[1], action.args[2]
+    if not state.is_up(node):
+        return [SetResult("unavailable", "")], "unavailable", ""
+    seq = state.orset_next_seq(key, node)
+    return [ORSetAdd(key, node, elem, node, seq), SetResult("ok", elem)], "ok", elem
+
+
+def srem_edits(
+    state: DistributedState, action: DistAction, config: DistConfig
+) -> tuple[DistDelta, str, str]:
+    """``srem node key elem``: CRDT OR-Set *observed*-remove (DS0 increment 30).
+
+    ``node`` tombstones **only the dots of ``elem`` it has observed** in its own add-set
+    (``ORSetTomb`` per dot) — the *observed*-remove that makes add-wins work: a concurrent ``sadd``
+    whose dot ``node`` never saw is *not* tombstoned, so it survives. The dot stays in the add-set
+    (union semantics); membership simply no longer counts it. Purely node-local (always available);
+    removing an absent element is a no-op. Reports the removed element. Tier-A ≡ Tier-B bit-for-bit.
+    """
+    node, key, elem = action.args[0], action.args[1], action.args[2]
+    if not state.is_up(node):
+        return [SetResult("unavailable", "")], "unavailable", ""
+    observed = {(owner, seq) for (e, owner, seq) in state.orset_adds.get((key, node), frozenset())
+                if e == elem}
+    already = state.orset_tombs.get((key, node), frozenset())
+    edits: DistDelta = [ORSetTomb(key, node, owner, seq)
+                        for owner, seq in sorted(observed - already)]
+    return [*edits, SetResult("ok", elem)], "ok", elem
+
+
+def smembers_edits(
+    state: DistributedState, action: DistAction, config: DistConfig
+) -> tuple[DistDelta, str, str]:
+    """``smembers node key``: read a CRDT OR-Set (DS0 increment 30) — non-tombstoned elements.
+
+    ``node``'s local view: the elements with at least one add-dot not in its tombstone-set, sorted
+    and rendered ``{a,b,c}`` (``{}`` when empty). Under a partition this may lag the other side's
+    adds/removes, but never loses them (a later join reconciles by union). A pure read; the node is
+    ``unavailable`` when down.
+    """
+    node, key = action.args[0], action.args[1]
+    if not state.is_up(node):
+        return [SetResult("unavailable", "")], "unavailable", ""
+    val = "{" + ",".join(state.orset_members(key, node)) + "}"
+    return [SetResult("ok", val)], "ok", val
 
 
 def active_members(state: DistributedState, config: DistConfig) -> frozenset[str]:
@@ -888,6 +981,12 @@ class ReferenceDistOracle:
             return cdecr_edits(state, action, self.config)
         if name == "cget":
             return cget_edits(state, action, self.config)
+        if name == "sadd":
+            return sadd_edits(state, action, self.config)
+        if name == "srem":
+            return srem_edits(state, action, self.config)
+        if name == "smembers":
+            return smembers_edits(state, action, self.config)
         if name in ("begin", "tget", "tput", "commit", "abort"):
             # The transaction family (DS0 increment 2) — shared OCC logic; a committed write's
             # async replication flows through the same in-flight medium as ``put`` (delivered by
@@ -1193,13 +1292,17 @@ class ReferenceDistOracle:
             if (best_version, best_value) != (local.version, local.value):
                 edits.append(ReplicaWrite(obj, node, best_version, best_value))
                 repaired += 1
-        # CRDT G-counter join (DS0 incr 28): pull each (key, owner) sub-count to the reachable max
-        # (a no-op when no CRDT counter is used; the pre-incr-28 form is unchanged).
+        # CRDT G-counter / PN-counter join (DS0 incr 28/29): pull each (key, owner) sub-count to the
+        # reachable max (a no-op when no CRDT counter is used; the pre-incr-28 form is unchanged).
         reachable = [node, *(p for p in self.config.nodes
                              if p != node and state.connected(node, p) and state.is_up(p))]
         gc = _gcounter_merge_edits(state, [node], reachable)
         edits.extend(gc)
         repaired += len(gc)
+        # CRDT OR-Set join (DS0 incr 30): pull the add/tombstone sets to the reachable union.
+        os_edits = _orset_merge_edits(state, [node], reachable)
+        edits.extend(os_edits)
+        repaired += len(os_edits)
         value = str(repaired)
         edits.append(SetResult("repaired", value))
         return edits, "repaired", value

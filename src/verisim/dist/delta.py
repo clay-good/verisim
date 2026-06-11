@@ -328,6 +328,39 @@ class NCounterSet:
 
 
 @dataclass(frozen=True)
+class ORSetAdd:
+    """Add one observed add-dot to node ``holder``'s copy of OR-Set ``key`` (DS0 incr 30).
+
+    The single edit for an OR-Set *add*: ``sadd n key elem`` emits ``ORSetAdd(key, n, elem, n, seq)``
+    (a node tags the element with its own unique dot), and the CRDT union join in
+    ``anti_entropy``/``gossip`` re-emits a holder's missing dots. Idempotent: re-applying a dot already
+    in ``holder``'s add-set is a no-op (set union). Omitted from the canonical form when no set is used.
+    """
+
+    key: str
+    holder: str
+    elem: str
+    owner: str
+    seq: int
+
+
+@dataclass(frozen=True)
+class ORSetTomb:
+    """Add one observed removed-dot to node ``holder``'s tombstone-set for OR-Set ``key`` (incr 30).
+
+    The single edit for an OR-Set *remove*: ``srem n key elem`` emits ``ORSetTomb(key, n, owner, seq)``
+    for each dot of ``elem`` that ``n`` has observed (the *observed*-remove), and the union join
+    re-emits a holder's missing tombs. The dot stays in the add-set (union semantics) but no longer
+    counts toward membership. Idempotent; omitted from the canonical form when no set is used.
+    """
+
+    key: str
+    holder: str
+    owner: str
+    seq: int
+
+
+@dataclass(frozen=True)
 class HostStep:
     """A SPEC-6 host syscall applied to one node's embedded host (DS0 increment 23, the §4 `HostDelta`).
 
@@ -376,6 +409,8 @@ DistEdit = (
     | ConfigSet
     | GCounterSet
     | NCounterSet
+    | ORSetAdd
+    | ORSetTomb
     | HostStep
     | SetResult
 )
@@ -466,6 +501,12 @@ def apply(state: DistributedState, delta: DistDelta) -> DistributedState:
                 s.ncounters[(edit.key, edit.holder, edit.owner)] = edit.count
             else:
                 s.ncounters.pop((edit.key, edit.holder, edit.owner), None)  # 0 carries no info
+        elif isinstance(edit, ORSetAdd):
+            k = (edit.key, edit.holder)
+            s.orset_adds[k] = s.orset_adds.get(k, frozenset()) | {(edit.elem, edit.owner, edit.seq)}
+        elif isinstance(edit, ORSetTomb):
+            k = (edit.key, edit.holder)
+            s.orset_tombs[k] = s.orset_tombs.get(k, frozenset()) | {(edit.owner, edit.seq)}
         elif isinstance(edit, HostStep):
             # apply the SPEC-6 host delta to the node's embedded host (created lazily), via the
             # SPEC-6 ``apply`` verbatim — the §4 composition. An untouched host leaves no residue.
@@ -543,6 +584,12 @@ def edit_to_dict(edit: DistEdit) -> dict[str, Any]:
     if isinstance(edit, NCounterSet):
         return {"op": "NCounterSet", "key": edit.key, "holder": edit.holder,
                 "owner": edit.owner, "count": edit.count}
+    if isinstance(edit, ORSetAdd):
+        return {"op": "ORSetAdd", "key": edit.key, "holder": edit.holder, "elem": edit.elem,
+                "owner": edit.owner, "seq": edit.seq}
+    if isinstance(edit, ORSetTomb):
+        return {"op": "ORSetTomb", "key": edit.key, "holder": edit.holder,
+                "owner": edit.owner, "seq": edit.seq}
     if isinstance(edit, HostStep):
         return {"op": "HostStep", "node": edit.node, "edits": host_delta_to_list(edit.edits)}
     assert isinstance(edit, SetResult)
@@ -608,6 +655,10 @@ def edit_from_dict(d: dict[str, Any]) -> DistEdit:
         return GCounterSet(d["key"], d["holder"], d["owner"], d["count"])
     if op == "NCounterSet":
         return NCounterSet(d["key"], d["holder"], d["owner"], d["count"])
+    if op == "ORSetAdd":
+        return ORSetAdd(d["key"], d["holder"], d["elem"], d["owner"], d["seq"])
+    if op == "ORSetTomb":
+        return ORSetTomb(d["key"], d["holder"], d["owner"], d["seq"])
     if op == "HostStep":
         return HostStep(d["node"], host_delta_from_list(d["edits"]))
     if op == "SetResult":

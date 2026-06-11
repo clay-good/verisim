@@ -658,6 +658,49 @@ def test_golden_pncounter_inc_and_dec_converge_to_net():
     assert oracle.step(state, parse_dist_action("cget n0 c")).value == "0"  # +1 - 1, nothing lost
 
 
+def test_golden_orset_add_wins_over_concurrent_remove():
+    # The CRDT OR-Set golden (SPEC-7 §3.2, DS0 incr 30): x is present cluster-wide (n0 adds dot
+    # (n0,1), n2 pulls it). Partition {n0,n1} | {n2}: n0 re-adds x (fresh dot (n0,2)) while n2
+    # removes
+    # the only dot it observed ((n0,1)). After heal, `gossip n0 n2` unions both halves — adds
+    # {(n0,1),(n0,2)}, tombs {(n0,1)} — so x is still a member via the surviving dot (n0,2): ADD
+    # WINS,
+    # where a 2P-Set would drop x. The orset maps appear in the canonical form (omitted until first
+    # op).
+    config = DistConfig(name="golden-or", nodes=("n0", "n1", "n2"), objects=("s",),
+                        values=("a",), consistency_model="eventual")
+    oracle = ReferenceDistOracle(config)
+    state = DistributedState.initial(config)
+    for cmd in ["sadd n0 s x", "anti_entropy n2", "partition n0 n1 | n2",
+                "sadd n0 s x", "srem n2 s x", "heal", "gossip n0 n2"]:
+        state = oracle.step(state, parse_dist_action(cmd)).state
+    final = to_canonical(state)
+    assert final == {
+        "replicas": [
+            _rep("s", "n0", 0, "nil"), _rep("s", "n1", 0, "nil"), _rep("s", "n2", 0, "nil"),
+        ],
+        "log": [],
+        "inflight": [],
+        "partitions": [["n0", "n1", "n2"]],
+        "down": [],
+        "clock": 0,
+        "next_event_id": 0,
+        "next_msg_id": 0,
+        "last_result": ["gossiped", "2"],  # n2 gains surviving dot (n0,2); n0 gains the tomb
+        "orset_adds": [
+            {"key": "s", "holder": "n0", "elem": "x", "owner": "n0", "seq": 1},
+            {"key": "s", "holder": "n0", "elem": "x", "owner": "n0", "seq": 2},
+            {"key": "s", "holder": "n2", "elem": "x", "owner": "n0", "seq": 1},
+            {"key": "s", "holder": "n2", "elem": "x", "owner": "n0", "seq": 2},
+        ],
+        "orset_tombs": [
+            {"key": "s", "holder": "n0", "owner": "n0", "seq": 1},
+            {"key": "s", "holder": "n2", "owner": "n0", "seq": 1},
+        ],
+    }
+    assert oracle.step(state, parse_dist_action("smembers n0 s")).value == "{x}"  # add wins
+
+
 def test_golden_config_push_commits_on_majority_minority_stays_stale() -> None:
     # The config-push golden (SPEC-7 §3.2, DS0 incr 24): n0 leads (term 1), then the network splits
     # {n0,n1} | {n2}. `config_push n0 feature on` from n0 (on the 2-of-3 majority side) commits and

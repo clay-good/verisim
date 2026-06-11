@@ -1,0 +1,9 @@
+panel,metric,value,detail
+orset,reads_back_k,1.0000,k=3_over_3_clusters
+orset,re_addable,1.0000,srem_then_sadd_returns
+orset,add_wins,1.0000,concurrent_add_survives_remove
+orset,always_available,1.0000,minority_sadd_acked_AP
+converge,gossip,1.0000,epidemic_all_nodes_same_set
+converge,anti_entropy,1.0000,all_nodes_same_set
+converge,idempotent,1.0000,second_gossip_unchanged
+tier_b,all,1.0000,steps=72

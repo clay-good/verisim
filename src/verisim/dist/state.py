@@ -274,6 +274,22 @@ class DistributedState:
     # G-counter cannot). Empty by default and omitted from the canonical form, so a cluster that never
     # decrements a CRDT counter serializes to the exact pre-increment-29 form (purely additive).
     ncounters: dict[tuple[str, str, str], int] = field(default_factory=dict)
+    # The CRDT add-wins observed-remove set (DS0 increment 30, `sadd`/`srem`/`smembers`): the canonical
+    # *interesting* CRDT, the one a naive replicated set gets wrong. Each `sadd n key elem` tags the
+    # element with a **unique dot** `(owner=n, seq)` — a per-(key, owner) monotone sequence, the
+    # single-writer discipline that made the counters work — and stores it in node `n`'s observed
+    # add-set; `srem n key elem` moves the dots for `elem` that `n` has **observed** into its
+    # tombstone-set (the *observed*-remove). `smembers n key` is the elements with at least one add-dot
+    # **not** tombstoned. The CRDT join is **set union** of both halves, applied by
+    # `anti_entropy`/`gossip` (commutative, associative, idempotent). The dot mechanism buys the two
+    # properties a naive set lacks: a concurrent `sadd` (a fresh dot the remover never saw) **survives**
+    # a concurrent `srem` (**add wins**), and a removed element is **re-addable** (a new dot is not in
+    # the tombstone-set) — where an element-level 2P-Set is remove-wins and can never re-add.
+    # `orset_adds` maps `(key, holder)` → node `holder`'s observed `(elem, owner, seq)` add-dots;
+    # `orset_tombs` maps `(key, holder)` → `holder`'s observed `(owner, seq)` removed-dots. Both empty
+    # by default and omitted from the canonical form (a set-free cluster is the pre-increment-30 form).
+    orset_adds: dict[tuple[str, str], frozenset[tuple[str, str, int]]] = field(default_factory=dict)
+    orset_tombs: dict[tuple[str, str], frozenset[tuple[str, int]]] = field(default_factory=dict)
     # The embedded SPEC-6 host inside each node (DS0 increment 23, `host`): a per-node `HostState`
     # (process table + per-process fd tables + the embedded v0 filesystem), so a cluster node is not
     # just a bag of KV replicas but a real host running processes — the compositional vision SPEC-7
@@ -337,6 +353,8 @@ class DistributedState:
             config=dict(self.config),
             gcounters=dict(self.gcounters),
             ncounters=dict(self.ncounters),
+            orset_adds=dict(self.orset_adds),
+            orset_tombs=dict(self.orset_tombs),
             hosts={node: h.copy() for node, h in self.hosts.items()},
             lease_until=self.lease_until,
         )
@@ -357,6 +375,24 @@ class DistributedState:
         For a counter that has only ever been ``cincr``-ed (``ncounters`` empty) this equals
         :meth:`gcounter_value` — so ``cget`` is unchanged for the grow-only case (purely additive)."""
         return self.gcounter_value(key, node) - self.ncounter_value(key, node)
+
+    def orset_members(self, key: str, node: str) -> list[str]:
+        """``node``'s view of OR-Set ``key`` (DS0 incr 30): elements with a non-tombstoned add-dot."""
+        adds = self.orset_adds.get((key, node), frozenset())
+        tombs = self.orset_tombs.get((key, node), frozenset())
+        return sorted({elem for (elem, owner, seq) in adds if (owner, seq) not in tombs})
+
+    def orset_next_seq(self, key: str, node: str) -> int:
+        """The next unique dot sequence for ``node``'s own dots on OR-Set ``key`` (DS0 incr 30).
+
+        ``node`` is the single writer of every ``owner == node`` dot, so a monotone ``1 + max`` over
+        its own dots — counting both live adds *and* tombstoned ones, so a re-add never reuses a
+        removed dot — yields a globally-unique tag without any cross-node coordination."""
+        seqs = [seq for (elem, owner, seq) in self.orset_adds.get((key, node), frozenset())
+                if owner == node]
+        seqs += [seq for (owner, seq) in self.orset_tombs.get((key, node), frozenset())
+                 if owner == node]
+        return (max(seqs) + 1) if seqs else 1
 
     def group_of(self, node: str) -> frozenset[str]:
         """The partition group ``node`` belongs to (a singleton if it is mentioned by no group)."""

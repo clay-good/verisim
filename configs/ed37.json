@@ -1,0 +1,6 @@
+{
+  "name": "ed37-orset",
+  "cluster_sizes": [3, 5, 7],
+  "key": "s",
+  "k": 3
+}

@@ -70,6 +70,7 @@ from verisim.dist.txn import txn_step
 from verisim.distoracle.base import DistStepResult
 from verisim.distoracle.reference import (
     _gcounter_merge_edits,
+    _orset_merge_edits,
     add_replica_edits,
     append_edits,
     causal_deps,
@@ -89,6 +90,9 @@ from verisim.distoracle.reference import (
     propose_edits,
     read_index_edits,
     remove_replica_edits,
+    sadd_edits,
+    smembers_edits,
+    srem_edits,
     step_down_edits,
     timing_fault_edits,
 )
@@ -259,6 +263,14 @@ class SystemDistOracle:
             return cdecr_edits(state, action, self.config)
         if name == "cget":
             return cget_edits(state, action, self.config)
+        if name == "sadd":
+            # The CRDT OR-Set ops (DS0 incr 30) are purely node-local (tag/observe in the node's own
+            # copy), deterministic, always available; union join is coordinator-level (Tier A≡B).
+            return sadd_edits(state, action, self.config)
+        if name == "srem":
+            return srem_edits(state, action, self.config)
+        if name == "smembers":
+            return smembers_edits(state, action, self.config)
         ev = self._event(state, action)
         if name in ("put", "cas", "delete", "incr"):
             return self._write(state, action, ev)
@@ -625,13 +637,16 @@ class SystemDistOracle:
             if (best_version, best_value) != (local.version, local.value):
                 edits.append(ReplicaWrite(obj, node, best_version, best_value))
                 repaired += 1
-        # CRDT G-counter join (DS0 incr 28): the same coordinator-level per-(key, owner) max-merge
-        # as Tier-A, via the shared helper — a no-op when no CRDT counter is used.
+        # CRDT G-counter / PN-counter / OR-Set joins (DS0 incr 28/29/30): the same coordinator-level
+        # merges as Tier-A, via the shared helpers — a no-op when the data type is unused.
         reachable = [node, *(p for p in self.config.nodes
                              if p != node and state.connected(node, p) and state.is_up(p))]
         gc = _gcounter_merge_edits(state, [node], reachable)
         edits.extend(gc)
         repaired += len(gc)
+        os_edits = _orset_merge_edits(state, [node], reachable)
+        edits.extend(os_edits)
+        repaired += len(os_edits)
         value = str(repaired)
         edits.append(SetResult("repaired", value))
         return edits, "repaired", value

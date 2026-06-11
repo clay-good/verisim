@@ -161,6 +161,9 @@ of a real message-passing execution, not just the analytic DES.
 | `cincr <node> <key>` (DS0 increment 28) | **CRDT G-counter increment**: bump **only `node`'s own** sub-count for `key` (`GCounterSet(key, node, node, +1)`) — purely node-local, so **always available** (a partitioned-alone node still counts — the AP property `incr` lacks under quorum/lin) and **never loses** a concurrent increment (disjoint owners). The CRDT join (per-(key, owner) max) is applied by `anti_entropy`/`gossip`. `("ok", new_own_subcount)`; `("unavailable", "")` if down. Purely additive (one `gcounters` map + one `GCounterSet` edit). |
 | `cdecr <node> <key>` (DS0 increment 29) | **CRDT PN-counter decrement**: bump **only `node`'s own** *decrement* sub-count for `key` (`NCounterSet(key, node, node, +1)`) — the twin of `cincr` over the PN-counter's N half. Purely node-local (**always available**), concurrent decrements never conflict, and the same per-(key, owner) max join merges it. The counter's value (`cget` = P − N) may now go **negative**, the property the grow-only G-counter lacks. `("ok", new_own_decrement_subcount)`; `("unavailable", "")` if down. Purely additive (one `ncounters` map + one `NCounterSet` edit). |
 | `cget <node> <key>` (DS0 increment 28/29) | **CRDT counter read**: return `node`'s G-counter sum **minus** its decrement sum over owners (a PN-counter; for a grow-only counter never `cdecr`-ed, N is empty and this is just the G-counter sum) — `node`'s local view (may lag, but never loses; a later join adds the rest). `("ok", total)`; `("unavailable", "")` if down. A pure read. |
+| `sadd <node> <key> <elem>` (DS0 increment 30) | **CRDT OR-Set add**: tag `elem` with a **unique dot** `(owner=node, seq)` — `node`'s next monotone sequence for `key` — and store it in `node`'s observed add-set (`ORSetAdd`). Purely node-local (**always available**), and because the dot is fresh it **survives** a concurrent `srem` (add-wins) and a removed element is **re-addable**. The union join applies in `anti_entropy`/`gossip`. `("ok", elem)`; `("unavailable", "")` if down. Purely additive (two `orset_adds`/`orset_tombs` maps + the `ORSetAdd`/`ORSetTomb` edits). |
+| `srem <node> <key> <elem>` (DS0 increment 30) | **CRDT OR-Set observed-remove**: tombstone **only the dots of `elem` that `node` has observed** in its own add-set (`ORSetTomb` per dot) — the *observed*-remove that makes add-wins work. The dot stays in the add-set (union semantics); membership no longer counts it. Node-local (always available); removing an absent element is a no-op. `("ok", elem)`; `("unavailable", "")` if down. |
+| `smembers <node> <key>` (DS0 increment 30) | **CRDT OR-Set read**: return `node`'s elements with at least one non-tombstoned dot, rendered `{a,b,c}` (`{}` empty) — `node`'s local view (may lag, never loses). `("ok", members)`; `("unavailable", "")` if down. A pure read. |
 | `enqueue <node> <queue> <val>` (DS0 incr 21) | append `val` to each reachable replica's FIFO `queue` list (the relative append op). Availability follows the consistency model (linearizable needs every replica, quorum a majority, eventual/causal proceed on the reachable set); else `("unavailable", "")`. `("enqueued", val)`. |
 | `dequeue <node> <queue>` (DS0 incr 21) | return the head of `node`'s local `queue` replica and pop the head from each reachable replica. The delivery semantics follow the model: `eventual` admits **duplicate delivery** under partition (the removal does not cross the split), `linearizable`/`quorum` gate availability for **exactly-once**. `("dequeued", head)`, or `("empty", "")` if the local replica has no items; `("unavailable", "")` if the model's quorum is unreachable. |
 
@@ -743,6 +746,47 @@ form until the first `cdecr` (purely additive over increment 28), and a cluster 
 ([`experiments/ed36.py`](../src/verisim/experiments/ed36.py)) pins both panels (decrement works +
 loss-free + goes-negative + always-available; gossip/anti_entropy convergence + idempotence over both
 halves) with Tier-B agreeing on every transition.
+
+### 3.12 `sadd` / `srem` / `smembers` — the CRDT OR-Set (DS0 increment 30)
+
+The CRDT counter was a number; the OR-Set is the canonical *interesting* CRDT — a replicated **set**,
+the data type a naive implementation gets wrong. The tempting design, an element-level **2P-Set** (a
+grow-only add-set plus a grow-only remove-set, `member iff in adds and not in removes`), has two
+defects: it is **remove-wins** (a concurrent add and remove of the same element resolve to *absent*),
+and once removed an element can **never be re-added** (its identity is permanently in the remove-set).
+Both are unacceptable for a real set.
+
+The **observed-remove set** fixes both with a **unique dot**. `sadd n key elem` does not just record
+"elem present" — it tags the element with a fresh dot `(owner=n, seq)`, where `seq` is `n`'s next
+monotone sequence for `key` (the same single-writer-per-owner discipline as the G-counter), and stores
+`(elem, n, seq)` in `n`'s observed add-set. `srem n key elem` is the *observed*-remove: it tombstones
+**only the dots of `elem` that `n` has actually observed**, not the element itself. `smembers` is the
+elements with at least one add-dot whose `(owner, seq)` is **not** tombstoned. The CRDT join is **set
+union** of both halves, applied by `anti_entropy`/`gossip` — commutative, associative, idempotent.
+
+The dot mechanism buys exactly the two properties the 2P-Set lacks:
+
+- **Add wins.** A concurrent `sadd` mints a *fresh* dot that the concurrent `srem` never observed, so
+  the union keeps it un-tombstoned and the element survives. (A `srem` can only remove what it has
+  seen; a brand-new add is, by construction, unseen.)
+- **Re-addable.** Re-adding a removed element mints a *new* dot, which is not in the tombstone-set, so
+  the element returns — the identity is per-*dot*, not per-*element*.
+
+```
+sadd n0 s x; anti_entropy n2            # x present cluster-wide (dot (n0,1) at n0 and n2)
+partition n0 n1 | n2
+sadd n0 s x                             # ("ok","x") — concurrent re-add, a FRESH dot (n0,2)
+srem n2 s x                             # ("ok","x") — n2 tombstones only the dot it saw, (n0,1)
+heal; gossip n0 n2; smembers n0 s       # ("ok","{x}") — dot (n0,2) survives: ADD WINS
+```
+
+`sadd`/`srem` are node-local and the merge is a coordinator-level read of the medium, so Tier-A and
+Tier-B compute byte-identical deltas. The `orset_adds`/`orset_tombs` maps join `cluster_view`, are
+omitted from the canonical form until the first set op (purely additive), and the metamorphic tier
+checks every dot is held/owned by a known node with a positive sequence. ED37
+([`experiments/ed37.py`](../src/verisim/experiments/ed37.py)) pins both panels (reads-back + re-addable
++ add-wins + always-available; gossip/anti_entropy convergence + idempotence) with Tier-B agreeing on
+every transition.
 
 ## 4. The delta and the `apply == oracle` invariant
 
