@@ -40,6 +40,7 @@ increment). A syscall on a non-`RUNNING` pid fails (`exit 1`) and leaves the sta
 | `setuid <pid> <uid>` | Set `pid`'s uid. **Root-only:** permitted iff the acting process has `uid == 0`. | `pid` not RUNNING; non-root caller (EPERM); non-integer uid |
 | `open <pid> <path>` | Bind the **smallest free** fd for `pid` to `resolve("/", path)`. Stdout is the fd number. | `pid` not RUNNING |
 | `write <pid> <fd> <token>` | Resolve `(pid, fd) → path`; **delegate `write <path> <token>` to the v0 FS sub-oracle**; the fs subsystem takes the sub-oracle's next state, exit code, and stdout. | `pid` not RUNNING; `fd` not open (EBADF) |
+| `read <pid> <fd>` | Resolve `(pid, fd) → path`; **delegate `cat <path>` to the v0 FS sub-oracle**; stdout is the file's content. **Read-only** — the only bundle effect is `SetExit` (no `FsDelta`), so it closes the write/read round trip without mutating state. Without a per-fd offset (a later increment) it returns the whole content each time. | `pid` not RUNNING; `fd` not open (EBADF); path not a readable file (inherits the FS oracle's failure) |
 | `close <pid> <fd>` | Release `(pid, fd)`. | `pid` not RUNNING; `fd` not open (EBADF) |
 
 ## Determinism contract

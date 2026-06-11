@@ -9,12 +9,15 @@ pid** explicitly (the scheduler/"current process" is a later HC increment). The 
     setuid <pid> <uid>             # creds: change <pid>'s uid (root-only; the privilege axis)
     open <pid> <path>              # files: bind a new fd for <pid> to <path> -> returns fd
     write <pid> <fd> <token>       # files: write <token> through <fd> (delegated to the FS oracle)
+    read <pid> <fd>                # files: read <fd>'s content back (delegated to the FS oracle)
     close <pid> <fd>               # files: release <fd>
 
 ``fork``/``exit`` are the long-range, branching, compounding-state core (SPEC-6 §3.2); ``setuid``
-makes privilege state first-class; ``open``/``write``/``close`` exercise the per-process fd table
-over the embedded v0 filesystem. Sockets, IPC, ``wait``/``kill``, ``dup``/``lseek``, ``chdir``, the
-scheduler (``yield``/``advance``) are later increments.
+makes privilege state first-class; ``open``/``write``/``read``/``close`` exercise the per-process fd
+table over the embedded v0 filesystem -- ``read`` closing the write/read round trip (a host you can
+write to but not read from is incomplete). Without a per-fd offset (a later increment), ``read``
+returns the file's whole content, read-only. Sockets, IPC, ``wait``/``kill``, ``dup``/``lseek``,
+``chdir``, the scheduler (``yield``/``advance``) are later increments.
 """
 
 from __future__ import annotations
@@ -27,6 +30,7 @@ _ARITY: dict[str, int] = {
     "setuid": 2,  # pid uid
     "open": 2,  # pid path
     "write": 3,  # pid fd token
+    "read": 2,  # pid fd
     "close": 2,  # pid fd
 }
 

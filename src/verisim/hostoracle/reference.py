@@ -47,7 +47,7 @@ class ReferenceHostOracle(HostOracle):
     def step(self, state: HostState, action: HostAction) -> HostStepResult:
         handler = {
             "fork": self._fork, "exit": self._exit, "setuid": self._setuid,
-            "open": self._open, "write": self._write, "close": self._close,
+            "open": self._open, "write": self._write, "read": self._read, "close": self._close,
         }[action.name]
         delta, exit_code, stdout = handler(state, action)
         return HostStepResult(
@@ -122,6 +122,24 @@ class ReferenceHostOracle(HostOracle):
         fs_result = self._fs.step(state.fs, parse_action(f"write {entry.path} {token}"))
         delta: HostDelta = [FsDelta(edits=fs_result.delta), SetExit(fs_result.exit_code)]
         return delta, fs_result.exit_code, fs_result.stdout
+
+    def _read(self, state: HostState, action: HostAction) -> _Outcome:
+        if not self._running(state, action.pid):
+            return self._fail()
+        try:
+            fd = int(action.args[0])
+        except ValueError:
+            return self._fail()
+        entry = state.fds.get((action.pid, fd))
+        if entry is None:  # EBADF
+            return self._fail()
+        # DELEGATE the read to the v0 FS sub-oracle (the composition, SPEC-6 §5.1): ``cat`` returns
+        # the file's content as stdout with an empty (read-only) delta, so the only host effect
+        # is the exit code. A read of an fd whose path is not a readable file (removed/a dir)
+        # inherits the FS oracle's failure (EXIT_ERR, ""). No per-fd offset yet, so a read returns
+        # the whole content each time. Reports the content read.
+        fs_result = self._fs.step(state.fs, parse_action(f"cat {entry.path}"))
+        return [SetExit(fs_result.exit_code)], fs_result.exit_code, fs_result.stdout
 
     def _close(self, state: HostState, action: HostAction) -> _Outcome:
         if not self._running(state, action.pid):

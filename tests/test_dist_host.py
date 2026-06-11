@@ -81,6 +81,38 @@ def test_embedded_filesystem_open_write() -> None:
     assert getattr(fs_node, "content", None) == "a"
 
 
+def test_host_read_round_trips_through_the_embedded_filesystem() -> None:
+    # The write/read round trip three layers deep (cluster -> host -> v0 FS): a process on n0's host
+    # writes a file and reads it back — the SPEC-6 `read` syscall, composed into SPEC-7 via `host`.
+    config = _config()
+    oracle = ReferenceDistOracle(config)
+    s = _run(oracle, config, ["host n0 open 1 /cfg", "host n0 write 1 0 enabled"])
+    r = oracle.step(s, parse_dist_action("host n0 read 1 0"))
+    assert (r.status, r.value) == ("ok", "enabled")
+    # per-node isolation: n1 never opened the fd, so its read is a host error.
+    assert oracle.step(s, parse_dist_action("host n1 read 1 0")).status == "host_err"
+    # a crashed node's host is unavailable — the cross-layer crash linkage reaches the read.
+    crashed = oracle.step(s, parse_dist_action("crash n0")).state
+    assert oracle.step(crashed, parse_dist_action("host n0 read 1 0")).status == "unavailable"
+
+
+def test_host_read_tier_a_equals_tier_b() -> None:
+    config = _config()
+    ref, sysb = ReferenceDistOracle(config), SystemDistOracle(config)
+    sa = sb = DistributedState.initial(config)
+    script = [
+        "host n0 open 1 /f", "host n0 write 1 0 hello", "host n0 read 1 0",  # round trip
+        "host n0 read 1 9",                                                  # EBADF -> host_err
+        "host n0 close 1 0", "host n0 read 1 0",                             # read after close
+    ]
+    for cmd in script:
+        a = parse_dist_action(cmd)
+        ra, rb = ref.step(sa, a), sysb.step(sb, a)
+        assert cluster_view(ra.state) == cluster_view(rb.state), cmd
+        assert (ra.status, ra.value) == (rb.status, rb.value), cmd
+        sa, sb = ra.state, rb.state
+
+
 def test_setuid_privilege_is_enforced_per_host() -> None:
     # The embedded host enforces SPEC-6 privilege: a non-root process cannot setuid (EPERM).
     config = _config()

@@ -72,6 +72,40 @@ def test_bad_pid_and_bad_fd_fail_without_mutating() -> None:
     assert oracle.step(s0, parse_host_action("write 1 3 x")).exit_code == EXIT_ERR
 
 
+def test_read_closes_the_write_read_round_trip() -> None:
+    # `read` reads back through the fd what `write` wrote — the round trip a host needs (read op).
+    oracle = ReferenceHostOracle()
+    state = _run(oracle, HostState.initial(), ["open 1 /f", "write 1 0 alpha"])
+    result = oracle.step(state, parse_host_action("read 1 0"))
+    assert result.exit_code == EXIT_OK
+    assert result.stdout == "alpha"  # the content delegated to the FS `cat` sub-oracle
+
+
+def test_read_is_read_only() -> None:
+    # `read` is read-only: it leaves the FS, process table, and fd table unchanged (only last_exit).
+    oracle = ReferenceHostOracle()
+    state = _run(oracle, HostState.initial(), ["open 1 /f", "write 1 0 gamma"])
+    before = to_canonical_host(state)
+    after = to_canonical_host(oracle.step(state, parse_host_action("read 1 0")).state)
+    before.pop("last_exit")
+    after.pop("last_exit")
+    assert before == after
+
+
+def test_read_bad_fd_and_after_close_are_ebadf() -> None:
+    oracle = ReferenceHostOracle()
+    s0 = HostState.initial()
+    assert oracle.step(s0, parse_host_action("read 1 5")).exit_code == EXIT_ERR  # never opened
+    closed = _run(oracle, s0, ["open 1 /f", "write 1 0 beta", "close 1 0"])
+    assert oracle.step(closed, parse_host_action("read 1 0")).exit_code == EXIT_ERR  # released fd
+
+
+def test_read_on_a_dead_pid_fails() -> None:
+    oracle = ReferenceHostOracle()
+    dead = _run(oracle, HostState.initial(), ["open 1 /f", "write 1 0 d", "exit 1 0"])
+    assert oracle.step(dead, parse_host_action("read 1 0")).exit_code == EXIT_ERR  # pid 1 zombie
+
+
 def test_oracle_is_pure_and_deterministic() -> None:
     oracle = ReferenceHostOracle()
     cmds = ["fork 1", "open 2 /a", "write 2 0 hello", "setuid 1 1000", "exit 2 0"]
