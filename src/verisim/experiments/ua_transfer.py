@@ -203,10 +203,15 @@ def main() -> None:  # pragma: no cover - CLI entry point
     parser = argparse.ArgumentParser(description="UA1/UA2 -- imagination + grounding (SPEC-20).")
     parser.add_argument("--checkpoint", type=str, default="runs/flagship/net-l")
     parser.add_argument("--out", type=str, default="figures/ua2_grounding_ablation.csv")
+    parser.add_argument("--rho", type=float, default=None, help="E_grounded budget (H73/H76)")
     parser.add_argument("--smoke", action="store_true")
     args = parser.parse_args()
 
     config = UATransferConfig.smoke() if args.smoke else UATransferConfig()
+    if args.rho is not None:
+        from dataclasses import replace
+
+        config = replace(config, rho=args.rho)
     if args.smoke:
         from verisim.netloop.model import NetOracleBackedModel
 

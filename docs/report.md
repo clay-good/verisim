@@ -2338,9 +2338,11 @@ PASS). On that frozen checkpoint:
 trained in `E_oracle` / `E_grounded` / `E_free`, all evaluated in reality. The result is a sharp
 **dissociation**:
 
-- **H73 (qualified) + H75 (SUPPORTED).** The defender learns (reality containment 0.42 vs a 0.21 noop
-  baseline), and the grounded-trained policy's sim-to-emulation gap is **0.000** — train in the model,
-  deploy in reality, identical performance. The world model **is** a faithful training environment.
+- **H73 + H75 — both SUPPORTED.** The defender learns (reality containment 0.42 vs a 0.21 noop
+  baseline); at ρ=0.2 the grounded-trained policy transfers at reality containment ≥ the oracle-trained
+  one (0.420 vs 0.390) at **5× lower oracle cost** (720 vs 3,600 calls) — H73's quality and cost bars
+  both met. And its sim-to-emulation gap is **0.000** — train in the model, deploy in reality, identical
+  performance (H75). The world model **is** a faithful, cheap training environment.
 - **H74 — the money hypothesis — REFUTED (the bankable negative).** Grounded ≡ free (reality 0.420 =
   0.420; advantage **0.000**, flat across ρ, H76 also refuted). Oracle-grounding during training buys
   **no** transfer advantage. *Mechanism (diagnosed):* both backends teach the same "isolate exposed
@@ -2371,6 +2373,9 @@ python -m verisim.experiments.flagship_swap --checkpoint runs/flagship/net-l \
 # SPEC-20 UA1/UA2 — learn-in-imagination + the grounding ablation (the money hypothesis):
 python -m verisim.experiments.ua_transfer --checkpoint runs/flagship/net-l \
     --out figures/ua2_grounding_ablation.csv
+# UA1/H73 at rho=0.2 — closes the strict 5x-cheaper cost bar (grounded 0.420 @ 720 calls vs oracle 3600):
+python -m verisim.experiments.ua_transfer --checkpoint runs/flagship/net-l --rho 0.2 \
+    --out figures/ua2_grounding_rho0.2.csv
 ```
 
 ## What v0 ships for others
