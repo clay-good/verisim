@@ -2370,6 +2370,9 @@ python -m verisim.experiments.flagship_goal --out figures/fl3_goal_horizon.csv
 # FL4 — proposer swap (model-invariance of the curve shape):
 python -m verisim.experiments.flagship_swap --checkpoint runs/flagship/net-l \
     --out figures/fl4_proposer_swap.csv
+# FL6 — why the real signal schedules well (ranking vs calibration; Spearman +0.352, lift +0.25):
+python -m verisim.experiments.flagship_signal --checkpoint runs/flagship/net-l \
+    --out figures/fl6_signal_diag.csv
 # SPEC-20 UA1/UA2 — learn-in-imagination + the grounding ablation (the money hypothesis):
 python -m verisim.experiments.ua_transfer --checkpoint runs/flagship/net-l \
     --out figures/ua2_grounding_ablation.csv
