@@ -773,6 +773,57 @@ def test_golden_lwwregister_concurrent_writes_resolve_deterministically():
     assert oracle.step(state, parse_dist_action("lwwget n0 w")).value == "b"  # deterministic winner
 
 
+def test_golden_ormap_composes_orset_presence_and_lww_values():
+    # The CRDT OR-Map golden (SPEC-7 §3.2, DS0 incr 33): under a partition {n0,n1} | {n2}, n0 puts
+    # field x=1 (dot (n0,1), ts 1) and n2 puts field y=2 (dot (n2,1), ts 1). After heal, `gossip n0
+    # n2` runs BOTH composed joins — the OR-Set union of presence dots (so both nodes hold fields
+    # {x,y}) and the LWW max of each field's value (each single value propagates). Four moves:
+    # two presence dots + two values. The ormap_* maps appear in the canonical form.
+    config = DistConfig(name="golden-om", nodes=("n0", "n1", "n2"), objects=("m",),
+                        values=("a",), consistency_model="eventual")
+    oracle = ReferenceDistOracle(config)
+    state = DistributedState.initial(config)
+    for cmd in ["partition n0 n1 | n2", "mput n0 m x 1", "mput n2 m y 2", "heal", "gossip n0 n2"]:
+        state = oracle.step(state, parse_dist_action(cmd)).state
+    final = to_canonical(state)
+    assert final == {
+        "replicas": [
+            _rep("m", "n0", 0, "nil"), _rep("m", "n1", 0, "nil"), _rep("m", "n2", 0, "nil"),
+        ],
+        "log": [],
+        "inflight": [],
+        "partitions": [["n0", "n1", "n2"]],
+        "down": [],
+        "clock": 0,
+        "next_event_id": 0,
+        "next_msg_id": 0,
+        "last_result": ["gossiped", "4"],  # two presence dots + two field values moved
+        "lamport": [
+            {"holder": "n0", "value": 1},
+            {"holder": "n2", "value": 1},
+        ],
+        "ormap_fields": [
+            {"map": "m", "holder": "n0", "field": "x", "owner": "n0", "seq": 1},
+            {"map": "m", "holder": "n0", "field": "y", "owner": "n2", "seq": 1},
+            {"map": "m", "holder": "n2", "field": "x", "owner": "n0", "seq": 1},
+            {"map": "m", "holder": "n2", "field": "y", "owner": "n2", "seq": 1},
+        ],
+        "ormap_vals": [
+            {"map": "m", "field": "x", "holder": "n0", "value": "1", "ts": 1, "owner": "n0"},
+            {"map": "m", "field": "x", "holder": "n2", "value": "1", "ts": 1, "owner": "n0"},
+            {"map": "m", "field": "y", "holder": "n0", "value": "2", "ts": 1, "owner": "n2"},
+            {"map": "m", "field": "y", "holder": "n2", "value": "2", "ts": 1, "owner": "n2"},
+        ],
+    }
+    assert _keys_of(oracle.step(state, parse_dist_action("mkeys n0 m")).value) == {"x", "y"}
+    assert oracle.step(state, parse_dist_action("mget n0 m y")).value == "2"  # value converged too
+
+
+def _keys_of(value: str) -> set[str]:
+    inner = value.strip("{}")
+    return set(inner.split(",")) if inner else set()
+
+
 def test_golden_config_push_commits_on_majority_minority_stays_stale() -> None:
     # The config-push golden (SPEC-7 §3.2, DS0 incr 24): n0 leads (term 1), then the network splits
     # {n0,n1} | {n2}. `config_push n0 feature on` from n0 (on the 2-of-3 majority side) commits and

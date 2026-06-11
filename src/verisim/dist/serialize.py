@@ -202,6 +202,25 @@ def to_canonical(state: DistributedState) -> dict[str, Any]:
     lamport = {n: t for n, t in state.lamport.items() if t != 0}
     if lamport:
         out["lamport"] = [{"holder": n, "value": lamport[n]} for n in sorted(lamport)]
+    # The CRDT OR-Map (DS0 incr 33, `mput`/`mget`/`mdel`/`mkeys`): the field-presence dots + tombstones
+    # (OR-Set half) and each field's LWW value (LWW-register half). Omitted when empty (pre-incr-33).
+    omf = sorted((m, h, fld, o, s) for (m, h), dots in state.ormap_fields.items() if dots
+                 for (fld, o, s) in dots)
+    if omf:
+        out["ormap_fields"] = [
+            {"map": m, "holder": h, "field": fld, "owner": o, "seq": s} for m, h, fld, o, s in omf
+        ]
+    omt = sorted((m, h, o, s) for (m, h), dots in state.ormap_tombs.items() if dots
+                 for (o, s) in dots)
+    if omt:
+        out["ormap_tombs"] = [
+            {"map": m, "holder": h, "owner": o, "seq": s} for m, h, o, s in omt
+        ]
+    if state.ormap_vals:
+        out["ormap_vals"] = [
+            {"map": m, "field": fld, "holder": h, "value": v, "ts": ts, "owner": o}
+            for ((m, fld), h), (v, ts, o) in sorted(state.ormap_vals.items())
+        ]
     # The embedded SPEC-6 hosts (DS0 incr 23): per-node host canonical form (the v0 FS reuses its own
     # canonical verbatim — the composition is visible in serialization). Omitted when no node runs a
     # host op, so a host-free cluster serializes to the exact pre-increment-23 form (purely additive).
@@ -236,6 +255,22 @@ def _group_mvreg_vals(rows: list[dict[str, Any]]) -> dict[tuple[str, str], froze
     grouped: dict[tuple[str, str], set[tuple[str, str, int]]] = {}
     for r in rows:
         grouped.setdefault((r["key"], r["holder"]), set()).add((r["value"], r["owner"], r["seq"]))
+    return {k: frozenset(v) for k, v in grouped.items()}
+
+
+def _group_ormap_fields(rows: list[dict[str, Any]]) -> dict[tuple[str, str], frozenset[tuple[str, str, int]]]:
+    """Re-group the flattened OR-Map presence-dot rows (DS0 incr 33) into per-(map, holder) sets."""
+    grouped: dict[tuple[str, str], set[tuple[str, str, int]]] = {}
+    for r in rows:
+        grouped.setdefault((r["map"], r["holder"]), set()).add((r["field"], r["owner"], r["seq"]))
+    return {k: frozenset(v) for k, v in grouped.items()}
+
+
+def _group_ormap_tombs(rows: list[dict[str, Any]]) -> dict[tuple[str, str], frozenset[tuple[str, int]]]:
+    """Re-group the flattened OR-Map tombstone rows (DS0 incr 33) into per-(map, holder) sets."""
+    grouped: dict[tuple[str, str], set[tuple[str, int]]] = {}
+    for r in rows:
+        grouped.setdefault((r["map"], r["holder"]), set()).add((r["owner"], r["seq"]))
     return {k: frozenset(v) for k, v in grouped.items()}
 
 
@@ -316,6 +351,12 @@ def from_canonical(d: dict[str, Any]) -> DistributedState:
             for r in d.get("lwwreg", [])
         },
         lamport={r["holder"]: r["value"] for r in d.get("lamport", [])},
+        ormap_fields=_group_ormap_fields(d.get("ormap_fields", [])),
+        ormap_tombs=_group_ormap_tombs(d.get("ormap_tombs", [])),
+        ormap_vals={
+            ((r["map"], r["field"]), r["holder"]): (r["value"], r["ts"], r["owner"])
+            for r in d.get("ormap_vals", [])
+        },
         hosts={h["node"]: from_canonical_host(h["host"]) for h in d.get("hosts", [])},
         lease_until=d.get("lease_until", 0),
     )

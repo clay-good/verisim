@@ -52,6 +52,9 @@ from verisim.dist.delta import (
     NCounterSet,
     NodeDown,
     NodeUp,
+    ORMapField,
+    ORMapTomb,
+    ORMapVal,
     ORSetAdd,
     ORSetTomb,
     PartitionSet,
@@ -194,9 +197,12 @@ def gossip_edits(
     edits.extend(_mvreg_merge_edits(state, [a, b], [a, b]))
     # The CRDT LWW-register join (incr 32): both endpoints adopt the (ts, owner, value)-max winner.
     edits.extend(_lwwreg_merge_edits(state, [a, b], [a, b]))
+    # The CRDT OR-Map join (incr 33): the OR-Set presence union + the per-field LWW max.
+    edits.extend(_ormap_merge_edits(state, [a, b], [a, b]))
     synced = sum(1 for e in edits
                  if isinstance(e, (ReplicaWrite, GCounterSet, NCounterSet, ORSetAdd, ORSetTomb,
-                                   MVRegWrite, MVRegTomb, LWWRegSet, LamportSet)))  # all moves
+                                   MVRegWrite, MVRegTomb, LWWRegSet, LamportSet,
+                                   ORMapField, ORMapTomb, ORMapVal)))  # all moves
     value = str(synced)
     return [*edits, SetResult("gossiped", value)], "gossiped", value
 
@@ -426,6 +432,117 @@ def lwwget_edits(
     if not state.is_up(node):
         return [SetResult("unavailable", "")], "unavailable", ""
     val = state.lwwreg_value(key, node)
+    return [SetResult("ok", val)], "ok", val
+
+
+def _ormap_merge_edits(
+    state: DistributedState, into: list[str], among: list[str]
+) -> list[DistEdit]:
+    """Join of the CRDT OR-Map (DS0 incr 33) — the **composition** of two prior CRDT joins.
+
+    The presence half is the **OR-Set union** of the field-presence dots (reusing
+    :func:`_dotset_union_edits`); the value half is the **LWW max** by ``(ts, owner, value)`` of
+    each ``(map, field)`` value (the LWW-register join); each node's shared Lamport clock rises to
+    the max ts observed. A no-op when no OR-Map is used (the pre-incr-33 form is unchanged).
+    """
+    edits: list[DistEdit] = _dotset_union_edits(
+        state.ormap_fields, state.ormap_tombs, into, among, ORMapField, ORMapTomb
+    )
+    for mapname, field in sorted({mf for (mf, _h) in state.ormap_vals}):
+        copies = [state.ormap_vals[((mapname, field), h)]
+                  for h in among if ((mapname, field), h) in state.ormap_vals]
+        if not copies:
+            continue
+        win = max(copies, key=lambda e: (e[1], e[2], e[0]))  # (ts, owner, value) LWW order
+        for holder in into:
+            if state.ormap_vals.get(((mapname, field), holder)) != win:
+                edits.append(ORMapVal(mapname, field, holder, win[0], win[1], win[2]))
+    max_ts = max(
+        [state.lamport.get(h, 0) for h in among]
+        + [ts for ((m, f), h), (v, ts, o) in state.ormap_vals.items() if h in among],
+        default=0,
+    )
+    for holder in into:
+        if state.lamport.get(holder, 0) < max_ts:
+            edits.append(LamportSet(holder, max_ts))
+    return edits
+
+
+def mput_edits(
+    state: DistributedState, action: DistAction, config: DistConfig
+) -> tuple[DistDelta, str, str]:
+    """``mput node map field val``: CRDT OR-Map field write (DS0 increment 33, the composition).
+
+    Two coordinated edits in the two halves: (1) a fresh **presence dot** for ``field`` (superseding
+    ``node``'s own observed dots of that field, so a sequential write keeps the presence bounded),
+    and (2) an **LWW value** stamped with the node's Lamport clock. Add-wins: the fresh presence dot
+    survives a concurrent ``mdel`` (whose tombstone never saw it), so a concurrent update beats a
+    concurrent remove. Purely node-local, so **always available** even partitioned-alone, and
+    deterministic, so Tier-A ≡ Tier-B bit-for-bit. A crashed node is ``unavailable``. Reports the
+    written value.
+    """
+    node, mapname, field, val = action.args[0], action.args[1], action.args[2], action.args[3]
+    if not state.is_up(node):
+        return [SetResult("unavailable", "")], "unavailable", ""
+    already = state.ormap_tombs.get((mapname, node), frozenset())
+    observed = state.ormap_field_dots(mapname, field, node)
+    edits: DistDelta = [ORMapTomb(mapname, node, o, s) for o, s in sorted(observed - already)]
+    seq = state.ormap_next_seq(mapname, node)
+    edits.append(ORMapField(mapname, node, field, node, seq))
+    ts = state.lamport.get(node, 0) + 1
+    edits.append(ORMapVal(mapname, field, node, val, ts, node))
+    edits.append(LamportSet(node, ts))
+    return [*edits, SetResult("ok", val)], "ok", val
+
+
+def mdel_edits(
+    state: DistributedState, action: DistAction, config: DistConfig
+) -> tuple[DistDelta, str, str]:
+    """``mdel node map field``: CRDT OR-Map field *observed*-remove (DS0 increment 33).
+
+    Tombstones **only the presence dots of ``field`` that ``node`` has observed** (the OR-Set
+    observed-remove) — so a concurrent ``mput``'s fresh, unseen dot survives (add-wins). The field's
+    LWW value stays (a re-``mput`` overwrites it), but ``mget``/``mkeys`` no longer see the field.
+    Purely node-local (always available); removing an absent field is a no-op. Reports the field.
+    """
+    node, mapname, field = action.args[0], action.args[1], action.args[2]
+    if not state.is_up(node):
+        return [SetResult("unavailable", "")], "unavailable", ""
+    already = state.ormap_tombs.get((mapname, node), frozenset())
+    observed = state.ormap_field_dots(mapname, field, node)
+    edits: DistDelta = [ORMapTomb(mapname, node, o, s) for o, s in sorted(observed - already)]
+    return [*edits, SetResult("ok", field)], "ok", field
+
+
+def mget_edits(
+    state: DistributedState, action: DistAction, config: DistConfig
+) -> tuple[DistDelta, str, str]:
+    """``mget node map field``: read an OR-Map field (DS0 increment 33) — its LWW value or ``""``.
+
+    Returns the field's last-writer-wins value if the field is **present** (it has a non-tombstoned
+    presence dot at ``node``), else ``""`` (absent/removed). ``node``'s local view; a later join
+    reconciles. A pure read; ``unavailable`` if the node is down.
+    """
+    node, mapname, field = action.args[0], action.args[1], action.args[2]
+    if not state.is_up(node):
+        return [SetResult("unavailable", "")], "unavailable", ""
+    return [SetResult("ok", state.ormap_get(mapname, field, node))], "ok", \
+        state.ormap_get(mapname, field, node)
+
+
+def mkeys_edits(
+    state: DistributedState, action: DistAction, config: DistConfig
+) -> tuple[DistDelta, str, str]:
+    """``mkeys node map``: read an OR-Map's present field names (DS0 increment 33).
+
+    The fields with at least one non-tombstoned presence dot at ``node``, sorted and rendered
+    ``{a,b}`` (``{}`` empty) — the enumeration capability the flat KV/registers lack. A pure read;
+    ``unavailable`` if down.
+    """
+    node, mapname = action.args[0], action.args[1]
+    if not state.is_up(node):
+        return [SetResult("unavailable", "")], "unavailable", ""
+    val = "{" + ",".join(state.ormap_keys(mapname, node)) + "}"
     return [SetResult("ok", val)], "ok", val
 
 
@@ -1143,6 +1260,14 @@ class ReferenceDistOracle:
             return lwwput_edits(state, action, self.config)
         if name == "lwwget":
             return lwwget_edits(state, action, self.config)
+        if name == "mput":
+            return mput_edits(state, action, self.config)
+        if name == "mget":
+            return mget_edits(state, action, self.config)
+        if name == "mdel":
+            return mdel_edits(state, action, self.config)
+        if name == "mkeys":
+            return mkeys_edits(state, action, self.config)
         if name in ("begin", "tget", "tput", "commit", "abort"):
             # The transaction family (DS0 increment 2) — shared OCC logic; a committed write's
             # async replication flows through the same in-flight medium as ``put`` (delivered by
@@ -1465,6 +1590,9 @@ class ReferenceDistOracle:
         lww_edits = _lwwreg_merge_edits(state, [node], reachable)
         edits.extend(lww_edits)
         repaired += len(lww_edits)
+        om_edits = _ormap_merge_edits(state, [node], reachable)
+        edits.extend(om_edits)
+        repaired += len(om_edits)
         value = str(repaired)
         edits.append(SetResult("repaired", value))
         return edits, "repaired", value

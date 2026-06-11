@@ -19,6 +19,10 @@ workload and the fault/time medium (the consensus/admin family arrives with the 
     mvget <node> <key>              # client: read a CRDT MV-register (surviving sibling values)
     lwwput <node> <key> <val>       # client: CRDT LWW-register write (Lamport-timestamped; one winner)
     lwwget <node> <key>             # client: read a CRDT LWW-register (the last-writer-wins value)
+    mput <node> <map> <field> <val> # client: CRDT OR-Map field write (add-wins presence + LWW value)
+    mget <node> <map> <field>       # client: read an OR-Map field (its value, or empty if absent)
+    mdel <node> <map> <field>       # client: CRDT OR-Map field remove (observed-remove; add-wins)
+    mkeys <node> <map>              # client: read an OR-Map's present field names
     advance <dt>                    # time: +<dt> clock; deliver in-flight msgs now due & reachable
     partition <nodes> | <nodes>     # fault: split the network into groups (| separates groups)
     heal                            # fault: remove all partitions (one fully-connected group)
@@ -216,7 +220,16 @@ surfacing a conflict it **deterministically picks one winner** by a **Lamport-ti
 that *happened-after* another (higher ts) always wins, regardless of which node made it, and truly
 *concurrent* writes (equal ts) break the tie by node id (a stable winner). ``lwwget n key`` reads the
 single winning value. The Lamport clock — advanced on write and on merge — is what makes "happens-
-after" a comparable order (ED39).
+after" a comparable order (ED39). ``mput``/``mget``/``mdel``/``mkeys`` (DS0 increment 33) are the
+**CRDT OR-Map** — the *capstone*, a CRDT **of** CRDTs: it composes the OR-Set (governing **field
+presence**, add-wins + observed-remove over field names) with the LWW-register (governing each
+field's **value**). ``mput n map field val`` adds a fresh presence dot for ``field`` (superseding
+``n``'s own observed dots of that field) *and* LWW-writes ``val``; ``mdel n map field`` observed-
+removes the field (tombstoning the dots ``n`` saw); ``mget`` reads a present field's LWW value;
+``mkeys`` enumerates the present fields — the map capability the flat KV/registers lack. The join is
+the **OR-Set union** of the presence halves plus the **LWW max** of each field's value, so a
+concurrent ``mput`` survives a concurrent ``mdel`` (add-wins field presence) while a field's value
+resolves by last-writer-wins — composition demonstrated within the CRDT layer (ED40).
 """
 
 from __future__ import annotations
@@ -241,6 +254,10 @@ _ARITY: dict[str, int | None] = {
     "mvget": 2,  # node key  -- read a CRDT MV-register: surviving sibling values (DS0 incr 31)
     "lwwput": 3,  # node key val  -- CRDT LWW-register write (Lamport-timestamped; DS0 incr 32)
     "lwwget": 2,  # node key  -- read a CRDT LWW-register: the last-writer-wins value (DS0 incr 32)
+    "mput": 4,  # node map field val  -- CRDT OR-Map field write (add-wins + LWW; DS0 incr 33)
+    "mget": 3,  # node map field  -- read an OR-Map field's value (DS0 incr 33)
+    "mdel": 3,  # node map field  -- CRDT OR-Map field observed-remove (add-wins; DS0 incr 33)
+    "mkeys": 2,  # node map  -- read an OR-Map's present field names (DS0 incr 33)
     "advance": 1,  # dt
     "partition": None,  # <nodes> | <nodes> [| ...]
     "host": None,  # <node> <syscall...>  -- a SPEC-6 host syscall on <node>'s host (DS0 incr 23)
@@ -280,6 +297,7 @@ _ARITY: dict[str, int | None] = {
 CLIENT_OPS = frozenset({
     "put", "get", "cas", "delete", "incr", "cincr", "cdecr", "cget",
     "sadd", "srem", "smembers", "mvput", "mvget", "lwwput", "lwwget",
+    "mput", "mget", "mdel", "mkeys",
     "begin", "tget", "tput", "commit", "abort", "enqueue", "dequeue",
 })
 TXN_OPS = frozenset({"begin", "tget", "tput", "commit", "abort"})

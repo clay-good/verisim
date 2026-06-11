@@ -72,6 +72,7 @@ from verisim.distoracle.reference import (
     _gcounter_merge_edits,
     _lwwreg_merge_edits,
     _mvreg_merge_edits,
+    _ormap_merge_edits,
     _orset_merge_edits,
     add_replica_edits,
     append_edits,
@@ -91,6 +92,10 @@ from verisim.distoracle.reference import (
     lread_edits,
     lwwget_edits,
     lwwput_edits,
+    mdel_edits,
+    mget_edits,
+    mkeys_edits,
+    mput_edits,
     mvget_edits,
     mvput_edits,
     propose_edits,
@@ -289,6 +294,16 @@ class SystemDistOracle:
             return lwwput_edits(state, action, self.config)
         if name == "lwwget":
             return lwwget_edits(state, action, self.config)
+        if name == "mput":
+            # The CRDT OR-Map ops (DS0 incr 33) are purely node-local (presence dots + LWW value in
+            # the node's own copy + its Lamport clock), deterministic, always available; coord join.
+            return mput_edits(state, action, self.config)
+        if name == "mget":
+            return mget_edits(state, action, self.config)
+        if name == "mdel":
+            return mdel_edits(state, action, self.config)
+        if name == "mkeys":
+            return mkeys_edits(state, action, self.config)
         ev = self._event(state, action)
         if name in ("put", "cas", "delete", "incr"):
             return self._write(state, action, ev)
@@ -671,6 +686,9 @@ class SystemDistOracle:
         lww_edits = _lwwreg_merge_edits(state, [node], reachable)
         edits.extend(lww_edits)
         repaired += len(lww_edits)
+        om_edits = _ormap_merge_edits(state, [node], reachable)
+        edits.extend(om_edits)
+        repaired += len(om_edits)
         value = str(repaired)
         edits.append(SetResult("repaired", value))
         return edits, "repaired", value

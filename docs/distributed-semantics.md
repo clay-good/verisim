@@ -168,6 +168,10 @@ of a real message-passing execution, not just the analytic DES.
 | `mvget <node> <key>` (DS0 increment 31) | **CRDT MV-register read**: return `node`'s surviving (non-tombstoned) sibling values, rendered `{a,b}` (`{}` empty, one value if resolved) — `node`'s local view (may lag, never loses). `("ok", siblings)`; `("unavailable", "")` if down. A pure read. |
 | `lwwput <node> <key> <val>` (DS0 increment 32) | **CRDT LWW-register write**: stamp `val` with `(ts, owner=node)` where `ts = lamport[node] + 1` (advancing `node`'s Lamport clock), and store it as the current register value (`LWWRegSet` + `LamportSet`). The join keeps the **max** copy by `(ts, owner, value)` — a write that happened-after (higher ts) wins regardless of node; concurrent (equal-ts) writes break the tie by node id. Purely node-local (**always available**). `("ok", val)`; `("unavailable", "")` if down. Purely additive (two `lwwreg`/`lamport` maps + the `LWWRegSet`/`LamportSet` edits). |
 | `lwwget <node> <key>` (DS0 increment 32) | **CRDT LWW-register read**: return `node`'s current winning value (`` `` if never written) — `node`'s local view (may lag, never resolves wrongly). `("ok", value)`; `("unavailable", "")` if down. A pure read. |
+| `mput <node> <map> <field> <val>` (DS0 increment 33) | **CRDT OR-Map field write**: add a fresh field-presence dot for `field` (superseding `node`'s observed dots of that field, `ORMapField` + `ORMapTomb`) *and* LWW-write `val` (`ORMapVal` + `LamportSet`). Add-wins: the fresh dot survives a concurrent `mdel`. Purely node-local (**always available**); the OR-Set union + per-field LWW join applies in `anti_entropy`/`gossip`. `("ok", val)`; `("unavailable", "")` if down. Purely additive (three `ormap_*` maps + three edits). |
+| `mget <node> <map> <field>` (DS0 increment 33) | **CRDT OR-Map field read**: return the field's LWW value if it is **present** (a non-tombstoned presence dot), else `` `` (absent). `node`'s local view. `("ok", value)`; `("unavailable", "")` if down. A pure read. |
+| `mdel <node> <map> <field>` (DS0 increment 33) | **CRDT OR-Map field observed-remove**: tombstone the presence dots of `field` that `node` has observed (`ORMapTomb`). The value stays (a re-`mput` overwrites it), but `mget`/`mkeys` no longer see the field; a concurrent `mput`'s unseen dot survives (add-wins). Purely node-local (always available). `("ok", field)`; `("unavailable", "")` if down. |
+| `mkeys <node> <map>` (DS0 increment 33) | **CRDT OR-Map enumerate**: return `node`'s present field names (non-tombstoned presence dots), rendered `{a,b}` (`{}` empty) — the enumeration capability the flat KV lacks. `("ok", keys)`; `("unavailable", "")` if down. A pure read. |
 | `enqueue <node> <queue> <val>` (DS0 incr 21) | append `val` to each reachable replica's FIFO `queue` list (the relative append op). Availability follows the consistency model (linearizable needs every replica, quorum a majority, eventual/causal proceed on the reachable set); else `("unavailable", "")`. `("enqueued", val)`. |
 | `dequeue <node> <queue>` (DS0 incr 21) | return the head of `node`'s local `queue` replica and pop the head from each reachable replica. The delivery semantics follow the model: `eventual` admits **duplicate delivery** under partition (the removal does not cross the split), `linearizable`/`quorum` gate availability for **exactly-once**. `("dequeued", head)`, or `("empty", "")` if the local replica has no items; `("unavailable", "")` if the model's quorum is unreachable. |
 
@@ -865,6 +869,45 @@ tier checks every entry is held/owned by a known node with a positive timestamp 
 clock. ED39 ([`experiments/ed39.py`](../src/verisim/experiments/ed39.py)) pins both panels (basic-read
 + causal-LWW + deterministic-resolution + always-available; gossip/anti_entropy convergence +
 idempotence + loser-dropped) with Tier-B agreeing on every transition.
+
+### 3.15 `mput` / `mget` / `mdel` / `mkeys` — the CRDT OR-Map (DS0 increment 33)
+
+The OR-Map is the **capstone** of the CRDT family because it is a CRDT *of* CRDTs — it composes two of
+the pieces built earlier. The **OR-Set** (§3.12) governs *field presence* (which fields the map has,
+add-wins + observed-remove over field names) and the **LWW-register** (§3.14) governs each field's
+*value*. This is the structure most real CRDT systems expose (Riak Map, Automerge), and it is the
+in-CRDT-layer instance of the whole program's thesis: a faithful composite is a composition of
+faithful parts.
+
+`mput n map field val` does two coordinated things: it adds a fresh **presence dot** `(field, n, seq)`
+(superseding `n`'s own observed dots of that field, so a sequential write keeps the presence set
+bounded) *and* LWW-writes `val` for `(map, field)`. `mdel n map field` observed-removes the field
+(tombstoning the presence dots `n` saw — the value stays, but the field is no longer present). `mget`
+reads a present field's LWW value; `mkeys` enumerates the present fields — the map capability the flat
+KV and registers lack. The join is the OR-Set union of the presence halves **plus** the LWW max of
+each field's value, with the two halves converging independently:
+
+- **Add-wins field presence.** A concurrent `mput`'s fresh dot is unseen by a concurrent `mdel`, so it
+  survives — a concurrent update beats a concurrent remove (where a naive map would lose the update).
+- **LWW field values.** Two concurrent writes to the *same field*'s value resolve by the
+  Lamport-timestamp order (one winner) — the LWW-register semantics, scoped per field.
+
+```
+mput n0 m k v0; anti_entropy n3         # field k present cluster-wide
+partition n0 n1 n2 | n3 n4
+mdel n3 m k                             # minority removes the field (tombstones the dot it saw)
+mput n0 m k v1                          # majority re-writes — a FRESH presence dot + new value
+heal; gossip n0 n3; mkeys n3 m          # ("ok","{k}") — the field SURVIVES (add-wins)
+```
+
+`mput`/`mdel` are node-local and the merge is a coordinator-level read of the medium, so Tier-A and
+Tier-B compute byte-identical deltas. The `ormap_fields`/`ormap_tombs`/`ormap_vals` maps join
+`cluster_view`, are omitted from the canonical form until the first map op (purely additive over
+increment 32), and share the Lamport clock with the LWW-register (which now applies as a max, so the
+two merges raise it order-independently). ED40
+([`experiments/ed40.py`](../src/verisim/experiments/ed40.py)) pins both panels (basic-read +
+delete-removes + value-LWW + add-wins-presence + always-available; gossip/anti_entropy convergence +
+idempotence) with Tier-B agreeing on every transition.
 
 ## 4. The delta and the `apply == oracle` invariant
 

@@ -190,6 +190,20 @@ class TieredOracle:
         for holder, clock in predicted.lamport.items():
             if holder not in nodeset or clock < 0:
                 return True, f"invalid lamport clock {clock} at {holder!r}"
+        # The CRDT OR-Map (DS0 incr 33): every presence dot is held/owned by a known node with a
+        # positive sequence, and every field value is stamped with a positive ts by a known owner —
+        # the composed OR-Set + LWW invariants, so a phantom node or non-positive tag is impossible.
+        for (_map, holder), fdots in predicted.ormap_fields.items():
+            for (_field, owner, seq) in fdots:
+                if holder not in nodeset or owner not in nodeset or seq < 1:
+                    return True, f"invalid ormap presence-dot ({owner!r},{seq}) at {holder!r}"
+        for (_map, holder), tdots in predicted.ormap_tombs.items():
+            for (owner, seq) in tdots:
+                if holder not in nodeset or owner not in nodeset or seq < 1:
+                    return True, f"invalid ormap tomb-dot ({owner!r},{seq}) at holder {holder!r}"
+        for (_mf, holder), (_value, ts, owner) in predicted.ormap_vals.items():
+            if holder not in nodeset or owner not in nodeset or ts < 1:
+                return True, f"invalid ormap value (ts={ts}, owner={owner!r}) at holder {holder!r}"
         return False, ""
 
     def _cycle(

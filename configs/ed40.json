@@ -1,0 +1,5 @@
+{
+  "name": "ed40-ormap",
+  "cluster_sizes": [3, 5, 7],
+  "mapname": "m"
+}

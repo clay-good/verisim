@@ -317,6 +317,23 @@ class DistributedState:
     # default and omitted from the canonical form (purely additive over increment 31).
     lwwreg: dict[tuple[str, str], tuple[str, int, str]] = field(default_factory=dict)
     lamport: dict[str, int] = field(default_factory=dict)
+    # The CRDT add-wins observed-remove map (DS0 increment 33, `mput`/`mget`/`mdel`/`mkeys`): the
+    # *capstone* of the CRDT family — a CRDT **of** CRDTs. It composes two pieces built earlier: the
+    # OR-Set governs **field presence** (which fields the map currently has, add-wins + observed-remove
+    # over field names) and the LWW-register governs each field's **value**. `mput n map field val`
+    # adds a fresh presence dot for `field` (superseding `n`'s own observed dots of that field, like the
+    # MV-register) *and* LWW-writes `val`; `mdel n map field` observed-removes the field (tombstoning
+    # the presence dots `n` saw); `mget` reads a present field's LWW value; `mkeys` enumerates the
+    # present fields — the genuinely-new map capability the flat KV/registers lack. The join is the
+    # **OR-Set union** of the presence halves plus the **LWW max** of each field's value (sharing the
+    # `lamport` clock), so a concurrent `mput` survives a concurrent `mdel` (add-wins field presence)
+    # while a field's value resolves by last-writer-wins. `ormap_fields` maps `(map, holder)` →
+    # `holder`'s observed `(field, owner, seq)` presence dots; `ormap_tombs` → its removed `(owner,
+    # seq)` dots; `ormap_vals` maps `((map, field), holder)` → the field's `(value, ts, owner)`. All
+    # empty by default and omitted from the canonical form (purely additive over increment 32).
+    ormap_fields: dict[tuple[str, str], frozenset[tuple[str, str, int]]] = field(default_factory=dict)
+    ormap_tombs: dict[tuple[str, str], frozenset[tuple[str, int]]] = field(default_factory=dict)
+    ormap_vals: dict[tuple[tuple[str, str], str], tuple[str, int, str]] = field(default_factory=dict)
     # The embedded SPEC-6 host inside each node (DS0 increment 23, `host`): a per-node `HostState`
     # (process table + per-process fd tables + the embedded v0 filesystem), so a cluster node is not
     # just a bag of KV replicas but a real host running processes — the compositional vision SPEC-7
@@ -386,6 +403,9 @@ class DistributedState:
             mvreg_tombs=dict(self.mvreg_tombs),
             lwwreg=dict(self.lwwreg),
             lamport=dict(self.lamport),
+            ormap_fields=dict(self.ormap_fields),
+            ormap_tombs=dict(self.ormap_tombs),
+            ormap_vals=dict(self.ormap_vals),
             hosts={node: h.copy() for node, h in self.hosts.items()},
             lease_until=self.lease_until,
         )
@@ -459,6 +479,42 @@ class DistributedState:
         never written)."""
         entry = self.lwwreg.get((key, node))
         return entry[0] if entry is not None else ""
+
+    def ormap_keys(self, mapname: str, node: str) -> list[str]:
+        """``node``'s view of OR-Map ``mapname`` (DS0 incr 33): its present (non-tombstoned) fields."""
+        fields = self.ormap_fields.get((mapname, node), frozenset())
+        tombs = self.ormap_tombs.get((mapname, node), frozenset())
+        return sorted({field for (field, owner, seq) in fields if (owner, seq) not in tombs})
+
+    def ormap_has_field(self, mapname: str, field: str, node: str) -> bool:
+        """Whether ``node`` sees ``field`` as present in OR-Map ``mapname`` (a non-tombstoned dot)."""
+        fields = self.ormap_fields.get((mapname, node), frozenset())
+        tombs = self.ormap_tombs.get((mapname, node), frozenset())
+        return any(f == field and (o, s) not in tombs for (f, o, s) in fields)
+
+    def ormap_get(self, mapname: str, field: str, node: str) -> str:
+        """``node``'s value for ``field`` of OR-Map ``mapname`` (`` `` if the field is absent)."""
+        if not self.ormap_has_field(mapname, field, node):
+            return ""
+        entry = self.ormap_vals.get(((mapname, field), node))
+        return entry[0] if entry is not None else ""
+
+    def ormap_field_dots(self, mapname: str, field: str, node: str) -> set[tuple[str, int]]:
+        """The presence dots of ``field`` that ``node`` currently observes in OR-Map ``mapname``.
+
+        A ``mput``/``mdel`` supersedes/tombstones exactly these — the dots the actor can see — so a
+        concurrent op on another node (whose fresh dot is unseen) survives (add-wins field presence)."""
+        fields = self.ormap_fields.get((mapname, node), frozenset())
+        tombs = self.ormap_tombs.get((mapname, node), frozenset())
+        return {(o, s) for (f, o, s) in fields if f == field and (o, s) not in tombs}
+
+    def ormap_next_seq(self, mapname: str, node: str) -> int:
+        """The next unique presence-dot sequence for ``node``'s own dots on OR-Map ``mapname`` (33)."""
+        seqs = [seq for (field, owner, seq) in self.ormap_fields.get((mapname, node), frozenset())
+                if owner == node]
+        seqs += [seq for (owner, seq) in self.ormap_tombs.get((mapname, node), frozenset())
+                 if owner == node]
+        return (max(seqs) + 1) if seqs else 1
 
     def group_of(self, node: str) -> frozenset[str]:
         """The partition group ``node`` belongs to (a singleton if it is mentioned by no group)."""

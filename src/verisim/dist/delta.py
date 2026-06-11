@@ -414,15 +414,67 @@ class LWWRegSet:
 class LamportSet:
     """Set node ``holder``'s Lamport clock to ``value`` (DS0 incr 32).
 
-    The per-node logical clock backing the LWW-register: ``lwwput`` advances it to ``+1`` before
-    stamping, and the join advances it to the max timestamp the node has observed (so a later write
-    always out-stamps what it overwrites). A clock of ``0`` is the default and is dropped from the
-    canonical form, so a cluster that never uses an LWW-register is byte-identical to the pre-incr-32
-    form.
+    The per-node logical clock backing the LWW-register (incr 32) and the OR-Map (incr 33): ``lwwput``/
+    ``mput`` advance it to ``+1`` before stamping, and the join advances it to the max timestamp the
+    node has observed (so a later write always out-stamps what it overwrites). It applies as a
+    **max** (a clock only moves forward), so the LWW-register and OR-Map merges — which may both raise
+    the same node's clock in one step — compose order-independently. A clock of ``0`` is the default
+    and dropped from the canonical form, so a cluster that uses neither is byte-identical to the
+    pre-incr-32 form.
     """
 
     holder: str
     value: int
+
+
+@dataclass(frozen=True)
+class ORMapField:
+    """Add one field-presence dot to node ``holder``'s copy of OR-Map ``mapname`` (DS0 incr 33).
+
+    The OR-Set half of the OR-Map: ``mput n map field val`` emits ``ORMapField(map, n, field, n, seq)``
+    (a node tags the field's presence with its own unique dot), and the union join re-emits a holder's
+    missing presence dots. Add-wins: a concurrent ``mput``'s fresh dot survives a concurrent ``mdel``.
+    Omitted from the canonical form when no map is used.
+    """
+
+    mapname: str
+    holder: str
+    field: str
+    owner: str
+    seq: int
+
+
+@dataclass(frozen=True)
+class ORMapTomb:
+    """Add one superseded/removed presence dot to ``holder``'s tombstone-set for OR-Map ``mapname``.
+
+    The OR-Set tombstone half (DS0 incr 33): ``mdel`` (and a re-``mput``'s supersede) emit
+    ``ORMapTomb`` for every presence dot they *observed*, so a removed field disappears while a
+    concurrent unseen dot survives (add-wins). Omitted from the canonical form when no map is used.
+    """
+
+    mapname: str
+    holder: str
+    owner: str
+    seq: int
+
+
+@dataclass(frozen=True)
+class ORMapVal:
+    """Set node ``holder``'s LWW value of ``field`` in OR-Map ``mapname`` to ``(value, ts, owner)``.
+
+    The LWW-register half of the OR-Map (DS0 incr 33): ``mput`` emits ``ORMapVal(map, field, n, val,
+    ts, n)`` and the join keeps the **max** by ``(ts, owner, value)`` per ``(map, field)`` — each
+    field's value resolves by last-writer-wins, sharing the node's Lamport clock. Omitted from the
+    canonical form when no map is used.
+    """
+
+    mapname: str
+    field: str
+    holder: str
+    value: str
+    ts: int
+    owner: str
 
 
 @dataclass(frozen=True)
@@ -480,6 +532,9 @@ DistEdit = (
     | MVRegTomb
     | LWWRegSet
     | LamportSet
+    | ORMapField
+    | ORMapTomb
+    | ORMapVal
     | HostStep
     | SetResult
 )
@@ -585,10 +640,23 @@ def apply(state: DistributedState, delta: DistDelta) -> DistributedState:
         elif isinstance(edit, LWWRegSet):
             s.lwwreg[(edit.key, edit.holder)] = (edit.value, edit.ts, edit.owner)
         elif isinstance(edit, LamportSet):
-            if edit.value != 0:
-                s.lamport[edit.holder] = edit.value
+            new = max(s.lamport.get(edit.holder, 0), edit.value)  # a clock only moves forward
+            if new != 0:
+                s.lamport[edit.holder] = new
             else:
                 s.lamport.pop(edit.holder, None)  # 0 is the default — no residue
+        elif isinstance(edit, ORMapField):
+            k = (edit.mapname, edit.holder)
+            s.ormap_fields[k] = s.ormap_fields.get(k, frozenset()) | {
+                (edit.field, edit.owner, edit.seq)
+            }
+        elif isinstance(edit, ORMapTomb):
+            k = (edit.mapname, edit.holder)
+            s.ormap_tombs[k] = s.ormap_tombs.get(k, frozenset()) | {(edit.owner, edit.seq)}
+        elif isinstance(edit, ORMapVal):
+            s.ormap_vals[((edit.mapname, edit.field), edit.holder)] = (
+                edit.value, edit.ts, edit.owner
+            )
         elif isinstance(edit, HostStep):
             # apply the SPEC-6 host delta to the node's embedded host (created lazily), via the
             # SPEC-6 ``apply`` verbatim — the §4 composition. An untouched host leaves no residue.
@@ -683,6 +751,15 @@ def edit_to_dict(edit: DistEdit) -> dict[str, Any]:
                 "ts": edit.ts, "owner": edit.owner}
     if isinstance(edit, LamportSet):
         return {"op": "LamportSet", "holder": edit.holder, "value": edit.value}
+    if isinstance(edit, ORMapField):
+        return {"op": "ORMapField", "mapname": edit.mapname, "holder": edit.holder,
+                "field": edit.field, "owner": edit.owner, "seq": edit.seq}
+    if isinstance(edit, ORMapTomb):
+        return {"op": "ORMapTomb", "mapname": edit.mapname, "holder": edit.holder,
+                "owner": edit.owner, "seq": edit.seq}
+    if isinstance(edit, ORMapVal):
+        return {"op": "ORMapVal", "mapname": edit.mapname, "field": edit.field,
+                "holder": edit.holder, "value": edit.value, "ts": edit.ts, "owner": edit.owner}
     if isinstance(edit, HostStep):
         return {"op": "HostStep", "node": edit.node, "edits": host_delta_to_list(edit.edits)}
     assert isinstance(edit, SetResult)
@@ -760,6 +837,12 @@ def edit_from_dict(d: dict[str, Any]) -> DistEdit:
         return LWWRegSet(d["key"], d["holder"], d["value"], d["ts"], d["owner"])
     if op == "LamportSet":
         return LamportSet(d["holder"], d["value"])
+    if op == "ORMapField":
+        return ORMapField(d["mapname"], d["holder"], d["field"], d["owner"], d["seq"])
+    if op == "ORMapTomb":
+        return ORMapTomb(d["mapname"], d["holder"], d["owner"], d["seq"])
+    if op == "ORMapVal":
+        return ORMapVal(d["mapname"], d["field"], d["holder"], d["value"], d["ts"], d["owner"])
     if op == "HostStep":
         return HostStep(d["node"], host_delta_from_list(d["edits"]))
     if op == "SetResult":

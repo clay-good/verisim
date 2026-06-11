@@ -1,0 +1,10 @@
+panel,metric,value,detail
+ormap,basic_read,1.0000,over_3_clusters
+ormap,delete_removes,1.0000,mdel_field_absent
+ormap,value_lww,1.0000,concurrent_value_one_winner
+ormap,add_wins,1.0000,mput_survives_concurrent_mdel
+ormap,always_available,1.0000,minority_op_acked_AP
+converge,gossip,1.0000,all_nodes_same_fields_values
+converge,anti_entropy,1.0000,all_nodes_same_fields
+converge,idempotent,1.0000,second_gossip_unchanged
+tier_b,all,1.0000,steps=79

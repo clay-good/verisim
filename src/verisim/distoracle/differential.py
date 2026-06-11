@@ -94,6 +94,13 @@ def cluster_view(state: DistributedState) -> str:
     # The CRDT LWW-register (DS0 incr 32): each holder's winning (value, ts, owner) + Lamport clock.
     lwwreg = sorted((k, h, v, ts, o) for (k, h), (v, ts, o) in state.lwwreg.items())
     lamport = sorted((n, t) for n, t in state.lamport.items() if t != 0)
+    # The CRDT OR-Map (incr 33): each holder's field-presence dots + tombstones + per-field values.
+    ormap_fields = sorted((m, h, fld, o, s) for (m, h), dots in state.ormap_fields.items() if dots
+                          for (fld, o, s) in dots)
+    ormap_tombs = sorted((m, h, o, s) for (m, h), dots in state.ormap_tombs.items() if dots
+                         for (o, s) in dots)
+    ormap_vals = sorted((m, fld, h, v, ts, o)
+                        for ((m, fld), h), (v, ts, o) in state.ormap_vals.items())
     # The embedded per-node hosts (DS0 incr 23) are observable cluster state — each node's host
     # canonical form, sorted by node. Empty for a host-free cluster, so the channel is unchanged.
     hosts = sorted((n, to_canonical_host(h)) for n, h in state.hosts.items())
@@ -115,6 +122,9 @@ def cluster_view(state: DistributedState) -> str:
         "mvreg_tombs": mvreg_tombs,
         "lwwreg": lwwreg,
         "lamport": lamport,
+        "ormap_fields": ormap_fields,
+        "ormap_tombs": ormap_tombs,
+        "ormap_vals": ormap_vals,
         "hosts": hosts,
     })
 
