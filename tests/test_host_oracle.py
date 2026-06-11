@@ -51,6 +51,39 @@ def test_write_through_fd_lands_in_the_embedded_filesystem() -> None:
     assert result.stdout == "1"
 
 
+def test_kill_terminates_the_target_and_releases_its_fds() -> None:
+    # root (pid 1) forks pid 2, which opens an fd; pid 1 kills pid 2 -> ZOMBIE (137) + fds released.
+    oracle = ReferenceHostOracle()
+    state = _run(oracle, HostState.initial(), ["fork 1", "open 2 /f"])
+    result = oracle.step(state, parse_host_action("kill 1 2"))
+    assert result.exit_code == EXIT_OK
+    assert result.state.procs[2].state == ZOMBIE
+    assert result.state.procs[2].exit_code == 137  # the SIGKILL convention (128 + 9)
+    assert not any(pid == 2 for (pid, _fd) in result.state.fds)  # the victim's fds are released
+    assert result.state.procs[1].state == RUNNING  # the killer is untouched
+
+
+def test_kill_is_permission_gated() -> None:
+    oracle = ReferenceHostOracle()
+    # pid 2 drops to uid 1000; pid 3 stays root (uid 0). A non-root process can't kill root (EPERM).
+    state = _run(oracle, HostState.initial(), ["fork 1", "setuid 2 1000", "fork 1"])
+    denied = oracle.step(state, parse_host_action("kill 2 3"))
+    assert denied.exit_code == EXIT_ERR and denied.state.procs[3].state == RUNNING
+    # root may kill anyone...
+    assert oracle.step(state, parse_host_action("kill 1 2")).state.procs[2].state == ZOMBIE
+    # ...and a process may kill another of the same uid (pid 2 forks pid 4, both uid 1000).
+    same = _run(oracle, state, ["fork 2"])  # pid 4 is pid 2's child, inherits uid 1000
+    killed = oracle.step(same, parse_host_action("kill 2 4"))
+    assert killed.exit_code == EXIT_OK and killed.state.procs[4].state == ZOMBIE
+
+
+def test_kill_nonexistent_or_zombie_target_is_esrch() -> None:
+    oracle = ReferenceHostOracle()
+    assert oracle.step(HostState.initial(), parse_host_action("kill 1 99")).exit_code == EXIT_ERR
+    zombie = _run(oracle, HostState.initial(), ["fork 1", "exit 2 0"])
+    assert oracle.step(zombie, parse_host_action("kill 1 2")).exit_code == EXIT_ERR  # already dead
+
+
 def test_setuid_is_root_gated() -> None:
     oracle = ReferenceHostOracle()
     # root (uid 0) may drop privilege...

@@ -113,6 +113,39 @@ def test_host_read_tier_a_equals_tier_b() -> None:
         sa, sb = ra.state, rb.state
 
 
+def test_host_kill_is_permission_gated_per_node() -> None:
+    # `kill` composes into SPEC-7 via `host`: pid 1 on n0's host forks pid 2 and terminates it.
+    config = _config()
+    oracle = ReferenceDistOracle(config)
+    s = _run(oracle, config, ["host n0 fork 1"])
+    r = oracle.step(s, parse_dist_action("host n0 kill 1 2"))
+    assert r.status == "ok"
+    assert r.state.hosts["n0"].procs[2].state == "ZOMBIE"  # the victim is terminated on n0's host
+    # the privilege axis reaches the embedded host: a non-root process cannot kill root (EPERM).
+    s2 = _run(oracle, config, ["host n0 fork 1", "host n0 setuid 2 1000", "host n0 fork 1"])
+    assert oracle.step(s2, parse_dist_action("host n0 kill 2 3")).status == "host_err"
+    # per-node isolation: n0's pid 2 does not exist on n1's host, so n1's kill is ESRCH.
+    assert oracle.step(s, parse_dist_action("host n1 kill 1 2")).status == "host_err"
+
+
+def test_host_kill_tier_a_equals_tier_b() -> None:
+    config = _config()
+    ref, sysb = ReferenceDistOracle(config), SystemDistOracle(config)
+    sa = sb = DistributedState.initial(config)
+    script = [
+        "host n0 fork 1", "host n0 fork 1", "host n0 setuid 2 1000",
+        "host n0 kill 2 3",   # EPERM (non-root kills root) -> host_err
+        "host n0 kill 1 2",   # root kills non-root -> ok
+        "host n0 kill 1 99",  # ESRCH -> host_err
+    ]
+    for cmd in script:
+        a = parse_dist_action(cmd)
+        ra, rb = ref.step(sa, a), sysb.step(sb, a)
+        assert cluster_view(ra.state) == cluster_view(rb.state), cmd
+        assert (ra.status, ra.value) == (rb.status, rb.value), cmd
+        sa, sb = ra.state, rb.state
+
+
 def test_setuid_privilege_is_enforced_per_host() -> None:
     # The embedded host enforces SPEC-6 privilege: a non-root process cannot setuid (EPERM).
     config = _config()

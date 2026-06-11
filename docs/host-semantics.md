@@ -37,6 +37,7 @@ increment). A syscall on a non-`RUNNING` pid fails (`exit 1`) and leaves the sta
 |---|---|---|
 | `fork <pid>` | Create a child `Process(next_pid, ppid=pid, RUNNING, uid=parent.uid)`; `next_pid++`. Stdout is the child pid. | `pid` not RUNNING |
 | `exit <pid> <code>` | `pid → ZOMBIE` with `exit_code = code`; **all of `pid`'s fds are released**. | `pid` not RUNNING; non-integer code |
+| `kill <pid> <target>` | `target → ZOMBIE` with `exit_code = 137` (the SIGKILL convention, `128 + 9`); **`target`'s fds are released** (reuses `ProcExit`). **Permission-gated:** permitted iff `pid` is root (`uid == 0`) or shares `target`'s uid. The killer is untouched. | `pid` not RUNNING; `target` absent or not RUNNING (ESRCH); non-root caller of a different uid (EPERM) |
 | `setuid <pid> <uid>` | Set `pid`'s uid. **Root-only:** permitted iff the acting process has `uid == 0`. | `pid` not RUNNING; non-root caller (EPERM); non-integer uid |
 | `open <pid> <path>` | Bind the **smallest free** fd for `pid` to `resolve("/", path)`. Stdout is the fd number. | `pid` not RUNNING |
 | `write <pid> <fd> <token>` | Resolve `(pid, fd) → path`; **delegate `write <path> <token>` to the v0 FS sub-oracle**; the fs subsystem takes the sub-oracle's next state, exit code, and stdout. | `pid` not RUNNING; `fd` not open (EBADF) |

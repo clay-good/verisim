@@ -46,7 +46,7 @@ class ReferenceHostOracle(HostOracle):
 
     def step(self, state: HostState, action: HostAction) -> HostStepResult:
         handler = {
-            "fork": self._fork, "exit": self._exit, "setuid": self._setuid,
+            "fork": self._fork, "exit": self._exit, "kill": self._kill, "setuid": self._setuid,
             "open": self._open, "write": self._write, "read": self._read, "close": self._close,
         }[action.name]
         delta, exit_code, stdout = handler(state, action)
@@ -84,6 +84,26 @@ class ReferenceHostOracle(HostOracle):
         except ValueError:
             return self._fail()
         return [ProcExit(pid=action.pid, code=code), SetExit(EXIT_OK)], EXIT_OK, ""
+
+    def _kill(self, state: HostState, action: HostAction) -> _Outcome:
+        if not self._running(state, action.pid):
+            return self._fail()
+        try:
+            target = int(action.args[0])
+        except ValueError:
+            return self._fail()
+        victim = state.procs.get(target)
+        if victim is None or victim.state != RUNNING:  # ESRCH: no such running process
+            return self._fail()
+        # PERMISSION (the privilege axis, EPERM): a process may terminate another only if it is root
+        # (uid 0) or shares the target's uid -- the standard Unix rule, the inter-process echo of
+        # ``setuid``'s root gate. A non-root process cannot kill another user's process.
+        killer_uid = state.procs[action.pid].uid
+        if killer_uid != 0 and killer_uid != victim.uid:
+            return self._fail()
+        # The target becomes a ZOMBIE and its fds are released -- reusing ``ProcExit`` (so no new
+        # delta type), with the SIGKILL convention for the exit status (128 + signal 9 = 137).
+        return [ProcExit(pid=target, code=137), SetExit(EXIT_OK)], EXIT_OK, ""
 
     def _setuid(self, state: HostState, action: HostAction) -> _Outcome:
         if not self._running(state, action.pid):

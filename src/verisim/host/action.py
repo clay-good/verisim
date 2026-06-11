@@ -6,18 +6,21 @@ pid** explicitly (the scheduler/"current process" is a later HC increment). The 
 
     fork <pid>                     # process: create a child of <pid>
     exit <pid> <code>              # process: <pid> becomes a ZOMBIE with this exit code
+    kill <pid> <target>            # process: <pid> terminates <target> (gated: same-uid or root)
     setuid <pid> <uid>             # creds: change <pid>'s uid (root-only; the privilege axis)
     open <pid> <path>              # files: bind a new fd for <pid> to <path> -> returns fd
     write <pid> <fd> <token>       # files: write <token> through <fd> (delegated to the FS oracle)
     read <pid> <fd>                # files: read <fd>'s content back (delegated to the FS oracle)
     close <pid> <fd>               # files: release <fd>
 
-``fork``/``exit`` are the long-range, branching, compounding-state core (SPEC-6 §3.2); ``setuid``
-makes privilege state first-class; ``open``/``write``/``read``/``close`` exercise the per-process fd
-table over the embedded v0 filesystem -- ``read`` closing the write/read round trip (a host you can
-write to but not read from is incomplete). Without a per-fd offset (a later increment), ``read``
-returns the file's whole content, read-only. Sockets, IPC, ``wait``/``kill``, ``dup``/``lseek``,
-``chdir``, the scheduler (``yield``/``advance``) are later increments.
+``fork``/``exit``/``kill`` are the long-range, branching, compounding-state process core (SPEC-6
+§3.2) -- ``kill`` is the inter-process control op, **permission-gated** like a real OS (a process
+may terminate another only if it is root or shares the target's uid, the EPERM rule -- the
+privilege axis again); ``setuid`` makes privilege state first-class; ``open``/``write``/``read``/
+``close`` exercise the per-process fd table over the embedded v0 filesystem -- ``read`` closing the
+write/read round trip (a host you can write to but not read from is incomplete). Without a per-fd
+offset (a later increment), ``read`` returns the file's whole content, read-only. Sockets, IPC,
+``wait``, ``dup``/``lseek``, ``chdir``, the scheduler (``yield``/``advance``) are later increments.
 """
 
 from __future__ import annotations
@@ -27,6 +30,7 @@ from dataclasses import dataclass
 _ARITY: dict[str, int] = {
     "fork": 1,  # pid
     "exit": 2,  # pid code
+    "kill": 2,  # pid target
     "setuid": 2,  # pid uid
     "open": 2,  # pid path
     "write": 3,  # pid fd token
