@@ -1,0 +1,10 @@
+panel,metric,value,detail
+cmap,basic_read,1.0000,over_3_clusters
+cmap,delete_removes,1.0000,cmdel_field_absent
+cmap,value_loss_free,1.0000,concurrent_increments_total_3
+cmap,add_wins,1.0000,cminc_survives_concurrent_cmdel
+cmap,always_available,1.0000,minority_cminc_acked_AP
+converge,gossip,1.0000,all_nodes_same_fields_totals
+converge,anti_entropy,1.0000,all_nodes_same_fields
+converge,idempotent,1.0000,second_gossip_unchanged
+tier_b,all,1.0000,steps=86

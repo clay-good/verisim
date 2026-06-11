@@ -175,6 +175,10 @@ of a real message-passing execution, not just the analytic DES.
 | `rins <node> <list> <i> <val>` (DS0 increment 34) | **CRDT RGA insert**: insert `val` after the i-th visible element (`i=0` = head, anchored at `RGA_ROOT`; `i` past the end appends) — a new element with unique id `(seq, node)` and the anchor's id as its `parent` (`RGAInsert`). The visible order is a DFS with siblings by id descending. Purely node-local (**always available**); the set-union join applies in `anti_entropy`/`gossip`. `("ok", val)`; `("unavailable", "")` if down. Purely additive (two `rga_*` maps + two edits). |
 | `rdel <node> <list> <i>` (DS0 increment 34) | **CRDT RGA delete**: tombstone the i-th visible element (`i=1` = first), so it leaves the sequence but keeps its position as an anchor for its children (delete preserves structure, `RGATomb`). Out-of-range `i` is `not_found`. Node-local (always available). `("ok", value)`; `("unavailable", "")` if down. |
 | `rget <node> <list>` (DS0 increment 34) | **CRDT RGA read**: return the visible (non-tombstoned) element values concatenated, in order. `node`'s local view (may lag, never diverges — concurrent inserts converge). `("ok", sequence)`; `("unavailable", "")` if down. A pure read. |
+| `cminc <node> <map> <field>` (DS0 increment 35) | **nested counter-map increment**: add a fresh field-presence dot for `field` (the OR-Set half — superseding `node`'s observed dots, `CMapField` + `CMapTomb`) *and* bump `node`'s own G-counter sub-count for that field (the value half, `CMapCount`). Both layers converge: a field survives a concurrent `cmdel` (add-wins) *and* concurrent increments are summed loss-free. Purely node-local (**always available**). `("ok", new_total)`; `("unavailable", "")` if down. Purely additive (three `cmap_*` maps + three edits). |
+| `cmget <node> <map> <field>` (DS0 increment 35) | **counter-map field read**: return the field's G-counter total (sum over owners) if **present**, else `` `` (absent). `node`'s local view. `("ok", total)`; `("unavailable", "")` if down. A pure read. |
+| `cmdel <node> <map> <field>` (DS0 increment 35) | **counter-map field observed-remove**: tombstone the presence dots of `field` that `node` has observed (`CMapTomb`), so the field leaves `cmkeys`/`cmget` while a concurrent `cminc`'s unseen dot survives (add-wins). The counter sub-counts persist (grow-only; a re-`cminc` restores the field). Node-local (always available). `("ok", field)`; `("unavailable", "")` if down. |
+| `cmkeys <node> <map>` (DS0 increment 35) | **counter-map enumerate**: return `node`'s present field names (non-tombstoned dots), rendered `{a,b}` (`{}` empty). `("ok", keys)`; `("unavailable", "")` if down. A pure read. |
 | `enqueue <node> <queue> <val>` (DS0 incr 21) | append `val` to each reachable replica's FIFO `queue` list (the relative append op). Availability follows the consistency model (linearizable needs every replica, quorum a majority, eventual/causal proceed on the reachable set); else `("unavailable", "")`. `("enqueued", val)`. |
 | `dequeue <node> <queue>` (DS0 incr 21) | return the head of `node`'s local `queue` replica and pop the head from each reachable replica. The delivery semantics follow the model: `eventual` admits **duplicate delivery** under partition (the removal does not cross the split), `linearizable`/`quorum` gate availability for **exactly-once**. `("dequeued", head)`, or `("empty", "")` if the local replica has no items; `("unavailable", "")` if the model's quorum is unreachable. |
 
@@ -948,6 +952,45 @@ from the canonical form until the first list op (purely additive over increment 
 metamorphic tier checks every element is held/owned by a known node with a positive sequence and a
 ROOT-or-known parent. ED41 ([`experiments/ed41.py`](../src/verisim/experiments/ed41.py)) pins both
 panels (build + insert/delete + deterministic-concurrent-insert + always-available; gossip/anti_entropy
+convergence + idempotence) with Tier-B agreeing on every transition.
+
+### 3.17 `cminc` / `cmget` / `cmdel` / `cmkeys` — the nested CRDT counter-map (DS0 increment 35)
+
+The OR-Map (§3.15) composed an OR-Set with LWW-registers. The **counter-map** is the *recursive* form
+of that idea — a CRDT whose *values are themselves CRDTs* of a **different** kind. It is a map of
+**G-counters** (Riak's `{user → visit_count}`): the OR-Set governs field presence (add-wins +
+observed-remove, identical to the OR-Map), but each field's value is a **G-counter**, which merges by
+per-owner **max** (loss-free) rather than by LWW. The point of building it is to show that the two
+composed layers' guarantees hold **simultaneously** under concurrency — which the LWW-valued OR-Map
+cannot, because LWW *drops* a concurrent write where a counter *sums* it.
+
+`cminc n map field` does two coordinated things: it adds a fresh presence dot for `field` (the OR-Set
+half) *and* bumps `node`'s own per-(map, field, owner) G-counter sub-count (the value half). `cmdel`
+observed-removes the field (the counter sub-counts persist — a grow-only counter; a re-`cminc` restores
+the field and continues the count). `cmget` reads a present field's total; `cmkeys` enumerates. The
+join is the OR-Set union of the presence halves **plus** the per-(map, field, owner) max of the
+counters:
+
+- **Add-wins field presence.** A concurrent `cminc`'s fresh presence dot survives a concurrent `cmdel`
+  — the field stays (with its full count).
+- **Loss-free counter values.** Concurrent `cminc`s to the *same field* land on different owners'
+  sub-counts, so the max-join **sums** them — three increments across a partition total 3, where the
+  OR-Map's LWW value would read 1.
+
+```
+cminc n0 m c; anti_entropy n3           # field c present cluster-wide, total 1
+partition n0 n1 n2 | n3 n4
+cminc n0 m c                            # majority +1 (total 2 on its side)
+cminc n3 m c                            # minority +1 (concurrent, total 2 on its side)
+heal; gossip n0 n3; cmget n3 m c        # ("ok","3") — SUMMED loss-free (LWW would read 2)
+```
+
+`cminc`/`cmdel` are node-local and the merge is a coordinator-level read of the medium, so Tier-A and
+Tier-B compute byte-identical deltas. The `cmap_fields`/`cmap_tombs`/`cmap_counts` maps join
+`cluster_view`, are omitted from the canonical form until the first counter-map op (purely additive
+over increment 34), and the metamorphic tier checks the composed OR-Set + G-counter invariants. ED42
+([`experiments/ed42.py`](../src/verisim/experiments/ed42.py)) pins both panels (basic-read +
+delete-removes + value-loss-free + add-wins-presence + always-available; gossip/anti_entropy
 convergence + idempotence) with Tier-B agreeing on every transition.
 
 ## 4. The delta and the `apply == oracle` invariant

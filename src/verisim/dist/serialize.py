@@ -239,6 +239,25 @@ def to_canonical(state: DistributedState) -> dict[str, Any]:
         out["rga_tombs"] = [
             {"list": ln, "holder": h, "seq": seq, "owner": owner} for ln, h, seq, owner in rtombs
         ]
+    # The CRDT counter-map (DS0 incr 35, `cminc`/`cmget`/`cmdel`/`cmkeys`): the OR-Set field-presence
+    # dots + tombstones, and the per-field G-counter sub-counts. Omitted when empty (pre-incr-35 form).
+    cmf = sorted((m, h, fld, o, s) for (m, h), dots in state.cmap_fields.items() if dots
+                 for (fld, o, s) in dots)
+    if cmf:
+        out["cmap_fields"] = [
+            {"map": m, "holder": h, "field": fld, "owner": o, "seq": s} for m, h, fld, o, s in cmf
+        ]
+    cmt = sorted((m, h, o, s) for (m, h), dots in state.cmap_tombs.items() if dots
+                 for (o, s) in dots)
+    if cmt:
+        out["cmap_tombs"] = [
+            {"map": m, "holder": h, "owner": o, "seq": s} for m, h, o, s in cmt
+        ]
+    cmc = sorted((m, fld, h, o, c) for ((m, fld), h, o), c in state.cmap_counts.items() if c != 0)
+    if cmc:
+        out["cmap_counts"] = [
+            {"map": m, "field": fld, "holder": h, "owner": o, "count": c} for m, fld, h, o, c in cmc
+        ]
     # The embedded SPEC-6 hosts (DS0 incr 23): per-node host canonical form (the v0 FS reuses its own
     # canonical verbatim — the composition is visible in serialization). Omitted when no node runs a
     # host op, so a host-free cluster serializes to the exact pre-increment-23 form (purely additive).
@@ -309,6 +328,22 @@ def _group_rga_tombs(rows: list[dict[str, Any]]) -> dict[tuple[str, str], frozen
     grouped: dict[tuple[str, str], set[tuple[int, str]]] = {}
     for r in rows:
         grouped.setdefault((r["list"], r["holder"]), set()).add((r["seq"], r["owner"]))
+    return {k: frozenset(v) for k, v in grouped.items()}
+
+
+def _group_cmap_fields(rows: list[dict[str, Any]]) -> dict[tuple[str, str], frozenset[tuple[str, str, int]]]:
+    """Re-group the flattened counter-map presence-dot rows (DS0 incr 35) into per-(map, holder) sets."""
+    grouped: dict[tuple[str, str], set[tuple[str, str, int]]] = {}
+    for r in rows:
+        grouped.setdefault((r["map"], r["holder"]), set()).add((r["field"], r["owner"], r["seq"]))
+    return {k: frozenset(v) for k, v in grouped.items()}
+
+
+def _group_cmap_tombs(rows: list[dict[str, Any]]) -> dict[tuple[str, str], frozenset[tuple[str, int]]]:
+    """Re-group the flattened counter-map tombstone rows (DS0 incr 35) into per-(map, holder) sets."""
+    grouped: dict[tuple[str, str], set[tuple[str, int]]] = {}
+    for r in rows:
+        grouped.setdefault((r["map"], r["holder"]), set()).add((r["owner"], r["seq"]))
     return {k: frozenset(v) for k, v in grouped.items()}
 
 
@@ -397,6 +432,12 @@ def from_canonical(d: dict[str, Any]) -> DistributedState:
         },
         rga_elems=_group_rga_elems(d.get("rga_elems", [])),
         rga_tombs=_group_rga_tombs(d.get("rga_tombs", [])),
+        cmap_fields=_group_cmap_fields(d.get("cmap_fields", [])),
+        cmap_tombs=_group_cmap_tombs(d.get("cmap_tombs", [])),
+        cmap_counts={
+            ((r["map"], r["field"]), r["holder"], r["owner"]): r["count"]
+            for r in d.get("cmap_counts", [])
+        },
         hosts={h["node"]: from_canonical_host(h["host"]) for h in d.get("hosts", [])},
         lease_until=d.get("lease_until", 0),
     )

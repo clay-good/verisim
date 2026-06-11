@@ -106,6 +106,13 @@ def cluster_view(state: DistributedState) -> str:
                        for (seq, o, v, ps, po) in es)
     rga_tombs = sorted((ln, h, seq, o) for (ln, h), ts in state.rga_tombs.items() if ts
                        for (seq, o) in ts)
+    # The nested CRDT counter-map (incr 35): field-presence dots + tombstones + per-field counts.
+    cmap_fields = sorted((m, h, fld, o, s) for (m, h), dots in state.cmap_fields.items() if dots
+                         for (fld, o, s) in dots)
+    cmap_tombs = sorted((m, h, o, s) for (m, h), dots in state.cmap_tombs.items() if dots
+                        for (o, s) in dots)
+    cmap_counts = sorted((m, fld, h, o, c) for ((m, fld), h, o), c in state.cmap_counts.items()
+                         if c != 0)
     # The embedded per-node hosts (DS0 incr 23) are observable cluster state — each node's host
     # canonical form, sorted by node. Empty for a host-free cluster, so the channel is unchanged.
     hosts = sorted((n, to_canonical_host(h)) for n, h in state.hosts.items())
@@ -132,6 +139,9 @@ def cluster_view(state: DistributedState) -> str:
         "ormap_vals": ormap_vals,
         "rga_elems": rga_elems,
         "rga_tombs": rga_tombs,
+        "cmap_fields": cmap_fields,
+        "cmap_tombs": cmap_tombs,
+        "cmap_counts": cmap_counts,
         "hosts": hosts,
     })
 

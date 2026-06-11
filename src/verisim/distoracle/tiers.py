@@ -217,6 +217,20 @@ class TieredOracle:
             for (seq, owner) in ts_set:
                 if holder not in nodeset or owner not in nodeset or seq < 1:
                     return True, f"invalid rga tombstone ({seq},{owner!r}) at holder {holder!r}"
+        # The nested CRDT counter-map (DS0 incr 35): the composed OR-Set + G-counter invariants —
+        # every presence dot is held/owned by a known node with a positive seq, and every counter
+        # sub-count is a non-negative value held/owned by known nodes.
+        for (_map, holder), fdots in predicted.cmap_fields.items():
+            for (_field, owner, seq) in fdots:
+                if holder not in nodeset or owner not in nodeset or seq < 1:
+                    return True, f"invalid cmap presence-dot ({owner!r},{seq}) at {holder!r}"
+        for (_map, holder), tdots in predicted.cmap_tombs.items():
+            for (owner, seq) in tdots:
+                if holder not in nodeset or owner not in nodeset or seq < 1:
+                    return True, f"invalid cmap tomb-dot ({owner!r},{seq}) at {holder!r}"
+        for (_mf, holder, owner), count in predicted.cmap_counts.items():
+            if count < 0 or holder not in nodeset or owner not in nodeset:
+                return True, f"invalid cmap count {count} at ({holder!r},{owner!r})"
         return False, ""
 
     def _cycle(

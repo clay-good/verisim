@@ -31,6 +31,9 @@ from verisim.dist.config import DEFAULT_DIST_CONFIG, DistConfig
 from verisim.dist.delta import (
     ClockSet,
     ClockSkewSet,
+    CMapCount,
+    CMapField,
+    CMapTomb,
     CommitIndexSet,
     ConfigSet,
     DistDelta,
@@ -203,10 +206,13 @@ def gossip_edits(
     edits.extend(_ormap_merge_edits(state, [a, b], [a, b]))
     # The CRDT RGA join (incr 34): the set-union of the sequence elements + tombstones.
     edits.extend(_rga_merge_edits(state, [a, b], [a, b]))
+    # The nested CRDT counter-map join (incr 35): OR-Set presence union + per-field G-counter max.
+    edits.extend(_cmap_merge_edits(state, [a, b], [a, b]))
     synced = sum(1 for e in edits
                  if isinstance(e, (ReplicaWrite, GCounterSet, NCounterSet, ORSetAdd, ORSetTomb,
                                    MVRegWrite, MVRegTomb, LWWRegSet, LamportSet,
-                                   ORMapField, ORMapTomb, ORMapVal, RGAInsert, RGATomb)))  # moves
+                                   ORMapField, ORMapTomb, ORMapVal, RGAInsert, RGATomb,
+                                   CMapField, CMapTomb, CMapCount)))  # moves
     value = str(synced)
     return [*edits, SetResult("gossiped", value)], "gossiped", value
 
@@ -636,6 +642,108 @@ def rget_edits(
     if not state.is_up(node):
         return [SetResult("unavailable", "")], "unavailable", ""
     val = "".join(v for _eid, v in state.rga_visible(list_name, node))
+    return [SetResult("ok", val)], "ok", val
+
+
+def _cmap_merge_edits(
+    state: DistributedState, into: list[str], among: list[str]
+) -> list[DistEdit]:
+    """Join of the nested counter-map (incr 35) — **OR-Set presence union + per-field G-max**.
+
+    The presence half is the OR-Set union of the field-presence dots (reusing
+    :func:`_dotset_union_edits`); the value half is the per-(map, field, owner) **max** of the
+    G-counter sub-counts (the loss-free counter join). A no-op when no counter-map is used.
+    """
+    edits: list[DistEdit] = _dotset_union_edits(
+        state.cmap_fields, state.cmap_tombs, into, among, CMapField, CMapTomb
+    )
+    keys_owners = {(mf, owner) for (mf, _h, owner) in state.cmap_counts}
+    for (mapname, field), owner in sorted(keys_owners):
+        best = max(state.cmap_counts.get(((mapname, field), h, owner), 0) for h in among)
+        if best == 0:
+            continue
+        for holder in into:
+            if state.cmap_counts.get(((mapname, field), holder, owner), 0) < best:
+                edits.append(CMapCount(mapname, field, holder, owner, best))
+    return edits
+
+
+def cminc_edits(
+    state: DistributedState, action: DistAction, config: DistConfig
+) -> tuple[DistDelta, str, str]:
+    """``cminc node map field``: nested counter-map increment (incr 35, recursive composition).
+
+    Two coordinated edits in the composed layers: (1) a fresh **presence dot** for ``field`` (the
+    OR-Set half — superseding ``node``'s own observed dots of that field, so add-wins holds and the
+    presence set stays bounded) and (2) a **G-counter** bump of ``node``'s per-(map, field, owner)
+    sub-count (the loss-free value half). So a field survives a concurrent ``cmdel`` (add-wins), and
+    concurrent ``cminc``s to the same field are summed loss-free — both layers' guarantees at once.
+    Purely node-local, so **always available**. Deterministic, so Tier-A ≡ Tier-B. A crashed node is
+    ``unavailable``. Reports the field's new total at this node.
+    """
+    node, mapname, field = action.args[0], action.args[1], action.args[2]
+    if not state.is_up(node):
+        return [SetResult("unavailable", "")], "unavailable", ""
+    already = state.cmap_tombs.get((mapname, node), frozenset())
+    observed = state.cmap_field_dots(mapname, field, node)
+    edits: DistDelta = [CMapTomb(mapname, node, o, s) for o, s in sorted(observed - already)]
+    seq = state.cmap_next_seq(mapname, node)
+    edits.append(CMapField(mapname, node, field, node, seq))
+    new = state.cmap_counts.get(((mapname, field), node, node), 0) + 1
+    edits.append(CMapCount(mapname, field, node, node, new))
+    total = str(state.cmap_total(mapname, field, node) + 1)
+    return [*edits, SetResult("ok", total)], "ok", total
+
+
+def cmget_edits(
+    state: DistributedState, action: DistAction, config: DistConfig
+) -> tuple[DistDelta, str, str]:
+    """``cmget node map field``: read a counter-map field's total (DS0 increment 35).
+
+    The field's G-counter total (sum over owners of ``node``'s sub-counts) if it is **present**
+    (a non-tombstoned presence dot), else ``""`` (absent). ``node``'s local view; a later join
+    reconciles. A pure read; ``unavailable`` if down.
+    """
+    node, mapname, field = action.args[0], action.args[1], action.args[2]
+    if not state.is_up(node):
+        return [SetResult("unavailable", "")], "unavailable", ""
+    if not state.cmap_has_field(mapname, field, node):
+        return [SetResult("ok", "")], "ok", ""
+    total = str(state.cmap_total(mapname, field, node))
+    return [SetResult("ok", total)], "ok", total
+
+
+def cmdel_edits(
+    state: DistributedState, action: DistAction, config: DistConfig
+) -> tuple[DistDelta, str, str]:
+    """``cmdel node map field``: counter-map field *observed*-remove (DS0 increment 35).
+
+    Tombstones the presence dots of ``field`` that ``node`` observed (the OR-Set observed-remove),
+    so the field leaves ``cmkeys``/``cmget`` while a concurrent ``cminc``'s unseen dot survives
+    (add-wins). The G-counter sub-counts persist (the counter is grow-only — a re-``cminc`` restores
+    the field and continues the count). Purely node-local (always available). Reports the field.
+    """
+    node, mapname, field = action.args[0], action.args[1], action.args[2]
+    if not state.is_up(node):
+        return [SetResult("unavailable", "")], "unavailable", ""
+    already = state.cmap_tombs.get((mapname, node), frozenset())
+    observed = state.cmap_field_dots(mapname, field, node)
+    edits: DistDelta = [CMapTomb(mapname, node, o, s) for o, s in sorted(observed - already)]
+    return [*edits, SetResult("ok", field)], "ok", field
+
+
+def cmkeys_edits(
+    state: DistributedState, action: DistAction, config: DistConfig
+) -> tuple[DistDelta, str, str]:
+    """``cmkeys node map``: read a counter-map's present field names (DS0 increment 35).
+
+    The fields with at least one non-tombstoned presence dot at ``node``, rendered ``{a,b}`` (``{}``
+    empty). A pure read; ``unavailable`` if down.
+    """
+    node, mapname = action.args[0], action.args[1]
+    if not state.is_up(node):
+        return [SetResult("unavailable", "")], "unavailable", ""
+    val = "{" + ",".join(state.cmap_keys(mapname, node)) + "}"
     return [SetResult("ok", val)], "ok", val
 
 
@@ -1367,6 +1475,14 @@ class ReferenceDistOracle:
             return rdel_edits(state, action, self.config)
         if name == "rget":
             return rget_edits(state, action, self.config)
+        if name == "cminc":
+            return cminc_edits(state, action, self.config)
+        if name == "cmget":
+            return cmget_edits(state, action, self.config)
+        if name == "cmdel":
+            return cmdel_edits(state, action, self.config)
+        if name == "cmkeys":
+            return cmkeys_edits(state, action, self.config)
         if name in ("begin", "tget", "tput", "commit", "abort"):
             # The transaction family (DS0 increment 2) — shared OCC logic; a committed write's
             # async replication flows through the same in-flight medium as ``put`` (delivered by
@@ -1695,6 +1811,9 @@ class ReferenceDistOracle:
         rga_edits = _rga_merge_edits(state, [node], reachable)
         edits.extend(rga_edits)
         repaired += len(rga_edits)
+        cm_edits = _cmap_merge_edits(state, [node], reachable)
+        edits.extend(cm_edits)
+        repaired += len(cm_edits)
         value = str(repaired)
         edits.append(SetResult("repaired", value))
         return edits, "repaired", value

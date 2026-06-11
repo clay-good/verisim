@@ -864,6 +864,47 @@ def test_golden_rga_concurrent_inserts_converge_to_one_order():
     assert oracle.step(state, parse_dist_action("rget n2 l")).value == "ba"  # same on both nodes
 
 
+def test_golden_counter_map_concurrent_increments_loss_free():
+    # The nested counter-map golden (SPEC-7 §3.2, DS0 incr 35): under a partition {n0,n1} | {n2}, n0
+    # and n2 each `cminc` the SAME field x (concurrently). After heal, `gossip n0 n2` runs BOTH
+    # composed joins — the OR-Set union of presence dots (both hold field {x}) and the per-(field,
+    # owner) G-counter max (each side's increment lands on a different owner sub-count).
+    # So cmget reads 2 — the increments are SUMMED loss-free, where an LWW-valued map would read 1.
+    config = DistConfig(name="golden-cm", nodes=("n0", "n1", "n2"), objects=("m",),
+                        values=("a",), consistency_model="eventual")
+    oracle = ReferenceDistOracle(config)
+    state = DistributedState.initial(config)
+    for cmd in ["partition n0 n1 | n2", "cminc n0 m x", "cminc n2 m x", "heal", "gossip n0 n2"]:
+        state = oracle.step(state, parse_dist_action(cmd)).state
+    final = to_canonical(state)
+    assert final == {
+        "replicas": [
+            _rep("m", "n0", 0, "nil"), _rep("m", "n1", 0, "nil"), _rep("m", "n2", 0, "nil"),
+        ],
+        "log": [],
+        "inflight": [],
+        "partitions": [["n0", "n1", "n2"]],
+        "down": [],
+        "clock": 0,
+        "next_event_id": 0,
+        "next_msg_id": 0,
+        "last_result": ["gossiped", "4"],  # two presence dots + two counter sub-counts moved
+        "cmap_fields": [
+            {"map": "m", "holder": "n0", "field": "x", "owner": "n0", "seq": 1},
+            {"map": "m", "holder": "n0", "field": "x", "owner": "n2", "seq": 1},
+            {"map": "m", "holder": "n2", "field": "x", "owner": "n0", "seq": 1},
+            {"map": "m", "holder": "n2", "field": "x", "owner": "n2", "seq": 1},
+        ],
+        "cmap_counts": [
+            {"map": "m", "field": "x", "holder": "n0", "owner": "n0", "count": 1},
+            {"map": "m", "field": "x", "holder": "n0", "owner": "n2", "count": 1},
+            {"map": "m", "field": "x", "holder": "n2", "owner": "n0", "count": 1},
+            {"map": "m", "field": "x", "holder": "n2", "owner": "n2", "count": 1},
+        ],
+    }
+    assert oracle.step(state, parse_dist_action("cmget n0 m x")).value == "2"  # summed loss-free
+
+
 def test_golden_config_push_commits_on_majority_minority_stays_stale() -> None:
     # The config-push golden (SPEC-7 §3.2, DS0 incr 24): n0 leads (term 1), then the network splits
     # {n0,n1} | {n2}. `config_push n0 feature on` from n0 (on the 2-of-3 majority side) commits and

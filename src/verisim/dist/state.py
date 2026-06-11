@@ -357,6 +357,21 @@ class DistributedState:
     rga_elems: dict[tuple[str, str], frozenset[tuple[int, str, str, int, str]]] = field(
         default_factory=dict)
     rga_tombs: dict[tuple[str, str], frozenset[tuple[int, str]]] = field(default_factory=dict)
+    # The CRDT counter-map (DS0 increment 35, `cminc`/`cmget`/`cmdel`/`cmkeys`): the **nested** CRDT —
+    # a CRDT whose *values are themselves CRDTs*, the recursive form of the compositional thesis. Where
+    # the OR-Map (incr 33) holds LWW-register values, the counter-map holds **G-counter** values — a map
+    # of counters (Riak's `{user → visit_count}`). It composes the OR-Set (governing **field presence**,
+    # add-wins + observed-remove, exactly like the OR-Map) with the G-counter (governing each field's
+    # **value**, which merges by per-owner **max** rather than LWW). The payoff is that *both* layers'
+    # guarantees hold at once under concurrency: a field survives a concurrent remove (add-wins
+    # presence) *and* concurrent increments to the same field are summed loss-free (the counter's
+    # no-lost-update, where the OR-Map's LWW value would drop one). `cmap_fields`/`cmap_tombs` are the
+    # OR-Set presence dots (per `(map, holder)`); `cmap_counts` maps `((map, field), holder, owner)` →
+    # node `holder`'s copy of `owner`'s G-counter sub-count for that field. All empty by default and
+    # omitted from the canonical form (purely additive over increment 34).
+    cmap_fields: dict[tuple[str, str], frozenset[tuple[str, str, int]]] = field(default_factory=dict)
+    cmap_tombs: dict[tuple[str, str], frozenset[tuple[str, int]]] = field(default_factory=dict)
+    cmap_counts: dict[tuple[tuple[str, str], str, str], int] = field(default_factory=dict)
     # The embedded SPEC-6 host inside each node (DS0 increment 23, `host`): a per-node `HostState`
     # (process table + per-process fd tables + the embedded v0 filesystem), so a cluster node is not
     # just a bag of KV replicas but a real host running processes — the compositional vision SPEC-7
@@ -431,6 +446,9 @@ class DistributedState:
             ormap_vals=dict(self.ormap_vals),
             rga_elems=dict(self.rga_elems),
             rga_tombs=dict(self.rga_tombs),
+            cmap_fields=dict(self.cmap_fields),
+            cmap_tombs=dict(self.cmap_tombs),
+            cmap_counts=dict(self.cmap_counts),
             hosts={node: h.copy() for node, h in self.hosts.items()},
             lease_until=self.lease_until,
         )
@@ -577,6 +595,37 @@ class DistributedState:
         seqs = [seq for (seq, owner, _v, _ps, _po) in self.rga_elems.get((list_name, node),
                                                                          frozenset())
                 if owner == node]
+        return (max(seqs) + 1) if seqs else 1
+
+    def cmap_keys(self, mapname: str, node: str) -> list[str]:
+        """``node``'s present (non-tombstoned) fields in counter-map ``mapname`` (DS0 incr 35)."""
+        fields = self.cmap_fields.get((mapname, node), frozenset())
+        tombs = self.cmap_tombs.get((mapname, node), frozenset())
+        return sorted({field for (field, owner, seq) in fields if (owner, seq) not in tombs})
+
+    def cmap_has_field(self, mapname: str, field: str, node: str) -> bool:
+        """Whether ``node`` sees ``field`` as present in counter-map ``mapname`` (a live dot; 35)."""
+        fields = self.cmap_fields.get((mapname, node), frozenset())
+        tombs = self.cmap_tombs.get((mapname, node), frozenset())
+        return any(f == field and (o, s) not in tombs for (f, o, s) in fields)
+
+    def cmap_total(self, mapname: str, field: str, node: str) -> int:
+        """``node``'s G-counter total for ``field`` of counter-map ``mapname`` — sum over owners (35)."""
+        return sum(c for ((mf), holder, _owner), c in self.cmap_counts.items()
+                   if mf == (mapname, field) and holder == node)
+
+    def cmap_field_dots(self, mapname: str, field: str, node: str) -> set[tuple[str, int]]:
+        """The presence dots of ``field`` that ``node`` currently observes in counter-map ``mapname``."""
+        fields = self.cmap_fields.get((mapname, node), frozenset())
+        tombs = self.cmap_tombs.get((mapname, node), frozenset())
+        return {(o, s) for (f, o, s) in fields if f == field and (o, s) not in tombs}
+
+    def cmap_next_seq(self, mapname: str, node: str) -> int:
+        """The next unique presence-dot sequence for ``node``'s own dots on counter-map ``mapname``."""
+        seqs = [seq for (field, owner, seq) in self.cmap_fields.get((mapname, node), frozenset())
+                if owner == node]
+        seqs += [seq for (owner, seq) in self.cmap_tombs.get((mapname, node), frozenset())
+                 if owner == node]
         return (max(seqs) + 1) if seqs else 1
 
     def group_of(self, node: str) -> frozenset[str]:

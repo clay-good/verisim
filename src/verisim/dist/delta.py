@@ -514,6 +514,54 @@ class RGATomb:
 
 
 @dataclass(frozen=True)
+class CMapField:
+    """Add a field-presence dot to node ``holder``'s copy of counter-map ``mapname`` (DS0 incr 35).
+
+    The OR-Set presence half of the nested counter-map — the twin of :class:`ORMapField`: ``cminc``
+    emits ``CMapField(map, n, field, n, seq)`` so the field is present, and the union join re-emits a
+    holder's missing dots. Add-wins. Omitted from the canonical form when no counter-map is used.
+    """
+
+    mapname: str
+    holder: str
+    field: str
+    owner: str
+    seq: int
+
+
+@dataclass(frozen=True)
+class CMapTomb:
+    """Add a superseded/removed presence dot to ``holder``'s tombstones for counter-map ``mapname``.
+
+    The OR-Set tombstone half (DS0 incr 35) — the twin of :class:`ORMapTomb`: ``cmdel`` (and a
+    ``cminc``'s supersede) emit ``CMapTomb`` for every presence dot they *observed*, so a removed field
+    disappears while a concurrent unseen dot survives (add-wins). Omitted when no counter-map is used.
+    """
+
+    mapname: str
+    holder: str
+    owner: str
+    seq: int
+
+
+@dataclass(frozen=True)
+class CMapCount:
+    """Set node ``holder``'s copy of ``owner``'s G-counter sub-count for ``field`` of map ``mapname``.
+
+    The G-counter value half of the nested counter-map (DS0 incr 35): ``cminc map field`` bumps the
+    node's **own** per-(map, field, owner) sub-count, and the join keeps the per-(map, field, owner)
+    **max** — so concurrent increments to the same field are summed loss-free (the counter's
+    no-lost-update, where the OR-Map's LWW value would drop one). Omitted when no counter-map is used.
+    """
+
+    mapname: str
+    field: str
+    holder: str
+    owner: str
+    count: int
+
+
+@dataclass(frozen=True)
 class HostStep:
     """A SPEC-6 host syscall applied to one node's embedded host (DS0 increment 23, the §4 `HostDelta`).
 
@@ -573,6 +621,9 @@ DistEdit = (
     | ORMapVal
     | RGAInsert
     | RGATomb
+    | CMapField
+    | CMapTomb
+    | CMapCount
     | HostStep
     | SetResult
 )
@@ -703,6 +754,20 @@ def apply(state: DistributedState, delta: DistDelta) -> DistributedState:
         elif isinstance(edit, RGATomb):
             k = (edit.list_name, edit.holder)
             s.rga_tombs[k] = s.rga_tombs.get(k, frozenset()) | {(edit.seq, edit.owner)}
+        elif isinstance(edit, CMapField):
+            k = (edit.mapname, edit.holder)
+            s.cmap_fields[k] = s.cmap_fields.get(k, frozenset()) | {
+                (edit.field, edit.owner, edit.seq)
+            }
+        elif isinstance(edit, CMapTomb):
+            k = (edit.mapname, edit.holder)
+            s.cmap_tombs[k] = s.cmap_tombs.get(k, frozenset()) | {(edit.owner, edit.seq)}
+        elif isinstance(edit, CMapCount):
+            ck = ((edit.mapname, edit.field), edit.holder, edit.owner)
+            if edit.count != 0:
+                s.cmap_counts[ck] = edit.count
+            else:
+                s.cmap_counts.pop(ck, None)  # 0 carries no info
         elif isinstance(edit, HostStep):
             # apply the SPEC-6 host delta to the node's embedded host (created lazily), via the
             # SPEC-6 ``apply`` verbatim — the §4 composition. An untouched host leaves no residue.
@@ -812,6 +877,15 @@ def edit_to_dict(edit: DistEdit) -> dict[str, Any]:
     if isinstance(edit, RGATomb):
         return {"op": "RGATomb", "list": edit.list_name, "holder": edit.holder,
                 "seq": edit.seq, "owner": edit.owner}
+    if isinstance(edit, CMapField):
+        return {"op": "CMapField", "map": edit.mapname, "holder": edit.holder,
+                "field": edit.field, "owner": edit.owner, "seq": edit.seq}
+    if isinstance(edit, CMapTomb):
+        return {"op": "CMapTomb", "map": edit.mapname, "holder": edit.holder,
+                "owner": edit.owner, "seq": edit.seq}
+    if isinstance(edit, CMapCount):
+        return {"op": "CMapCount", "map": edit.mapname, "field": edit.field,
+                "holder": edit.holder, "owner": edit.owner, "count": edit.count}
     if isinstance(edit, HostStep):
         return {"op": "HostStep", "node": edit.node, "edits": host_delta_to_list(edit.edits)}
     assert isinstance(edit, SetResult)
@@ -900,6 +974,12 @@ def edit_from_dict(d: dict[str, Any]) -> DistEdit:
                          d["pseq"], d["powner"])
     if op == "RGATomb":
         return RGATomb(d["list"], d["holder"], d["seq"], d["owner"])
+    if op == "CMapField":
+        return CMapField(d["map"], d["holder"], d["field"], d["owner"], d["seq"])
+    if op == "CMapTomb":
+        return CMapTomb(d["map"], d["holder"], d["owner"], d["seq"])
+    if op == "CMapCount":
+        return CMapCount(d["map"], d["field"], d["holder"], d["owner"], d["count"])
     if op == "HostStep":
         return HostStep(d["node"], host_delta_from_list(d["edits"]))
     if op == "SetResult":

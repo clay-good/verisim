@@ -69,6 +69,7 @@ from verisim.dist.state import TOMBSTONE, DistributedState, Message
 from verisim.dist.txn import txn_step
 from verisim.distoracle.base import DistStepResult
 from verisim.distoracle.reference import (
+    _cmap_merge_edits,
     _gcounter_merge_edits,
     _lwwreg_merge_edits,
     _mvreg_merge_edits,
@@ -82,6 +83,10 @@ from verisim.distoracle.reference import (
     cget_edits,
     cincr_edits,
     clock_skew_edits,
+    cmdel_edits,
+    cmget_edits,
+    cminc_edits,
+    cmkeys_edits,
     config_push_edits,
     deploy_edits,
     dequeue_edits,
@@ -316,6 +321,16 @@ class SystemDistOracle:
             return rdel_edits(state, action, self.config)
         if name == "rget":
             return rget_edits(state, action, self.config)
+        if name == "cminc":
+            # The nested CRDT counter-map ops (DS0 incr 35) are purely node-local (presence dots +
+            # G-counter sub-count in the node's own copy), deterministic, always available; coord.
+            return cminc_edits(state, action, self.config)
+        if name == "cmget":
+            return cmget_edits(state, action, self.config)
+        if name == "cmdel":
+            return cmdel_edits(state, action, self.config)
+        if name == "cmkeys":
+            return cmkeys_edits(state, action, self.config)
         ev = self._event(state, action)
         if name in ("put", "cas", "delete", "incr"):
             return self._write(state, action, ev)
@@ -704,6 +719,9 @@ class SystemDistOracle:
         rga_edits = _rga_merge_edits(state, [node], reachable)
         edits.extend(rga_edits)
         repaired += len(rga_edits)
+        cm_edits = _cmap_merge_edits(state, [node], reachable)
+        edits.extend(cm_edits)
+        repaired += len(cm_edits)
         value = str(repaired)
         edits.append(SetResult("repaired", value))
         return edits, "repaired", value

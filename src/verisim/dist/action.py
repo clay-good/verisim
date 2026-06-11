@@ -26,6 +26,10 @@ workload and the fault/time medium (the consensus/admin family arrives with the 
     rins <node> <list> <i> <val>    # client: CRDT RGA insert val after the i-th visible elem (0=head)
     rdel <node> <list> <i>          # client: CRDT RGA delete the i-th visible element (tombstone)
     rget <node> <list>              # client: read a CRDT RGA sequence (visible values concatenated)
+    cminc <node> <map> <field>      # client: nested CRDT counter-map — increment a field's G-counter +1
+    cmget <node> <map> <field>      # client: read a counter-map field's total (loss-free sum)
+    cmdel <node> <map> <field>      # client: counter-map field observed-remove (add-wins)
+    cmkeys <node> <map>             # client: read a counter-map's present field names
     advance <dt>                    # time: +<dt> clock; deliver in-flight msgs now due & reachable
     partition <nodes> | <nodes>     # fault: split the network into groups (| separates groups)
     heal                            # fault: remove all partitions (one fully-connected group)
@@ -243,6 +247,16 @@ i-th visible element (deletes preserve structure — a tombstone is still an anc
 the visible sequence concatenated. The join is **set union** of the elements + tombstones, and
 because the order is a pure function of the element set, **concurrent inserts converge to one
 deterministic order on every node** — the property that makes collaborative editing work (ED41).
+``cminc``/``cmget``/``cmdel``/``cmkeys`` (DS0 increment 35) are the **nested CRDT counter-map** — a
+CRDT whose *values are themselves CRDTs*, the recursive form of the composition. Where the OR-Map
+holds LWW-register values, the counter-map holds **G-counter** values (a map of counters, Riak's
+``{user → visit_count}``): it composes the OR-Set (governing **field presence**, add-wins +
+observed-remove) with the G-counter (governing each field's **value**, merging by per-owner **max**).
+``cminc n map field`` makes the field present *and* increments its counter; ``cmget`` reads the
+field's total; ``cmdel`` observed-removes the field; ``cmkeys`` enumerates. Both layers' guarantees
+hold at once: a field survives a concurrent ``cmdel`` (add-wins) *and* concurrent ``cminc``s to the
+same field are summed **loss-free** (the counter's no-lost-update, where the OR-Map's LWW value would
+drop one) — recursive composition demonstrated (ED42).
 """
 
 from __future__ import annotations
@@ -274,6 +288,10 @@ _ARITY: dict[str, int | None] = {
     "rins": 4,  # node list i val  -- CRDT RGA insert after the i-th visible elem (DS0 incr 34)
     "rdel": 3,  # node list i  -- CRDT RGA delete the i-th visible element (DS0 incr 34)
     "rget": 2,  # node list  -- read a CRDT RGA sequence (visible values concatenated; incr 34)
+    "cminc": 3,  # node map field  -- nested counter-map: increment a field's G-counter (DS0 incr 35)
+    "cmget": 3,  # node map field  -- read a counter-map field's total (DS0 incr 35)
+    "cmdel": 3,  # node map field  -- counter-map field observed-remove (add-wins; DS0 incr 35)
+    "cmkeys": 2,  # node map  -- read a counter-map's present field names (DS0 incr 35)
     "advance": 1,  # dt
     "partition": None,  # <nodes> | <nodes> [| ...]
     "host": None,  # <node> <syscall...>  -- a SPEC-6 host syscall on <node>'s host (DS0 incr 23)
@@ -314,6 +332,7 @@ CLIENT_OPS = frozenset({
     "put", "get", "cas", "delete", "incr", "cincr", "cdecr", "cget",
     "sadd", "srem", "smembers", "mvput", "mvget", "lwwput", "lwwget",
     "mput", "mget", "mdel", "mkeys", "rins", "rdel", "rget",
+    "cminc", "cmget", "cmdel", "cmkeys",
     "begin", "tget", "tput", "commit", "abort", "enqueue", "dequeue",
 })
 TXN_OPS = frozenset({"begin", "tget", "tput", "commit", "abort"})
