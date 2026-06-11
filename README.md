@@ -58,7 +58,7 @@ the proxy metrics everyone else uses cannot see (a bigger, per-step-*more*-accur
 ## Results at a glance
 
 Thirty-nine committed, oracle-grounded figures — the smoke-scale bet in one screen — each detailed below, each
-with its honest negative, now joined by the **SPEC-11 system-oracle validation** ([§35](#35-the-oracle-is-faithful-to-a-real-computer--the-one-structural-bet-measured-spec-11--sy1--h27)) — *the figure that retires W1*: the program's load-bearing assumption (a free, exact oracle exists for computer worlds) measured against a **real `/bin/sh` on a real kernel**, bit-for-bit. **Two one-figure theses frame the rest: the cross-*world* synthesis ([§22](#22-the-thesis-in-one-figure-the-floorcliff-is-the-same-in-every-world-cross-world-synthesis)) — the floor+cliff `H_ε(ρ)` is the *same shape in all four worlds* — and the cross-*proposer* synthesis ([§34](#34-the-spec-10-capstone-the-floor-is-proposer-dependent-cross-proposer-synthesis)) — whether that floor is a *resourcing artifact* depends on the proposer.** **What survives scaling is the real verdict: see [§8](#8-which-wins-survive-scaling--the-honest-mixed-verdict-spec-9).** Every number regenerates from
+with its honest negative, now joined by the **SPEC-11 system-oracle validation** ([§35](#35-the-oracle-is-faithful-to-a-real-computer--the-one-structural-bet-measured-spec-11--sy1--h27)) — *the figure that retires W1*: the program's load-bearing assumption (a free, exact oracle exists for computer worlds) measured against a **real `/bin/sh` on a real kernel**, bit-for-bit. **Two one-figure theses frame the rest: the cross-*world* synthesis ([§22](#22-the-thesis-in-one-figure-the-floorcliff-is-the-same-in-every-world-cross-world-synthesis)) — the floor+cliff `H_ε(ρ)` is the *same shape in all four worlds* — and the cross-*proposer* synthesis ([§34](#34-the-spec-10-capstone-the-floor-is-proposer-dependent-cross-proposer-synthesis)) — whether that floor is a *resourcing artifact* depends on the proposer.** **What survives scaling is the real verdict: see [§8](#8-which-wins-survive-scaling--the-honest-mixed-verdict-spec-9).** **The active-priority arc lands two headlines on *one real trained model*: the flagship `H_ε(ρ)` curve where smart scheduling nearly doubles the clock ([§43](#43-the-flagship-one-real-trained-model-the-whole-stack-one-headline-curve-spec-19--fl0fl6--h69h72)), and the usefulness proof — a defender trained *inside* the model, the boundary law (faithfulness is load-bearing exactly where control keys on the content the model drifts on), and the *useful knee* that buys that faithfulness at half the oracle calls ([§44](#44-the-usefulness-proof-the-boundary-law-and-the-useful-knee-spec-20--ua0ua9--h73h81)).** Every number regenerates from
 config + seeds (`bash figures/reproduce.sh`).
 
 | | |
@@ -1854,6 +1854,106 @@ decoder-side training fix (it does not lift `H_free` at CPU scale, the banked co
 remaining NA1–NA4 (decoder-side supervision at scale, alignment, iterate-to-convergence) are the
 deferred GPU-scale bets. See [SPEC-14 §11](docs/specs/SPEC-14.md).
 
+### 43. The flagship: one real trained model, the whole stack, one headline curve (SPEC-19 / FL0–FL6 / H69–H72)
+
+Every method spec above proved its mechanism on a *controlled stand-in* and deferred the trained-`M_θ`
+arm — "only the trained-`M_θ` arm remains" recurs across SPEC-13/15/16/17/18. SPEC-19 un-defers it
+**once**: it trains one flat network `M_θ` to the SPEC-10 HS1.3 compute-optimal frontier (`l@9.6k`,
+~110k params), freezes it with a reload-determinism gate (`H_free` = **18.75 id / 29.75 ood**,
+reproducing the 3-seed program-best on a single seed), and composes the shipped methods onto that one
+checkpoint — the figure the program had been promising.
+
+**The headline (FL1, H69).** The composed consultation policy (conformal trigger on the *real*
+decode-entropy OR a speculative draft window) is run through the partial-observation loop and the
+`H_ε(ρ)` curve is plotted against the exact oracle. The strict §3 bar (≥80% of ceiling at ρ≤0.2) is
+**not met** — the curve rises ~linearly, floor 18.75 → ceiling 96, so composed reaches only ~31% of
+ceiling at ρ=0.2, *no free sub-linear knee on a real model*. But the result is a large real positive
+that no stand-in produced: the composed policy **nearly doubles fixed-interval consultation at equal
+budget**, the gap widening with ρ — **+57% at ρ=0.2 (29.5 vs 18.75), +70% at ρ=0.3, +94% at ρ=0.5
+(61.25 vs 31.5)**. Smart scheduling decisively beats the clock on a real trained model, measured
+against ground truth where every oracle-free domain can only guess.
+
+![FL1: the flagship faithful-horizon curve H_ε(ρ) on a real trained network M_θ. The composed policy (blue) tracks well above the fixed-interval clock baseline (orange) at every budget, the gap widening with ρ, between the ρ=0 floor and ρ=1 ceiling — no sub-linear knee, but smart scheduling nearly doubles the clock](figures/fl1_flagship_curve.png)
+
+**What carries it, and the rest of the stack.** FL2's 2×2 ablation decomposes the FL1 win: the
+**conformal trigger on the real signal carries the entire lift; the speculative window is inert** at
+this operating point (conformal-only 42.0 = both 42.0, speculative-only = the floor). The methods
+*compose* (H70: both ≥ max single) but not super-additively. FL6 explains *why* the real signal
+schedules well even though SPEC-15's CF6 found it could not certify a conformal coverage bound:
+Spearman(signal, divergence) = **+0.352** — the decode-entropy *ranks* drift, and consulting the
+top-20%-signal steps catches breaches at **0.902 precision vs a 0.652 base rate** — **ranking ≠
+calibration**, both true. FL3 reproduces SPEC-12's landmark result on the *real* structured arm
+(H71): the HS3 wall survives (`H_free` ≈ 0.33) yet landmark planning lifts far-goal reach **0.167 →
+0.667 (4×)** — structure buys *goal-space* horizon where it cannot buy step horizon. FL4 confirms the
+curve's shape is the **loop's, not the model's** (H72): swapping the proposer (flat vs graph+RSSM)
+leaves the shape unchanged, the proposer only setting the floor. The one sentence: *on a real neural
+network world model at the compute-optimal frontier, faithful horizon rises ~linearly with oracle
+budget — no free knee — yet a consultation policy that triggers on the model's own decode-entropy
+nearly doubles fixed-interval consultation at equal budget.* See [SPEC-19](docs/specs/SPEC-19.md).
+
+### 44. The usefulness proof, the boundary law, and the useful knee (SPEC-20 / UA0–UA9 / H73–H81)
+
+The field's gold-standard test of a world model is not its faithfulness number; it is whether you can
+**train a policy inside it and have that policy work in reality** (Dreamer's learn-in-imagination).
+Verisim is the one place that test can be run *honestly*, because reality — the oracle — is checkable.
+SPEC-20 trains a defensive containment agent inside the frozen flagship model and transfers it to the
+oracle's reality, with three rigorously separated environments: `E_oracle` (reality / the expensive
+baseline), `E_grounded` (the model with oracle-in-the-loop correction at budget ρ — the product), and
+`E_free` (the same model, never corrected — the ablation). All three are tested in `E_oracle`.
+
+**Learn-in-imagination works (UA1, H73).** The defender trained in `E_grounded` reaches reality
+containment **≥** the one trained directly against the oracle (**0.420 vs 0.390**) at **5× lower
+training oracle cost** (720 vs 3,600 calls) — the cheap faithful model is a usable training environment.
+
+**The money hypothesis is refuted — the bankable negative (UA2, H74).** The `E_grounded`- and
+`E_free`-trained defenders transfer to reality **identically** (0.420 = 0.420, advantage 0.000).
+Oracle-grounding during training buys *no* transfer advantage. The diagnosed mechanism: both backends
+teach the same effective policy ("isolate exposed hosts"), which keys on compromise/exposure features
+that **survive the model's reachability drift**, so the model's errors never change the preferred
+action. Faithfulness does not convert into downstream usefulness *for this task* — which redirected the
+spec to a task-taxonomy fork.
+
+**The boundary law (UA6–UA8, the drift profile, the cross-world law).** Five more structural-control
+formulations (structural feature, long-horizon, closed- and open-loop predictive control) all reproduce
+the null. The mechanistic root, measured by free-running the flagship beside the oracle: the flat model
+is **faithful on the discrete structural dynamics it learns** (network reachability / host process-tree:
+host up/down drift 0.000, procs 0.000) and **drifts almost entirely on content** (network flows 0.252,
+host file-writes ~0.30–0.64) — confirmed on *both* worlds. So structural-control tasks are drift-robust
+and faithfulness is not load-bearing for them. The predicted *positive* is therefore a **content-keyed**
+task. UA8 (H80) builds it: a predictive **file-integrity** defender protects the budget files it
+predicts an adversarial workload will corrupt — a decision riding entirely on the model's prediction of
+*which files get written*. **Result, the positive: the faithful predictor catches every corruption
+(1.000) while the free predictor catches only 0.50–0.73, and the gap widens with horizon** as content
+drift compounds. The complete, cross-world law: **world-model faithfulness is load-bearing for control
+*exactly when* the task's optimal policy depends on the dynamics the model gets wrong (content), not the
+dynamics it learns faithfully (structure)** — six structural-control nulls, one content-control positive,
+a boundary drawn exactly against ground truth.
+
+**The useful knee — buying that faithfulness cheaply (UA9, H81).** UA8 settled *that* content-keyed
+control needs faithfulness, but only at the two extremes (ρ=1 faithful / ρ=0 free). The program's
+central claim is that the oracle-in-the-loop *buys back* faithfulness cheaply at a budget ρ — but that
+`H_ε(ρ)`-style curve had never been run on a *downstream task*, because on the structural tasks there
+was no advantage for ρ to recover (UA4/H76 found it flat in ρ). UA9 runs it where the advantage exists.
+The **ρ-grounded predictor** free-runs `M_θ` and re-anchors to the oracle's truth every `round(1/ρ)`
+steps — the propose-verify-correct loop applied to the predictive rollout — swept over ρ on the
+file-integrity task. **The catch rate rises *monotonically* with ρ (0.500 → 0.667 → 0.854 → 1.000),
+recovering the every-step faithful predictor's perfect catch at ρ=0.5 — half the oracle calls (7 vs
+14).** Two findings at once: the **H76/UA4 mirror** (the grounding advantage that was *flat* on
+structural control is **monotone in ρ here**, on the task whose optimal policy depends on the content
+the model drifts on — the boundary law read straight off the consultation curve), and the **useful
+knee** (SPEC-19's "buy faithfulness cheaply" mechanism, demonstrated for the first time on downstream
+*task success* rather than faithful horizon). The complete arc: faithfulness is load-bearing for control
+exactly where the task keys on content the model drifts on (UA8) — and *there*, where it matters, you can
+still buy it at sub-linear oracle cost (UA9). The cheap-faithful-model story holds where it has to.
+
+![UA9: the useful-knee curve. The ρ-grounded predictor's content-keyed catch rate rises monotonically with the oracle-consultation budget ρ, from the free floor (0.50) to the faithful ceiling (1.00), recovering the every-step faithful predictor's perfect catch at ρ=0.5 — the green star — at half the oracle calls (7 vs 14)](figures/ua9_grounded_knee.png)
+
+Honest caveats (SPEC-20 §8): the adversary is scripted, not learned (a defender-only spec, the §13
+ethics commitment); reality here is the Tier-A reference oracle (a checkable model of reality), with the
+system-oracle rung reached as the network/host system-oracle line matures; and the policy is
+deliberately the smallest that does the job — "the world model is a good training environment" is the
+result, not "the agent is clever." See [SPEC-20](docs/specs/SPEC-20.md).
+
 ## The problem, and what we're trying to accomplish
 
 ### The wall every world model hits
@@ -2129,6 +2229,8 @@ host → distributed); three specs are *cross-cutting methods* every world inher
 | [SPEC-18](docs/specs/SPEC-18.md) | **product: the benchmark** | the capstone — freezes the accumulated asset (the one faithfulness benchmark with *exact* labels) into a versioned product. **PB-bench/transfer/pack ship** ([`bench/`](src/verisim/bench/)) on the controlled-proposer core + the real-shell oracle (trained-arm leaderboard entries deferred): **PB-bench supports H65** (the leaderboard stably orders the fidelity ladder, Kendall τ=1.0 across seed splits, adjacent tiers resolved above paired noise — discriminative, [pb-bench](figures/pb_bench_leaderboard.png)); **PB-transfer supports H66 / banks H67** (the sim-to-emulation gap vs the SPEC-11 real-OS oracle is ΔH≈0 across the ρ-sweep on the validated grammar — transfer is lossless, the first such number in horizon terms, confirming SY1/H27; correction lifts the absolute real-OS horizon, [pb-transfer](figures/pb_transfer_gap.png)); **PB-transfer-broad maps the boundary** ([`experiments/pb_transfer_broad.py`](src/verisim/experiments/pb_transfer_broad.py)) — the same ΔH measurement across grammars: 0.000 (validated structural) → +0.67 (weighted) → +5.75 (adversarial), and oracle-in-the-loop correction does *not* close it (ΔH grows with ρ, since the loop consults the reference oracle which can't fix divergence from reality) — the first quantified sim-to-emulation boundary, SPEC-3 W1 ([broad](figures/pb_transfer_broad.png)); **PB-pack supports H68** (the public-minus-held-out gap separates a memorizer ~+0.98 from an honest proposer ~+0.10 — contamination-resistant; conformance 6/6 green; Croissant + datasheet + model-card emitted to [bench/](bench/), [pb-pack](figures/pb_pack_contamination.png)). Ships the asset as a versioned, conformant, documented benchmark. |
 | [SPEC-17](docs/specs/SPEC-17.md) | **method: the oracle as an SCM** | a deterministic, resettable, seedable oracle *is* an exact Structural Causal Model (`step`=`F`, seed=`U`, abduction=reset+replay), so all three rungs of Pearl's ladder are executable exactly and for free. **CX0–CX1 ship** ([`causal/`](src/verisim/causal/), [`experiments/cx_common.py`](src/verisim/experiments/cx_common.py)) pure-oracle on all four worlds (learned-lift bets deferred): **CX0 supports H60** (abduction-action-prediction is bit-exact on every world, rate 1.0 — the gate that makes rung-3 counterfactuals exact and free, an O(1) lookup not the intractable inference of an oracle-free SCM, [cx0](figures/cx0_scm_gate.png)); **CX1 supports H61** (the counterfactual effect is hidden-state-dependent — it amplifies ~3.6× downstream on the distributed world's persistent medium but ~1× on the on-policy-complete network/host worlds: the do-calculus reading of the mixed H5, [cx1](figures/cx1_counterfactual_effect.png)); the recipe runs cross-world with no causal-discovery step (H64 in kind). **CX5 supports H64 on the system oracles** ([`experiments/cx5.py`](src/verisim/experiments/cx5.py)): re-running the abduction gate on the real `/bin/sh` `SandboxOracle` and the Tier-B `SystemDistOracle` gives abduction + rung-3 counterfactual exactness = 1.0 on both, matching the reference anchor — exact, free rung-3 counterfactuals survive the move to the real system (the SY4 seal and the DST seeded scheduler are what make reality an exact SCM, [cx5](figures/cx5_system_oracle.png)). **CX3 ships** ([`experiments/cx3.py`](src/verisim/experiments/cx3.py), the new [`causal/coverage.py`](src/verisim/causal/coverage.py)) the matched-coverage cut that closes the ED6 branching-vs-coverage caveat: **H62 refuted** — at matched count *and* fault-coverage the *factual* control strictly beats the counterfactual arm (intervention-exact 0.569 vs 0.426, disjoint CIs), so ED6's ~2× lift was fault coverage (H21), not counterfactual structure ([cx3](figures/cx3_matched_coverage.png)). **CX4 ships** ([`experiments/cx4.py`](src/verisim/experiments/cx4.py)) the CoDA contrast: **H63 supported** — exact-oracle counterfactual augmentation lifts held-out intervention-exact (0.277→0.394) while a learned-local-model (CoDA stand-in) augmenter, whose counterfactual samples are only 6% causally valid, *corrupts* training below baseline (0.064), validating SPEC §1.1's unverifiability thesis ([cx4](figures/cx4_coda_contrast.png)). Only the *learned* three-world lift (CX2) remains a deferred trained-arm bet. |
 | [SPEC-16](docs/specs/SPEC-16.md) | **method: rollout-stability training** | the exposure-bias cure — train the proposer on the *learner's own* drifted states relabeled by the free, exact oracle (DAgger), where the simulator-learning field can only approximate it. **RS1 ships** ([`experiments/rs1_dagger.py`](src/verisim/experiments/rs1_dagger.py)) as a *genuine trained-`M_θ`* experiment (a real GPT, teacher-forced vs free-oracle DAgger at equal example budget, 5 model × 12 eval seeds): **H55 not supported at CPU scale** — the flat `M_θ` is near the `H_ε` floor (`p≈0.47`, `H_ε≈1.6`) and DAgger, despite relabeling its own drift with the exact oracle and spending extra compute, does not lift `H_ε` (best round 1.47 vs teacher-forced 1.63, CIs overlap, [rs1](figures/rs1_dagger.png)). The program's pre-registered, first-class **negative**: at this scale the gap behaves like fundamental compounding, not a train/deploy mismatch (a +2.2 small-scale fluke did not survive powering up). Whether the cure pays for a competent high-`p` model at larger scale is the open question. **RS4 ships** ([`experiments/rs4_unrolled.py`](src/verisim/experiments/rs4_unrolled.py), the new `train_unrolled` in [`graph_train.py`](src/verisim/netmodel/graph_train.py)) — the multi-step unrolled loss, **Brandstetter's pushforward made exact**, on the *structured* GNN+RSSM arm (the competent-one-step / zero-horizon HS3 subject): swept over `k∈{1,2,4,8}` it is the **first** rollout-aware lever to move the structured floor — `η0` crosses 1 (`H_free(ε=0)` 1.28→1.60) and raw `H_free` lifts at the loosest tolerance (`k=8` +3.24 at ε=0.5, clearing TF's CI), where RS1 and NA6's SF/NZ arms all *tied* TF (**H55/H57 supported on raw horizon**). **But it does not pay net-per-compute (H58):** charged the pushforward's `1.5×`–`4.5×` forwards, net `H_free/cost` falls monotonically with depth — the cure reshapes the error budget, it does not reduce it ([rs4](figures/rs4_unroll_depth.png)). **RS2/RS3 ship** ([`experiments/rs2_scheduled.py`](src/verisim/experiments/rs2_scheduled.py), [`rs3_noise.py`](src/verisim/experiments/rs3_noise.py)) as the dedicated lever sweeps — scheduled sampling over `max_sample_prob` ([rs2](figures/rs2_sample_prob_tradeoff.png)) and noise injection over a `noise_prob × magnitude` grid ([rs3](figures/rs3_noise_surface.png), adding a byte-identical-by-default `magnitude` knob): **both H57 nulls** (no signed tradeoff at any setting — `p` flat ~0.58, `H_free` within seed-CI), strengthening NA6's single-point comparisons into full sweeps. So of the four trainers only the unrolled loss moves the horizon. **RS6 ships** ([`experiments/rs6_pareto.py`](src/verisim/experiments/rs6_pareto.py)) the cross-trainer per-compute Pareto — all four structured-arm trainers on one `H_free`-vs-total-compute figure, charging self-forcing/unrolling for their extra data-gen forwards: **teacher forcing is the faithful-horizon-per-compute frontier, no rollout-aware trainer beats it beyond seed noise** (H58 confirmed at the family level, [rs6](figures/rs6_net_pareto.png)); this also answers RS5 in aggregate (only the unrolled loss moves raw H_free, and not net). **RS7 ships** ([`experiments/rs7_host.py`](src/verisim/experiments/rs7_host.py), the new `train_host_unrolled`) the cross-world fork onto the **host** factored arm: **H59 confirmed — the verdict transfers**, no host-arm lever beats teacher forcing either ([rs7](figures/rs7_host_transfer.png)). **SPEC-16 is complete (RS1–RS7)**; only the competent-high-`p` / GPU scale regime remains the standing open bet. |
+| [SPEC-19](docs/specs/SPEC-19.md) | **the flagship** | un-defer the trained `M_θ` once and compose the methods onto **one** frozen checkpoint — the headline `H_ε(ρ)` figure on a real model. **FL0–FL6 ship + frontier run** ([`experiments/flagship.py`](src/verisim/experiments/flagship.py)): **FL0** freezes the `l@9.6k` checkpoint (`H_free` = 18.75 id / 29.75 ood, reload-determinism gate PASS); **FL1 / H69** — the four-arm curve ([fl1](figures/fl1_flagship_curve.png)): the strict ≥80%-at-ρ≤0.2 bar is **not met** (curve rises ~linearly, no free knee) **but** the composed policy **nearly doubles fixed-interval** at equal budget (+57% at ρ=0.2, +94% at ρ=0.5) — smart scheduling beats the clock on a real model; **FL2 / H70** the methods compose (the conformal trigger on the real signal carries the win, speculative inert); **FL3 / H71** the HS3 wall survives (`H_free`≈0.33) yet landmark planning lifts far-goal reach 0.167→0.667 (4×) on the real arm; **FL4 / H72** the curve shape is the loop's, not the model's; **FL6 / H77** ranking ≠ calibration (Spearman +0.352, trigger precision 0.902 vs 0.652 base). The flat CPU frontier; the GPU arm is the standing bet. |
+| [SPEC-20](docs/specs/SPEC-20.md) | **the usefulness proof (Phase 5)** | train a defensive agent **inside** the oracle-grounded flagship model, transfer to the oracle's reality, measure task success — the field's gold-standard world-model test, run honestly because reality is checkable. **UA0–UA9 ship + frontier run** ([`acd/`](src/verisim/acd/), [`experiments/ua_transfer.py`](src/verisim/experiments/ua_transfer.py)): **UA1 / H73** learn-in-imagination works (grounded-trained ≥ oracle-trained at 5× lower oracle cost); **UA2 / H74** the money hypothesis **REFUTED, the bankable negative** — grounding buys no transfer advantage for structural control (0.420 = 0.420), because the optimal policy keys on structure the model learns faithfully; the drift profile + cross-world law confirm the flat model is **faithful on structure, drifts on content** (both worlds); **UA8 / H80** the predicted positive — a content-keyed file-integrity defender **does** need faithfulness (faithful predictor 1.000 vs free 0.50–0.73, gap widens with horizon), closing the boundary law: *faithfulness-for-control is load-bearing exactly when the task keys on the dynamics the model gets wrong*; **UA9 / H81** the **useful knee** — the ρ-grounded predictor recovers the faithful catch rate **monotonically** in ρ, reaching perfect catch at **ρ=0.5, half the oracle calls** ([ua9](figures/ua9_grounded_knee.png)) — SPEC-19's "buy faithfulness cheaply" mechanism demonstrated on downstream task success, where it matters. Defender-only (the §13 ethics commitment); Tier-A reference reality, with the system-oracle rung as it matures. |
 
 Semantics docs ([filesystem](docs/semantics.md), [network](docs/network-semantics.md)) pin the normative
 command semantics, paired with the reference oracles, which are the executable truth. SPEC-11's system
@@ -2618,6 +2720,34 @@ The shape of the era (30 backlog hypotheses): **✓ 12** supported, **◐ 3** sp
 rule). The decided tranche is the controlled-core + pure-oracle work; the negatives are first-class:
 H45→H46 turned SPEC-14 from "supervise the processor" to "the wall is the decoder," and RS1 + NA6
 banked that the exposure-bias cure does not pay at CPU scale on either the flat or the structured arm.
+
+### SPEC-19/20 hypothesis-verdict ledger (the flagship + usefulness era, H69–H81)
+
+The active-priority era: one real trained model (SPEC-19), and the first downstream-application spec
+(SPEC-20) — train an agent *inside* the model and transfer it to the oracle's reality. Same verdict
+glyphs.
+
+| H | verdict | experiment | finding (one line) | figure |
+|---|---------|-----------|--------------------|--------|
+| **H69** | ◐ | FL1 | the strict ≥80%-at-ρ≤0.2 bar is **not met** on a real model (curve rises ~linearly, no free knee) — **but** the composed policy nearly doubles fixed-interval at equal budget (+57% at ρ=0.2, +94% at ρ=0.5): smart scheduling beats the clock | [fl1](figures/fl1_flagship_curve.png) |
+| **H70** | ✓ | FL2 | the methods compose (both ≥ max single) — and the 2×2 ablation shows the **conformal trigger on the real signal carries the whole FL1 win; the speculative window is inert** at this operating point | [fl2](figures/fl1_flagship_curve.png) |
+| **H71** | ✓ | FL3 | structure buys **goal-space** horizon on the real arm where it cannot buy step horizon — the HS3 wall survives (`H_free`≈0.33) yet landmark planning lifts far-goal reach 0.167→0.667 (4×) | — |
+| **H72** | ✓ | FL4 | the `H_ε(ρ)` curve shape is the **loop's, not the model's** — flat vs graph+RSSM proposers share one shape, the proposer only setting the floor (H22 on a real trained model) | — |
+| **H73** | ✓ | UA1 | **learn-in-imagination works** — a defender trained in the grounded model reaches reality containment ≥ the oracle-trained one (0.420 vs 0.390) at **5× lower** training oracle cost | — |
+| **H74** | ⊟ | UA2 | the money hypothesis **REFUTED, the bankable negative** — grounded- and free-trained defenders transfer identically (0.420 = 0.420); grounding is not load-bearing for *structural* control (the policy keys on drift-robust exposure features) | — |
+| **H75** | ✓ | UA3 | the policy transfer gap is **zero** — the grounded policy performs identically in-model and in reality (a faithful training environment, the clean positive that dissociates from H74) | — |
+| **H76** | ✗ | UA4 | the grounding advantage is **flat in ρ** (≤0 across the sweep) — consistent with the H74 null (no advantage to grow); recovered as monotone by UA9 on the content-keyed task | — |
+| **H77** | ✓ | FL6 | **ranking ≠ calibration** — the real decode-entropy *ranks* drift (Spearman +0.352) and schedules consultations at 0.902 precision vs 0.652 base, even though CF6 found it cannot *calibrate* a coverage threshold | — |
+| **H78** | ✗ | UA6 | the task-taxonomy fork **refuted, diagnosed** — a structural-feature task stays drift-robust because the flat model's drift is **connectivity-preserving** (the coarse reachability the policy reads survives, raw links drift ~24%) | — |
+| **H79** | ✗ | UA7 | predictive control **does not need faithfulness here** — closed/open-loop model-predictive planning helps a lot (+0.242) but faithful planner ≡ free planner (the model perfectly predicts the control lever, `host_down` 0% drift) | — |
+| **H80** | ✓ | UA8 | the predicted positive — **content-keyed control needs faithfulness**: a predictive file-integrity defender's faithful predictor catches every corruption (1.000) vs the free one's 0.50–0.73, the gap widening with horizon (closes the boundary law) | — |
+| **H81** | ✓ | UA9 | the **useful knee** — the ρ-grounded predictor recovers the faithful catch rate **monotonically** in ρ (the H76 mirror), reaching perfect catch at **ρ=0.5, half the oracle calls** — buying content-keyed faithfulness cheaply on the downstream task | [ua9](figures/ua9_grounded_knee.png) |
+
+The shape of the flagship era (13 hypotheses): **✓ 8** supported, **◐ 1** split (the H69 strict bar),
+**✗ 3** refuted, **⊟ 1** banked negative (H74). The headline pair: faithful one-step dynamics do **not**
+make verification sub-linear on a real model (H69) but smart scheduling decisively beats the clock; and
+faithfulness is load-bearing for control **exactly when** the task keys on the content the model drifts
+on (H74 null + H80 positive), where it can still be bought at sub-linear oracle cost (H81).
 
 ## Design decisions (the load-bearing ones)
 

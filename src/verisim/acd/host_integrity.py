@@ -92,6 +92,58 @@ def predictive_defense_reward(
     return caught / min(budget, len(true_corrupted))
 
 
+def grounded_rollout_writes(
+    model: object, oracle: HostOracle, start: HostState, actions: Sequence[HostAction], rho: float,
+) -> tuple[set[str], set[str], int]:
+    """The ρ-grounded predictor: free-run `M_θ`, re-anchor to truth every ``round(1/ρ)`` step.
+
+    The propose-verify-correct loop (SPEC.md §5.2) applied to the *predictive* rollout. A parallel
+    true trajectory advances under the oracle; at each consultation step the predicted state is
+    snapped to that truth (the defender paid an oracle call to learn it), and between consultations
+    the model free-runs. ``ρ=1`` recovers the faithful predictor (predicted ≡ true, ``|actions|``
+    calls); ``ρ=0`` recovers the free predictor (pure `M_θ`, 0 calls). The interior is the
+    cheap-but-faithful regime SPEC-19 measures as `H_ε(ρ)` -- here on the *downstream* task.
+
+    Returns ``(predicted_writes, true_writes, oracle_calls)`` where ``oracle_calls`` is the count of
+    re-anchors (the policy's consultation budget; the ground-truth steps used for scoring are the
+    measurement instrument, not policy cost, per SPEC.md §2.1).
+    """
+    from verisim.host.delta import apply
+
+    interval = 0 if rho <= 0.0 else max(1, round(1.0 / rho))
+    true = start
+    predicted = start
+    calls = 0
+    for i, action in enumerate(actions, start=1):
+        true = oracle.step(true, action).state
+        if rho >= 1.0 or (interval and i % interval == 0):
+            predicted = true  # CONSULT -- re-anchor to the truth the oracle call returned
+            calls += 1
+        else:
+            delta = model.predict_delta(predicted, action)  # type: ignore[attr-defined]
+            predicted = apply(predicted, delta)
+    return written_files(predicted), written_files(true), calls
+
+
+def grounded_defense_reward(
+    model: object, oracle: HostOracle, start: HostState, actions: Sequence[HostAction],
+    budget: int, rho: float,
+) -> tuple[float, int]:
+    """Protect the ``budget`` files the ρ-grounded predictor expects corrupted; score vs the truth.
+
+    Same scoring as :func:`predictive_defense_reward` but the predictor is the ρ-grounded rollout,
+    so the catch rate is a function of the budget. Returns ``(reward, oracle_calls)``.
+    """
+    predicted_set, true_corrupted, calls = grounded_rollout_writes(
+        model, oracle, start, actions, rho
+    )
+    if not true_corrupted:
+        return 1.0, calls
+    protected = set(sorted(predicted_set)[:budget])
+    caught = len(protected & true_corrupted)
+    return caught / min(budget, len(true_corrupted)), calls
+
+
 def oracle_step(oracle: HostOracle) -> HostStepFn:
     """The faithful predictor: the exact oracle as a step function."""
 

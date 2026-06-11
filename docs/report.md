@@ -2403,6 +2403,26 @@ trained in `E_oracle` / `E_grounded` / `E_free`, all evaluated in reality. The r
   (content), not the dynamics it learns faithfully (structure).** Six structural-control nulls across
   two worlds, one content-control positive — a boundary measured exactly against ground truth, which
   no oracle-free domain could draw.
+- **The useful knee — buying that faithfulness at budget ρ (UA9 / H81 — SUPPORTED).** UA8 settled
+  *that* content-keyed control needs faithfulness, but only at the two extremes: the every-step
+  faithful predictor (ρ=1, catch 1.000) and the free predictor (ρ=0, catch 0.50–0.73). The program's
+  central claim is that you never have to choose — the oracle-in-the-loop *buys back* faithfulness
+  cheaply at a consultation budget ρ (SPEC-19's `H_ε(ρ)` curve). That curve had never been measured on
+  a *downstream task*, because on the structural-control tasks (UA2–UA7) there was no advantage for ρ
+  to recover — H76/UA4 found the grounding advantage **flat** in ρ. UA9 runs it where the advantage
+  exists. The **ρ-grounded predictor** free-runs `M_θ` and re-anchors to the oracle's truth every
+  `round(1/ρ)` steps — the propose–verify–correct loop applied to the predictive rollout — and we
+  sweep ρ on the content-keyed file-integrity task. **Result: the catch rate rises *monotonically*
+  with ρ (0.500 → 0.667 → 0.854 → 1.000), recovering the every-step faithful predictor's perfect catch
+  at ρ=0.5 — half the oracle calls (7 vs 14).** This is the synthesis the program had been missing,
+  and it lands two things at once. First, the **H76/UA4 mirror**: the grounding advantage that was
+  *flat* on structural control is **monotone in ρ here**, on exactly the task whose optimal policy
+  depends on the content the model drifts on — the cleanest possible confirmation of the boundary law,
+  read off the consultation curve itself. Second, the **useful knee**: SPEC-19's "buy faithfulness
+  cheaply" mechanism, demonstrated for the first time on SPEC-20's downstream *task success* rather
+  than on faithful horizon. The complete arc: faithfulness is load-bearing for control exactly when
+  the task keys on the content the model drifts on (UA8) — and *there*, where it matters, you can
+  still buy it at sub-linear oracle cost (UA9). The cheap-faithful-model story holds where it has to.
 
 Reproduce (CPU-local; the apparatus' smoke instances run in CI):
 
@@ -2443,6 +2463,10 @@ python -m verisim.experiments.host_drift --checkpoint runs/flagship/host-l \
 # UA8/H80 — predictive file-integrity (the POSITIVE: faithful vs free predictor over horizon):
 python -m verisim.experiments.ua_host_integrity --checkpoint runs/flagship/host-l \
     --out figures/ua8_host_integrity.csv
+# UA9/H81 — the useful knee: the ρ-grounded predictor sweeps catch from the free floor to the
+# faithful ceiling (recovers perfect catch at ρ=0.5, half the oracle calls) on the content task:
+python -m verisim.experiments.ua_host_grounded --checkpoint runs/flagship/host-l \
+    --out figures/ua9_grounded_knee.csv
 ```
 
 ## What v0 ships for others
