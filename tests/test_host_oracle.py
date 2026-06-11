@@ -205,6 +205,33 @@ def test_dup_bad_fd_and_dead_pid_are_ebadf() -> None:
     assert oracle.step(dead, parse_host_action("dup 1 0")).exit_code == EXIT_ERR  # pid 1 zombie
 
 
+def test_mkdir_creates_a_directory_and_enables_nested_writes() -> None:
+    # `mkdir` adds directory structure to the embedded fs: before it a write into /d/ fails (no
+    # parent dir); after it the nested write lands — the composition that makes `chdir` worthwhile.
+    oracle = ReferenceHostOracle()
+    s0 = HostState.initial()
+    # without the directory, opening then writing a nested path fails (the parent /d is not a dir)
+    blocked = _run(oracle, s0, ["open 1 /d/f"])
+    assert oracle.step(blocked, parse_host_action("write 1 0 hi")).exit_code == EXIT_ERR
+    # mkdir creates /d; the same nested write now succeeds and reads back through the fd
+    s = _run(oracle, s0, ["mkdir 1 /d", "open 1 /d/f", "write 1 0 hi"])
+    assert "/d" in s.fs.fs  # the directory node exists in the embedded v0 filesystem
+    assert oracle.step(s, parse_host_action("read 1 0")).stdout == "hi"
+
+
+def test_mkdir_existing_path_and_bad_parent_fail() -> None:
+    oracle = ReferenceHostOracle()
+    made = _run(oracle, HostState.initial(), ["mkdir 1 /d"])
+    assert oracle.step(made, parse_host_action("mkdir 1 /d")).exit_code == EXIT_ERR  # EEXIST
+    assert oracle.step(made, parse_host_action("mkdir 1 /x/y")).exit_code == EXIT_ERR  # ENOENT
+
+
+def test_mkdir_on_a_dead_pid_fails() -> None:
+    oracle = ReferenceHostOracle()
+    dead = _run(oracle, HostState.initial(), ["exit 1 0"])
+    assert oracle.step(dead, parse_host_action("mkdir 1 /d")).exit_code == EXIT_ERR  # pid 1 zombie
+
+
 def test_oracle_is_pure_and_deterministic() -> None:
     oracle = ReferenceHostOracle()
     cmds = ["fork 1", "open 2 /a", "write 2 0 hello", "setuid 1 1000", "exit 2 0"]

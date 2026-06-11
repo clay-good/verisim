@@ -45,6 +45,7 @@ increment). A syscall on a non-`RUNNING` pid fails (`exit 1`) and leaves the sta
 | `read <pid> <fd>` | Resolve `(pid, fd) → path`; **delegate `cat <path>` to the v0 FS sub-oracle**; stdout is the file's content. **Read-only** — the only bundle effect is `SetExit` (no `FsDelta`), so it closes the write/read round trip without mutating state. Without a per-fd offset (a later increment) it returns the whole content each time. | `pid` not RUNNING; `fd` not open (EBADF); path not a readable file (inherits the FS oracle's failure) |
 | `close <pid> <fd>` | Release `(pid, fd)`. | `pid` not RUNNING; `fd` not open (EBADF) |
 | `dup <pid> <fd>` | Bind the **smallest free** fd for `pid` to the **same path** as `fd` (an alias: two fds onto one file — the shared-file coupling). Stdout is the new fd number. **Reuses `FdOpen`** — no new edit type. No shared offset yet (`read` is whole-content, so the alias reads identically). | `pid` not RUNNING; `fd` not open (EBADF) |
+| `mkdir <pid> <path>` | Create a directory at `resolve("/", path)` — **delegate `mkdir` to the v0 FS sub-oracle** (a `Create(path, Dir())` wrapped in `FsDelta`, the `write` pattern — no new edit type). Adds **directory structure** to the embedded fs so a later `write` into the subdir succeeds (the parent must be a directory); the prerequisite that makes a per-process `chdir` meaningful (a dir to cd into beyond root). | `pid` not RUNNING; path exists (EEXIST); parent not a directory (ENOENT) — inheriting the FS oracle's verdict |
 
 ## Determinism contract
 
@@ -116,5 +117,6 @@ scalar hides (SPEC-6 §5.4, §9).
 ## Deferred (later HC increments)
 
 `lseek` + a per-fd offset (so `read`/`dup` share a seek position rather than returning whole content),
-`chdir` + per-process cwd, pipes/signals (IPC), sockets (the SPEC-5 net sub-oracle), and the scheduler
-(`yield`/`advance`) and its interleaving-entropy dial. This document grows with them.
+`chdir` + per-process cwd (now **unblocked** — `mkdir` gives a directory to cd into beyond root),
+pipes/signals (IPC), sockets (the SPEC-5 net sub-oracle), and the scheduler (`yield`/`advance`) and its
+interleaving-entropy dial. This document grows with them.

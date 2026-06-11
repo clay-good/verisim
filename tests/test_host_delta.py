@@ -20,6 +20,7 @@ from verisim.hostoracle import ReferenceHostOracle
 # A mixed trajectory exercising every implemented edit type + the FS-composition delta.
 _TRAJECTORY = [
     "fork 1",          # ProcSpawn
+    "mkdir 1 /etc",    # FsDelta wrapping a v0 Create(Dir) (so the nested write below has a parent)
     "open 2 /etc/cfg", # FdOpen
     "write 2 0 alpha", # FsDelta (delegated to the v0 FS sub-oracle)
     "dup 2 0",         # FdOpen via dup (alias fd 1 onto fd 0's path -- no new edit type)

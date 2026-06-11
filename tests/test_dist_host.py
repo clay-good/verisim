@@ -216,6 +216,39 @@ def test_host_dup_tier_a_equals_tier_b() -> None:
         sa, sb = ra.state, rb.state
 
 
+def test_host_mkdir_adds_directory_structure_three_layers_deep() -> None:
+    # `mkdir` composes into SPEC-7 via `host`: a process on n0's host creates a directory in its
+    # embedded v0 FS, enabling a nested write three layers deep (cluster -> host -> v0 FS).
+    config = _config()
+    oracle = ReferenceDistOracle(config)
+    s = _run(oracle, config, ["host n0 mkdir 1 /d", "host n0 open 1 /d/f", "host n0 write 1 0 dp"])
+    assert oracle.step(s, parse_dist_action("host n0 read 1 0")).value == "dp"  # nested file reads
+    # per-node isolation: n1's host never made /d, so a nested write there is a host error (no dir)
+    s1 = _run(oracle, config, ["host n1 open 1 /d/f"])
+    assert oracle.step(s1, parse_dist_action("host n1 write 1 0 x")).status == "host_err"
+    # a crashed node's host is unavailable — the cross-layer crash linkage reaches `mkdir`.
+    crashed = oracle.step(s, parse_dist_action("crash n0")).state
+    assert oracle.step(crashed, parse_dist_action("host n0 mkdir 1 /e")).status == "unavailable"
+
+
+def test_host_mkdir_tier_a_equals_tier_b() -> None:
+    config = _config()
+    ref, sysb = ReferenceDistOracle(config), SystemDistOracle(config)
+    sa = sb = DistributedState.initial(config)
+    script = [
+        "host n0 mkdir 1 /d",        # create the dir -> ok
+        "host n0 mkdir 1 /d",        # EEXIST -> host_err
+        "host n0 mkdir 1 /x/y",      # ENOENT (parent not a dir) -> host_err
+        "host n0 open 1 /d/f", "host n0 write 1 0 deep",  # nested write into the new dir -> ok
+    ]
+    for cmd in script:
+        a = parse_dist_action(cmd)
+        ra, rb = ref.step(sa, a), sysb.step(sb, a)
+        assert cluster_view(ra.state) == cluster_view(rb.state), cmd
+        assert (ra.status, ra.value) == (rb.status, rb.value), cmd
+        sa, sb = ra.state, rb.state
+
+
 def test_setuid_privilege_is_enforced_per_host() -> None:
     # The embedded host enforces SPEC-6 privilege: a non-root process cannot setuid (EPERM).
     config = _config()

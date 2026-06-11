@@ -50,7 +50,7 @@ class ReferenceHostOracle(HostOracle):
             "fork": self._fork, "exit": self._exit, "kill": self._kill, "wait": self._wait,
             "setuid": self._setuid,
             "open": self._open, "write": self._write, "read": self._read, "close": self._close,
-            "dup": self._dup,
+            "dup": self._dup, "mkdir": self._mkdir,
         }[action.name]
         delta, exit_code, stdout = handler(state, action)
         return HostStepResult(
@@ -210,3 +210,16 @@ class ReferenceHostOracle(HostOracle):
         new_fd = next(i for i in range(len(used) + 1) if i not in used)
         delta: HostDelta = [FdOpen(pid=action.pid, fd=new_fd, path=entry.path), SetExit(EXIT_OK)]
         return delta, EXIT_OK, str(new_fd)
+
+    def _mkdir(self, state: HostState, action: HostAction) -> _Outcome:
+        if not self._running(state, action.pid):
+            return self._fail()
+        # DELEGATE directory creation to the v0 FS sub-oracle (the composition, SPEC-6 §5.1), the
+        # ``write`` pattern: v0 ``mkdir`` yields a ``[Create(path, Dir())]`` we wrap in an
+        # ``FsDelta`` (no new edit type). It fails (EEXIST / ENOENT) iff the path exists or its
+        # parent is not a directory -- inheriting the FS oracle's verdict. Adds directory structure
+        # to the host so a later ``write`` into the subdir works (the prerequisite for ``chdir``).
+        path = resolve("/", action.args[0])  # absolute resolution (per-process cwd is a later step)
+        fs_result = self._fs.step(state.fs, parse_action(f"mkdir {path}"))
+        delta: HostDelta = [FsDelta(edits=fs_result.delta), SetExit(fs_result.exit_code)]
+        return delta, fs_result.exit_code, fs_result.stdout

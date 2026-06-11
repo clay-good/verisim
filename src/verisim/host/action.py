@@ -14,6 +14,7 @@ pid** explicitly (the scheduler/"current process" is a later HC increment). The 
     read <pid> <fd>                # files: read <fd>'s content back (delegated to the FS oracle)
     close <pid> <fd>               # files: release <fd>
     dup <pid> <fd>                 # files: duplicate <fd> to the smallest free fd (same path)
+    mkdir <pid> <path>             # files: create a directory (delegated to the FS oracle)
 
 ``fork``/``exit``/``kill``/``wait`` are the long-range, branching, compounding-state process core
 (SPEC-6 §3.2): ``fork`` spawns, ``exit``/``kill`` zombify (``kill`` **permission-gated** like a
@@ -24,8 +25,12 @@ entry, so zombies do not accumulate forever (the lifecycle is now spawn -> run -
 the per-process fd table over the embedded v0 filesystem -- ``read`` closing the write/read round
 trip and ``dup`` **aliasing** an fd (two fds onto one path, the shared-file coupling the factored
 model leans on). ``dup`` reuses the ``FdOpen`` delta -- no new edit type (the ``kill`` pattern).
-Without a per-fd offset (a later increment), ``read`` returns the file's whole content, read-only.
-Sockets, IPC, ``lseek``, ``chdir``, the scheduler (``yield``/``advance``) are later increments.
+``mkdir`` adds **directory structure** to the embedded fs -- it delegates to the v0 ``mkdir`` (a
+``Create(path, Dir())`` wrapped in ``FsDelta``, the ``write`` pattern, no new edit type), so a later
+``write`` into the new subdir succeeds (the parent must be a directory) -- the prerequisite that
+makes a per-process ``chdir`` meaningful (a dir to cd into beyond root). Without a per-fd offset
+(a later increment), ``read`` returns the file's whole content, read-only. Sockets, IPC, ``lseek``,
+``chdir`` + per-process cwd (now unblocked by ``mkdir``), the scheduler are later increments.
 """
 
 from __future__ import annotations
@@ -43,6 +48,7 @@ _ARITY: dict[str, int] = {
     "read": 2,  # pid fd
     "close": 2,  # pid fd
     "dup": 2,  # pid fd
+    "mkdir": 2,  # pid path
 }
 
 
