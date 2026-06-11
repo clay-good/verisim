@@ -1,0 +1,18 @@
+{
+  "name": "flagship-net-l",
+  "scale": { "label": "l", "n_embd": 192, "n_layer": 3, "n_head": 4, "train_steps": 5000 },
+  "data_seeds": 96,
+  "train_seed": 0,
+  "train_steps_per_traj": 100,
+  "block_size": 128,
+  "batch_size": 64,
+  "lr": 0.003,
+  "num_threads": 0,
+  "eval_driver": "weighted",
+  "eval_driver_hard": "adversarial",
+  "eval_seeds": [100, 101, 102, 103],
+  "eval_steps": 96,
+  "one_step_seeds": [200, 201, 202],
+  "one_step_steps": 40,
+  "epsilon": 0.0
+}
