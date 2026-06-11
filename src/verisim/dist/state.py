@@ -290,6 +290,20 @@ class DistributedState:
     # by default and omitted from the canonical form (a set-free cluster is the pre-increment-30 form).
     orset_adds: dict[tuple[str, str], frozenset[tuple[str, str, int]]] = field(default_factory=dict)
     orset_tombs: dict[tuple[str, str], frozenset[tuple[str, int]]] = field(default_factory=dict)
+    # The CRDT multi-value register (DS0 increment 31, `mvput`/`mvget`): the Dynamo/Riak register that
+    # **surfaces** concurrent conflicting writes as *siblings* instead of silently dropping one (the
+    # LWW the KV `put`/the counters do). It reuses the OR-Set's dot/union machinery: `mvput n key val`
+    # tags `val` with a fresh dot `(owner=n, seq)`, **tombstones every dot it currently observes** (a
+    # write supersedes the values it saw), and adds its own — so a *sequential* overwrite collapses to
+    # one value, but *concurrent* writes (neither observing the other) **both survive** as siblings,
+    # and a later context-aware `mvput` (observing both) **resolves** them. `mvget n key` reads the set
+    # of surviving (non-tombstoned) sibling values. The join is **set union** of both halves
+    # (commutative/associative/idempotent), exactly like the OR-Set. `mvreg_vals` maps `(key, holder)`
+    # → `holder`'s surviving `(value, owner, seq)` write-dots; `mvreg_tombs` maps `(key, holder)` →
+    # `holder`'s superseded `(owner, seq)` dots. Both empty by default and omitted from the canonical
+    # form (a register-free cluster is the pre-increment-31 form, purely additive over increment 30).
+    mvreg_vals: dict[tuple[str, str], frozenset[tuple[str, str, int]]] = field(default_factory=dict)
+    mvreg_tombs: dict[tuple[str, str], frozenset[tuple[str, int]]] = field(default_factory=dict)
     # The embedded SPEC-6 host inside each node (DS0 increment 23, `host`): a per-node `HostState`
     # (process table + per-process fd tables + the embedded v0 filesystem), so a cluster node is not
     # just a bag of KV replicas but a real host running processes — the compositional vision SPEC-7
@@ -355,6 +369,8 @@ class DistributedState:
             ncounters=dict(self.ncounters),
             orset_adds=dict(self.orset_adds),
             orset_tombs=dict(self.orset_tombs),
+            mvreg_vals=dict(self.mvreg_vals),
+            mvreg_tombs=dict(self.mvreg_tombs),
             hosts={node: h.copy() for node, h in self.hosts.items()},
             lease_until=self.lease_until,
         )
@@ -391,6 +407,35 @@ class DistributedState:
         seqs = [seq for (elem, owner, seq) in self.orset_adds.get((key, node), frozenset())
                 if owner == node]
         seqs += [seq for (owner, seq) in self.orset_tombs.get((key, node), frozenset())
+                 if owner == node]
+        return (max(seqs) + 1) if seqs else 1
+
+    def mvreg_value(self, key: str, node: str) -> list[str]:
+        """``node``'s view of MV-register ``key`` (DS0 incr 31): the surviving sibling values.
+
+        The values whose write-dot is not tombstoned — one value if resolved, several if concurrent
+        writes left siblings, empty if never written."""
+        vals = self.mvreg_vals.get((key, node), frozenset())
+        tombs = self.mvreg_tombs.get((key, node), frozenset())
+        return sorted({val for (val, owner, seq) in vals if (owner, seq) not in tombs})
+
+    def mvreg_observed_dots(self, key: str, node: str) -> set[tuple[str, int]]:
+        """The dots of ``node``'s currently-surviving siblings on MV-register ``key`` (DS0 incr 31).
+
+        A ``mvput`` supersedes exactly these — the values the writer can see — so concurrent writes
+        (which cannot see each other) leave both as siblings."""
+        vals = self.mvreg_vals.get((key, node), frozenset())
+        tombs = self.mvreg_tombs.get((key, node), frozenset())
+        return {(owner, seq) for (val, owner, seq) in vals if (owner, seq) not in tombs}
+
+    def mvreg_next_seq(self, key: str, node: str) -> int:
+        """The next unique dot sequence for ``node``'s own write-dots on MV-register ``key`` (incr 31).
+
+        The same single-writer ``1 + max`` over ``node``'s own dots (live values + tombstoned ones)
+        as the OR-Set, so a fresh write never reuses a superseded dot."""
+        seqs = [seq for (val, owner, seq) in self.mvreg_vals.get((key, node), frozenset())
+                if owner == node]
+        seqs += [seq for (owner, seq) in self.mvreg_tombs.get((key, node), frozenset())
                  if owner == node]
         return (max(seqs) + 1) if seqs else 1
 

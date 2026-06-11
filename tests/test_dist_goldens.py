@@ -701,6 +701,41 @@ def test_golden_orset_add_wins_over_concurrent_remove():
     assert oracle.step(state, parse_dist_action("smembers n0 s")).value == "{x}"  # add wins
 
 
+def test_golden_mvregister_concurrent_writes_become_siblings():
+    # The CRDT MV-register golden (SPEC-7 §3.2, DS0 incr 31): under a partition {n0,n1} | {n2}, n0
+    # writes a (dot (n0,1)) and n2 writes b (dot (n2,1)) — neither observes the other, so neither
+    # tombstones the other's dot. After heal, `gossip n0 n2` unions the write-dots, so both hold
+    # {a@(n0,1), b@(n2,1)} with no tombstones → mvget reads BOTH as siblings {a,b} (vs LWW `put`)
+    # would keep one. The mvreg maps appear in the canonical form (omitted until the first mvput).
+    config = DistConfig(name="golden-mv", nodes=("n0", "n1", "n2"), objects=("r",),
+                        values=("a",), consistency_model="eventual")
+    oracle = ReferenceDistOracle(config)
+    state = DistributedState.initial(config)
+    for cmd in ["partition n0 n1 | n2", "mvput n0 r a", "mvput n2 r b", "heal", "gossip n0 n2"]:
+        state = oracle.step(state, parse_dist_action(cmd)).state
+    final = to_canonical(state)
+    assert final == {
+        "replicas": [
+            _rep("r", "n0", 0, "nil"), _rep("r", "n1", 0, "nil"), _rep("r", "n2", 0, "nil"),
+        ],
+        "log": [],
+        "inflight": [],
+        "partitions": [["n0", "n1", "n2"]],
+        "down": [],
+        "clock": 0,
+        "next_event_id": 0,
+        "next_msg_id": 0,
+        "last_result": ["gossiped", "2"],  # n0 gains b's write-dot; n2 gains a's write-dot
+        "mvreg_vals": [
+            {"key": "r", "holder": "n0", "value": "a", "owner": "n0", "seq": 1},
+            {"key": "r", "holder": "n0", "value": "b", "owner": "n2", "seq": 1},
+            {"key": "r", "holder": "n2", "value": "a", "owner": "n0", "seq": 1},
+            {"key": "r", "holder": "n2", "value": "b", "owner": "n2", "seq": 1},
+        ],
+    }
+    assert oracle.step(state, parse_dist_action("mvget n0 r")).value == "{a,b}"  # siblings, no loss
+
+
 def test_golden_config_push_commits_on_majority_minority_stays_stale() -> None:
     # The config-push golden (SPEC-7 §3.2, DS0 incr 24): n0 leads (term 1), then the network splits
     # {n0,n1} | {n2}. `config_push n0 feature on` from n0 (on the 2-of-3 majority side) commits and

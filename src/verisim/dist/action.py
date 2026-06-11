@@ -15,6 +15,8 @@ workload and the fault/time medium (the consensus/admin family arrives with the 
     sadd <node> <key> <elem>        # client: CRDT OR-Set add (add-wins, re-addable; unique-dot tagged)
     srem <node> <key> <elem>        # client: CRDT OR-Set remove (observed-remove; tombstones seen dots)
     smembers <node> <key>           # client: read a CRDT OR-Set (elements with a non-tombstoned dot)
+    mvput <node> <key> <val>        # client: CRDT MV-register write (supersedes observed; siblings on conflict)
+    mvget <node> <key>              # client: read a CRDT MV-register (surviving sibling values)
     advance <dt>                    # time: +<dt> clock; deliver in-flight msgs now due & reachable
     partition <nodes> | <nodes>     # fault: split the network into groups (| separates groups)
     heal                            # fault: remove all partitions (one fully-connected group)
@@ -196,7 +198,15 @@ remove); ``smembers n key`` is the elements with at least one **non-tombstoned**
 **set union** of both halves (commutative/associative/idempotent), so a concurrent ``sadd`` (a fresh
 dot the remover never saw) **survives** a concurrent ``srem`` (**add wins**), and a removed element is
 **re-addable** (a new dot is not in the tombstone-set) — the two properties an element-level 2P-Set
-(remove-wins, never re-addable) lacks (ED37).
+(remove-wins, never re-addable) lacks (ED37). ``mvput``/``mvget`` (DS0 increment 31) are the **CRDT
+MV-register** — the Dynamo/Riak register that *surfaces* concurrent conflicting writes as **siblings**
+instead of silently dropping one (the LWW the KV ``put`` and the counters do). It reuses the OR-Set's
+dot/union machinery: ``mvput n key val`` tags ``val`` with a fresh dot, **tombstones every dot it
+currently observes** (a write supersedes the values it saw), and adds its own — so a *sequential*
+overwrite collapses to one value, but *concurrent* writes (neither observing the other) **both
+survive**, and a later context-aware ``mvput`` (observing both) **resolves** them. ``mvget n key``
+reads the set of surviving sibling values. The conflict is made *visible and resolvable* rather than
+silently lost — the textbook reason multi-value registers exist (ED38).
 """
 
 from __future__ import annotations
@@ -217,6 +227,8 @@ _ARITY: dict[str, int | None] = {
     "sadd": 3,  # node key elem  -- CRDT OR-Set add (add-wins, re-addable; DS0 incr 30)
     "srem": 3,  # node key elem  -- CRDT OR-Set observed-remove (tombstones seen dots; DS0 incr 30)
     "smembers": 2,  # node key  -- read a CRDT OR-Set: non-tombstoned elements (DS0 incr 30)
+    "mvput": 3,  # node key val  -- CRDT MV-register write (siblings on conflict; DS0 incr 31)
+    "mvget": 2,  # node key  -- read a CRDT MV-register: surviving sibling values (DS0 incr 31)
     "advance": 1,  # dt
     "partition": None,  # <nodes> | <nodes> [| ...]
     "host": None,  # <node> <syscall...>  -- a SPEC-6 host syscall on <node>'s host (DS0 incr 23)
@@ -255,7 +267,7 @@ _ARITY: dict[str, int | None] = {
 # are the ``enqueue``/``dequeue`` FIFO-queue ops (DS0 incr 21).
 CLIENT_OPS = frozenset({
     "put", "get", "cas", "delete", "incr", "cincr", "cdecr", "cget",
-    "sadd", "srem", "smembers",
+    "sadd", "srem", "smembers", "mvput", "mvget",
     "begin", "tget", "tput", "commit", "abort", "enqueue", "dequeue",
 })
 TXN_OPS = frozenset({"begin", "tget", "tput", "commit", "abort"})

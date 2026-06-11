@@ -45,6 +45,8 @@ from verisim.dist.delta import (
     MsgDrop,
     MsgReschedule,
     MsgSend,
+    MVRegTomb,
+    MVRegWrite,
     NCounterSet,
     NodeDown,
     NodeUp,
@@ -186,9 +188,11 @@ def gossip_edits(
     edits.extend(_gcounter_merge_edits(state, [a, b], [a, b]))
     # The CRDT OR-Set join (DS0 incr 30): both endpoints adopt the union of their add/tomb sets.
     edits.extend(_orset_merge_edits(state, [a, b], [a, b]))
+    # The CRDT MV-register join (DS0 incr 31): both endpoints union their write/tomb sets.
+    edits.extend(_mvreg_merge_edits(state, [a, b], [a, b]))
     synced = sum(1 for e in edits
-                 if isinstance(e, (ReplicaWrite, GCounterSet, NCounterSet,
-                                   ORSetAdd, ORSetTomb)))  # all moves
+                 if isinstance(e, (ReplicaWrite, GCounterSet, NCounterSet, ORSetAdd, ORSetTomb,
+                                   MVRegWrite, MVRegTomb)))  # all moves
     value = str(synced)
     return [*edits, SetResult("gossiped", value)], "gossiped", value
 
@@ -298,28 +302,54 @@ def _orset_merge_edits(
 ) -> list[DistEdit]:
     """**Set-union** join of the CRDT OR-Set copies (DS0 incr 30, the CRDT join over both halves).
 
-    For each node in ``into``, raise its observed add-set and tombstone-set to the **union** held
-    by any node in ``among`` (the reachable set), emitting one ``ORSetAdd``/``ORSetTomb`` per dot it
-    it is missing. Union is commutative, associative, and idempotent, so applying it in any order
-    converges every node to the same set. A no-op when no OR-Set is used (the pre-incr-30 form is
-    unchanged). ``anti_entropy`` pulls one node; ``gossip`` a pair.
+    A no-op when no OR-Set is used (the pre-incr-30 form is unchanged). See
+    :func:`_dotset_union_edits` for the shared union mechanism. ``anti_entropy`` pulls one node.
+    """
+    return _dotset_union_edits(state.orset_adds, state.orset_tombs, into, among,
+                               ORSetAdd, ORSetTomb)
+
+
+def _dotset_union_edits(
+    vals: dict[tuple[str, str], frozenset[tuple[str, str, int]]],
+    tombs: dict[tuple[str, str], frozenset[tuple[str, int]]],
+    into: list[str], among: list[str],
+    mk_val: Callable[[str, str, str, str, int], DistEdit],
+    mk_tomb: Callable[[str, str, str, int], DistEdit],
+) -> list[DistEdit]:
+    """**Set-union** join of a dotted CRDT — the shared OR-Set / MV-register merge (incr 30/31).
+
+    For each node in ``into``, raise its value-dot set and tombstone set to the **union** held by
+    any node in ``among`` (the reachable set), emitting ``mk_val``/``mk_tomb`` per missing dot.
+    Union is commutative, associative, and idempotent, so applying it in any order converges every
+    node to the same set of surviving dots. ``anti_entropy`` pulls one node; ``gossip`` a pair.
     """
     edits: list[DistEdit] = []
-    keys = {key for (key, _h) in state.orset_adds} | {key for (key, _h) in state.orset_tombs}
+    keys = {key for (key, _h) in vals} | {key for (key, _h) in tombs}
     for key in sorted(keys):
-        union_adds: set[tuple[str, str, int]] = set()
+        union_vals: set[tuple[str, str, int]] = set()
         union_tombs: set[tuple[str, int]] = set()
         for h in among:
-            union_adds |= state.orset_adds.get((key, h), frozenset())
-            union_tombs |= state.orset_tombs.get((key, h), frozenset())
+            union_vals |= vals.get((key, h), frozenset())
+            union_tombs |= tombs.get((key, h), frozenset())
         for holder in into:
-            have_a = state.orset_adds.get((key, holder), frozenset())
-            for elem, owner, seq in sorted(union_adds - have_a):
-                edits.append(ORSetAdd(key, holder, elem, owner, seq))
-            have_t = state.orset_tombs.get((key, holder), frozenset())
+            have_v = vals.get((key, holder), frozenset())
+            for value, owner, seq in sorted(union_vals - have_v):
+                edits.append(mk_val(key, holder, value, owner, seq))
+            have_t = tombs.get((key, holder), frozenset())
             for owner, seq in sorted(union_tombs - have_t):
-                edits.append(ORSetTomb(key, holder, owner, seq))
+                edits.append(mk_tomb(key, holder, owner, seq))
     return edits
+
+
+def _mvreg_merge_edits(
+    state: DistributedState, into: list[str], among: list[str]
+) -> list[DistEdit]:
+    """**Set-union** join of the CRDT MV-register copies (incr 31). See :func:`_dotset_union_edits`.
+
+    A no-op when no register is used (the pre-incr-31 form is unchanged).
+    """
+    return _dotset_union_edits(state.mvreg_vals, state.mvreg_tombs, into, among,
+                               MVRegWrite, MVRegTomb)
 
 
 def sadd_edits(
@@ -378,6 +408,47 @@ def smembers_edits(
     if not state.is_up(node):
         return [SetResult("unavailable", "")], "unavailable", ""
     val = "{" + ",".join(state.orset_members(key, node)) + "}"
+    return [SetResult("ok", val)], "ok", val
+
+
+def mvput_edits(
+    state: DistributedState, action: DistAction, config: DistConfig
+) -> tuple[DistDelta, str, str]:
+    """``mvput node key val``: CRDT MV-register write (DS0 increment 31, conflict-surfacing).
+
+    ``node`` tags ``val`` with a fresh dot ``(owner=node, seq)``, **tombstones every dot it now
+    observes** (the values it can see — a write supersedes what it saw), and stores its write-dot.
+    So a *sequential* overwrite (the writer observed the prior value) collapses to one, but two
+    *concurrent* writes — neither observing the other — **both survive** the union join as siblings,
+    and a later context-aware ``mvput`` (observing both) **resolves** them. Purely node-local (no
+    replication, no message), so **always available** even partitioned-alone. Deterministic: Tier-A
+    ≡ Tier-B bit-for-bit. A crashed node is ``unavailable``. Reports the written value.
+    """
+    node, key, val = action.args[0], action.args[1], action.args[2]
+    if not state.is_up(node):
+        return [SetResult("unavailable", "")], "unavailable", ""
+    already = state.mvreg_tombs.get((key, node), frozenset())
+    edits: DistDelta = [MVRegTomb(key, node, owner, seq)
+                        for owner, seq in sorted(state.mvreg_observed_dots(key, node) - already)]
+    seq = state.mvreg_next_seq(key, node)
+    edits.append(MVRegWrite(key, node, val, node, seq))
+    return [*edits, SetResult("ok", val)], "ok", val
+
+
+def mvget_edits(
+    state: DistributedState, action: DistAction, config: DistConfig
+) -> tuple[DistDelta, str, str]:
+    """``mvget node key``: read a CRDT MV-register (incr 31) — the surviving sibling values.
+
+    ``node``'s local view: the values whose write-dot is not tombstoned, sorted and rendered
+    ``{a,b}`` (``{}`` empty, one value if resolved, several if concurrent writes left siblings).
+    Under a partition this may lag the other side's writes, but never loses them (a later join
+    reconciles by union). A pure read; the node is ``unavailable`` when down.
+    """
+    node, key = action.args[0], action.args[1]
+    if not state.is_up(node):
+        return [SetResult("unavailable", "")], "unavailable", ""
+    val = "{" + ",".join(state.mvreg_value(key, node)) + "}"
     return [SetResult("ok", val)], "ok", val
 
 
@@ -987,6 +1058,10 @@ class ReferenceDistOracle:
             return srem_edits(state, action, self.config)
         if name == "smembers":
             return smembers_edits(state, action, self.config)
+        if name == "mvput":
+            return mvput_edits(state, action, self.config)
+        if name == "mvget":
+            return mvget_edits(state, action, self.config)
         if name in ("begin", "tget", "tput", "commit", "abort"):
             # The transaction family (DS0 increment 2) — shared OCC logic; a committed write's
             # async replication flows through the same in-flight medium as ``put`` (delivered by
@@ -1299,10 +1374,13 @@ class ReferenceDistOracle:
         gc = _gcounter_merge_edits(state, [node], reachable)
         edits.extend(gc)
         repaired += len(gc)
-        # CRDT OR-Set join (DS0 incr 30): pull the add/tombstone sets to the reachable union.
+        # CRDT OR-Set / MV-register joins (incr 30/31): pull each dotted set to the reachable union.
         os_edits = _orset_merge_edits(state, [node], reachable)
         edits.extend(os_edits)
         repaired += len(os_edits)
+        mv_edits = _mvreg_merge_edits(state, [node], reachable)
+        edits.extend(mv_edits)
+        repaired += len(mv_edits)
         value = str(repaired)
         edits.append(SetResult("repaired", value))
         return edits, "repaired", value

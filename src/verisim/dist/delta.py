@@ -361,6 +361,39 @@ class ORSetTomb:
 
 
 @dataclass(frozen=True)
+class MVRegWrite:
+    """Add one write-dot to node ``holder``'s copy of MV-register ``key`` (DS0 incr 31).
+
+    The twin of :class:`ORSetAdd` over the ``mvreg_vals`` map: ``mvput n key val`` emits
+    ``MVRegWrite(key, n, val, n, seq)`` (a node tags its value with its own unique dot), and the union
+    join in ``anti_entropy``/``gossip`` re-emits a holder's missing write-dots. Idempotent; omitted
+    from the canonical form when no register is used.
+    """
+
+    key: str
+    holder: str
+    value: str
+    owner: str
+    seq: int
+
+
+@dataclass(frozen=True)
+class MVRegTomb:
+    """Add one superseded dot to node ``holder``'s tombstone-set for MV-register ``key`` (incr 31).
+
+    The twin of :class:`ORSetTomb` over the ``mvreg_tombs`` map: a ``mvput`` emits ``MVRegTomb`` for
+    every dot it *observed* (the values it supersedes), so a sequential overwrite collapses to one
+    value while concurrent writes (which observed neither the other) leave both as siblings. Idempotent;
+    omitted from the canonical form when no register is used.
+    """
+
+    key: str
+    holder: str
+    owner: str
+    seq: int
+
+
+@dataclass(frozen=True)
 class HostStep:
     """A SPEC-6 host syscall applied to one node's embedded host (DS0 increment 23, the §4 `HostDelta`).
 
@@ -411,6 +444,8 @@ DistEdit = (
     | NCounterSet
     | ORSetAdd
     | ORSetTomb
+    | MVRegWrite
+    | MVRegTomb
     | HostStep
     | SetResult
 )
@@ -507,6 +542,12 @@ def apply(state: DistributedState, delta: DistDelta) -> DistributedState:
         elif isinstance(edit, ORSetTomb):
             k = (edit.key, edit.holder)
             s.orset_tombs[k] = s.orset_tombs.get(k, frozenset()) | {(edit.owner, edit.seq)}
+        elif isinstance(edit, MVRegWrite):
+            k = (edit.key, edit.holder)
+            s.mvreg_vals[k] = s.mvreg_vals.get(k, frozenset()) | {(edit.value, edit.owner, edit.seq)}
+        elif isinstance(edit, MVRegTomb):
+            k = (edit.key, edit.holder)
+            s.mvreg_tombs[k] = s.mvreg_tombs.get(k, frozenset()) | {(edit.owner, edit.seq)}
         elif isinstance(edit, HostStep):
             # apply the SPEC-6 host delta to the node's embedded host (created lazily), via the
             # SPEC-6 ``apply`` verbatim — the §4 composition. An untouched host leaves no residue.
@@ -590,6 +631,12 @@ def edit_to_dict(edit: DistEdit) -> dict[str, Any]:
     if isinstance(edit, ORSetTomb):
         return {"op": "ORSetTomb", "key": edit.key, "holder": edit.holder,
                 "owner": edit.owner, "seq": edit.seq}
+    if isinstance(edit, MVRegWrite):
+        return {"op": "MVRegWrite", "key": edit.key, "holder": edit.holder, "value": edit.value,
+                "owner": edit.owner, "seq": edit.seq}
+    if isinstance(edit, MVRegTomb):
+        return {"op": "MVRegTomb", "key": edit.key, "holder": edit.holder,
+                "owner": edit.owner, "seq": edit.seq}
     if isinstance(edit, HostStep):
         return {"op": "HostStep", "node": edit.node, "edits": host_delta_to_list(edit.edits)}
     assert isinstance(edit, SetResult)
@@ -659,6 +706,10 @@ def edit_from_dict(d: dict[str, Any]) -> DistEdit:
         return ORSetAdd(d["key"], d["holder"], d["elem"], d["owner"], d["seq"])
     if op == "ORSetTomb":
         return ORSetTomb(d["key"], d["holder"], d["owner"], d["seq"])
+    if op == "MVRegWrite":
+        return MVRegWrite(d["key"], d["holder"], d["value"], d["owner"], d["seq"])
+    if op == "MVRegTomb":
+        return MVRegTomb(d["key"], d["holder"], d["owner"], d["seq"])
     if op == "HostStep":
         return HostStep(d["node"], host_delta_from_list(d["edits"]))
     if op == "SetResult":

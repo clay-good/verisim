@@ -1744,7 +1744,13 @@ observed-remove set where each `sadd` tags the element with a **unique dot** `(o
 tombstones only the dots it *observed*, so the **set-union** join buys the two properties a naive
 element-level 2P-Set lacks — **add-wins** (a concurrent add mints a fresh dot the remover never saw,
 so it survives) and **re-addability** (a removed element returns under a new dot) — recovered as a
-banked positive against the 2P-Set's negative.
+banked positive against the 2P-Set's negative. **And the MV-register completes the CRDT register
+branch** (ED38): `mvput`/`mvget` is the Dynamo/Riak multi-value register that **surfaces** a write
+conflict as *siblings* instead of silently dropping one (the LWW the KV `put` and the counters do) —
+a `mvput` tags its value with a fresh dot and **tombstones every dot it observed**, so a sequential
+overwrite collapses to one value while concurrent writes (neither observing the other) **both
+survive**, and a later context-aware write **resolves** them (the read-and-resolve); reusing the
+OR-Set's set-union join verbatim, the conflict is made *visible and resolvable* rather than lost.
 Every
 one of these is additive (omitted from the canonical form until first used, so all prior goldens/hashes
 hold) and validated bit-for-bit against the autonomous-actor Tier-B execution.
@@ -2243,10 +2249,10 @@ python -m verisim.experiments.ed16 --config configs/ed16.json \
     --out figures/ed16.csv --plot figures/ed16.png  # read-committed isolation: lost update + its price (DS0 incr 9)
 python -m verisim.experiments.ed17 --config configs/ed17.json \
     --out figures/ed17.csv --plot figures/ed17.png  # read-uncommitted isolation: dirty read + black-box recovery (DS0 incr 10)
-# DS0 increments 11–30 (ED18–ED37): the complete §3.4 fault grammar (drop/delay/reorder/clock_skew +
+# DS0 increments 11–31 (ED18–ED38): the complete §3.4 fault grammar (drop/delay/reorder/clock_skew +
 # anti_entropy/gossip), the Raft-subset consensus core (elect/propose/step_down/lease/lread/read_index/
 # append/membership), the FIFO queue, the deploy + config_push admin ops, the embedded SPEC-6 host, the
-# tombstone delete, the atomic counter, and the CRDT G-counter/PN-counter/OR-Set — see reproduce.sh
+# tombstone delete, the atomic counter, and the CRDT counter/set/register family — see reproduce.sh
 python -m verisim.experiments.ed31 --config configs/ed31.json \
     --out figures/ed31.csv --plot figures/ed31.png  # config push: leader-committed config + divergence (DS0 incr 24)
 python -m verisim.experiments.ed32 --config configs/ed32.json \
@@ -2261,6 +2267,8 @@ python -m verisim.experiments.ed36 --config configs/ed36.json \
     --out figures/ed36.csv --plot figures/ed36.png  # CRDT PN-counter: decrementable, may go negative (DS0 incr 29)
 python -m verisim.experiments.ed37 --config configs/ed37.json \
     --out figures/ed37.csv --plot figures/ed37.png  # CRDT OR-Set: add-wins, re-addable, convergent (DS0 incr 30)
+python -m verisim.experiments.ed38 --config configs/ed38.json \
+    --out figures/ed38.csv --plot figures/ed38.png  # CRDT MV-register: conflict-surfacing siblings (DS0 incr 31)
 ```
 
 The run-records are git-ignored (regenerable); the figures and their CSVs are

@@ -1,0 +1,5 @@
+{
+  "name": "ed38-mvregister",
+  "cluster_sizes": [3, 5, 7],
+  "key": "r"
+}

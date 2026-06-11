@@ -70,6 +70,7 @@ from verisim.dist.txn import txn_step
 from verisim.distoracle.base import DistStepResult
 from verisim.distoracle.reference import (
     _gcounter_merge_edits,
+    _mvreg_merge_edits,
     _orset_merge_edits,
     add_replica_edits,
     append_edits,
@@ -87,6 +88,8 @@ from verisim.distoracle.reference import (
     host_op_edits,
     lease_edits,
     lread_edits,
+    mvget_edits,
+    mvput_edits,
     propose_edits,
     read_index_edits,
     remove_replica_edits,
@@ -271,6 +274,12 @@ class SystemDistOracle:
             return srem_edits(state, action, self.config)
         if name == "smembers":
             return smembers_edits(state, action, self.config)
+        if name == "mvput":
+            # The CRDT MV-register ops (incr 31) are likewise purely node-local (tag/supersede in
+            # the node's own copy), deterministic, always available; union join coordinator-level.
+            return mvput_edits(state, action, self.config)
+        if name == "mvget":
+            return mvget_edits(state, action, self.config)
         ev = self._event(state, action)
         if name in ("put", "cas", "delete", "incr"):
             return self._write(state, action, ev)
@@ -647,6 +656,9 @@ class SystemDistOracle:
         os_edits = _orset_merge_edits(state, [node], reachable)
         edits.extend(os_edits)
         repaired += len(os_edits)
+        mv_edits = _mvreg_merge_edits(state, [node], reachable)
+        edits.extend(mv_edits)
+        repaired += len(mv_edits)
         value = str(repaired)
         edits.append(SetResult("repaired", value))
         return edits, "repaired", value

@@ -171,6 +171,16 @@ class TieredOracle:
             for (owner, seq) in tombs:
                 if holder not in nodeset or owner not in nodeset or seq < 1:
                     return True, f"invalid orset tomb-dot ({owner!r},{seq}) at holder {holder!r}"
+        # The CRDT MV-register (DS0 incr 31) carries the same dot discipline as the OR-Set: every
+        # write/tombstone dot is held and owned by a known node with a positive sequence.
+        for (_key, holder), vdots in predicted.mvreg_vals.items():
+            for (_value, owner, seq) in vdots:
+                if holder not in nodeset or owner not in nodeset or seq < 1:
+                    return True, f"invalid mvreg write-dot ({owner!r},{seq}) at holder {holder!r}"
+        for (_key, holder), tdots in predicted.mvreg_tombs.items():
+            for (owner, seq) in tdots:
+                if holder not in nodeset or owner not in nodeset or seq < 1:
+                    return True, f"invalid mvreg tomb-dot ({owner!r},{seq}) at holder {holder!r}"
         return False, ""
 
     def _cycle(

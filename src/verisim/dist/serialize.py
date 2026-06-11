@@ -174,6 +174,24 @@ def to_canonical(state: DistributedState) -> dict[str, Any]:
             {"key": key, "holder": holder, "owner": owner, "seq": seq}
             for key, holder, owner, seq in tombs
         ]
+    # The CRDT MV-register (DS0 incr 31, `mvput`/`mvget`): per (key, holder), the surviving write-dots
+    # and superseded dots, same shape as the OR-Set. Omitted when empty (pre-increment-31 form).
+    mvvals = sorted((key, holder, value, owner, seq)
+                    for (key, holder), dots in state.mvreg_vals.items() if dots
+                    for (value, owner, seq) in dots)
+    if mvvals:
+        out["mvreg_vals"] = [
+            {"key": key, "holder": holder, "value": value, "owner": owner, "seq": seq}
+            for key, holder, value, owner, seq in mvvals
+        ]
+    mvtombs = sorted((key, holder, owner, seq)
+                     for (key, holder), dots in state.mvreg_tombs.items() if dots
+                     for (owner, seq) in dots)
+    if mvtombs:
+        out["mvreg_tombs"] = [
+            {"key": key, "holder": holder, "owner": owner, "seq": seq}
+            for key, holder, owner, seq in mvtombs
+        ]
     # The embedded SPEC-6 hosts (DS0 incr 23): per-node host canonical form (the v0 FS reuses its own
     # canonical verbatim — the composition is visible in serialization). Omitted when no node runs a
     # host op, so a host-free cluster serializes to the exact pre-increment-23 form (purely additive).
@@ -194,10 +212,20 @@ def _group_orset_adds(rows: list[dict[str, Any]]) -> dict[tuple[str, str], froze
 
 
 def _group_orset_tombs(rows: list[dict[str, Any]]) -> dict[tuple[str, str], frozenset[tuple[str, int]]]:
-    """Re-group the flattened OR-Set tombstone rows (DS0 incr 30) into the per-(key, holder) frozensets."""
+    """Re-group flattened tombstone rows (DS0 incr 30/31) into the per-(key, holder) frozensets.
+
+    Shared by the OR-Set and MV-register tombstone halves (both are ``(owner, seq)`` dots)."""
     grouped: dict[tuple[str, str], set[tuple[str, int]]] = {}
     for r in rows:
         grouped.setdefault((r["key"], r["holder"]), set()).add((r["owner"], r["seq"]))
+    return {k: frozenset(v) for k, v in grouped.items()}
+
+
+def _group_mvreg_vals(rows: list[dict[str, Any]]) -> dict[tuple[str, str], frozenset[tuple[str, str, int]]]:
+    """Re-group the flattened MV-register write-dot rows (DS0 incr 31) into per-(key, holder) sets."""
+    grouped: dict[tuple[str, str], set[tuple[str, str, int]]] = {}
+    for r in rows:
+        grouped.setdefault((r["key"], r["holder"]), set()).add((r["value"], r["owner"], r["seq"]))
     return {k: frozenset(v) for k, v in grouped.items()}
 
 
@@ -271,6 +299,8 @@ def from_canonical(d: dict[str, Any]) -> DistributedState:
         },
         orset_adds=_group_orset_adds(d.get("orset_adds", [])),
         orset_tombs=_group_orset_tombs(d.get("orset_tombs", [])),
+        mvreg_vals=_group_mvreg_vals(d.get("mvreg_vals", [])),
+        mvreg_tombs=_group_orset_tombs(d.get("mvreg_tombs", [])),
         hosts={h["node"]: from_canonical_host(h["host"]) for h in d.get("hosts", [])},
         lease_until=d.get("lease_until", 0),
     )

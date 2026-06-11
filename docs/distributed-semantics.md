@@ -164,6 +164,8 @@ of a real message-passing execution, not just the analytic DES.
 | `sadd <node> <key> <elem>` (DS0 increment 30) | **CRDT OR-Set add**: tag `elem` with a **unique dot** `(owner=node, seq)` — `node`'s next monotone sequence for `key` — and store it in `node`'s observed add-set (`ORSetAdd`). Purely node-local (**always available**), and because the dot is fresh it **survives** a concurrent `srem` (add-wins) and a removed element is **re-addable**. The union join applies in `anti_entropy`/`gossip`. `("ok", elem)`; `("unavailable", "")` if down. Purely additive (two `orset_adds`/`orset_tombs` maps + the `ORSetAdd`/`ORSetTomb` edits). |
 | `srem <node> <key> <elem>` (DS0 increment 30) | **CRDT OR-Set observed-remove**: tombstone **only the dots of `elem` that `node` has observed** in its own add-set (`ORSetTomb` per dot) — the *observed*-remove that makes add-wins work. The dot stays in the add-set (union semantics); membership no longer counts it. Node-local (always available); removing an absent element is a no-op. `("ok", elem)`; `("unavailable", "")` if down. |
 | `smembers <node> <key>` (DS0 increment 30) | **CRDT OR-Set read**: return `node`'s elements with at least one non-tombstoned dot, rendered `{a,b,c}` (`{}` empty) — `node`'s local view (may lag, never loses). `("ok", members)`; `("unavailable", "")` if down. A pure read. |
+| `mvput <node> <key> <val>` (DS0 increment 31) | **CRDT MV-register write**: tag `val` with a fresh dot `(owner=node, seq)`, **tombstone every dot `node` currently observes** (a write supersedes the values it saw, `MVRegTomb` per dot), and store its own write-dot (`MVRegWrite`). A *sequential* overwrite collapses to one value; *concurrent* writes (neither observing the other) **both survive** as siblings. Purely node-local (**always available**); the union join applies in `anti_entropy`/`gossip`. `("ok", val)`; `("unavailable", "")` if down. Purely additive (two `mvreg_vals`/`mvreg_tombs` maps + the `MVRegWrite`/`MVRegTomb` edits). |
+| `mvget <node> <key>` (DS0 increment 31) | **CRDT MV-register read**: return `node`'s surviving (non-tombstoned) sibling values, rendered `{a,b}` (`{}` empty, one value if resolved) — `node`'s local view (may lag, never loses). `("ok", siblings)`; `("unavailable", "")` if down. A pure read. |
 | `enqueue <node> <queue> <val>` (DS0 incr 21) | append `val` to each reachable replica's FIFO `queue` list (the relative append op). Availability follows the consistency model (linearizable needs every replica, quorum a majority, eventual/causal proceed on the reachable set); else `("unavailable", "")`. `("enqueued", val)`. |
 | `dequeue <node> <queue>` (DS0 incr 21) | return the head of `node`'s local `queue` replica and pop the head from each reachable replica. The delivery semantics follow the model: `eventual` admits **duplicate delivery** under partition (the removal does not cross the split), `linearizable`/`quorum` gate availability for **exactly-once**. `("dequeued", head)`, or `("empty", "")` if the local replica has no items; `("unavailable", "")` if the model's quorum is unreachable. |
 
@@ -787,6 +789,44 @@ checks every dot is held/owned by a known node with a positive sequence. ED37
 ([`experiments/ed37.py`](../src/verisim/experiments/ed37.py)) pins both panels (reads-back + re-addable
 + add-wins + always-available; gossip/anti_entropy convergence + idempotence) with Tier-B agreeing on
 every transition.
+
+### 3.13 `mvput` / `mvget` — the CRDT MV-register (DS0 increment 31)
+
+The counters and the KV `put` resolve a write conflict by **last-writer-wins**: one value survives, the
+other is silently dropped (ED14, ED34). The OR-Set unions *disjoint* adds. The **multi-value register**
+(MV-register) is the third option, the one Dynamo/Riak chose for the shopping cart: when two writes
+conflict, **keep both** as *siblings* and surface the conflict to a later reader, who resolves it. It
+is the data type that makes a conflict *visible and resolvable* rather than *lost*.
+
+It reuses the OR-Set's dot/union machinery exactly. `mvput n key val` tags `val` with a fresh dot
+`(owner=n, seq)`, **tombstones every dot it currently observes** (the surviving values it can see — a
+write supersedes what it saw), and stores its own write-dot. `mvget n key` is the values whose
+write-dot is not tombstoned. The CRDT join is **set union** of both halves, applied by
+`anti_entropy`/`gossip`. The "supersede what you observed" rule is the whole design:
+
+- **Sequential overwrite resolves.** A second write by the same node *observed* the first, so it
+  tombstones it — one value survives. The common case is a plain register.
+- **Concurrent writes become siblings.** Two writes on opposite sides of a partition each observed
+  only their own side, so neither tombstones the other; the union keeps **both**. `mvget` returns
+  `{a,b}` — the conflict, made visible, where a LWW `put` would have dropped one.
+- **A later write resolves the conflict.** Once a node has *seen* both siblings (after convergence), a
+  fresh `mvput` tombstones both and installs one value — the Dynamo read-and-resolve.
+
+```
+partition n0 n1 n2 | n3 n4
+mvput n0 r a                            # ("ok","a") — majority side, dot (n0,1)
+mvput n3 r b                            # ("ok","b") — minority side, concurrent dot (n3,1)
+heal; gossip n0 n3; mvget n0 r          # ("ok","{a,b}") — BOTH survive: the conflict surfaced
+mvput n0 r c; gossip n0 n3; mvget n3 r  # ("ok","{c}") — n0 saw both, so c supersedes them
+```
+
+`mvput` is node-local and the merge is a coordinator-level read of the medium, so Tier-A and Tier-B
+compute byte-identical deltas. The `mvreg_vals`/`mvreg_tombs` maps join `cluster_view`, are omitted
+from the canonical form until the first register op (purely additive over increment 30), and the
+metamorphic tier checks every dot is held/owned by a known node with a positive sequence. ED38
+([`experiments/ed38.py`](../src/verisim/experiments/ed38.py)) pins both panels (basic-read +
+sequential-resolve + siblings-preserved + always-available; gossip/anti_entropy convergence +
+idempotence + context-resolve) with Tier-B agreeing on every transition.
 
 ## 4. The delta and the `apply == oracle` invariant
 

@@ -86,6 +86,11 @@ def cluster_view(state: DistributedState) -> str:
                         for (e, o, s) in dots)
     orset_tombs = sorted((k, h, o, s) for (k, h), dots in state.orset_tombs.items() if dots
                          for (o, s) in dots)
+    # The CRDT MV-register (DS0 incr 31): each holder's surviving write-dots and superseded dots.
+    mvreg_vals = sorted((k, h, v, o, s) for (k, h), dots in state.mvreg_vals.items() if dots
+                        for (v, o, s) in dots)
+    mvreg_tombs = sorted((k, h, o, s) for (k, h), dots in state.mvreg_tombs.items() if dots
+                         for (o, s) in dots)
     # The embedded per-node hosts (DS0 incr 23) are observable cluster state — each node's host
     # canonical form, sorted by node. Empty for a host-free cluster, so the channel is unchanged.
     hosts = sorted((n, to_canonical_host(h)) for n, h in state.hosts.items())
@@ -103,6 +108,8 @@ def cluster_view(state: DistributedState) -> str:
         "ncounters": ncounters,
         "orset_adds": orset_adds,
         "orset_tombs": orset_tombs,
+        "mvreg_vals": mvreg_vals,
+        "mvreg_tombs": mvreg_tombs,
         "hosts": hosts,
     })
 

@@ -1,0 +1,10 @@
+panel,metric,value,detail
+mvreg,basic_read,1.0000,over_3_clusters
+mvreg,sequential_resolves,1.0000,overwrite_collapses_to_one
+mvreg,siblings_preserved,1.0000,concurrent_writes_both_survive
+mvreg,always_available,1.0000,minority_mvput_acked_AP
+converge,gossip,1.0000,epidemic_all_nodes_same_siblings
+converge,anti_entropy,1.0000,all_nodes_same_siblings
+converge,idempotent,1.0000,second_gossip_unchanged
+converge,resolves,1.0000,context_write_collapses_to_one
+tier_b,all,1.0000,steps=62
