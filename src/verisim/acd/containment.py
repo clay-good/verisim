@@ -326,3 +326,13 @@ class ContainmentEnv:
     @property
     def n_compromised(self) -> int:
         return len(self._compromised)
+
+    @property
+    def net(self) -> NetworkState:
+        """The current network state (read-only access for the policy's action featurizer)."""
+        return self._net
+
+    @property
+    def compromised(self) -> frozenset[str]:
+        """The current compromise set (read-only access for the policy's action featurizer)."""
+        return self._compromised
