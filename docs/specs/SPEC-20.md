@@ -197,7 +197,7 @@ Tier-B proves fidelity to reality. SPEC-20 lands rung 1 as the committed result 
 
 | ID | Hypothesis / artifact | State | Result |
 |---|---|---|---|
-| UA0 | containment env, three backends | ▶ proposed | — |
+| UA0 | containment env, three backends | ✅ shipped (CPU core) | the containment MDP + the three-backend seam ship ([`acd/containment.py`](../../src/verisim/acd/containment.py)): a scripted adversary spreads over the SPEC-5 reachability graph (compromise tracked in the env's own episode state, on top of the shipped `connected_hosts`), a defender `isolate`/`patch`/`noop`s (compiled to `host_down`/`svc_down`/`advance` NetActions), reward = containment − action cost. `OracleBackend`/`GroundedBackend`(ρ-corrected)/`FreeBackend` differ *only* in how the net state evolves — the UA2/H74 seam — so the adversary spreads on the backend's (possibly drifted) reachability. 7 torch-free tests (CI-runnable): isolation halts spread, ρ=1 grounded ≡ oracle, seeded topology connected + reproducible. |
 | UA1 | H73 — learn-in-imagination transfers | ▶ proposed | — |
 | UA2 | H74 — grounding is load-bearing | ▶ proposed (the deliverable) | — |
 | UA3 | H75 — policy transfer gap quantified | ▶ proposed | — |
