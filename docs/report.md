@@ -2391,6 +2391,18 @@ trained in `E_oracle` / `E_grounded` / `E_free`, all evaluated in reality. The r
   load-bearing for structural control. The predicted positive side of the boundary is a **content-keyed
   task**: file integrity, keyed on `write`/`fs`, where the host model drifts ~30–64% — the precise
   next experiment.
+- **The positive, demonstrated (UA8 / H80 — SUPPORTED).** We built that content-keyed task: a
+  predictive file-integrity defender protects the budget files it *predicts* an adversarial workload
+  will corrupt, scored on how many true corruptions it caught — a decision that rides entirely on the
+  model's prediction of *which files get written*. Faithful predictor (oracle rollout) vs free
+  predictor (`M_θ` rollout), swept over horizon. **Result: the faithful predictor catches every
+  corruption (1.000) while the free one catches only 0.50–0.73, and the gap *widens with horizon*
+  (+0.29 at h=6 → +0.50 at h=14)** as content drift compounds. **This closes the boundary from both
+  sides.** The complete, cross-world law: **oracle-grounded world-model faithfulness is load-bearing
+  for control *exactly when* the task's optimal policy depends on the dynamics the model gets wrong
+  (content), not the dynamics it learns faithfully (structure).** Six structural-control nulls across
+  two worlds, one content-control positive — a boundary measured exactly against ground truth, which
+  no oracle-free domain could draw.
 
 Reproduce (CPU-local; the apparatus' smoke instances run in CI):
 
@@ -2428,6 +2440,9 @@ python -m verisim.experiments.host_flagship --out runs/flagship/host-l
 # host drift profile — the cross-world law (faithful on structure, drifts on file content):
 python -m verisim.experiments.host_drift --checkpoint runs/flagship/host-l \
     --out figures/host_drift.json
+# UA8/H80 — predictive file-integrity (the POSITIVE: faithful vs free predictor over horizon):
+python -m verisim.experiments.ua_host_integrity --checkpoint runs/flagship/host-l \
+    --out figures/ua8_host_integrity.csv
 ```
 
 ## What v0 ships for others
