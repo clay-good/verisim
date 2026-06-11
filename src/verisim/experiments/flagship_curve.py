@@ -35,7 +35,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from pathlib import Path
 from statistics import fmean
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, Protocol, runtime_checkable
 
 from verisim.conformal.calibrate import calibrate_threshold
 from verisim.loop.policy import (
@@ -59,7 +59,25 @@ from .en1 import eval_actions
 from .flagship import load_checkpoint
 
 if TYPE_CHECKING:
-    from verisim.netmodel import NeuralNetworkWorldModel
+    from verisim.net.action import NetAction
+    from verisim.netdelta.edits import NetDelta
+
+
+@runtime_checkable
+class UncertainNetModel(Protocol):
+    """A proposer that exposes BOTH a delta prediction and a per-step uncertainty signal.
+
+    The flagship arms (flat ``NeuralNetworkWorldModel`` and structured ``GraphRSSMWorldModel``) both
+    satisfy this; the combined protocol is the honest type for FL1/FL4, where the loop needs
+    ``predict_delta`` (the runner) and the conformal calibration needs the uncertainty signal. The
+    shipped ``NetModel`` / ``NetUncertaintyModel`` protocols each declare only one of the two.
+    """
+
+    def predict_delta(self, state: NetworkState, action: NetAction) -> NetDelta: ...
+
+    def predict_delta_with_uncertainty(
+        self, state: NetworkState, action: NetAction
+    ) -> tuple[NetDelta, float]: ...
 
 
 @dataclass(frozen=True)
@@ -130,7 +148,7 @@ CSV_HEADER = "arm,rho,h_mean,ci_lo,ci_hi,n"
 
 
 def build_calibration(
-    world_model: NeuralNetworkWorldModel, config: FlagshipCurveConfig, oracle: NetOracle,
+    world_model: UncertainNetModel, config: FlagshipCurveConfig, oracle: NetOracle,
     net: NetConfig,
 ) -> tuple[list[float], list[int]]:
     """Free-run the *real* model and record (uncertainty signal, breach@ε) per step (SPEC-15 CF1).
@@ -158,7 +176,7 @@ def build_calibration(
 
 
 def _horizons(
-    world_model: NeuralNetworkWorldModel, policy: ConsultationPolicy, config: FlagshipCurveConfig,
+    world_model: UncertainNetModel, policy: ConsultationPolicy, config: FlagshipCurveConfig,
     oracle: NetOracle, net: NetConfig, *, budget: int | None,
 ) -> list[float]:
     """Faithful horizon of one policy over the eval seeds (budget caps total consultations)."""
@@ -180,7 +198,7 @@ def _cell(arm: str, rho: float, horizons: list[float]) -> CurvePoint:
 
 
 def run_flagship_curve(
-    world_model: NeuralNetworkWorldModel, config: FlagshipCurveConfig | None = None, *,
+    world_model: UncertainNetModel, config: FlagshipCurveConfig | None = None, *,
     oracle: NetOracle | None = None,
 ) -> list[CurvePoint]:
     """The FL1 four-arm sweep on the frozen flagship: floor, fixed-ρ, composed-ρ, ceiling."""
