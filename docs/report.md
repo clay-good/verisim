@@ -2333,6 +2333,18 @@ PASS). On that frozen checkpoint:
   G=16 — structure buys goal-space horizon where it cannot buy step horizon, on a real trained arm.
 - **FL4 / H72 — model-invariance. SUPPORTED.** Flat (floor 18.75) and graph (floor 0.50) share one
   curve shape (no knee) — the loop governs the shape, the proposer sets the floor (H22 on real models).
+- **HFL1 / H84 — the smart-scheduling win is cross-world. SUPPORTED.** FL1's headline (composed
+  decode-entropy scheduling beats the fixed clock) was network-only. HFL1 runs the *same* four-arm
+  `H_ε(ρ)` curve on the frozen **host** flagship (HFL0, the harder world: `H_free`≈9 vs the network's
+  ≈18, `p`=0.70 vs 0.88), triggering on the *host* model's real decode entropy. The composed policy
+  beats fixed-interval on the host world too — floor 9 → ceiling 48, with composed **+50% at ρ=0.2
+  (13.5 vs 9.0), +60% at ρ=0.5 (20.75 vs 13.0)** — so the FL6/H77 ranking mechanism reproduces where
+  the model is materially *less* faithful: the less-faithful host model's decode entropy still orders
+  its drift well enough to schedule. The win opens at ρ≥0.2 (at lower budgets both arms sit at the
+  floor — the signal needs budget to act on). Smart scheduling is a property of the loop, not the
+  network world.
+
+  ![HFL1: the host flagship faithful-horizon curve H_ε(ρ). The composed decode-entropy-triggered policy (blue) sits above the fixed-interval clock (orange) at ρ≥0.2 on the harder host world, both rising from the floor (9) toward the ceiling (48) — the cross-world confirmation of the FL1 scheduling win](../figures/hfl1_host_curve.png)
 
 **SPEC-20 — train a defender *inside* the model, transfer to reality.** A defensive containment agent
 trained in `E_oracle` / `E_grounded` / `E_free`, all evaluated in reality. The result is a sharp
@@ -2477,6 +2489,10 @@ python -m verisim.experiments.ua_predictive --checkpoint runs/flagship/net-l \
     --out figures/ua7_predictive.csv
 # HFL0 — the HOST flagship (the harder world, H_free~9 vs network ~18):
 python -m verisim.experiments.host_flagship --out runs/flagship/host-l
+# HFL1/H84 — the host flagship H_ε(ρ) curve: smart scheduling beats the clock on the harder world too
+# (composed +50% at ρ=0.2, +60% at ρ=0.5 over fixed-interval) — the FL1 win, cross-world:
+python -m verisim.experiments.host_flagship_curve --checkpoint runs/flagship/host-l \
+    --out figures/hfl1_host_curve.csv
 # host drift profile — the cross-world law (faithful on structure, drifts on file content):
 python -m verisim.experiments.host_drift --checkpoint runs/flagship/host-l \
     --out figures/host_drift.json
