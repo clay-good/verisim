@@ -824,6 +824,46 @@ def _keys_of(value: str) -> set[str]:
     return set(inner.split(",")) if inner else set()
 
 
+def test_golden_rga_concurrent_inserts_converge_to_one_order():
+    # The CRDT RGA golden (SPEC-7 §3.2, DS0 incr 34): under a partition {n0,n1} | {n2}, n0 adds 'a'
+    # at the head (id (1,n0), parent ROOT) and n2 inserts 'b' at the head (id (1,n2), parent ROOT) —
+    # concurrent. After heal, `gossip n0 n2` UNIONs the element sets, so both nodes hold {a@(1,n0),
+    # b@(1,n2)}. The visible order is a DFS, siblings by id descending: at equal seq, owner n2 > n0,
+    # so 'b' precedes 'a' → "ba", the SAME on both nodes (order is a pure function of the set).
+    config = DistConfig(name="golden-rga", nodes=("n0", "n1", "n2"), objects=("l",),
+                        values=("a",), consistency_model="eventual")
+    oracle = ReferenceDistOracle(config)
+    state = DistributedState.initial(config)
+    for cmd in ["partition n0 n1 | n2", "rins n0 l 0 a", "rins n2 l 0 b", "heal", "gossip n0 n2"]:
+        state = oracle.step(state, parse_dist_action(cmd)).state
+    final = to_canonical(state)
+    assert final == {
+        "replicas": [
+            _rep("l", "n0", 0, "nil"), _rep("l", "n1", 0, "nil"), _rep("l", "n2", 0, "nil"),
+        ],
+        "log": [],
+        "inflight": [],
+        "partitions": [["n0", "n1", "n2"]],
+        "down": [],
+        "clock": 0,
+        "next_event_id": 0,
+        "next_msg_id": 0,
+        "last_result": ["gossiped", "2"],  # n0 gains b's element; n2 gains a's element
+        "rga_elems": [
+            {"list": "l", "holder": "n0", "seq": 1, "owner": "n0", "value": "a",
+             "pseq": 0, "powner": ""},
+            {"list": "l", "holder": "n0", "seq": 1, "owner": "n2", "value": "b",
+             "pseq": 0, "powner": ""},
+            {"list": "l", "holder": "n2", "seq": 1, "owner": "n0", "value": "a",
+             "pseq": 0, "powner": ""},
+            {"list": "l", "holder": "n2", "seq": 1, "owner": "n2", "value": "b",
+             "pseq": 0, "powner": ""},
+        ],
+    }
+    assert oracle.step(state, parse_dist_action("rget n0 l")).value == "ba"  # deterministic order
+    assert oracle.step(state, parse_dist_action("rget n2 l")).value == "ba"  # same on both nodes
+
+
 def test_golden_config_push_commits_on_majority_minority_stays_stale() -> None:
     # The config-push golden (SPEC-7 §3.2, DS0 incr 24): n0 leads (term 1), then the network splits
     # {n0,n1} | {n2}. `config_push n0 feature on` from n0 (on the 2-of-3 majority side) commits and

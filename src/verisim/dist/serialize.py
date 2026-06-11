@@ -221,6 +221,24 @@ def to_canonical(state: DistributedState) -> dict[str, Any]:
             {"map": m, "field": fld, "holder": h, "value": v, "ts": ts, "owner": o}
             for ((m, fld), h), (v, ts, o) in sorted(state.ormap_vals.items())
         ]
+    # The CRDT RGA sequence (DS0 incr 34, `rins`/`rdel`/`rget`): the elements (with parent ids) + the
+    # tombstoned element ids, flattened and sorted. Omitted when empty (pre-increment-34 form).
+    rels = sorted((ln, h, seq, owner, value, pseq, powner)
+                  for (ln, h), es in state.rga_elems.items() if es
+                  for (seq, owner, value, pseq, powner) in es)
+    if rels:
+        out["rga_elems"] = [
+            {"list": ln, "holder": h, "seq": seq, "owner": owner, "value": value,
+             "pseq": pseq, "powner": powner}
+            for ln, h, seq, owner, value, pseq, powner in rels
+        ]
+    rtombs = sorted((ln, h, seq, owner)
+                    for (ln, h), ts in state.rga_tombs.items() if ts
+                    for (seq, owner) in ts)
+    if rtombs:
+        out["rga_tombs"] = [
+            {"list": ln, "holder": h, "seq": seq, "owner": owner} for ln, h, seq, owner in rtombs
+        ]
     # The embedded SPEC-6 hosts (DS0 incr 23): per-node host canonical form (the v0 FS reuses its own
     # canonical verbatim — the composition is visible in serialization). Omitted when no node runs a
     # host op, so a host-free cluster serializes to the exact pre-increment-23 form (purely additive).
@@ -271,6 +289,26 @@ def _group_ormap_tombs(rows: list[dict[str, Any]]) -> dict[tuple[str, str], froz
     grouped: dict[tuple[str, str], set[tuple[str, int]]] = {}
     for r in rows:
         grouped.setdefault((r["map"], r["holder"]), set()).add((r["owner"], r["seq"]))
+    return {k: frozenset(v) for k, v in grouped.items()}
+
+
+def _group_rga_elems(
+    rows: list[dict[str, Any]],
+) -> dict[tuple[str, str], frozenset[tuple[int, str, str, int, str]]]:
+    """Re-group the flattened RGA element rows (DS0 incr 34) into per-(list, holder) sets."""
+    grouped: dict[tuple[str, str], set[tuple[int, str, str, int, str]]] = {}
+    for r in rows:
+        grouped.setdefault((r["list"], r["holder"]), set()).add(
+            (r["seq"], r["owner"], r["value"], r["pseq"], r["powner"])
+        )
+    return {k: frozenset(v) for k, v in grouped.items()}
+
+
+def _group_rga_tombs(rows: list[dict[str, Any]]) -> dict[tuple[str, str], frozenset[tuple[int, str]]]:
+    """Re-group the flattened RGA tombstone rows (DS0 incr 34) into per-(list, holder) sets."""
+    grouped: dict[tuple[str, str], set[tuple[int, str]]] = {}
+    for r in rows:
+        grouped.setdefault((r["list"], r["holder"]), set()).add((r["seq"], r["owner"]))
     return {k: frozenset(v) for k, v in grouped.items()}
 
 
@@ -357,6 +395,8 @@ def from_canonical(d: dict[str, Any]) -> DistributedState:
             ((r["map"], r["field"]), r["holder"]): (r["value"], r["ts"], r["owner"])
             for r in d.get("ormap_vals", [])
         },
+        rga_elems=_group_rga_elems(d.get("rga_elems", [])),
+        rga_tombs=_group_rga_tombs(d.get("rga_tombs", [])),
         hosts={h["node"]: from_canonical_host(h["host"]) for h in d.get("hosts", [])},
         lease_until=d.get("lease_until", 0),
     )

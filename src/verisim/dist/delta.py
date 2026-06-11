@@ -478,6 +478,42 @@ class ORMapVal:
 
 
 @dataclass(frozen=True)
+class RGAInsert:
+    """Add one element to node ``holder``'s copy of RGA ``list_name`` (DS0 incr 34).
+
+    The sequence CRDT's insert: ``rins`` emits ``RGAInsert(list, n, seq, n, value, pseq, powner)`` — an
+    element with unique id ``(seq, n)``, ``value``, and a ``parent`` id ``(pseq, powner)`` (the element
+    it was inserted after, or ``RGA_ROOT = (0, "")`` for the head). The union join in
+    ``anti_entropy``/``gossip`` re-emits a holder's missing elements; the visible order is derived from
+    the element set. Omitted from the canonical form when no list is used.
+    """
+
+    list_name: str
+    holder: str
+    seq: int
+    owner: str
+    value: str
+    pseq: int
+    powner: str
+
+
+@dataclass(frozen=True)
+class RGATomb:
+    """Mark element ``(seq, owner)`` deleted in node ``holder``'s copy of RGA ``list_name`` (incr 34).
+
+    The sequence CRDT's delete: ``rdel`` emits ``RGATomb(list, n, seq, owner)`` for the element at the
+    chosen position — a tombstone, so the element keeps its position as an anchor for its children
+    (delete preserves structure) but no longer appears in the visible sequence. Omitted from the
+    canonical form when no list is used.
+    """
+
+    list_name: str
+    holder: str
+    seq: int
+    owner: str
+
+
+@dataclass(frozen=True)
 class HostStep:
     """A SPEC-6 host syscall applied to one node's embedded host (DS0 increment 23, the §4 `HostDelta`).
 
@@ -535,6 +571,8 @@ DistEdit = (
     | ORMapField
     | ORMapTomb
     | ORMapVal
+    | RGAInsert
+    | RGATomb
     | HostStep
     | SetResult
 )
@@ -657,6 +695,14 @@ def apply(state: DistributedState, delta: DistDelta) -> DistributedState:
             s.ormap_vals[((edit.mapname, edit.field), edit.holder)] = (
                 edit.value, edit.ts, edit.owner
             )
+        elif isinstance(edit, RGAInsert):
+            k = (edit.list_name, edit.holder)
+            s.rga_elems[k] = s.rga_elems.get(k, frozenset()) | {
+                (edit.seq, edit.owner, edit.value, edit.pseq, edit.powner)
+            }
+        elif isinstance(edit, RGATomb):
+            k = (edit.list_name, edit.holder)
+            s.rga_tombs[k] = s.rga_tombs.get(k, frozenset()) | {(edit.seq, edit.owner)}
         elif isinstance(edit, HostStep):
             # apply the SPEC-6 host delta to the node's embedded host (created lazily), via the
             # SPEC-6 ``apply`` verbatim — the §4 composition. An untouched host leaves no residue.
@@ -760,6 +806,12 @@ def edit_to_dict(edit: DistEdit) -> dict[str, Any]:
     if isinstance(edit, ORMapVal):
         return {"op": "ORMapVal", "mapname": edit.mapname, "field": edit.field,
                 "holder": edit.holder, "value": edit.value, "ts": edit.ts, "owner": edit.owner}
+    if isinstance(edit, RGAInsert):
+        return {"op": "RGAInsert", "list": edit.list_name, "holder": edit.holder, "seq": edit.seq,
+                "owner": edit.owner, "value": edit.value, "pseq": edit.pseq, "powner": edit.powner}
+    if isinstance(edit, RGATomb):
+        return {"op": "RGATomb", "list": edit.list_name, "holder": edit.holder,
+                "seq": edit.seq, "owner": edit.owner}
     if isinstance(edit, HostStep):
         return {"op": "HostStep", "node": edit.node, "edits": host_delta_to_list(edit.edits)}
     assert isinstance(edit, SetResult)
@@ -843,6 +895,11 @@ def edit_from_dict(d: dict[str, Any]) -> DistEdit:
         return ORMapTomb(d["mapname"], d["holder"], d["owner"], d["seq"])
     if op == "ORMapVal":
         return ORMapVal(d["mapname"], d["field"], d["holder"], d["value"], d["ts"], d["owner"])
+    if op == "RGAInsert":
+        return RGAInsert(d["list"], d["holder"], d["seq"], d["owner"], d["value"],
+                         d["pseq"], d["powner"])
+    if op == "RGATomb":
+        return RGATomb(d["list"], d["holder"], d["seq"], d["owner"])
     if op == "HostStep":
         return HostStep(d["node"], host_delta_from_list(d["edits"]))
     if op == "SetResult":

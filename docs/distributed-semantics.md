@@ -172,6 +172,9 @@ of a real message-passing execution, not just the analytic DES.
 | `mget <node> <map> <field>` (DS0 increment 33) | **CRDT OR-Map field read**: return the field's LWW value if it is **present** (a non-tombstoned presence dot), else `` `` (absent). `node`'s local view. `("ok", value)`; `("unavailable", "")` if down. A pure read. |
 | `mdel <node> <map> <field>` (DS0 increment 33) | **CRDT OR-Map field observed-remove**: tombstone the presence dots of `field` that `node` has observed (`ORMapTomb`). The value stays (a re-`mput` overwrites it), but `mget`/`mkeys` no longer see the field; a concurrent `mput`'s unseen dot survives (add-wins). Purely node-local (always available). `("ok", field)`; `("unavailable", "")` if down. |
 | `mkeys <node> <map>` (DS0 increment 33) | **CRDT OR-Map enumerate**: return `node`'s present field names (non-tombstoned presence dots), rendered `{a,b}` (`{}` empty) — the enumeration capability the flat KV lacks. `("ok", keys)`; `("unavailable", "")` if down. A pure read. |
+| `rins <node> <list> <i> <val>` (DS0 increment 34) | **CRDT RGA insert**: insert `val` after the i-th visible element (`i=0` = head, anchored at `RGA_ROOT`; `i` past the end appends) — a new element with unique id `(seq, node)` and the anchor's id as its `parent` (`RGAInsert`). The visible order is a DFS with siblings by id descending. Purely node-local (**always available**); the set-union join applies in `anti_entropy`/`gossip`. `("ok", val)`; `("unavailable", "")` if down. Purely additive (two `rga_*` maps + two edits). |
+| `rdel <node> <list> <i>` (DS0 increment 34) | **CRDT RGA delete**: tombstone the i-th visible element (`i=1` = first), so it leaves the sequence but keeps its position as an anchor for its children (delete preserves structure, `RGATomb`). Out-of-range `i` is `not_found`. Node-local (always available). `("ok", value)`; `("unavailable", "")` if down. |
+| `rget <node> <list>` (DS0 increment 34) | **CRDT RGA read**: return the visible (non-tombstoned) element values concatenated, in order. `node`'s local view (may lag, never diverges — concurrent inserts converge). `("ok", sequence)`; `("unavailable", "")` if down. A pure read. |
 | `enqueue <node> <queue> <val>` (DS0 incr 21) | append `val` to each reachable replica's FIFO `queue` list (the relative append op). Availability follows the consistency model (linearizable needs every replica, quorum a majority, eventual/causal proceed on the reachable set); else `("unavailable", "")`. `("enqueued", val)`. |
 | `dequeue <node> <queue>` (DS0 incr 21) | return the head of `node`'s local `queue` replica and pop the head from each reachable replica. The delivery semantics follow the model: `eventual` admits **duplicate delivery** under partition (the removal does not cross the split), `linearizable`/`quorum` gate availability for **exactly-once**. `("dequeued", head)`, or `("empty", "")` if the local replica has no items; `("unavailable", "")` if the model's quorum is unreachable. |
 
@@ -908,6 +911,44 @@ two merges raise it order-independently). ED40
 ([`experiments/ed40.py`](../src/verisim/experiments/ed40.py)) pins both panels (basic-read +
 delete-removes + value-LWW + add-wins-presence + always-available; gossip/anti_entropy convergence +
 idempotence) with Tier-B agreeing on every transition.
+
+### 3.16 `rins` / `rdel` / `rget` — the CRDT RGA sequence (DS0 increment 34)
+
+Every CRDT so far is **unordered** — a set, a counter, a register, a map. The **RGA** (replicated
+growable array) is the first *ordered* one: a sequence, in which any node can insert at any position
+and concurrent inserts converge to **one** deterministic order with no duplication. That is the exact
+property collaborative text editors (Google Docs, Figma) need, and the reason CRDTs are the standard
+foundation for them.
+
+The trick is to give each element a stable identity instead of a position (positions shift as others
+edit). Each element carries a unique id `(seq, owner)` and a `parent` id — the id of the element it was
+inserted *after* (or `RGA_ROOT = (0, "")` for the head). The visible order is a depth-first traversal
+of the element forest where siblings (same parent) are ordered by id **descending** — the RGA rule that
+a *later* insert at the same anchor lands immediately after it. `rins n list i val` resolves the visible
+position `i` to an anchor id and creates a new element; `rdel n list i` tombstones the i-th visible
+element (it leaves the sequence but keeps its position as an anchor for its children — delete preserves
+structure); `rget` reads the visible values concatenated.
+
+The join is **set union** of the elements and tombstones — the same lattice join the OR-Set uses. The
+key insight is that the *order is a pure function of the element set*: any two nodes holding the same
+elements derive the same sequence, deterministically, by the same traversal. So convergence is free
+once the sets converge:
+
+```
+rins n0 l 0 a; anti_entropy n3          # 'a' present cluster-wide
+partition n0 n1 n2 | n3 n4
+rins n0 l 1 b                           # majority inserts 'b' after 'a'  (id (2, n0))
+rins n3 l 1 c                           # minority inserts 'c' after 'a'  (id (1, n3)) — concurrent
+heal; gossip n0 n3; rget n3 l           # ("ok","abc") — BOTH nodes derive the SAME order, no dup
+```
+
+`rins`/`rdel` are node-local and the merge is a coordinator-level read of the medium, so Tier-A and
+Tier-B compute byte-identical deltas. The `rga_elems`/`rga_tombs` maps join `cluster_view`, are omitted
+from the canonical form until the first list op (purely additive over increment 33), and the
+metamorphic tier checks every element is held/owned by a known node with a positive sequence and a
+ROOT-or-known parent. ED41 ([`experiments/ed41.py`](../src/verisim/experiments/ed41.py)) pins both
+panels (build + insert/delete + deterministic-concurrent-insert + always-available; gossip/anti_entropy
+convergence + idempotence) with Tier-B agreeing on every transition.
 
 ## 4. The delta and the `apply == oracle` invariant
 

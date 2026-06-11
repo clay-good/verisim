@@ -1763,7 +1763,13 @@ names) with the LWW-register (governing each field's value), so `mput`/`mget`/`m
 where a concurrent field-update survives a concurrent field-remove (add-wins presence) while a field's
 value resolves by LWW — the in-CRDT-layer instance of the whole program's thesis that a faithful
 composite is a composition of faithful parts, with the OR-Set union and LWW max joins reused verbatim
-and converging independently.
+and converging independently. **And the RGA adds the one CRDT category none of the others cover — an
+*ordered* sequence** (ED41): `rins`/`rdel`/`rget` is the replicated growable array, the basis of
+collaborative text, where each element has a stable id `(seq, owner)` and a `parent` (the element it
+was inserted after) so the visible order is a pure function of the element set — and therefore the
+**set-union** join (the same lattice join the OR-Set uses) makes concurrent inserts at the same
+position converge to **one** deterministic order with no duplication on every node, the exact property
+Google Docs / Figma are built on.
 Every
 one of these is additive (omitted from the canonical form until first used, so all prior goldens/hashes
 hold) and validated bit-for-bit against the autonomous-actor Tier-B execution.
@@ -2262,10 +2268,10 @@ python -m verisim.experiments.ed16 --config configs/ed16.json \
     --out figures/ed16.csv --plot figures/ed16.png  # read-committed isolation: lost update + its price (DS0 incr 9)
 python -m verisim.experiments.ed17 --config configs/ed17.json \
     --out figures/ed17.csv --plot figures/ed17.png  # read-uncommitted isolation: dirty read + black-box recovery (DS0 incr 10)
-# DS0 increments 11–33 (ED18–ED40): the complete §3.4 fault grammar (drop/delay/reorder/clock_skew +
+# DS0 increments 11–34 (ED18–ED41): the complete §3.4 fault grammar (drop/delay/reorder/clock_skew +
 # anti_entropy/gossip), the Raft-subset consensus core (elect/propose/step_down/lease/lread/read_index/
 # append/membership), the FIFO queue, the deploy + config_push admin ops, the embedded SPEC-6 host, the
-# tombstone delete, the atomic counter, and the CRDT counter/set/register/map family — see reproduce.sh
+# tombstone delete, the atomic counter, and the CRDT counter/set/register/map/sequence family — see below
 python -m verisim.experiments.ed31 --config configs/ed31.json \
     --out figures/ed31.csv --plot figures/ed31.png  # config push: leader-committed config + divergence (DS0 incr 24)
 python -m verisim.experiments.ed32 --config configs/ed32.json \
@@ -2286,6 +2292,8 @@ python -m verisim.experiments.ed39 --config configs/ed39.json \
     --out figures/ed39.csv --plot figures/ed39.png  # CRDT LWW-register: Lamport-ordered, deterministic (DS0 incr 32)
 python -m verisim.experiments.ed40 --config configs/ed40.json \
     --out figures/ed40.csv --plot figures/ed40.png  # CRDT OR-Map: a CRDT of CRDTs (OR-Set ∘ LWW) (DS0 incr 33)
+python -m verisim.experiments.ed41 --config configs/ed41.json \
+    --out figures/ed41.csv --plot figures/ed41.png  # CRDT RGA: the first ordered CRDT (a sequence) (DS0 incr 34)
 ```
 
 The run-records are git-ignored (regenerable); the figures and their CSVs are

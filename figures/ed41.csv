@@ -1,0 +1,9 @@
+panel,metric,value,detail
+rga,build_abc,1.0000,over_3_clusters
+rga,insert_delete,1.0000,middle_insert_and_delete
+rga,concurrent_converges,1.0000,same_order_both_inserts
+rga,always_available,1.0000,minority_rins_acked_AP
+converge,gossip,1.0000,epidemic_all_nodes_same_seq
+converge,anti_entropy,1.0000,all_nodes_same_seq
+converge,idempotent,1.0000,second_gossip_unchanged
+tier_b,all,1.0000,steps=64

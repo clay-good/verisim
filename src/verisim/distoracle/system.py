@@ -74,6 +74,7 @@ from verisim.distoracle.reference import (
     _mvreg_merge_edits,
     _ormap_merge_edits,
     _orset_merge_edits,
+    _rga_merge_edits,
     add_replica_edits,
     append_edits,
     causal_deps,
@@ -99,8 +100,11 @@ from verisim.distoracle.reference import (
     mvget_edits,
     mvput_edits,
     propose_edits,
+    rdel_edits,
     read_index_edits,
     remove_replica_edits,
+    rget_edits,
+    rins_edits,
     sadd_edits,
     smembers_edits,
     srem_edits,
@@ -304,6 +308,14 @@ class SystemDistOracle:
             return mdel_edits(state, action, self.config)
         if name == "mkeys":
             return mkeys_edits(state, action, self.config)
+        if name == "rins":
+            # The CRDT RGA ops (DS0 incr 34) are purely node-local (insert/tombstone in the node's
+            # own copy), deterministic, always available; the set-union join is coordinator-level.
+            return rins_edits(state, action, self.config)
+        if name == "rdel":
+            return rdel_edits(state, action, self.config)
+        if name == "rget":
+            return rget_edits(state, action, self.config)
         ev = self._event(state, action)
         if name in ("put", "cas", "delete", "incr"):
             return self._write(state, action, ev)
@@ -689,6 +701,9 @@ class SystemDistOracle:
         om_edits = _ormap_merge_edits(state, [node], reachable)
         edits.extend(om_edits)
         repaired += len(om_edits)
+        rga_edits = _rga_merge_edits(state, [node], reachable)
+        edits.extend(rga_edits)
+        repaired += len(rga_edits)
         value = str(repaired)
         edits.append(SetResult("repaired", value))
         return edits, "repaired", value

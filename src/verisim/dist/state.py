@@ -37,6 +37,11 @@ if TYPE_CHECKING:
 # value vocab, so it never collides with a real value; the metamorphic tier admits it explicitly.
 TOMBSTONE = "__deleted__"
 
+# The RGA head anchor (DS0 increment 34): the sentinel ``parent`` id of an element inserted at the
+# front of a list. Real element ids are ``(seq >= 1, owner)``, so ``(0, "")`` sorts below all of them
+# and is never a real element — only ever a parent reference.
+RGA_ROOT: tuple[int, str] = (0, "")
+
 
 @dataclass(frozen=True)
 class ReplicaState:
@@ -334,6 +339,24 @@ class DistributedState:
     ormap_fields: dict[tuple[str, str], frozenset[tuple[str, str, int]]] = field(default_factory=dict)
     ormap_tombs: dict[tuple[str, str], frozenset[tuple[str, int]]] = field(default_factory=dict)
     ormap_vals: dict[tuple[tuple[str, str], str], tuple[str, int, str]] = field(default_factory=dict)
+    # The CRDT replicated growable array (DS0 increment 34, `rins`/`rdel`/`rget`): the first **ordered**
+    # CRDT — a sequence, the basis of collaborative text (Google Docs / Figma). Where the set/counter/
+    # register/map types are unordered, the RGA maintains a *list* in which any node can insert at any
+    # position and concurrent inserts converge to **one** deterministic order with no duplication — the
+    # property that makes collaborative editing work. Each element carries a unique id `(seq, owner)`
+    # and a `parent` id (the element it was inserted *after*, or `ROOT` for the head); the visible
+    # sequence is a depth-first traversal where siblings (same parent) are ordered by id **descending**
+    # (a later insert at the same anchor appears immediately after it — the RGA rule). `rins n list i v`
+    # inserts `v` after the i-th visible element (i=0 = head); `rdel n list i` tombstones the i-th
+    # visible element (deletes preserve structure — a tombstone is still an anchor); `rget` reads the
+    # visible sequence concatenated. The join is **set union** of the elements + tombstones (like the
+    # OR-Set), and because the order is a pure function of the element set, every node with the same set
+    # derives the same sequence. `rga_elems` maps `(list, holder)` → `holder`'s `(seq, owner, value,
+    # pseq, powner)` elements; `rga_tombs` → its deleted `(seq, owner)` ids. Empty by default and
+    # omitted from the canonical form (purely additive over increment 33).
+    rga_elems: dict[tuple[str, str], frozenset[tuple[int, str, str, int, str]]] = field(
+        default_factory=dict)
+    rga_tombs: dict[tuple[str, str], frozenset[tuple[int, str]]] = field(default_factory=dict)
     # The embedded SPEC-6 host inside each node (DS0 increment 23, `host`): a per-node `HostState`
     # (process table + per-process fd tables + the embedded v0 filesystem), so a cluster node is not
     # just a bag of KV replicas but a real host running processes — the compositional vision SPEC-7
@@ -406,6 +429,8 @@ class DistributedState:
             ormap_fields=dict(self.ormap_fields),
             ormap_tombs=dict(self.ormap_tombs),
             ormap_vals=dict(self.ormap_vals),
+            rga_elems=dict(self.rga_elems),
+            rga_tombs=dict(self.rga_tombs),
             hosts={node: h.copy() for node, h in self.hosts.items()},
             lease_until=self.lease_until,
         )
@@ -514,6 +539,44 @@ class DistributedState:
                 if owner == node]
         seqs += [seq for (owner, seq) in self.ormap_tombs.get((mapname, node), frozenset())
                  if owner == node]
+        return (max(seqs) + 1) if seqs else 1
+
+    def rga_entries(self, list_name: str, node: str) -> list[tuple[tuple[int, str], str, bool]]:
+        """``node``'s ordered view of RGA ``list_name`` (DS0 incr 34): ``(elem_id, value, visible)``.
+
+        The visible sequence is a depth-first traversal of the element forest rooted at ``RGA_ROOT``,
+        with siblings (same parent) ordered by ``elem_id = (seq, owner)`` **descending** — the RGA rule
+        that a later insert at the same anchor lands immediately after it. Tombstoned elements are
+        emitted as ``visible=False`` (they keep their position as anchors for their children). A pure
+        function of the element/tombstone set, so every node holding the same set derives the same order.
+        """
+        elems = self.rga_elems.get((list_name, node), frozenset())
+        tombs = self.rga_tombs.get((list_name, node), frozenset())
+        value_of: dict[tuple[int, str], str] = {}
+        children: dict[tuple[int, str], list[tuple[int, str]]] = {}
+        for (seq, owner, value, pseq, powner) in elems:
+            eid = (seq, owner)
+            value_of[eid] = value
+            children.setdefault((pseq, powner), []).append(eid)
+        for kids in children.values():
+            kids.sort(reverse=True)  # siblings by (seq, owner) descending
+        out: list[tuple[tuple[int, str], str, bool]] = []
+        stack = list(reversed(children.get(RGA_ROOT, [])))  # pre-order: leftmost popped first
+        while stack:
+            eid = stack.pop()
+            out.append((eid, value_of[eid], eid not in tombs))
+            stack.extend(reversed(children.get(eid, [])))
+        return out
+
+    def rga_visible(self, list_name: str, node: str) -> list[tuple[tuple[int, str], str]]:
+        """``node``'s visible (non-tombstoned) RGA elements in order — ``(elem_id, value)`` (incr 34)."""
+        return [(eid, val) for (eid, val, vis) in self.rga_entries(list_name, node) if vis]
+
+    def rga_next_seq(self, list_name: str, node: str) -> int:
+        """The next unique element sequence for ``node``'s own inserts on RGA ``list_name`` (incr 34)."""
+        seqs = [seq for (seq, owner, _v, _ps, _po) in self.rga_elems.get((list_name, node),
+                                                                         frozenset())
+                if owner == node]
         return (max(seqs) + 1) if seqs else 1
 
     def group_of(self, node: str) -> frozenset[str]:

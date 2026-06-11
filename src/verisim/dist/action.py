@@ -23,6 +23,9 @@ workload and the fault/time medium (the consensus/admin family arrives with the 
     mget <node> <map> <field>       # client: read an OR-Map field (its value, or empty if absent)
     mdel <node> <map> <field>       # client: CRDT OR-Map field remove (observed-remove; add-wins)
     mkeys <node> <map>              # client: read an OR-Map's present field names
+    rins <node> <list> <i> <val>    # client: CRDT RGA insert val after the i-th visible elem (0=head)
+    rdel <node> <list> <i>          # client: CRDT RGA delete the i-th visible element (tombstone)
+    rget <node> <list>              # client: read a CRDT RGA sequence (visible values concatenated)
     advance <dt>                    # time: +<dt> clock; deliver in-flight msgs now due & reachable
     partition <nodes> | <nodes>     # fault: split the network into groups (| separates groups)
     heal                            # fault: remove all partitions (one fully-connected group)
@@ -230,6 +233,16 @@ removes the field (tombstoning the dots ``n`` saw); ``mget`` reads a present fie
 the **OR-Set union** of the presence halves plus the **LWW max** of each field's value, so a
 concurrent ``mput`` survives a concurrent ``mdel`` (add-wins field presence) while a field's value
 resolves by last-writer-wins — composition demonstrated within the CRDT layer (ED40).
+``rins``/``rdel``/``rget`` (DS0 increment 34) are the **CRDT RGA** (replicated growable array) — the
+first **ordered** CRDT, a sequence, the basis of collaborative text. Each element has a unique id
+``(seq, owner)`` and a ``parent`` id (the element it was inserted *after*, or ``RGA_ROOT`` for the
+head); the visible order is a depth-first traversal where siblings (same parent) are ordered by id
+**descending** (a later insert at the same anchor lands immediately after it). ``rins n list i val``
+inserts ``val`` after the i-th visible element (``i=0`` = head), ``rdel n list i`` tombstones the
+i-th visible element (deletes preserve structure — a tombstone is still an anchor), ``rget`` reads
+the visible sequence concatenated. The join is **set union** of the elements + tombstones, and
+because the order is a pure function of the element set, **concurrent inserts converge to one
+deterministic order on every node** — the property that makes collaborative editing work (ED41).
 """
 
 from __future__ import annotations
@@ -258,6 +271,9 @@ _ARITY: dict[str, int | None] = {
     "mget": 3,  # node map field  -- read an OR-Map field's value (DS0 incr 33)
     "mdel": 3,  # node map field  -- CRDT OR-Map field observed-remove (add-wins; DS0 incr 33)
     "mkeys": 2,  # node map  -- read an OR-Map's present field names (DS0 incr 33)
+    "rins": 4,  # node list i val  -- CRDT RGA insert after the i-th visible elem (DS0 incr 34)
+    "rdel": 3,  # node list i  -- CRDT RGA delete the i-th visible element (DS0 incr 34)
+    "rget": 2,  # node list  -- read a CRDT RGA sequence (visible values concatenated; incr 34)
     "advance": 1,  # dt
     "partition": None,  # <nodes> | <nodes> [| ...]
     "host": None,  # <node> <syscall...>  -- a SPEC-6 host syscall on <node>'s host (DS0 incr 23)
@@ -297,7 +313,7 @@ _ARITY: dict[str, int | None] = {
 CLIENT_OPS = frozenset({
     "put", "get", "cas", "delete", "incr", "cincr", "cdecr", "cget",
     "sadd", "srem", "smembers", "mvput", "mvget", "lwwput", "lwwget",
-    "mput", "mget", "mdel", "mkeys",
+    "mput", "mget", "mdel", "mkeys", "rins", "rdel", "rget",
     "begin", "tget", "tput", "commit", "abort", "enqueue", "dequeue",
 })
 TXN_OPS = frozenset({"begin", "tget", "tput", "commit", "abort"})

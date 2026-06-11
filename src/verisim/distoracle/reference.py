@@ -61,11 +61,13 @@ from verisim.dist.delta import (
     ProtocolStep,
     QueueSet,
     ReplicaWrite,
+    RGAInsert,
+    RGATomb,
     SetResult,
     VersionSet,
     apply,
 )
-from verisim.dist.state import TOMBSTONE, DistributedState, LogEntry, Message
+from verisim.dist.state import RGA_ROOT, TOMBSTONE, DistributedState, LogEntry, Message
 from verisim.dist.txn import txn_step
 from verisim.distoracle.base import DistStepResult
 from verisim.host.action import parse_host_action
@@ -199,10 +201,12 @@ def gossip_edits(
     edits.extend(_lwwreg_merge_edits(state, [a, b], [a, b]))
     # The CRDT OR-Map join (incr 33): the OR-Set presence union + the per-field LWW max.
     edits.extend(_ormap_merge_edits(state, [a, b], [a, b]))
+    # The CRDT RGA join (incr 34): the set-union of the sequence elements + tombstones.
+    edits.extend(_rga_merge_edits(state, [a, b], [a, b]))
     synced = sum(1 for e in edits
                  if isinstance(e, (ReplicaWrite, GCounterSet, NCounterSet, ORSetAdd, ORSetTomb,
                                    MVRegWrite, MVRegTomb, LWWRegSet, LamportSet,
-                                   ORMapField, ORMapTomb, ORMapVal)))  # all moves
+                                   ORMapField, ORMapTomb, ORMapVal, RGAInsert, RGATomb)))  # moves
     value = str(synced)
     return [*edits, SetResult("gossiped", value)], "gossiped", value
 
@@ -543,6 +547,95 @@ def mkeys_edits(
     if not state.is_up(node):
         return [SetResult("unavailable", "")], "unavailable", ""
     val = "{" + ",".join(state.ormap_keys(mapname, node)) + "}"
+    return [SetResult("ok", val)], "ok", val
+
+
+def _rga_merge_edits(
+    state: DistributedState, into: list[str], among: list[str]
+) -> list[DistEdit]:
+    """**Set-union** join of the CRDT RGA sequences (DS0 incr 34).
+
+    For each list, each node in ``into`` adopts the union of the elements and tombstones held by any
+    node in ``among`` (emitting ``RGAInsert``/``RGATomb`` per missing one). Union is commutative,
+    associative, idempotent, and the visible order is a pure function of the element set — so every
+    node converges to the same set and so the same sequence. A no-op when no RGA list is used.
+    """
+    edits: list[DistEdit] = []
+    lists = {ln for (ln, _h) in state.rga_elems} | {ln for (ln, _h) in state.rga_tombs}
+    for ln in sorted(lists):
+        union_elems: set[tuple[int, str, str, int, str]] = set()
+        union_tombs: set[tuple[int, str]] = set()
+        for h in among:
+            union_elems |= state.rga_elems.get((ln, h), frozenset())
+            union_tombs |= state.rga_tombs.get((ln, h), frozenset())
+        for holder in into:
+            have_e = state.rga_elems.get((ln, holder), frozenset())
+            for seq, owner, value, pseq, powner in sorted(union_elems - have_e):
+                edits.append(RGAInsert(ln, holder, seq, owner, value, pseq, powner))
+            have_t = state.rga_tombs.get((ln, holder), frozenset())
+            for seq, owner in sorted(union_tombs - have_t):
+                edits.append(RGATomb(ln, holder, seq, owner))
+    return edits
+
+
+def rins_edits(
+    state: DistributedState, action: DistAction, config: DistConfig
+) -> tuple[DistDelta, str, str]:
+    """``rins node list i val``: CRDT RGA insert (DS0 increment 34, the ordered sequence).
+
+    Insert ``val`` so it lands immediately after the **i-th visible element** (``i=0`` = the head,
+    anchored at ``RGA_ROOT``; ``i`` beyond the end appends after the last element). The new element
+    gets a unique id ``(seq, node)`` and records its anchor's id as its ``parent`` — so the visible
+    order (a DFS with siblings by id descending) is a pure function of the element set, so
+    concurrent inserts at the same anchor converge to one deterministic order. Purely node-local, so
+    **always available** even partitioned-alone. Deterministic, so Tier-A ≡ Tier-B. A crashed node
+    is ``unavailable``. Reports the inserted value.
+    """
+    node, list_name, i_str, val = action.args[0], action.args[1], action.args[2], action.args[3]
+    if not state.is_up(node):
+        return [SetResult("unavailable", "")], "unavailable", ""
+    visible = state.rga_visible(list_name, node)
+    i = max(0, min(int(i_str), len(visible)))  # clamp into [0, len]; i=0 = head
+    pseq, powner = RGA_ROOT if i == 0 else visible[i - 1][0]
+    seq = state.rga_next_seq(list_name, node)
+    edit = RGAInsert(list_name, node, seq, node, val, pseq, powner)
+    return [edit, SetResult("ok", val)], "ok", val
+
+
+def rdel_edits(
+    state: DistributedState, action: DistAction, config: DistConfig
+) -> tuple[DistDelta, str, str]:
+    """``rdel node list i``: CRDT RGA delete (incr 34) — tombstone the i-th visible element.
+
+    Tombstones the element at visible position ``i`` (``i=1`` = the first element), so it leaves the
+    visible sequence but keeps its position as an anchor for its children (delete preserves
+    structure). An out-of-range ``i`` is a no-op (``not_found``). Node-local (always available).
+    Reports the deleted value.
+    """
+    node, list_name, i_str = action.args[0], action.args[1], action.args[2]
+    if not state.is_up(node):
+        return [SetResult("unavailable", "")], "unavailable", ""
+    visible = state.rga_visible(list_name, node)
+    i = int(i_str)
+    if i < 1 or i > len(visible):
+        return [SetResult("not_found", "")], "not_found", ""
+    (seq, owner), value = visible[i - 1]
+    return [RGATomb(list_name, node, seq, owner), SetResult("ok", value)], "ok", value
+
+
+def rget_edits(
+    state: DistributedState, action: DistAction, config: DistConfig
+) -> tuple[DistDelta, str, str]:
+    """``rget node list``: read a CRDT RGA sequence (DS0 increment 34) — the visible values joined.
+
+    The concatenation of the visible (non-tombstoned) element values, in order. ``node``'s view;
+    a later join reconciles by union, so concurrent inserts converge to one string. A pure read;
+    ``unavailable`` if the node is down.
+    """
+    node, list_name = action.args[0], action.args[1]
+    if not state.is_up(node):
+        return [SetResult("unavailable", "")], "unavailable", ""
+    val = "".join(v for _eid, v in state.rga_visible(list_name, node))
     return [SetResult("ok", val)], "ok", val
 
 
@@ -1268,6 +1361,12 @@ class ReferenceDistOracle:
             return mdel_edits(state, action, self.config)
         if name == "mkeys":
             return mkeys_edits(state, action, self.config)
+        if name == "rins":
+            return rins_edits(state, action, self.config)
+        if name == "rdel":
+            return rdel_edits(state, action, self.config)
+        if name == "rget":
+            return rget_edits(state, action, self.config)
         if name in ("begin", "tget", "tput", "commit", "abort"):
             # The transaction family (DS0 increment 2) — shared OCC logic; a committed write's
             # async replication flows through the same in-flight medium as ``put`` (delivered by
@@ -1593,6 +1692,9 @@ class ReferenceDistOracle:
         om_edits = _ormap_merge_edits(state, [node], reachable)
         edits.extend(om_edits)
         repaired += len(om_edits)
+        rga_edits = _rga_merge_edits(state, [node], reachable)
+        edits.extend(rga_edits)
+        repaired += len(rga_edits)
         value = str(repaired)
         edits.append(SetResult("repaired", value))
         return edits, "repaired", value

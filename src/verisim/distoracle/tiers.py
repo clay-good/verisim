@@ -33,7 +33,7 @@ from dataclasses import dataclass
 
 from verisim.dist.action import DistAction
 from verisim.dist.config import DEFAULT_DIST_CONFIG, DistConfig
-from verisim.dist.state import TOMBSTONE, DistributedState
+from verisim.dist.state import RGA_ROOT, TOMBSTONE, DistributedState
 from verisim.distoracle.reference import ReferenceDistOracle
 
 # Relative tier costs (nominal; any monotone schedule preserves the cheapest-refutation policy).
@@ -204,6 +204,19 @@ class TieredOracle:
         for (_mf, holder), (_value, ts, owner) in predicted.ormap_vals.items():
             if holder not in nodeset or owner not in nodeset or ts < 1:
                 return True, f"invalid ormap value (ts={ts}, owner={owner!r}) at holder {holder!r}"
+        # The CRDT RGA (DS0 incr 34): every element is held/owned by a known node with a positive
+        # sequence, and its parent is the ROOT sentinel or another known node's id — a phantom
+        # node, a non-positive seq, or a malformed parent is impossible.
+        for (_list, holder), es in predicted.rga_elems.items():
+            for (seq, owner, _value, pseq, powner) in es:
+                if holder not in nodeset or owner not in nodeset or seq < 1:
+                    return True, f"invalid rga element ({seq},{owner!r}) at holder {holder!r}"
+                if (pseq, powner) != RGA_ROOT and (powner not in nodeset or pseq < 1):
+                    return True, f"invalid rga parent ({pseq},{powner!r}) at holder {holder!r}"
+        for (_list, holder), ts_set in predicted.rga_tombs.items():
+            for (seq, owner) in ts_set:
+                if holder not in nodeset or owner not in nodeset or seq < 1:
+                    return True, f"invalid rga tombstone ({seq},{owner!r}) at holder {holder!r}"
         return False, ""
 
     def _cycle(

@@ -101,6 +101,11 @@ def cluster_view(state: DistributedState) -> str:
                          for (o, s) in dots)
     ormap_vals = sorted((m, fld, h, v, ts, o)
                         for ((m, fld), h), (v, ts, o) in state.ormap_vals.items())
+    # The CRDT RGA sequence (DS0 incr 34): each holder's elements (with parents) + tombstoned ids.
+    rga_elems = sorted((ln, h, seq, o, v, ps, po) for (ln, h), es in state.rga_elems.items() if es
+                       for (seq, o, v, ps, po) in es)
+    rga_tombs = sorted((ln, h, seq, o) for (ln, h), ts in state.rga_tombs.items() if ts
+                       for (seq, o) in ts)
     # The embedded per-node hosts (DS0 incr 23) are observable cluster state — each node's host
     # canonical form, sorted by node. Empty for a host-free cluster, so the channel is unchanged.
     hosts = sorted((n, to_canonical_host(h)) for n, h in state.hosts.items())
@@ -125,6 +130,8 @@ def cluster_view(state: DistributedState) -> str:
         "ormap_fields": ormap_fields,
         "ormap_tombs": ormap_tombs,
         "ormap_vals": ormap_vals,
+        "rga_elems": rga_elems,
+        "rga_tombs": rga_tombs,
         "hosts": hosts,
     })
 
