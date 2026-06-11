@@ -2362,6 +2362,23 @@ trained in `E_oracle` / `E_grounded` / `E_free`, all evaluated in reality. The r
   multi-hop structural feature is drift-robust here; faithfulness would need a task keyed on the
   *fine-grained* state the model actually drifts on. A sharper boundary than the bare H74 null — the
   oracle let us *measure why* the negative holds, not just that it does.
+- **The drift profile (why the negatives hold).** Free-running the flagship beside the oracle, the
+  per-dimension drift is: **host up/down 0.000**, firewall 0.003, services 0.011, links 0.044,
+  **flows 0.252** — the model is faithful on the *control-relevant* state and drifts almost entirely
+  on *control-irrelevant flows*. That is the mechanistic root: the model is faithful where control
+  needs it.
+- **Predictive control (UA7 / H79 — REFUTED; the characterization completes).** A model-predictive
+  defender that plans by rolling its model forward `k` steps. Closed-loop predictive planning **helps
+  a lot** (containment 0.800 vs the reactive 0.558 baseline, +0.242) — but its **faithfulness is
+  irrelevant**: the faithful planner (oracle lookahead) ≡ the free planner (`M_θ` lookahead) at every
+  `k`, and identically in **open-loop** (plan the whole episode with no re-observation). The flat model
+  perfectly predicts the control lever (`host_down`, 0% drift), so a drifted model plans the same
+  actions. **The complete finding, across six formulations** (reactive, structural feature, long
+  horizon, closed- and open-loop predictive): oracle-grounded faithfulness is **structurally not
+  load-bearing for control in this domain — the model is faithful where control needs it.** The sharp
+  boundary, and the next test: faithfulness-for-control appears only where the model is *bad* at the
+  control-relevant dynamics — the host world (SPEC-6, `H_free≈5` vs the network's ≈18) is the natural
+  probe.
 
 Reproduce (CPU-local; the apparatus' smoke instances run in CI):
 
@@ -2391,6 +2408,9 @@ python -m verisim.experiments.ua_transfer --checkpoint runs/flagship/net-l --rho
 # UA6/H78 — the task-taxonomy fork (drift-robust vs drift-sensitive grounding ablation + diagnostic):
 python -m verisim.experiments.ua_taxonomy --checkpoint runs/flagship/net-l \
     --out figures/ua6_taxonomy.csv
+# UA7/H79 — predictive control (closed + open loop, faithful vs free planner vs reactive baseline):
+python -m verisim.experiments.ua_predictive --checkpoint runs/flagship/net-l \
+    --out figures/ua7_predictive.csv
 ```
 
 ## What v0 ships for others
