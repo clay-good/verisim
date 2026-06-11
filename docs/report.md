@@ -2379,6 +2379,18 @@ trained in `E_oracle` / `E_grounded` / `E_free`, all evaluated in reality. The r
   boundary, and the next test: faithfulness-for-control appears only where the model is *bad* at the
   control-relevant dynamics — the host world (SPEC-6, `H_free≈5` vs the network's ≈18) is the natural
   probe.
+- **The host fork — the cross-world law (HFL0 + host drift profile).** We froze a host flagship
+  (`H_free` = 9.25 id / 6.00 ood, `p` = 0.700 — materially *less* faithful than the network's 18.75 /
+  0.875, the harder regime the boundary predicted) and measured its drift. The result is the same
+  shape one level up: per-action the model is faithful on the discrete **structure** (exit 1.00, close
+  0.96, **fork 0.93**) and drifts on **content** (open 0.55, **write 0.36**); free-running, the
+  **process set is 0.000 drift** while file content drifts ~30% (fds 0.258, fs 0.322). **The
+  cross-world law:** *the flat world-model learns discrete structure faithfully (network reachability /
+  host process-tree) and drifts on content (network flows / host file-writes).* Control tasks key on
+  structure, so they are drift-robust in **both** worlds — which is why faithfulness is not
+  load-bearing for structural control. The predicted positive side of the boundary is a **content-keyed
+  task**: file integrity, keyed on `write`/`fs`, where the host model drifts ~30–64% — the precise
+  next experiment.
 
 Reproduce (CPU-local; the apparatus' smoke instances run in CI):
 
@@ -2411,6 +2423,11 @@ python -m verisim.experiments.ua_taxonomy --checkpoint runs/flagship/net-l \
 # UA7/H79 — predictive control (closed + open loop, faithful vs free planner vs reactive baseline):
 python -m verisim.experiments.ua_predictive --checkpoint runs/flagship/net-l \
     --out figures/ua7_predictive.csv
+# HFL0 — the HOST flagship (the harder world, H_free~9 vs network ~18):
+python -m verisim.experiments.host_flagship --out runs/flagship/host-l
+# host drift profile — the cross-world law (faithful on structure, drifts on file content):
+python -m verisim.experiments.host_drift --checkpoint runs/flagship/host-l \
+    --out figures/host_drift.json
 ```
 
 ## What v0 ships for others
