@@ -232,6 +232,46 @@ def test_mkdir_on_a_dead_pid_fails() -> None:
     assert oracle.step(dead, parse_host_action("mkdir 1 /d")).exit_code == EXIT_ERR  # pid 1 zombie
 
 
+def test_chdir_makes_relative_paths_resolve_against_the_cwd() -> None:
+    # `chdir` moves a process's cwd so a subsequent *relative* open/mkdir resolves against it: after
+    # `chdir /d` an `open f` opens `/d/f`, not `/f` — the navigation `mkdir` made meaningful.
+    oracle = ReferenceHostOracle()
+    s = _run(oracle, HostState.initial(), ["mkdir 1 /d", "chdir 1 /d"])
+    assert s.procs[1].cwd == "/d"
+    # a relative open now lands in /d; write+read round-trips through the relative path
+    s = _run(oracle, s, ["open 1 f", "write 1 0 hi"])
+    assert "/d/f" in s.fs.fs  # the relative `open f` resolved against cwd /d
+    assert oracle.step(s, parse_host_action("read 1 0")).stdout == "hi"
+    # chdir is relative too: `chdir e` from /d (after making /d/e) lands at /d/e, not /e
+    s = _run(oracle, s, ["mkdir 1 e", "chdir 1 e"])
+    assert s.procs[1].cwd == "/d/e"
+
+
+def test_chdir_to_a_file_or_missing_path_fails() -> None:
+    oracle = ReferenceHostOracle()
+    made = _run(oracle, HostState.initial(), ["open 1 /f", "write 1 0 x"])  # /f is a file
+    assert oracle.step(made, parse_host_action("chdir 1 /f")).exit_code == EXIT_ERR  # ENOTDIR
+    assert oracle.step(made, parse_host_action("chdir 1 /nope")).exit_code == EXIT_ERR  # ENOENT
+    assert oracle.step(made, parse_host_action("chdir 1 /")).exit_code == EXIT_OK  # root always ok
+
+
+def test_fork_child_inherits_parent_cwd() -> None:
+    # Standard fork semantics: a child starts in the parent's cwd (computed in `apply`, so the
+    # ProcSpawn edit — and the learned model's token for it — is unchanged).
+    oracle = ReferenceHostOracle()
+    s = _run(oracle, HostState.initial(), ["mkdir 1 /d", "chdir 1 /d", "fork 1"])
+    assert s.procs[2].cwd == "/d"  # the child inherits /d
+    # the child's later chdir does not move the parent (per-process cwd)
+    s = _run(oracle, s, ["mkdir 2 e", "chdir 2 e"])
+    assert s.procs[2].cwd == "/d/e" and s.procs[1].cwd == "/d"
+
+
+def test_chdir_on_a_dead_pid_fails() -> None:
+    oracle = ReferenceHostOracle()
+    dead = _run(oracle, HostState.initial(), ["exit 1 0"])
+    assert oracle.step(dead, parse_host_action("chdir 1 /")).exit_code == EXIT_ERR  # pid 1 zombie
+
+
 def test_oracle_is_pure_and_deterministic() -> None:
     oracle = ReferenceHostOracle()
     cmds = ["fork 1", "open 2 /a", "write 2 0 hello", "setuid 1 1000", "exit 2 0"]

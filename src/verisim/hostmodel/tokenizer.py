@@ -181,10 +181,10 @@ def _edit_ids(edit: HostEdit, vocab: HostVocab) -> list[int]:
         return _fs_edit_ids(edit, vocab)
     if isinstance(edit, SetExit):
         return [vocab.id("<set_exit>"), _exit_id(edit.exit_code, vocab)]
-    # ``ProcReap`` (the ``wait`` op, HC0 increment +) has no token here yet: the learned-model
-    # coverage of the post-HC0-increment-1 syscalls is the deferred GPU arm (exactly as the dist
-    # model covers only the base KV+fault ops), so the data factory never produces it. Raise rather
-    # than silently mis-encoding it as ``<set_exit>``.
+    # ``ProcReap`` (``wait``) and ``CwdChange`` (``chdir``) have no token here yet: the
+    # learned-model coverage of the post-HC0-increment-1 syscalls is the deferred GPU arm (exactly
+    # as the dist model covers only the base KV+fault ops), so the data factory never produces them.
+    # Raise rather than silently mis-encoding them as ``<set_exit>``.
     raise ValueError(f"host edit {type(edit).__name__} has no model token (coverage deferred)")
 
 

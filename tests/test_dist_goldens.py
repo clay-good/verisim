@@ -955,8 +955,8 @@ def test_golden_host_fork_runs_on_the_nodes_embedded_host():
     }
     n0_host = {
         "procs": [
-            {"pid": 1, "ppid": 0, "state": "RUNNING", "uid": 0, "exit_code": None},
-            {"pid": 2, "ppid": 1, "state": "RUNNING", "uid": 0, "exit_code": None},
+            {"pid": 1, "ppid": 0, "state": "RUNNING", "uid": 0, "exit_code": None, "cwd": "/"},
+            {"pid": 2, "ppid": 1, "state": "RUNNING", "uid": 0, "exit_code": None, "cwd": "/"},
         ],
         "fds": [],
         "fs": boot_fs,

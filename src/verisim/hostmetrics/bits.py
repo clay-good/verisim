@@ -22,11 +22,13 @@ from collections.abc import Sequence
 
 from verisim.host.delta import (
     CredChange,
+    CwdChange,
     FdClose,
     FdOpen,
     FsDelta,
     HostEdit,
     ProcExit,
+    ProcReap,
     ProcSpawn,
     SetExit,
     edit_to_dict,
@@ -37,8 +39,9 @@ _BITS_PER_SYMBOL = math.log2(64)  # nominal; any positive constant preserves the
 
 
 def _subsystem_of(edit: HostEdit) -> str:
-    """Which subsystem an edit corrects (§5.4). ``CredChange`` is process (privilege) state."""
-    if isinstance(edit, (ProcSpawn, ProcExit, CredChange)):
+    """Which subsystem an edit corrects (§5.4). ``CredChange`` (uid) and ``CwdChange`` (cwd) are
+    per-process scalars, and ``ProcReap`` is a process-table change -- all process state."""
+    if isinstance(edit, (ProcSpawn, ProcExit, ProcReap, CredChange, CwdChange)):
         return "proc"
     if isinstance(edit, (FdOpen, FdClose)):
         return "fd"

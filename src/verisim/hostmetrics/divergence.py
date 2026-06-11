@@ -38,7 +38,7 @@ def facts_by_subsystem(state: HostState) -> dict[str, set[Fact]]:
     the process facts, so including it would double-penalize a mispredicted ``fork``.
     """
     proc: set[Fact] = {
-        ("proc", p.pid, p.ppid, p.state, p.uid, p.exit_code) for p in state.procs.values()
+        ("proc", p.pid, p.ppid, p.state, p.uid, p.exit_code, p.cwd) for p in state.procs.values()
     }
     fd: set[Fact] = {("fd", pid, fd, entry.path) for (pid, fd), entry in state.fds.items()}
     fs: set[Fact] = {("fs", *fact) for fact in fs_state_facts(state.fs)}

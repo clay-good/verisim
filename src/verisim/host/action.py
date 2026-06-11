@@ -15,6 +15,7 @@ pid** explicitly (the scheduler/"current process" is a later HC increment). The 
     close <pid> <fd>               # files: release <fd>
     dup <pid> <fd>                 # files: duplicate <fd> to the smallest free fd (same path)
     mkdir <pid> <path>             # files: create a directory (delegated to the FS oracle)
+    chdir <pid> <path>             # files: change <pid>'s cwd (relative paths resolve against it)
 
 ``fork``/``exit``/``kill``/``wait`` are the long-range, branching, compounding-state process core
 (SPEC-6 §3.2): ``fork`` spawns, ``exit``/``kill`` zombify (``kill`` **permission-gated** like a
@@ -27,10 +28,12 @@ trip and ``dup`` **aliasing** an fd (two fds onto one path, the shared-file coup
 model leans on). ``dup`` reuses the ``FdOpen`` delta -- no new edit type (the ``kill`` pattern).
 ``mkdir`` adds **directory structure** to the embedded fs -- it delegates to the v0 ``mkdir`` (a
 ``Create(path, Dir())`` wrapped in ``FsDelta``, the ``write`` pattern, no new edit type), so a later
-``write`` into the new subdir succeeds (the parent must be a directory) -- the prerequisite that
-makes a per-process ``chdir`` meaningful (a dir to cd into beyond root). Without a per-fd offset
-(a later increment), ``read`` returns the file's whole content, read-only. Sockets, IPC, ``lseek``,
-``chdir`` + per-process cwd (now unblocked by ``mkdir``), the scheduler are later increments.
+``write`` into the new subdir succeeds (the parent must be a directory). ``chdir`` makes that
+directory structure *navigable*: it sets a process's **current working directory**, so a subsequent
+relative ``open``/``mkdir`` resolves against the cwd rather than ``/`` (a ``CwdChange`` edit, the
+``setuid``/``CredChange`` pattern; a ``fork`` child inherits the parent's cwd). Without a per-fd
+offset (a later increment), ``read`` returns the file's whole content, read-only. Sockets, IPC,
+``lseek``, the scheduler (``yield``/``advance``) are later increments.
 """
 
 from __future__ import annotations
@@ -49,6 +52,7 @@ _ARITY: dict[str, int] = {
     "close": 2,  # pid fd
     "dup": 2,  # pid fd
     "mkdir": 2,  # pid path
+    "chdir": 2,  # pid path
 }
 
 

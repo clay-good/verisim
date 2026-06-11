@@ -249,6 +249,37 @@ def test_host_mkdir_tier_a_equals_tier_b() -> None:
         sa, sb = ra.state, rb.state
 
 
+def test_host_chdir_resolves_relative_paths_per_node() -> None:
+    # `chdir` composes into SPEC-7 via `host`: a process on n0's host moves its cwd, so a later
+    # *relative* open resolves against it — the whole stack (cluster -> host -> v0 FS) three deep.
+    config = _config()
+    oracle = ReferenceDistOracle(config)
+    s = _run(oracle, config, [
+        "host n0 mkdir 1 /d", "host n0 chdir 1 /d", "host n0 open 1 f", "host n0 write 1 0 rel",
+    ])
+    assert oracle.step(s, parse_dist_action("host n0 read 1 0")).value == "rel"  # /d/f reads back
+    # a crashed node's host is unavailable — the cross-layer crash linkage reaches `chdir`.
+    crashed = oracle.step(s, parse_dist_action("crash n0")).state
+    assert oracle.step(crashed, parse_dist_action("host n0 chdir 1 /")).status == "unavailable"
+
+
+def test_host_chdir_tier_a_equals_tier_b() -> None:
+    config = _config()
+    ref, sysb = ReferenceDistOracle(config), SystemDistOracle(config)
+    sa = sb = DistributedState.initial(config)
+    script = [
+        "host n0 mkdir 1 /d", "host n0 chdir 1 /d",  # move cwd to /d -> ok
+        "host n0 chdir 1 /nope",                      # ENOENT -> host_err
+        "host n0 open 1 f", "host n0 write 1 0 deep", # relative open resolves against /d -> ok
+    ]
+    for cmd in script:
+        a = parse_dist_action(cmd)
+        ra, rb = ref.step(sa, a), sysb.step(sb, a)
+        assert cluster_view(ra.state) == cluster_view(rb.state), cmd
+        assert (ra.status, ra.value) == (rb.status, rb.value), cmd
+        sa, sb = ra.state, rb.state
+
+
 def test_setuid_privilege_is_enforced_per_host() -> None:
     # The embedded host enforces SPEC-6 privilege: a non-root process cannot setuid (EPERM).
     config = _config()

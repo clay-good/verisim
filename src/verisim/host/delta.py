@@ -10,7 +10,7 @@ The **M1-analogue invariant** keeps the loop model-agnostic (tested in
 :mod:`tests.test_host_delta`): ``apply(state, oracle.step(s, a).delta) == oracle.step(s, a).state``
 for every transition, by construction. Delta-to-serialization round-trips. No runtime deps, no GPU.
 
-Scope (HC1, matching HC0 increment 1): process/fd/credential edits + the embedded FS delta.
+Scope (HC1, matching HC0 increment 1): process/fd/credential/cwd edits + the embedded FS delta.
 Socket/IPC/scheduler edits arrive with their syscalls in later HC increments.
 """
 
@@ -83,6 +83,21 @@ class CredChange:
 
 
 @dataclass(frozen=True)
+class CwdChange:
+    """Change a process's current working directory (``chdir``).
+
+    Parallel to :class:`CredChange` (the other per-process scalar): it rewrites one field of one
+    ``Process`` and touches nothing else. The cwd resolves a process's relative path arguments, so
+    after ``chdir /d`` an ``open f`` opens ``/d/f``. A ``fork`` child inherits its parent's cwd in
+    :func:`apply` (no field on :class:`ProcSpawn`), so the learned-model delta vocabulary is
+    unchanged -- the ``mkdir``/``dup`` "reuse, no new model token" pattern.
+    """
+
+    pid: int
+    cwd: str
+
+
+@dataclass(frozen=True)
 class FsDelta:
     """The embedded v0 filesystem delta, applied verbatim by the v0 ``apply`` (the composition)."""
 
@@ -96,7 +111,9 @@ class SetExit:
     exit_code: int
 
 
-HostEdit = ProcSpawn | ProcExit | ProcReap | FdOpen | FdClose | CredChange | FsDelta | SetExit
+HostEdit = (
+    ProcSpawn | ProcExit | ProcReap | FdOpen | FdClose | CredChange | CwdChange | FsDelta | SetExit
+)
 HostDelta = list[HostEdit]
 
 
@@ -113,13 +130,20 @@ def apply(state: HostState, delta: HostDelta) -> HostState:
     last_exit = state.last_exit
     for edit in delta:
         if isinstance(edit, ProcSpawn):
-            procs[edit.pid] = Process(pid=edit.pid, ppid=edit.ppid, state=RUNNING, uid=edit.uid)
+            # A child inherits the parent's cwd (the standard fork semantics) -- read here from the
+            # parent already in ``procs`` rather than carried on ``ProcSpawn``, so the spawn edit
+            # (and the learned model's token for it) stays unchanged. ppid 0 (init) has no parent.
+            parent = procs.get(edit.ppid)
+            procs[edit.pid] = Process(
+                pid=edit.pid, ppid=edit.ppid, state=RUNNING, uid=edit.uid,
+                cwd=parent.cwd if parent is not None else "/",
+            )
             next_pid = max(next_pid, edit.pid + 1)
         elif isinstance(edit, ProcExit):
             if edit.pid in procs:
                 procs[edit.pid] = Process(
                     pid=edit.pid, ppid=procs[edit.pid].ppid, state=ZOMBIE,
-                    uid=procs[edit.pid].uid, exit_code=edit.code,
+                    uid=procs[edit.pid].uid, exit_code=edit.code, cwd=procs[edit.pid].cwd,
                 )
                 fds = {k: v for k, v in fds.items() if k[0] != edit.pid}
         elif isinstance(edit, ProcReap):
@@ -131,7 +155,11 @@ def apply(state: HostState, delta: HostDelta) -> HostState:
         elif isinstance(edit, CredChange):
             if edit.pid in procs:
                 p = procs[edit.pid]
-                procs[edit.pid] = Process(p.pid, p.ppid, p.state, edit.uid, p.exit_code)
+                procs[edit.pid] = Process(p.pid, p.ppid, p.state, edit.uid, p.exit_code, p.cwd)
+        elif isinstance(edit, CwdChange):
+            if edit.pid in procs:
+                p = procs[edit.pid]
+                procs[edit.pid] = Process(p.pid, p.ppid, p.state, p.uid, p.exit_code, edit.cwd)
         elif isinstance(edit, FsDelta):
             fs = fs_apply(fs, edit.edits)
         elif isinstance(edit, SetExit):
@@ -156,6 +184,8 @@ def edit_to_dict(edit: HostEdit) -> dict[str, Any]:
         return {"op": "FdClose", "pid": edit.pid, "fd": edit.fd}
     if isinstance(edit, CredChange):
         return {"op": "CredChange", "pid": edit.pid, "uid": edit.uid}
+    if isinstance(edit, CwdChange):
+        return {"op": "CwdChange", "pid": edit.pid, "cwd": edit.cwd}
     if isinstance(edit, FsDelta):
         return {"op": "FsDelta", "edits": fs_delta_to_list(edit.edits)}
     return {"op": "SetExit", "exit_code": edit.exit_code}
@@ -176,6 +206,8 @@ def edit_from_dict(d: dict[str, Any]) -> HostEdit:
         return FdClose(pid=d["pid"], fd=d["fd"])
     if op == "CredChange":
         return CredChange(pid=d["pid"], uid=d["uid"])
+    if op == "CwdChange":
+        return CwdChange(pid=d["pid"], cwd=d["cwd"])
     if op == "FsDelta":
         return FsDelta(edits=fs_delta_from_list(d["edits"]))
     if op == "SetExit":

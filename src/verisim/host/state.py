@@ -9,7 +9,9 @@ fds — the factored/object-centric structure SPEC-6 §2.3 prescribes.
 
 This is the HC0-increment-1 subset: processes (``fork``/``exit``), credentials (``setuid``), and a
 per-process fd table over files (``open``/``write``/``close``), file effects delegated to the v0
-FS sub-oracle. Sockets, pipes/signals, the scheduler, per-process cwd are later HC increments
+FS sub-oracle. Each process also carries a **current working directory** (``chdir``), inherited by
+a child at ``fork`` and used to resolve relative path arguments. Sockets, pipes/signals, the
+scheduler, and a per-fd offset are later HC increments
 (:mod:`verisim.hostoracle.reference`; ``docs/host-semantics.md``). Canonicalization (sorted maps,
 v0-canonical fs) is mandatory so the divergence metric measures competence, not identifier churn
 (SPEC-6 §3.1, SPEC-3 DD-1). No runtime dependencies, no GPU.
@@ -36,6 +38,7 @@ class Process:
     state: str = RUNNING
     uid: int = 0  # 0 == root; the privilege axis (SPEC-6 §3.2)
     exit_code: int | None = None
+    cwd: str = "/"  # per-process working directory (``chdir``); a fork child inherits the parent's
 
 
 @dataclass(frozen=True)
@@ -92,7 +95,7 @@ def to_canonical_host(state: HostState) -> dict[str, Any]:
         "procs": [
             {
                 "pid": p.pid, "ppid": p.ppid, "state": p.state, "uid": p.uid,
-                "exit_code": p.exit_code,
+                "exit_code": p.exit_code, "cwd": p.cwd,
             }
             for p in sorted(state.procs.values(), key=lambda p: p.pid)
         ],
@@ -118,7 +121,7 @@ def from_canonical_host(d: dict[str, Any]) -> HostState:
     procs = {
         p["pid"]: Process(
             pid=p["pid"], ppid=p["ppid"], state=p["state"], uid=p["uid"],
-            exit_code=p["exit_code"],
+            exit_code=p["exit_code"], cwd=p.get("cwd", "/"),
         )
         for p in d["procs"]
     }

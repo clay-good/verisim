@@ -35,17 +35,18 @@ increment). A syscall on a non-`RUNNING` pid fails (`exit 1`) and leaves the sta
 
 | Syscall | Effect | Failure (`exit 1`) |
 |---|---|---|
-| `fork <pid>` | Create a child `Process(next_pid, ppid=pid, RUNNING, uid=parent.uid)`; `next_pid++`. Stdout is the child pid. | `pid` not RUNNING |
+| `fork <pid>` | Create a child `Process(next_pid, ppid=pid, RUNNING, uid=parent.uid, cwd=parent.cwd)`; `next_pid++`. The child **inherits the parent's cwd** (computed in `apply` from the parent already in the table, so `ProcSpawn` carries no cwd field). Stdout is the child pid. | `pid` not RUNNING |
 | `exit <pid> <code>` | `pid → ZOMBIE` with `exit_code = code`; **all of `pid`'s fds are released**. | `pid` not RUNNING; non-integer code |
 | `kill <pid> <target>` | `target → ZOMBIE` with `exit_code = 137` (the SIGKILL convention, `128 + 9`); **`target`'s fds are released** (reuses `ProcExit`). **Permission-gated:** permitted iff `pid` is root (`uid == 0`) or shares `target`'s uid. The killer is untouched. | `pid` not RUNNING; `target` absent or not RUNNING (ESRCH); non-root caller of a different uid (EPERM) |
 | `wait <pid> <child>` | **Reap** `child`: remove it from the process table (`ProcReap`) and report its `exit_code` as stdout. **Parent-only, non-blocking:** permitted iff `child` is a `ZOMBIE` with `ppid == pid`. Pids are **not reused** (the monotone `next_pid`). Completes the lifecycle spawn → run → die → reap, so zombies do not accumulate. | `pid` not RUNNING; `child` absent, still RUNNING, or not a child of `pid` (ECHILD) |
 | `setuid <pid> <uid>` | Set `pid`'s uid. **Root-only:** permitted iff the acting process has `uid == 0`. | `pid` not RUNNING; non-root caller (EPERM); non-integer uid |
-| `open <pid> <path>` | Bind the **smallest free** fd for `pid` to `resolve("/", path)`. Stdout is the fd number. | `pid` not RUNNING |
+| `open <pid> <path>` | Bind the **smallest free** fd for `pid` to `resolve(pid.cwd, path)` (a relative `path` resolves against the process's cwd). Stdout is the fd number. | `pid` not RUNNING |
 | `write <pid> <fd> <token>` | Resolve `(pid, fd) → path`; **delegate `write <path> <token>` to the v0 FS sub-oracle**; the fs subsystem takes the sub-oracle's next state, exit code, and stdout. | `pid` not RUNNING; `fd` not open (EBADF) |
 | `read <pid> <fd>` | Resolve `(pid, fd) → path`; **delegate `cat <path>` to the v0 FS sub-oracle**; stdout is the file's content. **Read-only** — the only bundle effect is `SetExit` (no `FsDelta`), so it closes the write/read round trip without mutating state. Without a per-fd offset (a later increment) it returns the whole content each time. | `pid` not RUNNING; `fd` not open (EBADF); path not a readable file (inherits the FS oracle's failure) |
 | `close <pid> <fd>` | Release `(pid, fd)`. | `pid` not RUNNING; `fd` not open (EBADF) |
 | `dup <pid> <fd>` | Bind the **smallest free** fd for `pid` to the **same path** as `fd` (an alias: two fds onto one file — the shared-file coupling). Stdout is the new fd number. **Reuses `FdOpen`** — no new edit type. No shared offset yet (`read` is whole-content, so the alias reads identically). | `pid` not RUNNING; `fd` not open (EBADF) |
-| `mkdir <pid> <path>` | Create a directory at `resolve("/", path)` — **delegate `mkdir` to the v0 FS sub-oracle** (a `Create(path, Dir())` wrapped in `FsDelta`, the `write` pattern — no new edit type). Adds **directory structure** to the embedded fs so a later `write` into the subdir succeeds (the parent must be a directory); the prerequisite that makes a per-process `chdir` meaningful (a dir to cd into beyond root). | `pid` not RUNNING; path exists (EEXIST); parent not a directory (ENOENT) — inheriting the FS oracle's verdict |
+| `mkdir <pid> <path>` | Create a directory at `resolve(pid.cwd, path)` — **delegate `mkdir` to the v0 FS sub-oracle** (a `Create(path, Dir())` wrapped in `FsDelta`, the `write` pattern — no new edit type). Adds **directory structure** to the embedded fs so a later `write` into the subdir succeeds (the parent must be a directory); the prerequisite that makes a per-process `chdir` meaningful (a dir to cd into beyond root). | `pid` not RUNNING; path exists (EEXIST); parent not a directory (ENOENT) — inheriting the FS oracle's verdict |
+| `chdir <pid> <path>` | Move `pid`'s **current working directory** to `resolve(pid.cwd, path)`, requiring it to be an existing **directory** in the embedded fs (a `CwdChange` — the `setuid`/`CredChange` pattern, one scalar of one process). Subsequent relative `open`/`mkdir`/`chdir` for `pid` resolve against it; other processes are unaffected (per-process cwd). Stdout is the new cwd (a `pwd`-like confirmation). | `pid` not RUNNING; target missing (ENOENT) or a file (ENOTDIR) |
 
 ## Determinism contract
 
@@ -60,7 +61,7 @@ oracle would, with the process/fd table updated by the glue.
 beats absolute-state prediction) carried up the ladder. The host delta vocabulary
 ([`verisim.host.delta`](../../src/verisim/host/delta.py)) is one edit type per subsystem:
 `ProcSpawn` / `ProcExit` / `ProcReap` (process table — spawn, zombify, reap), `FdOpen` / `FdClose` (per-process fd table), `CredChange`
-(credentials), `SetExit` (the syscall's host-level exit code), and — the composition — `FsDelta`, which
+(credentials), `CwdChange` (working directory), `SetExit` (the syscall's host-level exit code), and — the composition — `FsDelta`, which
 **wraps a v0 filesystem `Delta` verbatim** and is applied by the v0 `apply`. A `write` syscall's bundle
 delta is therefore `[FsDelta(<the v0 sub-oracle's own delta>), SetExit(...)]`: the host layer never
 reimplements file semantics, it embeds them.
@@ -117,6 +118,6 @@ scalar hides (SPEC-6 §5.4, §9).
 ## Deferred (later HC increments)
 
 `lseek` + a per-fd offset (so `read`/`dup` share a seek position rather than returning whole content),
-`chdir` + per-process cwd (now **unblocked** — `mkdir` gives a directory to cd into beyond root),
 pipes/signals (IPC), sockets (the SPEC-5 net sub-oracle), and the scheduler (`yield`/`advance`) and its
-interleaving-entropy dial. This document grows with them.
+interleaving-entropy dial. This document grows with them. (`chdir` + per-process cwd **shipped** — a
+relative `open`/`mkdir` now resolves against the process's working directory.)

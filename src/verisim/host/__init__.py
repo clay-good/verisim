@@ -7,6 +7,7 @@ from .action import HostAction, HostParseError, parse_host_action
 from .config import DEFAULT_HOST_CONFIG, HostConfig
 from .delta import (
     CredChange,
+    CwdChange,
     FdClose,
     FdOpen,
     FsDelta,
@@ -35,6 +36,7 @@ __all__ = [
     "RUNNING",
     "ZOMBIE",
     "CredChange",
+    "CwdChange",
     "FdClose",
     "FdEntry",
     "FdOpen",

@@ -16,10 +16,11 @@ delta wraps the v0 FS sub-oracle's own delta in an :class:`~verisim.host.delta.F
 from __future__ import annotations
 
 from verisim.env.action import parse_action
-from verisim.env.state import resolve
+from verisim.env.state import Dir, resolve
 from verisim.host.action import HostAction
 from verisim.host.delta import (
     CredChange,
+    CwdChange,
     FdClose,
     FdOpen,
     FsDelta,
@@ -50,7 +51,7 @@ class ReferenceHostOracle(HostOracle):
             "fork": self._fork, "exit": self._exit, "kill": self._kill, "wait": self._wait,
             "setuid": self._setuid,
             "open": self._open, "write": self._write, "read": self._read, "close": self._close,
-            "dup": self._dup, "mkdir": self._mkdir,
+            "dup": self._dup, "mkdir": self._mkdir, "chdir": self._chdir,
         }[action.name]
         delta, exit_code, stdout = handler(state, action)
         return HostStepResult(
@@ -141,7 +142,7 @@ class ReferenceHostOracle(HostOracle):
     def _open(self, state: HostState, action: HostAction) -> _Outcome:
         if not self._running(state, action.pid):
             return self._fail()
-        path = resolve("/", action.args[0])  # absolute resolution (per-process cwd is a later step)
+        path = resolve(state.procs[action.pid].cwd, action.args[0])  # relative to the process cwd
         used = {fd for (pid, fd) in state.fds if pid == action.pid}
         fd = next(i for i in range(len(used) + 1) if i not in used)  # smallest free fd
         return [FdOpen(pid=action.pid, fd=fd, path=path), SetExit(EXIT_OK)], EXIT_OK, str(fd)
@@ -219,7 +220,21 @@ class ReferenceHostOracle(HostOracle):
         # ``FsDelta`` (no new edit type). It fails (EEXIST / ENOENT) iff the path exists or its
         # parent is not a directory -- inheriting the FS oracle's verdict. Adds directory structure
         # to the host so a later ``write`` into the subdir works (the prerequisite for ``chdir``).
-        path = resolve("/", action.args[0])  # absolute resolution (per-process cwd is a later step)
+        path = resolve(state.procs[action.pid].cwd, action.args[0])  # relative to the process cwd
         fs_result = self._fs.step(state.fs, parse_action(f"mkdir {path}"))
         delta: HostDelta = [FsDelta(edits=fs_result.delta), SetExit(fs_result.exit_code)]
         return delta, fs_result.exit_code, fs_result.stdout
+
+    def _chdir(self, state: HostState, action: HostAction) -> _Outcome:
+        if not self._running(state, action.pid):
+            return self._fail()
+        # Resolve the target against the *current* cwd (so ``chdir a`` after ``chdir /d`` lands at
+        # ``/d/a``), then require it to be an existing directory in the embedded fs -- a file is
+        # ENOTDIR, a missing path is ENOENT, both reported as the host's EXIT_ERR. On success the
+        # process's cwd moves (a ``CwdChange``, the ``setuid``/``CredChange`` pattern -- one scalar
+        # of one process), and subsequent relative ``open``/``mkdir`` resolve against it. Stdout is
+        # the new cwd (a ``pwd``-like confirmation). Root ``/`` always exists, so ``chdir /`` works.
+        target = resolve(state.procs[action.pid].cwd, action.args[0])
+        if not isinstance(state.fs.fs.get(target), Dir):
+            return self._fail()
+        return [CwdChange(pid=action.pid, cwd=target), SetExit(EXIT_OK)], EXIT_OK, target
