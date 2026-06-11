@@ -20,8 +20,15 @@ from dataclasses import dataclass
 from statistics import fmean
 from typing import Any
 
-from .containment import ContainmentEnv
+from verisim.net.state import NetworkState
+
+from .containment import ContainmentEnv, DefenderAction
 from .policy import N_ACTION_FEATURES, LinearPolicy, action_features
+
+# A featurizer maps (net, compromised, candidate-action) -> a feature vector. The default is the
+# basic drift-robust featurizer; the SPEC-20 UA6 task-taxonomy fork swaps in a structural one whose
+# features depend on the multi-hop reachability the model drifts on.
+Featurizer = Callable[[NetworkState, frozenset[str], DefenderAction], list[float]]
 
 
 @dataclass(frozen=True)
@@ -48,14 +55,17 @@ class Step:
     reward: float
 
 
-def rollout(env: ContainmentEnv, policy: LinearPolicy, rng: random.Random, seed: int) -> list[Step]:
+def rollout(
+    env: ContainmentEnv, policy: LinearPolicy, rng: random.Random, seed: int,
+    featurizer: Featurizer = action_features,
+) -> list[Step]:
     """Run one episode under ``policy``; return the per-step REINFORCE records."""
     env.reset(seed)
     steps: list[Step] = []
     done = False
     while not done:
         actions = env.legal_actions()
-        feats_list = [action_features(env.net, env.compromised, a) for a in actions]
+        feats_list = [featurizer(env.net, env.compromised, a) for a in actions]
         idx = policy.sample(feats_list, rng)
         out = env.step(actions[idx])
         steps.append(Step(feats_list, idx, out.reward))
@@ -75,15 +85,18 @@ def _returns(rewards: list[float], gamma: float) -> list[float]:
 
 def reinforce(
     make_env: Callable[[], ContainmentEnv], config: TrainConfig | None = None,
-    *, policy: LinearPolicy | None = None,
+    *, policy: LinearPolicy | None = None, featurizer: Featurizer = action_features,
+    n_features: int = N_ACTION_FEATURES,
 ) -> LinearPolicy:
     """Train a containment defender by REINFORCE against the env ``make_env`` builds (one backend).
 
     ``make_env`` is a thunk so each episode gets a fresh env over the *same* backend (the backend
-    carries the model/oracle; the episode seed varies the topology). Returns the trained policy.
+    carries the model/oracle; the episode seed varies the topology). ``featurizer``/``n_features``
+    select the action-feature set (default: the basic drift-robust one; the UA6 fork passes a
+    structural one). Returns the trained policy.
     """
     config = config or TrainConfig()
-    policy = policy or LinearPolicy()
+    policy = policy or LinearPolicy([0.0] * n_features)
     rng = random.Random(config.seed)
     env = make_env()
 
@@ -92,7 +105,9 @@ def reinforce(
         batch_returns: list[list[float]] = []
         batch_steps: list[list[Step]] = []
         for _ in range(min(config.batch, config.episodes - episode)):
-            steps = rollout(env, policy, rng, seed=config.seed + 1000 + episode)
+            steps = rollout(
+                env, policy, rng, seed=config.seed + 1000 + episode, featurizer=featurizer
+            )
             rets = _returns([s.reward for s in steps], config.gamma)
             batch_steps.append(steps)
             batch_returns.append(rets)
@@ -100,13 +115,13 @@ def reinforce(
         # baseline = mean return-to-go across the batch's first step (a simple, stable baseline)
         flat_returns = [r for rets in batch_returns for r in rets]
         baseline = fmean(flat_returns) if flat_returns else 0.0
-        grad = [0.0] * N_ACTION_FEATURES
+        grad = [0.0] * n_features
         n_terms = 0
         for steps, rets in zip(batch_steps, batch_returns, strict=True):
             for step, ret in zip(steps, rets, strict=True):
                 advantage = ret - baseline
                 g = policy.logprob_grad(step.feats_list, step.chosen)
-                for k in range(N_ACTION_FEATURES):
+                for k in range(n_features):
                     grad[k] += advantage * g[k]
                 n_terms += 1
         if n_terms:
@@ -118,6 +133,7 @@ def reinforce(
 
 def evaluate(
     make_env: Callable[[], ContainmentEnv], policy: LinearPolicy, *, seeds: tuple[int, ...],
+    featurizer: Featurizer = action_features,
 ) -> float:
     """Mean final containment of ``policy`` (greedy) over ``seeds`` in ``make_env``'s env."""
     env = make_env()
@@ -128,7 +144,7 @@ def evaluate(
         info: dict[str, Any] = {"containment": 1.0}
         while not done:
             actions = env.legal_actions()
-            feats_list = [action_features(env.net, env.compromised, a) for a in actions]
+            feats_list = [featurizer(env.net, env.compromised, a) for a in actions]
             idx = policy.greedy(feats_list)
             out = env.step(actions[idx])
             info = out.info

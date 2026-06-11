@@ -66,13 +66,17 @@ def _softmax(scores: list[float]) -> list[float]:
 
 @dataclass
 class LinearPolicy:
-    """A linear softmax policy over action features (the smallest policy that does the job)."""
+    """A linear softmax policy over action features (the smallest policy that does the job).
+
+    The weight dimension is inferred from ``weights`` -- the default is the basic featurizer's
+    ``N_ACTION_FEATURES``, but the UA6 structural featurizer passes a longer vector.
+    """
 
     weights: list[float] = field(default_factory=lambda: [0.0] * N_ACTION_FEATURES)
 
     def __post_init__(self) -> None:
-        if len(self.weights) != N_ACTION_FEATURES:
-            raise ValueError(f"weights must have {N_ACTION_FEATURES} entries")
+        if not self.weights:
+            raise ValueError("weights must be non-empty")
 
     def _score(self, feats: list[float]) -> float:
         return sum(w * f for w, f in zip(self.weights, feats, strict=True))
@@ -99,10 +103,11 @@ class LinearPolicy:
 
     def logprob_grad(self, feats_list: list[list[float]], chosen: int) -> list[float]:
         """∇_w log π(chosen | ·) = φ(chosen) − Σ_a π(a) φ(a) -- the REINFORCE score function."""
+        dim = len(self.weights)
         ps = self.probs(feats_list)
-        expected = [0.0] * N_ACTION_FEATURES
+        expected = [0.0] * dim
         for p, feats in zip(ps, feats_list, strict=True):
-            for k in range(N_ACTION_FEATURES):
+            for k in range(dim):
                 expected[k] += p * feats[k]
         chosen_feats = feats_list[chosen]
-        return [chosen_feats[k] - expected[k] for k in range(N_ACTION_FEATURES)]
+        return [chosen_feats[k] - expected[k] for k in range(dim)]

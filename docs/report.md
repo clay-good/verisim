@@ -2353,6 +2353,15 @@ trained in `E_oracle` / `E_grounded` / `E_free`, all evaluated in reality. The r
   dissociates "faithful sim" from "faithfulness is necessary," and pre-registers the redirect (SPEC-20
   §7) — find tasks whose optimal policy depends on the dynamics the model actually drifts on, not on
   drift-invariant features.
+- **The redirect, attempted (UA6 / H78 — REFUTED, diagnosed).** We then *built* the redirect: a
+  drift-sensitive task with a multi-hop `marginal_cut` feature (how many hosts an isolation protects)
+  and a tight isolation budget, so *which* host you cut depends on global reachability. Grounding was
+  **still** null (advantage −0.010). The diagnostic explains it: the marginal-cut feature is **97.4%
+  identical** on drifted vs true states — the flat model's drift is *connectivity-structure-preserving*
+  (raw links drift ~24%, but the coarse reachability a containment policy reads survives). So even a
+  multi-hop structural feature is drift-robust here; faithfulness would need a task keyed on the
+  *fine-grained* state the model actually drifts on. A sharper boundary than the bare H74 null — the
+  oracle let us *measure why* the negative holds, not just that it does.
 
 Reproduce (CPU-local; the apparatus' smoke instances run in CI):
 
@@ -2379,6 +2388,9 @@ python -m verisim.experiments.ua_transfer --checkpoint runs/flagship/net-l \
 # UA1/H73 at rho=0.2 — closes the strict 5x-cheaper cost bar (grounded 0.420 @ 720 calls vs oracle 3600):
 python -m verisim.experiments.ua_transfer --checkpoint runs/flagship/net-l --rho 0.2 \
     --out figures/ua2_grounding_rho0.2.csv
+# UA6/H78 — the task-taxonomy fork (drift-robust vs drift-sensitive grounding ablation + diagnostic):
+python -m verisim.experiments.ua_taxonomy --checkpoint runs/flagship/net-l \
+    --out figures/ua6_taxonomy.csv
 ```
 
 ## What v0 ships for others

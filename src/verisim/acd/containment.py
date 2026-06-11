@@ -67,6 +67,7 @@ class ContainmentConfig:
     n_links: int = 7  # topology density (edges seeded per episode)
     n_services: int = 6  # listening (host, port) services seeded per episode
     n_initial_compromised: int = 1
+    cut_budget: int | None = None  # max isolations per episode (None = unlimited); the UA6 lever
 
     def net(self) -> NetConfig:
         return scaled_net_config(self.n_hosts, self.n_ports)
@@ -278,17 +279,23 @@ class ContainmentEnv:
         self._net = NetworkState.initial(config.net().hosts)
         self._compromised: frozenset[str] = frozenset()
         self._t = 0
+        self._isolations_used = 0
         self._rng = random.Random(0)
 
     def reset(self, seed: int = 0) -> tuple[float, ...]:
         self._rng = random.Random(seed)
         self._net, self._compromised = seed_topology(self.config, self._rng)
         self._t = 0
+        self._isolations_used = 0
         self.backend.reset()
         return self.observe()
 
     def legal_actions(self) -> list[DefenderAction]:
-        return legal_actions(self._net, self.config)
+        """The legal moves, with `isolate` removed once the `cut_budget` is spent (UA6)."""
+        actions = legal_actions(self._net, self.config)
+        if self.config.cut_budget is not None and self._isolations_used >= self.config.cut_budget:
+            actions = [a for a in actions if a.kind != "isolate"]
+        return actions
 
     def observe(self) -> tuple[float, ...]:
         """Per-host features: up, #services (normalized), compromised, connected-to-compromised.
@@ -314,6 +321,8 @@ class ContainmentEnv:
 
     def step(self, action: DefenderAction) -> StepOutcome:
         """Apply the defender action, evolve via the backend, spread the adversary, score."""
+        if action.kind == "isolate":
+            self._isolations_used += 1  # spends one cut-budget slot, whether or not it takes effect
         self._net = self.backend.step(self._net, action.to_net_action())
         self._compromised = adversary_spread(self._net, self._compromised, self._rng)
         self._t += 1
