@@ -2423,6 +2423,26 @@ trained in `E_oracle` / `E_grounded` / `E_free`, all evaluated in reality. The r
   than on faithful horizon. The complete arc: faithfulness is load-bearing for control exactly when
   the task keys on the content the model drifts on (UA8) — and *there*, where it matters, you can
   still buy it at sub-linear oracle cost (UA9). The cheap-faithful-model story holds where it has to.
+- **The law is cross-world, not host-specific (UA10 / H82 — SUPPORTED).** UA8 and UA9 both lived
+  entirely on the host world (content = file-writes), so the symmetric question was open: does the
+  boundary law — *and* the useful knee — reproduce on the network world, whose content dimension is
+  **flows** (the net flagship drifts ~0.252 on the live-flow set, faithful on its structure)? UA10
+  builds the network content-keyed task: an adversarial workload (from a connected seed topology, the
+  flow-bearing regime) opens connections, and a flow-integrity defender predicts which flows will be
+  established over the episode — the **cumulative** set, detect every connection the adversary made —
+  and protects the budget flows it predicts. Both findings reproduce, *more sharply than on host*.
+  The content-keyed positive: the faithful predictor catches every flow (1.000) while the free
+  predictor **collapses 0.583 → 0.083** as flow drift compounds, the gap widening from +0.42 at h=8
+  to **+0.92 at h=28** — the network model drifts *harder* on its content than the host model does,
+  so the free predictor fails more completely than host's 0.50–0.73. The useful knee: the ρ-grounded
+  predictor recovers the faithful ceiling from that near-zero floor at **ρ=0.2 — 4 oracle calls vs 20
+  (5× cheaper)**, monotone in ρ. So the complete cross-world picture is symmetric: the boundary law
+  (faithfulness is load-bearing for control iff the task keys on the content the model drifts on)
+  **and** its cheap purchase (the useful knee) hold in *both* worlds, with magnitudes that scale with
+  how hard each world's model drifts on its content. The law is a property of the
+  structure-vs-content split, not of one world.
+
+  ![UA10: the network flow-integrity cross-world confirmation. Left — the content-keyed positive: the faithful predictor (green) stays at 1.0 while the free predictor (red) collapses from 0.58 to 0.08 as the workload horizon grows and flow drift compounds. Right — the useful knee: the ρ-grounded predictor's catch rate climbs from the free floor (0.08) to the faithful ceiling (1.0), recovering it at ρ=0.2 (4 oracle calls vs 20 for the every-step predictor)](../figures/ua10_net_integrity.png)
 
 Reproduce (CPU-local; the apparatus' smoke instances run in CI):
 
@@ -2467,6 +2487,10 @@ python -m verisim.experiments.ua_host_integrity --checkpoint runs/flagship/host-
 # faithful ceiling (recovers perfect catch at ρ=0.5, half the oracle calls) on the content task:
 python -m verisim.experiments.ua_host_grounded --checkpoint runs/flagship/host-l \
     --out figures/ua9_grounded_knee.csv
+# UA10/H82 — the cross-world confirmation: network flow-integrity (content = flows). The positive
+# (faithful 1.0 vs free collapsing to 0.08) + the useful knee (ρ=0.2 recovers the ceiling, 5x cheaper):
+python -m verisim.experiments.ua_net_integrity --checkpoint runs/flagship/net-l \
+    --out figures/ua10_net_integrity.csv
 ```
 
 ## What v0 ships for others
