@@ -17,6 +17,8 @@ workload and the fault/time medium (the consensus/admin family arrives with the 
     smembers <node> <key>           # client: read a CRDT OR-Set (elements with a non-tombstoned dot)
     mvput <node> <key> <val>        # client: CRDT MV-register write (supersedes observed; siblings on conflict)
     mvget <node> <key>              # client: read a CRDT MV-register (surviving sibling values)
+    lwwput <node> <key> <val>       # client: CRDT LWW-register write (Lamport-timestamped; one winner)
+    lwwget <node> <key>             # client: read a CRDT LWW-register (the last-writer-wins value)
     advance <dt>                    # time: +<dt> clock; deliver in-flight msgs now due & reachable
     partition <nodes> | <nodes>     # fault: split the network into groups (| separates groups)
     heal                            # fault: remove all partitions (one fully-connected group)
@@ -206,7 +208,15 @@ currently observes** (a write supersedes the values it saw), and adds its own �
 overwrite collapses to one value, but *concurrent* writes (neither observing the other) **both
 survive**, and a later context-aware ``mvput`` (observing both) **resolves** them. ``mvget n key``
 reads the set of surviving sibling values. The conflict is made *visible and resolvable* rather than
-silently lost — the textbook reason multi-value registers exist (ED38).
+silently lost — the textbook reason multi-value registers exist (ED38). ``lwwput``/``lwwget`` (DS0
+increment 32) are the **CRDT LWW-register** — the *policy-opposite* of the MV-register: instead of
+surfacing a conflict it **deterministically picks one winner** by a **Lamport-timestamp total order**.
+``lwwput n key val`` stamps ``val`` with ``(ts, owner=n)`` where ``ts = lamport[n] + 1`` (advancing
+``n``'s Lamport clock), and the join keeps the **max** copy by ``(ts, owner, value)`` — so a write
+that *happened-after* another (higher ts) always wins, regardless of which node made it, and truly
+*concurrent* writes (equal ts) break the tie by node id (a stable winner). ``lwwget n key`` reads the
+single winning value. The Lamport clock — advanced on write and on merge — is what makes "happens-
+after" a comparable order (ED39).
 """
 
 from __future__ import annotations
@@ -229,6 +239,8 @@ _ARITY: dict[str, int | None] = {
     "smembers": 2,  # node key  -- read a CRDT OR-Set: non-tombstoned elements (DS0 incr 30)
     "mvput": 3,  # node key val  -- CRDT MV-register write (siblings on conflict; DS0 incr 31)
     "mvget": 2,  # node key  -- read a CRDT MV-register: surviving sibling values (DS0 incr 31)
+    "lwwput": 3,  # node key val  -- CRDT LWW-register write (Lamport-timestamped; DS0 incr 32)
+    "lwwget": 2,  # node key  -- read a CRDT LWW-register: the last-writer-wins value (DS0 incr 32)
     "advance": 1,  # dt
     "partition": None,  # <nodes> | <nodes> [| ...]
     "host": None,  # <node> <syscall...>  -- a SPEC-6 host syscall on <node>'s host (DS0 incr 23)
@@ -267,7 +279,7 @@ _ARITY: dict[str, int | None] = {
 # are the ``enqueue``/``dequeue`` FIFO-queue ops (DS0 incr 21).
 CLIENT_OPS = frozenset({
     "put", "get", "cas", "delete", "incr", "cincr", "cdecr", "cget",
-    "sadd", "srem", "smembers", "mvput", "mvget",
+    "sadd", "srem", "smembers", "mvput", "mvget", "lwwput", "lwwget",
     "begin", "tget", "tput", "commit", "abort", "enqueue", "dequeue",
 })
 TXN_OPS = frozenset({"begin", "tget", "tput", "commit", "abort"})

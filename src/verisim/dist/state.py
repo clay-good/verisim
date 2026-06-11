@@ -304,6 +304,19 @@ class DistributedState:
     # form (a register-free cluster is the pre-increment-31 form, purely additive over increment 30).
     mvreg_vals: dict[tuple[str, str], frozenset[tuple[str, str, int]]] = field(default_factory=dict)
     mvreg_tombs: dict[tuple[str, str], frozenset[tuple[str, int]]] = field(default_factory=dict)
+    # The CRDT last-writer-wins register (DS0 increment 32, `lwwput`/`lwwget`): the policy-opposite of
+    # the MV-register — instead of surfacing a write conflict as siblings, it **deterministically picks
+    # one winner** by a **Lamport-timestamp total order**. `lwwput n key val` stamps `val` with a
+    # logical timestamp `(ts, owner=n)` where `ts = lamport[n] + 1` (advancing `n`'s Lamport clock);
+    # the CRDT join keeps the **max** copy by `(ts, owner, value)`, so a write that *happened-after*
+    # another (a higher Lamport ts) always wins — regardless of which node made it — and truly
+    # *concurrent* writes (equal ts) break the tie by the node id (a stable winner, not an arbitrary
+    # one). `lwwreg` maps `(key, holder)` → `holder`'s current `(value, ts, owner)`; `lamport` maps a
+    # node → its Lamport clock (the max ts it has produced or observed, advanced on write and on
+    # merge — the textbook logical clock that makes "happens-after" a comparable order). Both empty by
+    # default and omitted from the canonical form (purely additive over increment 31).
+    lwwreg: dict[tuple[str, str], tuple[str, int, str]] = field(default_factory=dict)
+    lamport: dict[str, int] = field(default_factory=dict)
     # The embedded SPEC-6 host inside each node (DS0 increment 23, `host`): a per-node `HostState`
     # (process table + per-process fd tables + the embedded v0 filesystem), so a cluster node is not
     # just a bag of KV replicas but a real host running processes — the compositional vision SPEC-7
@@ -371,6 +384,8 @@ class DistributedState:
             orset_tombs=dict(self.orset_tombs),
             mvreg_vals=dict(self.mvreg_vals),
             mvreg_tombs=dict(self.mvreg_tombs),
+            lwwreg=dict(self.lwwreg),
+            lamport=dict(self.lamport),
             hosts={node: h.copy() for node, h in self.hosts.items()},
             lease_until=self.lease_until,
         )
@@ -438,6 +453,12 @@ class DistributedState:
         seqs += [seq for (owner, seq) in self.mvreg_tombs.get((key, node), frozenset())
                  if owner == node]
         return (max(seqs) + 1) if seqs else 1
+
+    def lwwreg_value(self, key: str, node: str) -> str:
+        """``node``'s view of LWW-register ``key`` (DS0 incr 32): its current winning value (`` `` if
+        never written)."""
+        entry = self.lwwreg.get((key, node))
+        return entry[0] if entry is not None else ""
 
     def group_of(self, node: str) -> frozenset[str]:
         """The partition group ``node`` belongs to (a singleton if it is mentioned by no group)."""

@@ -91,6 +91,9 @@ def cluster_view(state: DistributedState) -> str:
                         for (v, o, s) in dots)
     mvreg_tombs = sorted((k, h, o, s) for (k, h), dots in state.mvreg_tombs.items() if dots
                          for (o, s) in dots)
+    # The CRDT LWW-register (DS0 incr 32): each holder's winning (value, ts, owner) + Lamport clock.
+    lwwreg = sorted((k, h, v, ts, o) for (k, h), (v, ts, o) in state.lwwreg.items())
+    lamport = sorted((n, t) for n, t in state.lamport.items() if t != 0)
     # The embedded per-node hosts (DS0 incr 23) are observable cluster state — each node's host
     # canonical form, sorted by node. Empty for a host-free cluster, so the channel is unchanged.
     hosts = sorted((n, to_canonical_host(h)) for n, h in state.hosts.items())
@@ -110,6 +113,8 @@ def cluster_view(state: DistributedState) -> str:
         "orset_tombs": orset_tombs,
         "mvreg_vals": mvreg_vals,
         "mvreg_tombs": mvreg_tombs,
+        "lwwreg": lwwreg,
+        "lamport": lamport,
         "hosts": hosts,
     })
 

@@ -736,6 +736,43 @@ def test_golden_mvregister_concurrent_writes_become_siblings():
     assert oracle.step(state, parse_dist_action("mvget n0 r")).value == "{a,b}"  # siblings, no loss
 
 
+def test_golden_lwwregister_concurrent_writes_resolve_deterministically():
+    # The CRDT LWW-register golden (SPEC-7 §3.2, DS0 incr 32): under a partition {n0,n1} | {n2}, n0
+    # writes a (ts 1, owner n0) and n2 writes b (ts 1, owner n2) — concurrent (equal Lamport ts).
+    # After heal, `gossip n0 n2` keeps the (ts, owner, value)-max: ts ties at 1, owner n2 > n0, so b
+    # wins. n0 adopts ("b",1,"n2"); the concurrent loser a is DROPPED (one value, not siblings — the
+    # policy-opposite of the MV-register). The lwwreg/lamport maps appear in the canonical form.
+    config = DistConfig(name="golden-lww", nodes=("n0", "n1", "n2"), objects=("w",),
+                        values=("a",), consistency_model="eventual")
+    oracle = ReferenceDistOracle(config)
+    state = DistributedState.initial(config)
+    for cmd in ["partition n0 n1 | n2", "lwwput n0 w a", "lwwput n2 w b", "heal", "gossip n0 n2"]:
+        state = oracle.step(state, parse_dist_action(cmd)).state
+    final = to_canonical(state)
+    assert final == {
+        "replicas": [
+            _rep("w", "n0", 0, "nil"), _rep("w", "n1", 0, "nil"), _rep("w", "n2", 0, "nil"),
+        ],
+        "log": [],
+        "inflight": [],
+        "partitions": [["n0", "n1", "n2"]],
+        "down": [],
+        "clock": 0,
+        "next_event_id": 0,
+        "next_msg_id": 0,
+        "last_result": ["gossiped", "1"],  # n0 adopts the winner b; n2 already holds it
+        "lwwreg": [
+            {"key": "w", "holder": "n0", "value": "b", "ts": 1, "owner": "n2"},
+            {"key": "w", "holder": "n2", "value": "b", "ts": 1, "owner": "n2"},
+        ],
+        "lamport": [
+            {"holder": "n0", "value": 1},
+            {"holder": "n2", "value": 1},
+        ],
+    }
+    assert oracle.step(state, parse_dist_action("lwwget n0 w")).value == "b"  # deterministic winner
+
+
 def test_golden_config_push_commits_on_majority_minority_stays_stale() -> None:
     # The config-push golden (SPEC-7 §3.2, DS0 incr 24): n0 leads (term 1), then the network splits
     # {n0,n1} | {n2}. `config_push n0 feature on` from n0 (on the 2-of-3 majority side) commits and

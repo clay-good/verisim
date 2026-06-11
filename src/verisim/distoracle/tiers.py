@@ -181,6 +181,15 @@ class TieredOracle:
             for (owner, seq) in tdots:
                 if holder not in nodeset or owner not in nodeset or seq < 1:
                     return True, f"invalid mvreg tomb-dot ({owner!r},{seq}) at holder {holder!r}"
+        # The CRDT LWW-register (incr 32): each winning entry is held by a known node and stamped
+        # with a positive Lamport ts by a known owner; each Lamport clock is non-negative on a known
+        # node — a backward (non-positive) timestamp or a phantom holder/owner is impossible.
+        for (_key, holder), (_value, ts, owner) in predicted.lwwreg.items():
+            if holder not in nodeset or owner not in nodeset or ts < 1:
+                return True, f"invalid lwwreg entry (ts={ts}, owner={owner!r}) at holder {holder!r}"
+        for holder, clock in predicted.lamport.items():
+            if holder not in nodeset or clock < 0:
+                return True, f"invalid lamport clock {clock} at {holder!r}"
         return False, ""
 
     def _cycle(

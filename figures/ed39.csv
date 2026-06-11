@@ -1,0 +1,10 @@
+panel,metric,value,detail
+lwwreg,basic_read,1.0000,over_3_clusters
+lwwreg,causal_lww,1.0000,happens_after_wins_low_id
+lwwreg,deterministic_resolve,1.0000,concurrent_one_winner
+lwwreg,always_available,1.0000,minority_lwwput_acked_AP
+converge,gossip,1.0000,epidemic_all_nodes_winner
+converge,anti_entropy,1.0000,all_nodes_winner
+converge,idempotent,1.0000,second_gossip_unchanged
+converge,loser_dropped,1.0000,one_value_not_siblings
+tier_b,all,1.0000,steps=61

@@ -70,6 +70,7 @@ from verisim.dist.txn import txn_step
 from verisim.distoracle.base import DistStepResult
 from verisim.distoracle.reference import (
     _gcounter_merge_edits,
+    _lwwreg_merge_edits,
     _mvreg_merge_edits,
     _orset_merge_edits,
     add_replica_edits,
@@ -88,6 +89,8 @@ from verisim.distoracle.reference import (
     host_op_edits,
     lease_edits,
     lread_edits,
+    lwwget_edits,
+    lwwput_edits,
     mvget_edits,
     mvput_edits,
     propose_edits,
@@ -280,6 +283,12 @@ class SystemDistOracle:
             return mvput_edits(state, action, self.config)
         if name == "mvget":
             return mvget_edits(state, action, self.config)
+        if name == "lwwput":
+            # The CRDT LWW-register ops (DS0 incr 32) are purely node-local (stamp in the node's own
+            # copy + its Lamport clock), deterministic, always available; max-join is coord-level.
+            return lwwput_edits(state, action, self.config)
+        if name == "lwwget":
+            return lwwget_edits(state, action, self.config)
         ev = self._event(state, action)
         if name in ("put", "cas", "delete", "incr"):
             return self._write(state, action, ev)
@@ -659,6 +668,9 @@ class SystemDistOracle:
         mv_edits = _mvreg_merge_edits(state, [node], reachable)
         edits.extend(mv_edits)
         repaired += len(mv_edits)
+        lww_edits = _lwwreg_merge_edits(state, [node], reachable)
+        edits.extend(lww_edits)
+        repaired += len(lww_edits)
         value = str(repaired)
         edits.append(SetResult("repaired", value))
         return edits, "repaired", value

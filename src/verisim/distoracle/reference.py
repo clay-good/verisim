@@ -38,8 +38,10 @@ from verisim.dist.delta import (
     EventAppend,
     GCounterSet,
     HostStep,
+    LamportSet,
     LeaseSet,
     LogSet,
+    LWWRegSet,
     MemberSet,
     MsgDeliver,
     MsgDrop,
@@ -190,9 +192,11 @@ def gossip_edits(
     edits.extend(_orset_merge_edits(state, [a, b], [a, b]))
     # The CRDT MV-register join (DS0 incr 31): both endpoints union their write/tomb sets.
     edits.extend(_mvreg_merge_edits(state, [a, b], [a, b]))
+    # The CRDT LWW-register join (incr 32): both endpoints adopt the (ts, owner, value)-max winner.
+    edits.extend(_lwwreg_merge_edits(state, [a, b], [a, b]))
     synced = sum(1 for e in edits
                  if isinstance(e, (ReplicaWrite, GCounterSet, NCounterSet, ORSetAdd, ORSetTomb,
-                                   MVRegWrite, MVRegTomb)))  # all moves
+                                   MVRegWrite, MVRegTomb, LWWRegSet, LamportSet)))  # all moves
     value = str(synced)
     return [*edits, SetResult("gossiped", value)], "gossiped", value
 
@@ -350,6 +354,79 @@ def _mvreg_merge_edits(
     """
     return _dotset_union_edits(state.mvreg_vals, state.mvreg_tombs, into, among,
                                MVRegWrite, MVRegTomb)
+
+
+def _lwwreg_merge_edits(
+    state: DistributedState, into: list[str], among: list[str]
+) -> list[DistEdit]:
+    """**Max-by-(ts, owner, value)** join of the CRDT LWW-register copies (DS0 incr 32).
+
+    For each register ``key`` held by any node in ``among``, the winner is the **max** copy by
+    ``(ts, owner, value)`` — the Lamport-timestamp total order (a higher timestamp, i.e. a write
+    that happened-after, wins; ties break by node id then value). Each node in ``into`` that is
+    behind adopts the winner (``LWWRegSet``). Each node also advances its Lamport clock to the
+    max timestamp seen across the reachable set (``LamportSet``), so a later local write always
+    out-stamps what it overwrote — the logical-clock invariant that keeps the join convergent. No-op
+    when no LWW-register is used (the pre-incr-32 form is unchanged).
+    """
+    edits: list[DistEdit] = []
+    keys = {key for (key, _h) in state.lwwreg}
+    for key in sorted(keys):
+        copies = [state.lwwreg[(key, h)] for h in among if (key, h) in state.lwwreg]
+        if not copies:
+            continue
+        # stored as (value, ts, owner); compare by (ts, owner, value) for the LWW order.
+        win = max(copies, key=lambda e: (e[1], e[2], e[0]))
+        for holder in into:
+            if state.lwwreg.get((key, holder)) != win:
+                edits.append(LWWRegSet(key, holder, win[0], win[1], win[2]))
+    # advance each into-node's Lamport clock to the max ts observed across the reachable set.
+    max_ts = max(
+        [state.lamport.get(h, 0) for h in among]
+        + [ts for (k, h), (v, ts, o) in state.lwwreg.items() if h in among],
+        default=0,
+    )
+    for holder in into:
+        if state.lamport.get(holder, 0) < max_ts:
+            edits.append(LamportSet(holder, max_ts))
+    return edits
+
+
+def lwwput_edits(
+    state: DistributedState, action: DistAction, config: DistConfig
+) -> tuple[DistDelta, str, str]:
+    """``lwwput node key val``: CRDT LWW-register write (incr 32, deterministic resolution).
+
+    ``node`` stamps ``val`` with ``(ts, owner=node)`` where ``ts = lamport[node] + 1`` (advancing
+    its Lamport clock) and stores it as the current register value (``LWWRegSet`` + ``LamportSet``);
+    the join keeps the **max** copy by ``(ts, owner, value)``, so a write that *happened-after*
+    another (higher ts) wins regardless of node, and concurrent writes (equal ts) resolve by node id
+    to **one** deterministic winner, where the MV-register would keep siblings (ED38). Node-local
+    (no replication, no message), so **always available** even partitioned-alone, and deterministic,
+    so Tier-A ≡ Tier-B bit-for-bit. A crashed node is ``unavailable``. Reports the written value.
+    """
+    node, key, val = action.args[0], action.args[1], action.args[2]
+    if not state.is_up(node):
+        return [SetResult("unavailable", "")], "unavailable", ""
+    ts = state.lamport.get(node, 0) + 1
+    edits: DistDelta = [LWWRegSet(key, node, val, ts, node), LamportSet(node, ts)]
+    return [*edits, SetResult("ok", val)], "ok", val
+
+
+def lwwget_edits(
+    state: DistributedState, action: DistAction, config: DistConfig
+) -> tuple[DistDelta, str, str]:
+    """``lwwget node key``: read a CRDT LWW-register (DS0 increment 32) — the winning value.
+
+    ``node``'s local view: its current ``(value, ts, owner)`` winner for ``key`` (or ``""`` if never
+    written). Under a partition this may lag the other side's writes, but never resolves *wrongly*:
+    a later join adopts the global ``(ts, owner, value)`` max. A pure read; ``unavailable`` if down.
+    """
+    node, key = action.args[0], action.args[1]
+    if not state.is_up(node):
+        return [SetResult("unavailable", "")], "unavailable", ""
+    val = state.lwwreg_value(key, node)
+    return [SetResult("ok", val)], "ok", val
 
 
 def sadd_edits(
@@ -1062,6 +1139,10 @@ class ReferenceDistOracle:
             return mvput_edits(state, action, self.config)
         if name == "mvget":
             return mvget_edits(state, action, self.config)
+        if name == "lwwput":
+            return lwwput_edits(state, action, self.config)
+        if name == "lwwget":
+            return lwwget_edits(state, action, self.config)
         if name in ("begin", "tget", "tput", "commit", "abort"):
             # The transaction family (DS0 increment 2) — shared OCC logic; a committed write's
             # async replication flows through the same in-flight medium as ``put`` (delivered by
@@ -1381,6 +1462,9 @@ class ReferenceDistOracle:
         mv_edits = _mvreg_merge_edits(state, [node], reachable)
         edits.extend(mv_edits)
         repaired += len(mv_edits)
+        lww_edits = _lwwreg_merge_edits(state, [node], reachable)
+        edits.extend(lww_edits)
+        repaired += len(lww_edits)
         value = str(repaired)
         edits.append(SetResult("repaired", value))
         return edits, "repaired", value

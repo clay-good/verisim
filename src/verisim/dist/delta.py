@@ -394,6 +394,38 @@ class MVRegTomb:
 
 
 @dataclass(frozen=True)
+class LWWRegSet:
+    """Set node ``holder``'s LWW-register ``key`` to ``(value, ts, owner)`` (DS0 incr 32).
+
+    The single edit for the last-writer-wins register: ``lwwput n key val`` emits
+    ``LWWRegSet(key, n, val, ts, n)`` (a node stamps its write with a Lamport timestamp), and the CRDT
+    join in ``anti_entropy``/``gossip`` re-emits the **max** copy by ``(ts, owner, value)`` when a
+    holder's copy is behind. Omitted from the canonical form when no register is used.
+    """
+
+    key: str
+    holder: str
+    value: str
+    ts: int
+    owner: str
+
+
+@dataclass(frozen=True)
+class LamportSet:
+    """Set node ``holder``'s Lamport clock to ``value`` (DS0 incr 32).
+
+    The per-node logical clock backing the LWW-register: ``lwwput`` advances it to ``+1`` before
+    stamping, and the join advances it to the max timestamp the node has observed (so a later write
+    always out-stamps what it overwrites). A clock of ``0`` is the default and is dropped from the
+    canonical form, so a cluster that never uses an LWW-register is byte-identical to the pre-incr-32
+    form.
+    """
+
+    holder: str
+    value: int
+
+
+@dataclass(frozen=True)
 class HostStep:
     """A SPEC-6 host syscall applied to one node's embedded host (DS0 increment 23, the §4 `HostDelta`).
 
@@ -446,6 +478,8 @@ DistEdit = (
     | ORSetTomb
     | MVRegWrite
     | MVRegTomb
+    | LWWRegSet
+    | LamportSet
     | HostStep
     | SetResult
 )
@@ -548,6 +582,13 @@ def apply(state: DistributedState, delta: DistDelta) -> DistributedState:
         elif isinstance(edit, MVRegTomb):
             k = (edit.key, edit.holder)
             s.mvreg_tombs[k] = s.mvreg_tombs.get(k, frozenset()) | {(edit.owner, edit.seq)}
+        elif isinstance(edit, LWWRegSet):
+            s.lwwreg[(edit.key, edit.holder)] = (edit.value, edit.ts, edit.owner)
+        elif isinstance(edit, LamportSet):
+            if edit.value != 0:
+                s.lamport[edit.holder] = edit.value
+            else:
+                s.lamport.pop(edit.holder, None)  # 0 is the default — no residue
         elif isinstance(edit, HostStep):
             # apply the SPEC-6 host delta to the node's embedded host (created lazily), via the
             # SPEC-6 ``apply`` verbatim — the §4 composition. An untouched host leaves no residue.
@@ -637,6 +678,11 @@ def edit_to_dict(edit: DistEdit) -> dict[str, Any]:
     if isinstance(edit, MVRegTomb):
         return {"op": "MVRegTomb", "key": edit.key, "holder": edit.holder,
                 "owner": edit.owner, "seq": edit.seq}
+    if isinstance(edit, LWWRegSet):
+        return {"op": "LWWRegSet", "key": edit.key, "holder": edit.holder, "value": edit.value,
+                "ts": edit.ts, "owner": edit.owner}
+    if isinstance(edit, LamportSet):
+        return {"op": "LamportSet", "holder": edit.holder, "value": edit.value}
     if isinstance(edit, HostStep):
         return {"op": "HostStep", "node": edit.node, "edits": host_delta_to_list(edit.edits)}
     assert isinstance(edit, SetResult)
@@ -710,6 +756,10 @@ def edit_from_dict(d: dict[str, Any]) -> DistEdit:
         return MVRegWrite(d["key"], d["holder"], d["value"], d["owner"], d["seq"])
     if op == "MVRegTomb":
         return MVRegTomb(d["key"], d["holder"], d["owner"], d["seq"])
+    if op == "LWWRegSet":
+        return LWWRegSet(d["key"], d["holder"], d["value"], d["ts"], d["owner"])
+    if op == "LamportSet":
+        return LamportSet(d["holder"], d["value"])
     if op == "HostStep":
         return HostStep(d["node"], host_delta_from_list(d["edits"]))
     if op == "SetResult":

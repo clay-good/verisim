@@ -166,6 +166,8 @@ of a real message-passing execution, not just the analytic DES.
 | `smembers <node> <key>` (DS0 increment 30) | **CRDT OR-Set read**: return `node`'s elements with at least one non-tombstoned dot, rendered `{a,b,c}` (`{}` empty) — `node`'s local view (may lag, never loses). `("ok", members)`; `("unavailable", "")` if down. A pure read. |
 | `mvput <node> <key> <val>` (DS0 increment 31) | **CRDT MV-register write**: tag `val` with a fresh dot `(owner=node, seq)`, **tombstone every dot `node` currently observes** (a write supersedes the values it saw, `MVRegTomb` per dot), and store its own write-dot (`MVRegWrite`). A *sequential* overwrite collapses to one value; *concurrent* writes (neither observing the other) **both survive** as siblings. Purely node-local (**always available**); the union join applies in `anti_entropy`/`gossip`. `("ok", val)`; `("unavailable", "")` if down. Purely additive (two `mvreg_vals`/`mvreg_tombs` maps + the `MVRegWrite`/`MVRegTomb` edits). |
 | `mvget <node> <key>` (DS0 increment 31) | **CRDT MV-register read**: return `node`'s surviving (non-tombstoned) sibling values, rendered `{a,b}` (`{}` empty, one value if resolved) — `node`'s local view (may lag, never loses). `("ok", siblings)`; `("unavailable", "")` if down. A pure read. |
+| `lwwput <node> <key> <val>` (DS0 increment 32) | **CRDT LWW-register write**: stamp `val` with `(ts, owner=node)` where `ts = lamport[node] + 1` (advancing `node`'s Lamport clock), and store it as the current register value (`LWWRegSet` + `LamportSet`). The join keeps the **max** copy by `(ts, owner, value)` — a write that happened-after (higher ts) wins regardless of node; concurrent (equal-ts) writes break the tie by node id. Purely node-local (**always available**). `("ok", val)`; `("unavailable", "")` if down. Purely additive (two `lwwreg`/`lamport` maps + the `LWWRegSet`/`LamportSet` edits). |
+| `lwwget <node> <key>` (DS0 increment 32) | **CRDT LWW-register read**: return `node`'s current winning value (`` `` if never written) — `node`'s local view (may lag, never resolves wrongly). `("ok", value)`; `("unavailable", "")` if down. A pure read. |
 | `enqueue <node> <queue> <val>` (DS0 incr 21) | append `val` to each reachable replica's FIFO `queue` list (the relative append op). Availability follows the consistency model (linearizable needs every replica, quorum a majority, eventual/causal proceed on the reachable set); else `("unavailable", "")`. `("enqueued", val)`. |
 | `dequeue <node> <queue>` (DS0 incr 21) | return the head of `node`'s local `queue` replica and pop the head from each reachable replica. The delivery semantics follow the model: `eventual` admits **duplicate delivery** under partition (the removal does not cross the split), `linearizable`/`quorum` gate availability for **exactly-once**. `("dequeued", head)`, or `("empty", "")` if the local replica has no items; `("unavailable", "")` if the model's quorum is unreachable. |
 
@@ -827,6 +829,42 @@ metamorphic tier checks every dot is held/owned by a known node with a positive 
 ([`experiments/ed38.py`](../src/verisim/experiments/ed38.py)) pins both panels (basic-read +
 sequential-resolve + siblings-preserved + always-available; gossip/anti_entropy convergence +
 idempotence + context-resolve) with Tier-B agreeing on every transition.
+
+### 3.14 `lwwput` / `lwwget` — the CRDT LWW-register (DS0 increment 32)
+
+The MV-register *surfaces* a write conflict; the **LWW-register** is its policy-opposite — it
+**deterministically picks one winner**. It is the register CRDT for the common case where you want a
+single value and an automatic resolution rule, not a sibling set to merge by hand. The mechanism is a
+**Lamport clock** — a per-node logical counter that makes "happens-after" a comparable order without a
+real clock (which a partitioned cluster cannot share, HW-5).
+
+`lwwput n key val` stamps `val` with `(ts, owner=n)` where `ts = lamport[n] + 1` (advancing `n`'s
+Lamport clock), and stores it as `n`'s current register value. The CRDT join keeps the **max** copy by
+`(ts, owner, value)`, and each node advances its Lamport clock to the max timestamp it observes (so a
+later local write always out-stamps what it overwrote — the invariant that keeps the join convergent).
+`lwwget n key` reads the single winning value. Two properties follow:
+
+- **Happens-after wins, regardless of node.** A write that *observed* another has a strictly higher
+  Lamport ts, so it wins — even if a *lower*-id node made it. The timestamp encodes causality; the
+  node id is only the tie-break, not the deciding factor. (A naive "highest node id wins" gets this
+  backwards.)
+- **Concurrent writes resolve deterministically.** Two causally-unrelated writes have the same ts, so
+  the tie breaks by node id (then value) — a single, stable winner the whole cluster agrees on. The
+  price the MV-register avoids: the concurrent *loser* is dropped (one value, not siblings).
+
+```
+lwwput n2 w a; anti_entropy n0          # a@(ts1, n2); n0 observes it, its clock -> 1
+lwwput n0 w b                           # b@(ts2, n0) — later, so HIGHER ts, even though n0 < n2
+gossip n0 n2; lwwget n2 w               # ("ok","b") — happens-after wins, regardless of node id
+```
+
+`lwwput` is node-local and the merge is a coordinator-level read of the medium, so Tier-A and Tier-B
+compute byte-identical deltas. The `lwwreg`/`lamport` maps join `cluster_view`, are omitted from the
+canonical form until the first register op (purely additive over increment 31), and the metamorphic
+tier checks every entry is held/owned by a known node with a positive timestamp and a non-negative
+clock. ED39 ([`experiments/ed39.py`](../src/verisim/experiments/ed39.py)) pins both panels (basic-read
++ causal-LWW + deterministic-resolution + always-available; gossip/anti_entropy convergence +
+idempotence + loser-dropped) with Tier-B agreeing on every transition.
 
 ## 4. The delta and the `apply == oracle` invariant
 

@@ -1751,6 +1751,13 @@ a `mvput` tags its value with a fresh dot and **tombstones every dot it observed
 overwrite collapses to one value while concurrent writes (neither observing the other) **both
 survive**, and a later context-aware write **resolves** them (the read-and-resolve); reusing the
 OR-Set's set-union join verbatim, the conflict is made *visible and resolvable* rather than lost.
+**And the LWW-register is its policy-opposite** (ED39): `lwwput`/`lwwget` deterministically picks one
+winner by a **Lamport-timestamp total order** — a write that happened-after another (a higher Lamport
+ts, the logical clock advanced on write and merge) wins regardless of node, and truly concurrent
+(equal-ts) writes break the tie by node id, so the cluster converges to a single agreed value (the
+concurrent loser dropped, where the MV-register kept both); introducing the Lamport clock — the
+per-node logical counter that makes "happens-after" comparable without a shared real clock the
+partitioned cluster cannot have.
 Every
 one of these is additive (omitted from the canonical form until first used, so all prior goldens/hashes
 hold) and validated bit-for-bit against the autonomous-actor Tier-B execution.
@@ -2249,7 +2256,7 @@ python -m verisim.experiments.ed16 --config configs/ed16.json \
     --out figures/ed16.csv --plot figures/ed16.png  # read-committed isolation: lost update + its price (DS0 incr 9)
 python -m verisim.experiments.ed17 --config configs/ed17.json \
     --out figures/ed17.csv --plot figures/ed17.png  # read-uncommitted isolation: dirty read + black-box recovery (DS0 incr 10)
-# DS0 increments 11–31 (ED18–ED38): the complete §3.4 fault grammar (drop/delay/reorder/clock_skew +
+# DS0 increments 11–32 (ED18–ED39): the complete §3.4 fault grammar (drop/delay/reorder/clock_skew +
 # anti_entropy/gossip), the Raft-subset consensus core (elect/propose/step_down/lease/lread/read_index/
 # append/membership), the FIFO queue, the deploy + config_push admin ops, the embedded SPEC-6 host, the
 # tombstone delete, the atomic counter, and the CRDT counter/set/register family — see reproduce.sh
@@ -2269,6 +2276,8 @@ python -m verisim.experiments.ed37 --config configs/ed37.json \
     --out figures/ed37.csv --plot figures/ed37.png  # CRDT OR-Set: add-wins, re-addable, convergent (DS0 incr 30)
 python -m verisim.experiments.ed38 --config configs/ed38.json \
     --out figures/ed38.csv --plot figures/ed38.png  # CRDT MV-register: conflict-surfacing siblings (DS0 incr 31)
+python -m verisim.experiments.ed39 --config configs/ed39.json \
+    --out figures/ed39.csv --plot figures/ed39.png  # CRDT LWW-register: Lamport-ordered, deterministic (DS0 incr 32)
 ```
 
 The run-records are git-ignored (regenerable); the figures and their CSVs are

@@ -192,6 +192,16 @@ def to_canonical(state: DistributedState) -> dict[str, Any]:
             {"key": key, "holder": holder, "owner": owner, "seq": seq}
             for key, holder, owner, seq in mvtombs
         ]
+    # The CRDT LWW-register (DS0 incr 32, `lwwput`/`lwwget`): each (key, holder) winning entry and each
+    # node's Lamport clock, sorted. Omitted when empty (pre-increment-32 form, purely additive).
+    if state.lwwreg:
+        out["lwwreg"] = [
+            {"key": key, "holder": holder, "value": v, "ts": ts, "owner": owner}
+            for (key, holder), (v, ts, owner) in sorted(state.lwwreg.items())
+        ]
+    lamport = {n: t for n, t in state.lamport.items() if t != 0}
+    if lamport:
+        out["lamport"] = [{"holder": n, "value": lamport[n]} for n in sorted(lamport)]
     # The embedded SPEC-6 hosts (DS0 incr 23): per-node host canonical form (the v0 FS reuses its own
     # canonical verbatim — the composition is visible in serialization). Omitted when no node runs a
     # host op, so a host-free cluster serializes to the exact pre-increment-23 form (purely additive).
@@ -301,6 +311,11 @@ def from_canonical(d: dict[str, Any]) -> DistributedState:
         orset_tombs=_group_orset_tombs(d.get("orset_tombs", [])),
         mvreg_vals=_group_mvreg_vals(d.get("mvreg_vals", [])),
         mvreg_tombs=_group_orset_tombs(d.get("mvreg_tombs", [])),
+        lwwreg={
+            (r["key"], r["holder"]): (r["value"], r["ts"], r["owner"])
+            for r in d.get("lwwreg", [])
+        },
+        lamport={r["holder"]: r["value"] for r in d.get("lamport", [])},
         hosts={h["node"]: from_canonical_host(h["host"]) for h in d.get("hosts", [])},
         lease_until=d.get("lease_until", 0),
     )
