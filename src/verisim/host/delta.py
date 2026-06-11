@@ -45,6 +45,19 @@ class ProcExit:
 
 
 @dataclass(frozen=True)
+class ProcReap:
+    """Remove a ``ZOMBIE`` from the process table (``wait``).
+
+    The reaping half of the process lifecycle: a parent collects its dead child's exit status and
+    frees the table entry, so zombies do not accumulate forever. ``apply`` removes the pid from
+    ``procs`` (its fds were already released when it became a zombie). Pids are not reused (the
+    monotone allocator), so reaping frees the table slot but never the pid number.
+    """
+
+    pid: int
+
+
+@dataclass(frozen=True)
 class FdOpen:
     """Bind a file descriptor to a path (``open``)."""
 
@@ -83,7 +96,7 @@ class SetExit:
     exit_code: int
 
 
-HostEdit = ProcSpawn | ProcExit | FdOpen | FdClose | CredChange | FsDelta | SetExit
+HostEdit = ProcSpawn | ProcExit | ProcReap | FdOpen | FdClose | CredChange | FsDelta | SetExit
 HostDelta = list[HostEdit]
 
 
@@ -109,6 +122,8 @@ def apply(state: HostState, delta: HostDelta) -> HostState:
                     uid=procs[edit.pid].uid, exit_code=edit.code,
                 )
                 fds = {k: v for k, v in fds.items() if k[0] != edit.pid}
+        elif isinstance(edit, ProcReap):
+            procs.pop(edit.pid, None)  # remove the reaped zombie from the table (fds already freed)
         elif isinstance(edit, FdOpen):
             fds[(edit.pid, edit.fd)] = FdEntry(path=edit.path)
         elif isinstance(edit, FdClose):
@@ -133,6 +148,8 @@ def edit_to_dict(edit: HostEdit) -> dict[str, Any]:
         return {"op": "ProcSpawn", "pid": edit.pid, "ppid": edit.ppid, "uid": edit.uid}
     if isinstance(edit, ProcExit):
         return {"op": "ProcExit", "pid": edit.pid, "code": edit.code}
+    if isinstance(edit, ProcReap):
+        return {"op": "ProcReap", "pid": edit.pid}
     if isinstance(edit, FdOpen):
         return {"op": "FdOpen", "pid": edit.pid, "fd": edit.fd, "path": edit.path}
     if isinstance(edit, FdClose):
@@ -151,6 +168,8 @@ def edit_from_dict(d: dict[str, Any]) -> HostEdit:
         return ProcSpawn(pid=d["pid"], ppid=d["ppid"], uid=d["uid"])
     if op == "ProcExit":
         return ProcExit(pid=d["pid"], code=d["code"])
+    if op == "ProcReap":
+        return ProcReap(pid=d["pid"])
     if op == "FdOpen":
         return FdOpen(pid=d["pid"], fd=d["fd"], path=d["path"])
     if op == "FdClose":

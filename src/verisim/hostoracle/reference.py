@@ -25,11 +25,12 @@ from verisim.host.delta import (
     FsDelta,
     HostDelta,
     ProcExit,
+    ProcReap,
     ProcSpawn,
     SetExit,
     apply,
 )
-from verisim.host.state import RUNNING, HostState
+from verisim.host.state import RUNNING, ZOMBIE, HostState
 from verisim.oracle.reference import ReferenceOracle
 
 from .base import EXIT_ERR, EXIT_OK, HostOracle, HostStepResult
@@ -46,7 +47,8 @@ class ReferenceHostOracle(HostOracle):
 
     def step(self, state: HostState, action: HostAction) -> HostStepResult:
         handler = {
-            "fork": self._fork, "exit": self._exit, "kill": self._kill, "setuid": self._setuid,
+            "fork": self._fork, "exit": self._exit, "kill": self._kill, "wait": self._wait,
+            "setuid": self._setuid,
             "open": self._open, "write": self._write, "read": self._read, "close": self._close,
         }[action.name]
         delta, exit_code, stdout = handler(state, action)
@@ -104,6 +106,23 @@ class ReferenceHostOracle(HostOracle):
         # The target becomes a ZOMBIE and its fds are released -- reusing ``ProcExit`` (so no new
         # delta type), with the SIGKILL convention for the exit status (128 + signal 9 = 137).
         return [ProcExit(pid=target, code=137), SetExit(EXIT_OK)], EXIT_OK, ""
+
+    def _wait(self, state: HostState, action: HostAction) -> _Outcome:
+        if not self._running(state, action.pid):
+            return self._fail()
+        try:
+            child = int(action.args[0])
+        except ValueError:
+            return self._fail()
+        victim = state.procs.get(child)
+        # The reaping half of the lifecycle: a parent collects a dead child's exit status and frees
+        # the table entry. Non-blocking and parent-only: ``child`` must exist, be a ZOMBIE, and have
+        # ``ppid == pid`` (you reap only your own dead children) -- else ECHILD. Waiting on a
+        # running child is *not* blocking here (no scheduler): it fails (nothing to reap yet).
+        if victim is None or victim.state != ZOMBIE or victim.ppid != action.pid:
+            return self._fail()
+        # Remove the zombie (``ProcReap``) and report its exit status; pids are not reused.
+        return [ProcReap(pid=child), SetExit(EXIT_OK)], EXIT_OK, str(victim.exit_code)
 
     def _setuid(self, state: HostState, action: HostAction) -> _Outcome:
         if not self._running(state, action.pid):

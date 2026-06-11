@@ -84,6 +84,42 @@ def test_kill_nonexistent_or_zombie_target_is_esrch() -> None:
     assert oracle.step(zombie, parse_host_action("kill 1 2")).exit_code == EXIT_ERR  # already dead
 
 
+def test_wait_reaps_a_zombie_child_and_returns_its_exit_code() -> None:
+    # The reaping half of the lifecycle: pid 1 forks pid 2, which exits; `wait` collects the status
+    # and removes pid 2 from the table (so zombies do not accumulate forever).
+    oracle = ReferenceHostOracle()
+    state = _run(oracle, HostState.initial(), ["fork 1", "exit 2 7"])
+    assert state.procs[2].state == ZOMBIE  # waiting to be reaped
+    result = oracle.step(state, parse_host_action("wait 1 2"))
+    assert (result.exit_code, result.stdout) == (EXIT_OK, "7")  # the reaped child's exit code
+    assert 2 not in result.state.procs  # the table entry is freed
+    # a killed child (exit 137) reaps the same way.
+    killed = _run(oracle, HostState.initial(), ["fork 1", "kill 1 2"])
+    assert oracle.step(killed, parse_host_action("wait 1 2")).stdout == "137"
+
+
+def test_wait_requires_a_zombie_child_of_the_caller() -> None:
+    oracle = ReferenceHostOracle()
+    # waiting on a still-RUNNING child fails (non-blocking: nothing to reap yet, not a hang).
+    running = _run(oracle, HostState.initial(), ["fork 1"])
+    assert oracle.step(running, parse_host_action("wait 1 2")).exit_code == EXIT_ERR
+    # waiting on a zombie that is not the caller's child is ECHILD (pid 3 is pid 2's child).
+    other = _run(oracle, HostState.initial(), ["fork 1", "fork 2", "exit 3 0"])
+    assert oracle.step(other, parse_host_action("wait 1 3")).exit_code == EXIT_ERR  # not pid 1's
+    assert oracle.step(other, parse_host_action("wait 2 3")).exit_code == EXIT_OK  # the true parent
+    # waiting on a nonexistent process is ECHILD.
+    assert oracle.step(HostState.initial(), parse_host_action("wait 1 99")).exit_code == EXIT_ERR
+
+
+def test_reaping_does_not_reuse_the_pid() -> None:
+    # The monotone allocator never reuses a pid: reaping frees the table entry but not the number.
+    oracle = ReferenceHostOracle()
+    final = _run(oracle, HostState.initial(), ["fork 1", "exit 2 0", "wait 1 2", "fork 1"])
+    assert 2 not in final.procs  # reaped
+    assert 3 in final.procs  # the next fork is pid 3, not a recycled pid 2
+    assert final.next_pid == 4
+
+
 def test_setuid_is_root_gated() -> None:
     oracle = ReferenceHostOracle()
     # root (uid 0) may drop privilege...

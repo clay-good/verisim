@@ -146,6 +146,41 @@ def test_host_kill_tier_a_equals_tier_b() -> None:
         sa, sb = ra.state, rb.state
 
 
+def test_host_wait_reaps_a_zombie_three_layers_deep() -> None:
+    # `wait` composes into SPEC-7 via `host`: a process on n0's host reaps its dead child, three
+    # layers deep (cluster -> host process table). The exit status surfaces as the dist value.
+    config = _config()
+    oracle = ReferenceDistOracle(config)
+    s = _run(oracle, config, ["host n0 fork 1", "host n0 exit 2 7"])
+    assert s.hosts["n0"].procs[2].state == "ZOMBIE"  # waiting to be reaped
+    r = oracle.step(s, parse_dist_action("host n0 wait 1 2"))
+    assert (r.status, r.value) == ("ok", "7")  # the reaped child's exit code
+    assert 2 not in r.state.hosts["n0"].procs  # the table entry is freed on n0's host
+    # per-node isolation: n0's zombie does not exist on n1's host, so n1's wait is ECHILD.
+    assert oracle.step(s, parse_dist_action("host n1 wait 1 2")).status == "host_err"
+    # a crashed node's host is unavailable — the cross-layer crash linkage reaches `wait`.
+    crashed = oracle.step(s, parse_dist_action("crash n0")).state
+    assert oracle.step(crashed, parse_dist_action("host n0 wait 1 2")).status == "unavailable"
+
+
+def test_host_wait_tier_a_equals_tier_b() -> None:
+    config = _config()
+    ref, sysb = ReferenceDistOracle(config), SystemDistOracle(config)
+    sa = sb = DistributedState.initial(config)
+    script = [
+        "host n0 fork 1", "host n0 fork 1", "host n0 exit 2 5",
+        "host n0 wait 1 2",   # reap the zombie -> ok, value "5"
+        "host n0 wait 1 3",   # ECHILD (pid 3 still running) -> host_err
+        "host n0 wait 1 99",  # ECHILD (no such process) -> host_err
+    ]
+    for cmd in script:
+        a = parse_dist_action(cmd)
+        ra, rb = ref.step(sa, a), sysb.step(sb, a)
+        assert cluster_view(ra.state) == cluster_view(rb.state), cmd
+        assert (ra.status, ra.value) == (rb.status, rb.value), cmd
+        sa, sb = ra.state, rb.state
+
+
 def test_setuid_privilege_is_enforced_per_host() -> None:
     # The embedded host enforces SPEC-6 privilege: a non-root process cannot setuid (EPERM).
     config = _config()

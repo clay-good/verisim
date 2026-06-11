@@ -26,6 +26,9 @@ _TRAJECTORY = [
     "close 2 0",       # FdClose
     "fork 1",          # ProcSpawn (another child)
     "exit 2 0",        # ProcExit (+ implied fd release)
+    "wait 1 2",        # ProcReap (collect the zombie, free the table entry)
+    "fork 1",          # ProcSpawn (pid 4 -- pids are not reused after reaping)
+    "kill 1 4",        # ProcExit via kill (zombify pid 4)
     "write 1 9 x",     # a failing syscall (EBADF) -> SetExit only
 ]
 
