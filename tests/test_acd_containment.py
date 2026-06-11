@@ -33,6 +33,17 @@ from verisim.net.state import connected_hosts
 from verisim.netoracle import ReferenceNetworkOracle
 
 
+def test_default_world_matches_the_flagship_model_world():
+    # a model backend can only predict for its training world (DEFAULT_NET_CONFIG); the default
+    # containment world must match it exactly, or a trained model rejects an unseen host (regression
+    # for the frontier-run bug: n_hosts=6 produced 'h5', outside the 5-host model vocab).
+    from verisim.net.config import DEFAULT_NET_CONFIG
+
+    net = ContainmentConfig().net()
+    assert net.hosts == DEFAULT_NET_CONFIG.hosts
+    assert net.ports == DEFAULT_NET_CONFIG.ports
+
+
 def test_defender_actions_compile_to_net_actions():
     assert DefenderAction("isolate", host="h1").to_net_action().name == "host_down"
     assert DefenderAction("patch", host="h1", port=22).to_net_action().name == "svc_down"

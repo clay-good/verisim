@@ -51,10 +51,17 @@ if TYPE_CHECKING:
 
 @dataclass(frozen=True)
 class ContainmentConfig:
-    """The containment MDP instance: topology size, episode length, and the operational cost."""
+    """The containment MDP instance: topology size, episode length, and the operational cost.
 
-    n_hosts: int = 6
-    n_ports: int = 2
+    The default `(n_hosts=5, n_ports=3)` matches `DEFAULT_NET_CONFIG` -- the world the flagship
+    `M_θ` is trained on -- so a model backend can predict for it. **Invariant:** with a model
+    backend, the env world must be a *sub-world* of the model's training world (its hosts/ports a
+    subset), or the model's tokenizer rejects an unseen host (the env is parameterized for the
+    oracle backend, which works at any size, but the trained model only knows the world it saw).
+    """
+
+    n_hosts: int = 5  # == DEFAULT_NET_CONFIG (the flagship model's world)
+    n_ports: int = 3
     episode_steps: int = 12
     action_cost: float = 0.02
     n_links: int = 7  # topology density (edges seeded per episode)

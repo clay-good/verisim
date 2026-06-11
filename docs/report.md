@@ -2307,6 +2307,72 @@ The run-records are git-ignored (regenerable); the figures and their CSVs are
 committed next to the plotting scripts, so a reader can check the numbers against the
 figures without rerunning anything.
 
+## SPEC-19/20 — the flagship and the usefulness proof (2026-06-11)
+
+The program's priority push (SPEC.md §12): make the value emphatic on **one real trained model**, and
+prove the model is **useful**, not just faithful. Both ran end-to-end against the exact oracle.
+
+**SPEC-19 — the flagship `H_ε(ρ)` on a real `M_θ`.** A single flat network `M_θ` was trained and
+frozen at the SPEC-10 HS1.3 compute-optimal frontier (`l@9.6k`, 110k params): free-running
+`H_free` = **18.75 id / 29.75 ood**, reproducing the SPEC-10 3-seed program-best on one seed (FL0, gate
+PASS). On that frozen checkpoint:
+
+- **FL1 / H69 — the headline.** Four-arm curve (floor 18.75 → ceiling 96). H69's strict bar (≥80% of
+  ceiling at ρ≤0.2) is **not met** — the curve rises ~linearly, no free sub-linear knee. **But** the
+  composed policy (conformal-on-real-decode-entropy OR speculative window) **nearly doubles**
+  fixed-interval at equal budget: **+57% at ρ=0.2** (29.5 vs 18.75), **+94% at ρ=0.5** (61.25 vs 31.5).
+  Smart scheduling decisively beats the clock *on a real model*, where every oracle-free stand-in gave
+  a dead floor+cliff. This is the headline: not the knee, the scheduling win — measured exactly.
+- **FL2 / H70 — it composes, and decomposes FL1.** At ρ=0.3: conformal-only **42.0**, speculative-only
+  18.75 (=floor, inert), both 42.0. The **conformal trigger on the real signal carries the entire
+  win**; the speculative window is inert here. The CF6 refinement: a signal that cannot *certify* a
+  conformal coverage bound is still an excellent consultation *scheduler* — certifying coverage and
+  timing a consultation are different jobs.
+- **FL3 / H71 — structure buys goal-horizon. SUPPORTED.** On the trained graph+RSSM arm the HS3 wall
+  survives (`H_free`=0.33≈0), yet landmark planning lifts far-goal reach **0.167 → 0.667 (4×)** at
+  G=16 — structure buys goal-space horizon where it cannot buy step horizon, on a real trained arm.
+- **FL4 / H72 — model-invariance. SUPPORTED.** Flat (floor 18.75) and graph (floor 0.50) share one
+  curve shape (no knee) — the loop governs the shape, the proposer sets the floor (H22 on real models).
+
+**SPEC-20 — train a defender *inside* the model, transfer to reality.** A defensive containment agent
+trained in `E_oracle` / `E_grounded` / `E_free`, all evaluated in reality. The result is a sharp
+**dissociation**:
+
+- **H73 (qualified) + H75 (SUPPORTED).** The defender learns (reality containment 0.42 vs a 0.21 noop
+  baseline), and the grounded-trained policy's sim-to-emulation gap is **0.000** — train in the model,
+  deploy in reality, identical performance. The world model **is** a faithful training environment.
+- **H74 — the money hypothesis — REFUTED (the bankable negative).** Grounded ≡ free (reality 0.420 =
+  0.420; advantage **0.000**, flat across ρ, H76 also refuted). Oracle-grounding during training buys
+  **no** transfer advantage. *Mechanism (diagnosed):* both backends teach the same "isolate exposed
+  hosts" policy, because it keys on compromise/exposure features that **survive the model's reachability
+  drift** — so the flat model's errors never change the preferred action.
+- **The finding:** *"a faithful training environment whose faithfulness is not load-bearing for this
+  task"* — the oracle's whole point (SPEC.md §10.1) is that this negative is **bankable**: it
+  dissociates "faithful sim" from "faithfulness is necessary," and pre-registers the redirect (SPEC-20
+  §7) — find tasks whose optimal policy depends on the dynamics the model actually drifts on, not on
+  drift-invariant features.
+
+Reproduce (CPU-local; the apparatus' smoke instances run in CI):
+
+```sh
+# SPEC-19 FL0 — train + freeze the flagship checkpoint (gate: reload-determinism + SPEC-10 band):
+python -m verisim.experiments.flagship --config configs/flagship.json --out runs/flagship/net-l
+# FL1 — the headline H_ε(ρ) curve (writes CSV + figure):
+python -m verisim.experiments.flagship_curve --checkpoint runs/flagship/net-l \
+    --out figures/fl1_flagship_curve.csv --plot figures/fl1_flagship_curve.png
+# FL2 — the composition ablation (which method drives FL1):
+python -m verisim.experiments.flagship_ablation --checkpoint runs/flagship/net-l --rho 0.3 \
+    --out figures/fl2_composition.csv
+# FL3 — structured-arm goal-horizon (the HS3 wall + the landmark escape, one model):
+python -m verisim.experiments.flagship_goal --out figures/fl3_goal_horizon.csv
+# FL4 — proposer swap (model-invariance of the curve shape):
+python -m verisim.experiments.flagship_swap --checkpoint runs/flagship/net-l \
+    --out figures/fl4_proposer_swap.csv
+# SPEC-20 UA1/UA2 — learn-in-imagination + the grounding ablation (the money hypothesis):
+python -m verisim.experiments.ua_transfer --checkpoint runs/flagship/net-l \
+    --out figures/ua2_grounding_ablation.csv
+```
+
 ## What v0 ships for others
 
 Per SPEC-2 §15, the env + metric are packaged for reuse:
