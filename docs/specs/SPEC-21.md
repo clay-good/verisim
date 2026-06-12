@@ -294,17 +294,19 @@ In every branch the artifact and the writeup ship; only their headline sentence 
 
 | ID | Hypothesis / artifact | State | Result |
 |---|---|---|---|
-| CP0 | the scale-law harness (one pipeline, one dial) | ▶ proposed (CPU core) | — |
-| CP1 | the ordered task suite | ▶ proposed (CPU core) | — |
-| CP2 | the structural (fd/reachability) rung | ▶ proposed (CPU core) | — |
-| CP3 | the deep-content rung (the residue probe) | ▶ proposed (CPU core) | — |
-| CP4 | the load-bearing frontier + the forecast (CS1/CS2) | ▶ proposed (CPU core) | — |
-| CP5 | the GPU-readiness gate (config + dry-run + cost) | ▶ proposed (CPU core) | — |
-| CS1 | H87/H88 — the frontier recedes; the residue remains | ▶ proposed (GPU run) | — |
-| CS2 | H89 — the drift profile forecasts the frontier | ▶ proposed | — |
+| CP1 | the ordered task suite | ✅ shipped (CPU core) | the `verisim-cue` task suite ([`cue/tasks.py`](../../src/verisim/cue/tasks.py)): four computer-use predictive-defense tasks ordered structure→content (`process-control` → `fd-control` → `file-integrity` → `content-value`), each a SPEC-20 faithful-vs-free gap over a generic **keyed-set extractor** (procs / fds / written-files / (path,content)), reusing the shipped UA8 workload+predictor machinery. The structure→content gap gradient appears already at smoke scale (process **+0.00** / fd **+0.06–0.12** / file **+0.31–0.38** / content **+0.50**). |
+| CP2 | the structural (fd/reachability) rung | ✅ shipped (CPU core) | the `fd-control` task (keyed on the open-fd table) populates the near-structure middle of the spectrum — a structural lever that drifts moderately (gap ~0.06–0.19 at smoke scale). |
+| CP3 | the deep-content rung (the residue probe) | ✅ shipped (CPU core) | the `content-value` task (keyed on the actual *(path, content)* pairs, not just which file) is the highest-entropy rung and the irreducible-residue probe (H88); the per-task `keyed_drift` is the CP3 content-accuracy diagnostic (a single free-run measurement). |
+| CP0 | the scale-law harness (one pipeline, one dial) | ✅ shipped (CPU core) | `run_scale_law(config)` ([`experiments/scale_law.py`](../../src/verisim/experiments/scale_law.py)): per rung, train+freeze a host `M_θ` (the HFL0 lifecycle, scale swapped via `dataclasses.replace`) → the drift profile → the per-task gap + cheap keyed drift + the ρ-grounded knee for each load-bearing task. Device-agnostic, seeded; the smoke ladder runs green in CI. |
+| CP4 | the load-bearing frontier + the forecast (CS1/CS2) | ✅ shipped (CPU core) | the reducers: `load_bearing_frontier` (the contour where the gap crosses threshold), `frontier_verdict` (H87 recession + H88 residue), `forecast_check` (H89). **Committed 4-rung CPU run** ([`cs1_loadbearing_frontier.csv`](../../figures/cs1_loadbearing_frontier.csv), [`.png`](../../figures/cs1_loadbearing_frontier.png)): the structure→content gap gradient holds at every rung (process ≤0.16 → fd 0.13–0.25 → file 0.56–0.88 → content **0.81–0.94**); process-control falls below the load-bearing threshold after `xs` (the structural-first recession *beginning*), content-value stays load-bearing at every rung (H88 directionally confirmed), and the cheap keyed drift forecasts the gap at **Spearman +0.965** (H89). The CPU range is too narrow to fit the full recession — that is the GPU run's job, stated plainly. |
+| CP5 | the GPU-readiness gate (config + dry-run + cost) | ✅ shipped (CPU core) | [`configs/scale_law_gpu.json`](../../configs/scale_law_gpu.json) (full ladder `xs…xxxl` + `device=cuda`) + `--dry-run` (validates shapes/device/cost-estimate **without training**) + the one-command entry point `python -m verisim.experiments.scale_law --config … --device cuda`. The dry-run on the committed config is green — a rented GPU runs a proven program. |
+| CS1 | H87/H88 — the frontier recedes; the residue remains | ▶ proposed (GPU run) | the committed scale law (apparatus CPU-proven; the headline needs the wide GPU ladder) |
+| CS2 | H89 — the drift profile forecasts the frontier | ◐ apparatus shipped + smoke-confirmed | `forecast_check` Spearman +0.90 at smoke scale; the committed number is the GPU run |
 | CS3 | H90 — survives the system oracle (real computer-use) | ▶ proposed (system-oracle-gated) | — |
-| — | `verisim-cue` artifact + the essay | ▶ proposed | — |
+| — | `verisim-cue` artifact + the essay | ◐ environment shipped ([`cue/`](../../src/verisim/cue/)); packaging + essay proposed | — |
 
-The discipline of §5 is the load-bearing commitment of this spec: the CPU core (CP0–CP5) is what turns
-"rent a GPU and hope" into "rent a GPU and run a proven program." When CP5 is green, the headline is one
-command away.
+The discipline of §5 is the load-bearing commitment of this spec, and it is now **met**: the CPU core
+(CP0–CP5) is shipped — the full pipeline runs green on the smoke ladder in CI, every task/knee/drift
+component has a deterministic test, and the GPU config's `--dry-run` validates without training. The
+headline scale law (CS1/CS2/CS3) is now one command — `python -m verisim.experiments.scale_law --config
+configs/scale_law_gpu.json --device cuda` — away.

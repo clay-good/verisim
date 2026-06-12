@@ -2456,6 +2456,37 @@ trained in `E_oracle` / `E_grounded` / `E_free`, all evaluated in reality. The r
 
   ![UA10: the network flow-integrity cross-world confirmation. Left — the content-keyed positive: the faithful predictor (green) stays at 1.0 while the free predictor (red) collapses from 0.58 to 0.08 as the workload horizon grows and flow drift compounds. Right — the useful knee: the ρ-grounded predictor's catch rate climbs from the free floor (0.08) to the faithful ceiling (1.0), recovering it at ρ=0.2 (4 oracle calls vs 20 for the every-step predictor)](../figures/ua10_net_integrity.png)
 
+**SPEC-21 — scaling the boundary into a law (the CPU-proven core).** SPEC-20 drew the structure/content
+boundary on *one tiny model per world*. The standing objection is the one every result of its kind
+faces: *does it survive scale, or is it a small-model vignette?* SPEC-21 reframes the boundary as a
+*moving function of capacity* and measures its trajectory — sweeping the SPEC-10 capacity ladder
+*through* the SPEC-20 content/structure measurement, on a **verifiable computer-use environment**
+(`verisim-cue`: the host shell/file/process world, the slice of computer use that admits a
+ground-truth oracle). The load-bearing engineering commitment is the **CPU-proven / GPU-ready
+contract** (one pipeline, one dial): every component runs on CPU at smoke scale, identically, before
+any GPU is rented — the GPU run is a config swap, not a rewrite. The CPU core (CP0–CP5) is now shipped.
+
+- **The ordered task suite (CP1–CP3).** Four computer-use predictive-defense tasks ordered
+  structure→content — `process-control` (the process tree) → `fd-control` (the open-fd table) →
+  `file-integrity` (*which* files written, UA8) → `content-value` (the actual *(path, content)*, the
+  highest-entropy rung and the irreducible-residue probe) — each a SPEC-20 faithful-vs-free gap over a
+  generic **keyed-set extractor**, reusing the shipped UA8 machinery.
+- **The committed 4-rung CPU run (CP0/CP4).** Training a host `M_θ` at each rung `xs`(1k)→`s`→`m`→`l`(110k)
+  and measuring the per-task gap, the structure→content gradient holds at **every** rung (process ≤0.16
+  → fd 0.13–0.25 → file 0.56–0.88 → content **0.81–0.94**); `process-control` falls below the
+  load-bearing threshold after `xs` — the structural-first recession *beginning* — while `content-value`
+  stays load-bearing at every rung (the irreducible residue, H88, directionally confirmed). And the
+  **cheap per-task keyed drift forecasts the expensive gap at Spearman +0.965** (H89: the cheap profile
+  predicts the load-bearing verdict). The honest scope is stated plainly: the CPU capacity range is too
+  narrow to fit the *full* recession — that is the GPU run's job, and the apparatus that produces it is
+  proven here.
+- **The GPU-readiness gate (CP5).** [`configs/scale_law_gpu.json`](../configs/scale_law_gpu.json) (the
+  full `xs…xxxl` ladder + `device=cuda`) plus a `--dry-run` that validates shapes, device, and a
+  pre-registered cost estimate *without training* — green on the committed config, so a rented GPU runs
+  a proven program. The headline scale law (CS1/CS2/CS3) is now one command away.
+
+  ![SPEC-21 CS1: the faithfulness-for-control scale law (CPU-proven apparatus). Left — the load-bearing frontier: the faithful-vs-free gap per task vs model capacity (log x), one line per task ordered structure→content; process-control (green) drops below the load-bearing threshold while content-value (red) stays high — the structural-first recession with an irreducible content residue. Right — the forecast: the cheap per-task keyed drift versus the expensive gap, every (rung, task) cell falling near the line (Spearman +0.965), so the cheap profile forecasts the load-bearing verdict](../figures/cs1_loadbearing_frontier.png)
+
 Reproduce (CPU-local; the apparatus' smoke instances run in CI):
 
 ```sh
@@ -2507,6 +2538,13 @@ python -m verisim.experiments.ua_host_grounded --checkpoint runs/flagship/host-l
 # (faithful 1.0 vs free collapsing to 0.08) + the useful knee (ρ=0.2 recovers the ceiling, 5x cheaper):
 python -m verisim.experiments.ua_net_integrity --checkpoint runs/flagship/net-l \
     --out figures/ua10_net_integrity.csv
+# SPEC-21 CP5 — the GPU-readiness gate: validate the full ladder + cost estimate WITHOUT training:
+python -m verisim.experiments.scale_law --config configs/scale_law_gpu.json --dry-run
+# SPEC-21 CP0-CP4 — the committed 4-rung CPU ladder (the CPU-proven apparatus; structure->content
+# gap gradient + the cheap-forecasts-expensive check, Spearman +0.965):
+python -m verisim.experiments.scale_law --cpu --out figures/cs1_loadbearing_frontier.csv
+# the committed scale law (CS1/CS2/CS3) — the SAME pipeline, one dial (the GPU run):
+python -m verisim.experiments.scale_law --config configs/scale_law_gpu.json --device cuda
 ```
 
 ## What v0 ships for others

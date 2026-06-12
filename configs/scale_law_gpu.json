@@ -1,0 +1,19 @@
+{
+  "_comment": "SPEC-21 CS1/CS2 -- the committed scale-law GPU run. The ONLY difference from the CI smoke run is this ladder + device (SPEC-21 §5, one pipeline / one dial). Entry point: python -m verisim.experiments.scale_law --config configs/scale_law_gpu.json --device cuda. Validate first WITHOUT training: add --dry-run (CP5 gate). Pre-registered cost envelope: ~one 24-48GB card; see the --dry-run cost estimate (estimated_gpu_hours) before renting.",
+  "device": "cuda",
+  "threshold": 0.05,
+  "scales": [
+    { "label": "xs",   "n_embd": 32,  "n_layer": 1, "n_head": 2, "train_steps": 2000 },
+    { "label": "s",    "n_embd": 64,  "n_layer": 2, "n_head": 2, "train_steps": 2500 },
+    { "label": "m",    "n_embd": 128, "n_layer": 2, "n_head": 4, "train_steps": 3000 },
+    { "label": "l",    "n_embd": 192, "n_layer": 3, "n_head": 4, "train_steps": 3500 },
+    { "label": "xl",   "n_embd": 320, "n_layer": 4, "n_head": 4, "train_steps": 6000 },
+    { "label": "xxl",  "n_embd": 512, "n_layer": 6, "n_head": 8, "train_steps": 10000 },
+    { "label": "xxxl", "n_embd": 768, "n_layer": 8, "n_head": 8, "train_steps": 16000 }
+  ],
+  "base": {
+    "data_seeds": 48,
+    "train_steps_per_traj": 60,
+    "num_threads": 0
+  }
+}
