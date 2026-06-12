@@ -17,6 +17,7 @@ from verisim.experiments.scale_law import (
     ScaleLawResult,
     ScaleRung,
     config_from_json,
+    cost_forecast_check,
     dry_run,
     estimate_cost,
     forecast_check,
@@ -97,6 +98,28 @@ def test_knee_trajectory_and_verdict():
     assert v["deepest_load_bearing"] == "content-value"
     assert v["knee_trend"] == "rising"
     assert v["knee_delta"] == pytest.approx(0.2)
+
+
+def test_cost_forecast_check():
+    # build a result where the cheap keyed drift monotonically orders the knee (H89, cost dim)
+    def cost_rung(label, params):
+        gaps = [
+            TaskGap("fd-control", "fds", 1, 1.0, 0.7, 0.30, 16),
+            TaskGap("file-integrity", "fs", 2, 1.0, 0.4, 0.60, 16),
+            TaskGap("content-value", "fs", 3, 1.0, 0.1, 0.90, 16),
+        ]
+        keyed = {"fd-control": 0.3, "file-integrity": 0.6, "content-value": 0.9}
+        # higher drift -> higher knee:
+        knees = {"fd-control": 0.1, "file-integrity": 0.2, "content-value": 0.5}
+        return ScaleRung(label, params, {"fs_drift": 0.3}, gaps, keyed, knees)
+
+    result = ScaleLawResult(rungs=[cost_rung("xs", 1024), cost_rung("l", 110592)])
+    cf = cost_forecast_check(result, threshold=0.05)
+    assert cf["n_cells"] == 6  # 3 load-bearing tasks x 2 rungs
+    assert cf["spearman"] > 0.6 and cf["cost_forecastable"]  # cheap drift forecasts the cost too
+    # too few cells -> graceful empty verdict
+    empty = cost_forecast_check(ScaleLawResult(rungs=[]), threshold=0.05)
+    assert empty["n_cells"] == 0 and not empty["cost_forecastable"]
 
 
 def test_estimate_cost_monotone_in_ladder():

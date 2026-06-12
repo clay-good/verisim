@@ -2490,16 +2490,18 @@ any GPU is rented — the GPU run is a config swap, not a rewrite. The CPU core 
 - **The cost dimension — how expensive it is to buy back faithfulness, across scale.** The frontier
   says *where* faithfulness is load-bearing; the harness also computes a per-task **ρ-knee** (the
   smallest consultation budget that buys back the faithful catch, UA9/H81) — the *cost* of buying it.
-  That signal sat in the CSV unanalyzed; `knee_trajectory` / `knee_verdict` surface it as the law's
-  second dimension. The committed run shows a real trend: **the deep-content residue's knee rises
-  0.3 → 0.5 as the model scales, while file-integrity stays cheap and flat at ~0.2.** So the
-  irreducible residue (H88) is **doubly hard** — not only does the content gap persist as scale closes
-  the structural gap, the *cost* of buying it back *grows*. Shallower content (file-integrity) stays
-  cheaply buyable; the deepest content gets both more load-bearing and more expensive. A CPU-scale
-  observation on a coarse ρ grid (the GPU run resolves it), and a sharpening of H88: verification is
-  not just a permanent primitive on the residue, it is an increasingly *costly* one.
+  That signal sat in the CSV unanalyzed; `knee_trajectory` / `knee_verdict` / `cost_forecast_check`
+  surface it as the law's second dimension. **On a fine ρ grid, the deep-content residue's knee is
+  flat at ρ≈0.25 across every rung** (an earlier coarse-grid run read this as a 0.3 → 0.5 *rise* — the
+  fine grid corrects that to a quantization artifact, the value of resolving the cost dimension
+  properly). So the irreducible residue (H88) is load-bearing and *persistent*, but **cheaply *and
+  stably* buyable**: verification on the residue is a permanent primitive, but a *cheap* one (~ρ0.25,
+  about 4 oracle calls per 16-step episode), and the cost does not grow with scale. **And the cost
+  forecast extends H89:** the cheap keyed drift forecasts the *knee* — not just the gap — at
+  **Spearman +0.717**, so the single cheap free-run profile predicts both *where* faithfulness is
+  load-bearing *and* how expensive it is to buy back, without ever running the ρ-sweep.
 
-  ![SPEC-21 knee trajectory — the cost dimension of the scale law. The useful-knee ρ (the consultation budget needed to buy back the faithful catch) per load-bearing task vs model capacity (log x). content-value (red, the deep residue) rises from 0.3 to 0.5 as the model scales — the residue gets more expensive to buy back — while file-integrity (orange) stays flat at 0.2 (cheaply, stably buyable) and fd-control falls; process-control drops out as it stops being load-bearing](../figures/cs1_knee_trajectory.png)
+  ![SPEC-21 knee trajectory — the cost dimension of the scale law. The useful-knee ρ (the consultation budget needed to buy back the faithful catch) per load-bearing task vs model capacity (log x). content-value (red, the deep residue) stays flat at ρ≈0.25 across every rung — the residue is cheaply and stably buyable, the cost does not grow with scale — while file-integrity (orange) and fd-control (olive) sit near 0.10–0.20; process-control drops out as it stops being load-bearing](../figures/cs1_knee_trajectory.png)
 
 - **The artifact half — `verisim-cue` (deliverable #2).** A scale law is the *result*; `verisim-cue`
   is the *thing others use*. The computer-use task suite is hardened the SPEC-18 way into a frozen,

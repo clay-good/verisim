@@ -108,6 +108,8 @@ class ScaleLawConfig:
             drift_config=HostDriftConfig(
                 n_episodes=8, accuracy_steps=12, drift_steps=10, drift_episodes=8,
             ),
+            # a fine ρ grid so the useful-knee (the cost dim) resolves below the coarse 0.1 step
+            knee_rhos=(0.0, 0.05, 0.1, 0.15, 0.2, 0.25, 0.3, 0.35, 0.4, 0.45, 0.5, 0.6, 0.8, 1.0),
         )
 
 
@@ -202,6 +204,34 @@ def forecast_check(result: ScaleLawResult) -> dict[str, Any]:
         "spearman": spearman(drifts, gaps),
         # H89 supported if the cheap drift orders the gaps well (forecast is reliable)
         "forecastable": spearman(drifts, gaps) > 0.6,
+    }
+
+
+def cost_forecast_check(result: ScaleLawResult, threshold: float = 0.05) -> dict[str, Any]:
+    """H89 extended to the *cost* dimension: does the cheap drift forecast the knee, not the gap?
+
+    `forecast_check` (H89) showed the cheap keyed drift forecasts *whether* a task is load-bearing
+    (the gap). This asks whether it also forecasts *how expensive it is to buy back* — the ρ-knee
+    — on the load-bearing cells (gap > threshold, knee computed). A strong correlation means a
+    cheap free-run profile predicts both the load-bearing verdict *and* the budget a task
+    needs, without ever running the ρ-sweep. Pool the load-bearing ``(rung, task)`` cells and
+    correlate the cheap keyed drift against the knee.
+    """
+    drifts: list[float] = []
+    knees: list[float] = []
+    for rung in result.rungs:
+        for g in rung.gaps:
+            if g.gap > threshold and g.task in rung.knees:
+                drifts.append(rung.keyed_drift.get(g.task, 0.0))
+                knees.append(rung.knees[g.task])
+    if len(drifts) < 2:
+        return {"n_cells": len(drifts), "spearman": 0.0, "pearson": 0.0, "cost_forecastable": False}
+    return {
+        "n_cells": len(drifts),
+        "pearson": pearson(drifts, knees),
+        "spearman": spearman(drifts, knees),
+        # the cost forecast is weaker than the gap forecast (the knee is on a coarse ρ grid)
+        "cost_forecastable": spearman(drifts, knees) > 0.6,
     }
 
 
@@ -436,6 +466,9 @@ def main() -> None:  # pragma: no cover - CLI entry point
         print(f"knee (cost to buy back faithfulness) on {kv['deepest_load_bearing']}: "
               f"ρ {kv['knee_at_smallest']:.2f} -> {kv['knee_at_largest']:.2f} "
               f"({kv['knee_trend']}) across scale")
+    cf = cost_forecast_check(result, config.threshold)
+    print(f"cost forecast (cheap drift -> knee): spearman={cf['spearman']:+.3f}  "
+          f"cost_forecastable={cf['cost_forecastable']}")
 
 
 if __name__ == "__main__":  # pragma: no cover
