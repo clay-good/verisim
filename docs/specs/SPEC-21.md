@@ -188,7 +188,7 @@ The CPU core is *done* when: the full pipeline runs green on the smoke ladder in
 drift component has a deterministic test, and a dry-run of the GPU config validates (shapes, device
 switch, cost estimate) without training — i.e., the rented GPU runs a *proven* program.
 
-## 6. Hypotheses (H87–H90)
+## 6. Hypotheses (H87–H91)
 
 Pre-registered with both branches, per SPEC.md §10.1.
 
@@ -218,6 +218,22 @@ Pre-registered with both branches, per SPEC.md §10.1.
   expensive per-task ablation is forecastable from the cheap profile, and the frontier can be *predicted*
   for a new task without running it. *Refuted if* the per-task gaps do not track the per-dimension
   accuracies (the frontier has structure the profile misses). Tested as **CS2** (the forecast check).
+- **H91 (the verisim-cue scorecard is discriminative — the artifact-validity result).** The benchmark
+  half (§8.2) earns the name "benchmark" only if its scorecard *stably ranks* computer-use world-models
+  by faithfulness — the SPEC-18 H65 test for the computer-use vertical, which §8.2 positions verisim-cue
+  to inherit ("packaged on the SPEC-18 verisim-bench line"). Scoring a controlled fidelity ladder (the
+  trained arm deferred, the LP7 rule) through the ordered suite by *recall over the keyed set*, the
+  ranking is stable (high Kendall τ between disjoint seed splits, CI-positive) **and** every adjacent
+  fidelity tier resolves above its paired across-split noise (the strict test, not the trivial
+  top-beats-floor). *Refuted if* adjacent tiers collapse into seed noise — then a cue scorecard is not
+  trustworthy as a frozen eval, a result that redirects the artifact rather than a number to bury.
+  Tested as **CL1** (the leaderboard + its discriminative validity). **CPU confirmation (CL1):** the cue
+  scorecard is **discriminative** — Kendall τ = **+1.000** [+1.00, +1.00] across disjoint seed splits and
+  every adjacent tier clears 2× its paired noise (binding gap 0.035 > 0.021), so verisim-cue stably ranks
+  computer-use world-models by faithfulness. The ranking is carried by the structure→content gradient
+  (structure tasks saturate at recall 1.0 for every tier; content-value recall climbs 0.00 → 1.00 with
+  capacity), the same gradient the scale law sweeps — so the leaderboard and the frontier are the
+  model-facing and capacity-facing duals of one object.
 - **H90 (the scale law survives the system oracle — real computer-use).** The frontier and its motion,
   measured against the reference oracle, hold when the SPEC-11 `SandboxOracle` (real `/bin/sh`, real
   kernel) replaces it as the reality anchor — so the scale law is about real computer-use dynamics, not
@@ -262,11 +278,14 @@ swap. Each ships a deterministic test and a smoke-ladder result.
 2. **The artifact (the thing others use).** `verisim-cue`: the verifiable computer-use environment +
    the load-bearing-frontier benchmark — the one computer-use world-model benchmark with ground-truth
    labels *and* a faithfulness-load-bearing verdict per task, packaged on the SPEC-18 `verisim-bench`
-   line (Croissant + datasheet + model-card, a frozen eval battery). Adoption is *not* a hypothesis
-   (SPEC-18 §9); the artifact is shipped whether or not it is adopted.
+   line (Croissant + datasheet + model-card, a frozen eval battery) with a **discriminative leaderboard**
+   (CL1/H91: the scorecard stably ranks computer-use world-models by faithfulness, the SPEC-18 H65 parity
+   that makes the scorecard trustworthy as a frozen eval). Adoption is *not* a hypothesis (SPEC-18 §9);
+   the artifact is shipped whether or not it is adopted.
 3. **The writeup (the thing that circulates).** A single essay — the verifier-as-primitive axis, the
    structure/content boundary, the bankable-negative methodology, and now the *scale law* — drafted via
    the `essay` skill, the form that reaches the right readers for a non-credentialed researcher.
+   **Shipped:** [`docs/essays/the-verifier-is-the-primitive.md`](../essays/the-verifier-is-the-primitive.md).
 
 ## 9. Gate and what each branch licenses
 
@@ -312,19 +331,24 @@ In every branch the artifact and the writeup ship; only their headline sentence 
 | CP4+ | the **cost dimension** — the knee trajectory + the cost forecast | ✅ shipped (CPU core) | the harness computed a per-task ρ-knee (the cheap-purchase signal, UA9/H81) but never analyzed it; `knee_trajectory` + `knee_verdict` + `cost_forecast_check` ([`experiments/scale_law.py`](../../src/verisim/experiments/scale_law.py)) surface the law's second dimension (the frontier says *where* faithfulness is load-bearing; the knee says *how expensive it is to buy back*). **Committed run on a fine ρ grid** ([`cs1_knee_trajectory.png`](../../figures/cs1_knee_trajectory.png)): the deep-content residue's knee is **flat at ρ≈0.25 across every rung** (an earlier coarse-grid run read this as a 0.3→0.5 *rise*, which the fine grid corrects to a quantization artifact) — so the irreducible residue (H88) is load-bearing and *persistent* but **cheaply *and stably* buyable**: verification on it is a permanent primitive, but a *cheap* one. And the **cost forecast extends H89**: the cheap keyed drift forecasts the knee, not just the gap, at **Spearman +0.717** — the cheap free-run profile predicts both *where* faithfulness is load-bearing and *how expensive* it is to buy back. |
 | CP5 | the GPU-readiness gate (config + dry-run + cost) | ✅ shipped (CPU core) | [`configs/scale_law_gpu.json`](../../configs/scale_law_gpu.json) (full ladder `xs…xxxl` + `device=cuda`) + `--dry-run` (validates shapes/device/cost-estimate **without training**) + the one-command entry point `python -m verisim.experiments.scale_law --config … --device cuda`. The dry-run on the committed config is green — a rented GPU runs a proven program. |
 | CS1-dist | **is the structural-first recession (H87) universal?** the distributed recession test | ✅ shipped (CPU) — **a refinement of H87** | host/network proved "structural-first" *for free*: there the structure gap was ~0 at every rung, so it had already receded. The distributed world is the clean test — even partition *structure* is hard to learn (non-zero gap at small scale) ([`experiments/dist_boundary.py::dist_recession`](../../src/verisim/experiments/dist_boundary.py), [`ua11_dist_recession.csv`](../../figures/ua11_dist_recession.csv), [`.png`](../../figures/ua11_dist_recession.png)). **Committed 2-rung run:** the content gap recedes sharply (0.60 → 0.28) but the **structure gap persists** (0.25 → 0.20 — it does *not* reach ~0). So the structural-first recession is **not universal**: it is a property of worlds where the structure is *trivially learnable*. What *is* universal across all three worlds is the **gradient** (content > structure at every rung), not a structural-first *ordering* of the recession. (Trajectory noisy run-to-run at CPU scale; "the distributed structure gap persists" is the two-run-stable signal.) |
+| CL1 | H91 — **the verisim-cue scorecard is discriminative** (the artifact-validity result) | ✅ shipped (CPU) | the benchmark-half's missing parity with its declared sibling: §8.2 positions verisim-cue "on the SPEC-18 verisim-bench line," whose headline (H65) is a *discriminative leaderboard* — but the cue artifact shipped a per-model `score_model` with no cross-model ranking or rank-stability verdict. [`cue/leaderboard.py`](../../src/verisim/cue/leaderboard.py) + [`experiments/cue_leaderboard.py`](../../src/verisim/experiments/cue_leaderboard.py) close it: score a controlled fidelity ladder (floor → graded learned tiers → oracle ceiling; the trained arm deferred, the LP7 rule) through the ordered suite by **recall over the keyed set** (a defense budget covering the true set, so catch is a *smooth* fidelity score — the scale-law's small fixed budget saturates to {0,0.5,1} and collapses adjacent tiers), then decide validity the strict SPEC-18 way (reusing the proven `bench.leaderboard` rank-stability discipline): Kendall τ between disjoint seed-split leaderboards **and** every adjacent tier resolved above its *paired* across-split noise. **Committed 5-tier run** ([`cl1_cue_leaderboard.csv`](../../figures/cl1_cue_leaderboard.csv), [`.png`](../../figures/cl1_cue_leaderboard.png)): **discriminative** — τ = **+1.000** [+1.00, +1.00], every adjacent gap clears 2× its noise (binding 0.035 > 0.021), and the ranking is carried by the **structure→content gradient** (process/fd recall flat at 1.0 — structure never load-bearing; content-value recall climbs **0.00 → 0.49 → 0.68 → 0.86 → 1.00** with capacity; file-integrity 0.83 → 1.00 in between). The leaderboard and the frontier (CS1) are the **model-facing and capacity-facing duals** of one object: the frontier asks "across capacity, where does the boundary sit?", the leaderboard asks "for these models, which rank highest?" — and both key on the same content drift. The bankable negative (a non-discriminative scorecard) is first-class; the trained-`M_θ` leaderboard entries are the deferred GPU arm. |
 | CS1 | H87/H88 — the frontier recedes; the residue remains | ▶ proposed (GPU run) | the committed scale law (apparatus CPU-proven; the headline needs the wide GPU ladder) |
 | CS2 | H89 — the drift profile forecasts the frontier | ◐ apparatus shipped + smoke-confirmed | `forecast_check` Spearman +0.90 at smoke scale; the committed number is the GPU run |
 | CS3 | H90 — survives the system oracle (real computer-use) | ✅ shipped (CPU) | the scale law's headline object — the **load-bearing gap** — measured against a real `/bin/sh` ([`experiments/cs3_system_anchor.py`](../../src/verisim/experiments/cs3_system_anchor.py), [`cs3_system_anchor.csv`](../../figures/cs3_system_anchor.csv), [`.png`](../../figures/cs3_system_anchor.png)). The scale-law sibling of [`sy1`](../../src/verisim/experiments/sy1.py)/[`pb_transfer`](../../src/verisim/experiments/pb_transfer.py): on the content grammar (the slice the real shell anchors, where SY1/H27 proved it bit-exact), the per-task faithful-vs-free gap is swept across a **capacity-proxy α-ladder** — a content-drifting `M_θ` stand-in (trained arm deferred, the LP7 rule) faithful on structure, drifting on content with prob `1−α`, with an **irreducible residue floor** (H88's effectively-unlearnable content) — and scored against **both** reality anchors. **Committed 4-rung run (`α∈{0.3,0.5,0.7,0.9}`, real `/bin/sh`, platform=darwin; Linux CI reproduces):** the load-bearing gap is **anchor-invariant — `gap_sys == gap_ref` bit-for-bit (max Δ = 0.0e+00)** at every cell (H90 confirmed); the structure→content **gradient** holds under the real kernel (file-integrity gap **0.000** flat / content-value gap **0.76→0.56→0.41→0.28** receding); the content **residue stays load-bearing under the real shell** at the top rung (0.28 > 0.05, H88-consistency); and the cheap keyed drift **forecasts the gap under the real kernel** at **Spearman +1.000** (H89). The scale law is about real computer-use dynamics, not a model of them. `skipif`-guarded + §2.5-disclosed; the GPU run extends the *trained* arm. |
 | — | `verisim-cue` artifact (packaging + eval surface) | ✅ shipped (CPU) | the artifact half hardened the SPEC-18 way ([`cue/pack.py`](../../src/verisim/cue/pack.py), [`cue/scorecard.py`](../../src/verisim/cue/scorecard.py), [`cue/conformance.py`](../../src/verisim/cue/conformance.py), [`experiments/cue_pack.py`](../../src/verisim/experiments/cue_pack.py)): a frozen, hashed, versioned `CueManifest` (`verisim-cue@0.1.0+<hash>`) over the ordered task suite, emitting the full metadata triple §8.2 names — **Croissant** + **datasheet** + **model-card** — plus a **task-card** carrying the **per-task load-bearing verdict** (process-control *not* load-bearing +0.03 / fd +0.16 / file +0.56 / content +0.84 at the top CPU rung). The **eval surface** is `score_model(model)` — run any host world-model through the suite and get its per-task scorecard (catch rate + *whether the oracle was load-bearing for that model*); the model-card shows the reference scorecards (one per scale-law rung). Conformance (**ground-truth labels exact** — the faithful predictor scores 1.000 on every task; ordered spectrum; recognized dimensions) all green, plus the **contamination control** ([`cue/contamination.py`](../../src/verisim/cue/contamination.py), the SPEC-18 H68 parallel): a model that memorizes the public seeds is caught by a disjoint held-out shard — the memorizer's public-minus-held-out catch gap is **+0.875 vs the honest model's +0.021** (margin +0.854, overfit-resistant), so a scorecard is trustworthy as a frozen eval. Committed under [`cue/`](../../cue/). Adoption is not a hypothesis (SPEC-18 §9); the artifact ships regardless. |
-| — | the SPEC-21 essay | ▶ proposed | — |
+| — | the SPEC-21 essay | ✅ shipped | [`docs/essays/the-verifier-is-the-primitive.md`](../essays/the-verifier-is-the-primitive.md) — the thing that circulates (§8.3): the verifier-as-primitive axis, the structure/content boundary, the scale law and its irreducible residue, the real-kernel anchor, the discriminative artifact (CL1/H91), and the bankable-negative methodology, in the cyber/computer-use framing, drafted via the `essay` skill. |
 
 The discipline of §5 is the load-bearing commitment of this spec, and it is now **met**: the CPU core
 (CP0–CP5) is shipped — the full pipeline runs green on the smoke ladder in CI, every task/knee/drift
 component has a deterministic test, and the GPU config's `--dry-run` validates without training. And
 **CS3/H90 is no longer deferred**: the system-oracle anchor is now CPU-proven — the scale law's
 load-bearing gap is **anchor-invariant against a real `/bin/sh`** (`gap_sys == gap_ref` bit-for-bit),
-so the law is demonstrably about real computer-use dynamics. What remains for the GPU is the
-*range* (CS1/CS2's wide-ladder trajectory) and the *trained* arm; the apparatus, the cross-world
-reproduction, the cost dimension, and the reality anchor are all CPU-proven. The headline scale law is
-now one command — `python -m verisim.experiments.scale_law --config configs/scale_law_gpu.json
---device cuda` — away.
+so the law is demonstrably about real computer-use dynamics. And the **artifact half reaches parity
+with its declared sibling** (CL1/H91): the verisim-cue scorecard is now shown **discriminative** — it
+stably ranks computer-use world-models by faithfulness (Kendall τ = +1.000, every adjacent fidelity
+tier resolved above noise), the SPEC-18 H65 property that makes a frozen eval trustworthy, carried by
+the same structure→content gradient the scale law sweeps. What remains for the GPU is the *range*
+(CS1/CS2's wide-ladder trajectory) and the *trained* arm; the apparatus, the cross-world reproduction,
+the cost dimension, the reality anchor, and the discriminative leaderboard are all CPU-proven. The
+headline scale law is now one command — `python -m verisim.experiments.scale_law --config
+configs/scale_law_gpu.json --device cuda` — away.

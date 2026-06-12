@@ -2577,6 +2577,25 @@ any GPU is rented — the GPU run is a config swap, not a rewrite. The CPU core 
   (margin +0.854), so an adopter can trust a scorecard was earned on the dynamics, not the seeds.
   Committed under [`cue/`](../cue/), regenerable from the manifest hash; adoption is not a hypothesis
   (SPEC-18 §9), so it ships regardless.
+- **The artifact is discriminative (CL1 / H91).** A scorecard is only trustworthy if the benchmark
+  *stably ranks* models, and §8.2 positions `verisim-cue` "on the SPEC-18 verisim-bench line", whose
+  headline (H65) is exactly that test. The cue artifact shipped a per-model `score_model` but no
+  cross-model ranking; CL1 closes that parity ([`cue/leaderboard.py`](../src/verisim/cue/leaderboard.py)).
+  It scores a controlled fidelity ladder (floor → graded learned tiers → oracle ceiling; the trained
+  arm deferred, the LP7 rule) through the ordered suite by **recall over the keyed set** — a defense
+  budget covering the true set, so catch is a *smooth* fidelity score (the scale-law's small fixed
+  budget saturates to {0, 0.5, 1} per seed and collapses adjacent tiers) — then decides validity the
+  strict SPEC-18 way (reusing the proven `bench.leaderboard` rank-stability discipline): Kendall τ
+  between disjoint seed-split leaderboards **and** every adjacent fidelity tier resolved above its
+  *paired* across-split noise. **The verdict: discriminative** — τ = **+1.000** [+1.00, +1.00], every
+  adjacent gap clears 2× its noise (binding 0.035 > 0.021), and the ranking is carried by the
+  **structure→content gradient** the scale law sweeps (process/fd recall flat at 1.0 — structure never
+  separates models; content-value recall climbs **0.00 → 0.49 → 0.68 → 0.86 → 1.00** with capacity).
+  The leaderboard and the frontier are the **model-facing and capacity-facing duals** of one object. The
+  bankable negative (a non-discriminative scorecard) is first-class; the trained-`M_θ` entries are the
+  deferred GPU arm.
+
+  ![SPEC-21 CL1 / H91: the verisim-cue scorecard is discriminative, two panels. Left — the leaderboard: a horizontal bar per fidelity tier (floor α=0 at the bottom through oracle-ceiling α=1 at the top), mean catch rising monotonically 0.707 → 0.857 → 0.916 → 0.964 → 1.000, with red diamonds marking content-value recall (the single task that separates the tiers, climbing 0.0 → 1.0 while the structure tasks sit pinned at 1.0). Right — the discrimination test: one green bar per adjacent-tier pair, every bar clearing the red dashed 2×-noise line at 0.021, Kendall τ = +1.000 in the title. The benchmark resolves adjacent fidelity tiers above seed noise, not merely top-beats-floor](../figures/cl1_cue_leaderboard.png)
 - **The scale law is cross-world (CS1-net).** The host scale law lived on one world. SPEC-20's
   *boundary* law was cross-world (host + network); this is the cross-world confirmation of its *scale*
   law. A **network** task suite ordered structure→content — `service-control` (structure) →
@@ -2664,6 +2683,9 @@ python -m verisim.experiments.scale_law --config configs/scale_law_gpu.json --de
 # SPEC-21 deliverable #2 — package verisim-cue: emit Croissant + datasheet + the load-bearing
 # task-card to cue/, and run the ground-truth-labels conformance suite (all CPU, torch-free):
 python -m verisim.experiments.cue_pack --out cue
+# SPEC-21 CL1/H91 — the discriminative leaderboard: rank a fidelity ladder by recall, Kendall τ
+# between disjoint seed splits + adjacent-tier-above-noise (the SPEC-18 H65 test; CPU, torch-free):
+python -m verisim.experiments.cue_leaderboard --out figures/cl1_cue_leaderboard.csv
 ```
 
 ## What v0 ships for others

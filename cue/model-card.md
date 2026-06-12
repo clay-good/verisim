@@ -26,6 +26,15 @@ Each rung's trained `M_θ` scored through the suite (catch rate per task; `*` = 
 | `m` | process 0.97 · fd 0.88* · file 0.41* · content 0.09* | 3 |
 | `l` | process 0.97 · fd 0.84* · file 0.44* · content 0.16* | 3 |
 
+## Discriminative validity (CL1 / H91)
+The scorecard is a *trustworthy* frozen eval because it **stably ranks** models by faithfulness:
+scoring a controlled fidelity ladder by recall over the keyed set, the ranking is rank-stable
+(Kendall τ = +1.000 between disjoint seed splits) and every adjacent fidelity tier resolves above
+its paired seed noise — the SPEC-18 H65 discriminative-validity test for the computer-use vertical.
+See [`cue/leaderboard.py`](../src/verisim/cue/leaderboard.py) and the committed
+`figures/cl1_cue_leaderboard.csv`. The ranking is carried by the structure→content gradient: a model
+is separated from its neighbors by *content* recall (structure tasks saturate for every tier).
+
 ## Intended use
 Scoring host (shell/file/process) world-models for computer-use faithfulness, and locating *which*
 dynamics a given model still needs the oracle for. **Not** for offensive automation (SPEC.md §13).

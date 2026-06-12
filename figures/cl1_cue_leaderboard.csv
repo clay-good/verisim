@@ -1,0 +1,6 @@
+manifest,proposer,tier,alpha,mean_catch,n_seeds,per_task
+verisim-cue@0.1.0+53b53fefba0d267e,oracle-ceiling,ceiling,1.0000,1.000000,24,content-value=1.0000;fd-control=1.0000;file-integrity=1.0000;process-control=1.0000
+verisim-cue@0.1.0+53b53fefba0d267e,learned-hi,learned-hi,0.8500,0.964236,24,content-value=0.8569;fd-control=1.0000;file-integrity=1.0000;process-control=1.0000
+verisim-cue@0.1.0+53b53fefba0d267e,learned-mid,learned-mid,0.6500,0.915625,24,content-value=0.6833;fd-control=1.0000;file-integrity=0.9792;process-control=1.0000
+verisim-cue@0.1.0+53b53fefba0d267e,learned-lo,learned-lo,0.4500,0.857465,24,content-value=0.4924;fd-control=1.0000;file-integrity=0.9375;process-control=1.0000
+verisim-cue@0.1.0+53b53fefba0d267e,null,floor,0.0000,0.706597,24,content-value=0.0000;fd-control=1.0000;file-integrity=0.8264;process-control=1.0000

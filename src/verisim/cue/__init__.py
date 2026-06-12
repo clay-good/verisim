@@ -12,6 +12,15 @@ from __future__ import annotations
 
 from .conformance import ConformanceResult, all_passed, run_conformance
 from .contamination import ContaminationResult, run_contamination
+from .leaderboard import (
+    REFERENCE_CUE_PROPOSERS,
+    CueLeaderboardConfig,
+    CueLeaderRow,
+    CueProposer,
+    CueRankStability,
+    HostFidelityProposer,
+    build_cue_leaderboard,
+)
 from .pack import (
     CUE_VERSION,
     CueManifest,
@@ -45,17 +54,24 @@ from .tasks import (
 
 __all__ = [
     "CUE_VERSION",
+    "REFERENCE_CUE_PROPOSERS",
     "TASK_SUITE",
     "ConformanceResult",
     "ContaminationResult",
+    "CueLeaderRow",
+    "CueLeaderboardConfig",
     "CueManifest",
+    "CueProposer",
+    "CueRankStability",
     "CueTask",
     "CueTaskSpec",
+    "HostFidelityProposer",
     "TaskGap",
     "TaskGapConfig",
     "TaskScore",
     "alive_procs",
     "all_passed",
+    "build_cue_leaderboard",
     "croissant_metadata",
     "datasheet",
     "file_contents",
