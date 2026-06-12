@@ -1,0 +1,127 @@
+{
+  "@context": {
+    "@vocab": "https://schema.org/",
+    "cr": "http://mlcommons.org/croissant/"
+  },
+  "@type": "Dataset",
+  "cr:provenance": "oracle-generated (host reference oracle); no scraped data",
+  "cr:recordSet": [
+    {
+      "@type": "cr:RecordSet",
+      "cr:field": [
+        {
+          "dataType": "Text",
+          "name": "state"
+        },
+        {
+          "dataType": "Text",
+          "name": "action"
+        },
+        {
+          "dataType": "Text",
+          "name": "next_state"
+        },
+        {
+          "dataType": "Text",
+          "name": "keyed_set"
+        },
+        {
+          "dataType": "Float",
+          "name": "load_bearing_gap"
+        }
+      ],
+      "description": "order-0 (structure) task keyed on the procs dimension; budget 2",
+      "name": "process-control"
+    },
+    {
+      "@type": "cr:RecordSet",
+      "cr:field": [
+        {
+          "dataType": "Text",
+          "name": "state"
+        },
+        {
+          "dataType": "Text",
+          "name": "action"
+        },
+        {
+          "dataType": "Text",
+          "name": "next_state"
+        },
+        {
+          "dataType": "Text",
+          "name": "keyed_set"
+        },
+        {
+          "dataType": "Float",
+          "name": "load_bearing_gap"
+        }
+      ],
+      "description": "order-1 (content) task keyed on the fds dimension; budget 2",
+      "name": "fd-control"
+    },
+    {
+      "@type": "cr:RecordSet",
+      "cr:field": [
+        {
+          "dataType": "Text",
+          "name": "state"
+        },
+        {
+          "dataType": "Text",
+          "name": "action"
+        },
+        {
+          "dataType": "Text",
+          "name": "next_state"
+        },
+        {
+          "dataType": "Text",
+          "name": "keyed_set"
+        },
+        {
+          "dataType": "Float",
+          "name": "load_bearing_gap"
+        }
+      ],
+      "description": "order-2 (content) task keyed on the fs dimension; budget 2",
+      "name": "file-integrity"
+    },
+    {
+      "@type": "cr:RecordSet",
+      "cr:field": [
+        {
+          "dataType": "Text",
+          "name": "state"
+        },
+        {
+          "dataType": "Text",
+          "name": "action"
+        },
+        {
+          "dataType": "Text",
+          "name": "next_state"
+        },
+        {
+          "dataType": "Text",
+          "name": "keyed_set"
+        },
+        {
+          "dataType": "Float",
+          "name": "load_bearing_gap"
+        }
+      ],
+      "description": "order-3 (content) task keyed on the fs dimension; budget 2",
+      "name": "content-value"
+    }
+  ],
+  "creator": {
+    "@type": "Organization",
+    "name": "Verisim"
+  },
+  "description": "Verifiable computer-use (shell/file/process) world-model benchmark: per-task faithful-vs-free predictive-defense rollouts on the host world, labeled exactly by a deterministic reference oracle, ordered structure->content, each carrying a faithfulness-load-bearing verdict swept across the model-capacity ladder (the SPEC-21 scale law).",
+  "license": "https://opensource.org/licenses/MIT",
+  "manifestHash": "53b53fefba0d267e",
+  "name": "verisim-cue",
+  "version": "0.1.0"
+}

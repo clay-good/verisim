@@ -303,7 +303,8 @@ In every branch the artifact and the writeup ship; only their headline sentence 
 | CS1 | H87/H88 — the frontier recedes; the residue remains | ▶ proposed (GPU run) | the committed scale law (apparatus CPU-proven; the headline needs the wide GPU ladder) |
 | CS2 | H89 — the drift profile forecasts the frontier | ◐ apparatus shipped + smoke-confirmed | `forecast_check` Spearman +0.90 at smoke scale; the committed number is the GPU run |
 | CS3 | H90 — survives the system oracle (real computer-use) | ▶ proposed (system-oracle-gated) | — |
-| — | `verisim-cue` artifact + the essay | ◐ environment shipped ([`cue/`](../../src/verisim/cue/)); packaging + essay proposed | — |
+| — | `verisim-cue` artifact (packaging) | ✅ shipped (CPU) | the artifact half hardened the SPEC-18 way ([`cue/pack.py`](../../src/verisim/cue/pack.py), [`cue/conformance.py`](../../src/verisim/cue/conformance.py), [`experiments/cue_pack.py`](../../src/verisim/experiments/cue_pack.py)): a frozen, hashed, versioned `CueManifest` (`verisim-cue@0.1.0+<hash>`) over the ordered task suite, emitting **Croissant** + **datasheet** + a **task-card** that carries the thing that distinguishes verisim-cue — the **per-task load-bearing verdict** (process-control *not* load-bearing +0.03 / fd +0.16 / file +0.56 / content +0.84 at the top CPU rung, read from the committed CS1 run). Conformance suite (**ground-truth labels exact** — the faithful predictor scores 1.000 on every task; ordered structure→content spectrum; recognized dimensions) all green. Committed under [`cue/`](../../cue/). Adoption is not a hypothesis (SPEC-18 §9); the artifact ships regardless. |
+| — | the SPEC-21 essay | ▶ proposed | — |
 
 The discipline of §5 is the load-bearing commitment of this spec, and it is now **met**: the CPU core
 (CP0–CP5) is shipped — the full pipeline runs green on the smoke ladder in CI, every task/knee/drift

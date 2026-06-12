@@ -2487,6 +2487,19 @@ any GPU is rented — the GPU run is a config swap, not a rewrite. The CPU core 
 
   ![SPEC-21 CS1: the faithfulness-for-control scale law (CPU-proven apparatus). Left — the load-bearing frontier: the faithful-vs-free gap per task vs model capacity (log x), one line per task ordered structure→content; process-control (green) drops below the load-bearing threshold while content-value (red) stays high — the structural-first recession with an irreducible content residue. Right — the forecast: the cheap per-task keyed drift versus the expensive gap, every (rung, task) cell falling near the line (Spearman +0.965), so the cheap profile forecasts the load-bearing verdict](../figures/cs1_loadbearing_frontier.png)
 
+- **The artifact half — `verisim-cue` packaging (deliverable #2).** A scale law is the *result*;
+  `verisim-cue` is the *thing others use*. The computer-use task suite is hardened the SPEC-18 way into
+  a frozen, hashed, versioned benchmark (`verisim-cue@0.1.0+<hash>`), emitting the standardized
+  metadata almost no benchmark ships — a **Croissant** descriptor, a **datasheet**, and a **task-card**
+  that carries what distinguishes verisim-cue from every other computer-use benchmark: the **per-task
+  load-bearing verdict** (does a faithful predictor beat a free one — is the oracle load-bearing for
+  control on this task at this scale; process-control *not* load-bearing +0.03 / fd-control +0.16 /
+  file-integrity +0.56 / content-value +0.84 at the top CPU rung). Its conformance contract — the
+  property no oracle-free benchmark can offer — holds: **the faithful predictor scores exactly 1.000 on
+  every task** (ground-truth labels), the spectrum is well-ordered structure→content, and the keyed
+  dimensions are recognized. The artifact is committed under [`cue/`](../cue/) and regenerates from the
+  manifest hash; adoption is not a hypothesis (SPEC-18 §9), so it ships regardless.
+
 Reproduce (CPU-local; the apparatus' smoke instances run in CI):
 
 ```sh
@@ -2545,6 +2558,9 @@ python -m verisim.experiments.scale_law --config configs/scale_law_gpu.json --dr
 python -m verisim.experiments.scale_law --cpu --out figures/cs1_loadbearing_frontier.csv
 # the committed scale law (CS1/CS2/CS3) — the SAME pipeline, one dial (the GPU run):
 python -m verisim.experiments.scale_law --config configs/scale_law_gpu.json --device cuda
+# SPEC-21 deliverable #2 — package verisim-cue: emit Croissant + datasheet + the load-bearing
+# task-card to cue/, and run the ground-truth-labels conformance suite (all CPU, torch-free):
+python -m verisim.experiments.cue_pack --out cue
 ```
 
 ## What v0 ships for others

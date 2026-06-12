@@ -10,6 +10,15 @@ is the load-bearing signal -- which the SPEC-21 scale law sweeps across model ca
 
 from __future__ import annotations
 
+from .conformance import ConformanceResult, all_passed, run_conformance
+from .pack import (
+    CUE_VERSION,
+    CueManifest,
+    CueTaskSpec,
+    croissant_metadata,
+    datasheet,
+    task_card,
+)
 from .tasks import (
     TASK_SUITE,
     CueTask,
@@ -27,16 +36,25 @@ from .tasks import (
 )
 
 __all__ = [
+    "CUE_VERSION",
     "TASK_SUITE",
+    "ConformanceResult",
+    "CueManifest",
     "CueTask",
+    "CueTaskSpec",
     "TaskGap",
     "TaskGapConfig",
     "alive_procs",
+    "all_passed",
+    "croissant_metadata",
+    "datasheet",
     "file_contents",
     "grounded_keyed_reward",
     "keyed_defense_reward",
     "open_fds",
     "rollout_keyed",
+    "run_conformance",
+    "task_card",
     "task_gap",
     "task_knee_rho",
     "written_files",
