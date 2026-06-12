@@ -18,6 +18,7 @@ from verisim.cue.conformance import (
     check_ordered_spectrum,
     run_conformance,
 )
+from verisim.cue.contamination import run_contamination
 from verisim.cue.pack import (
     CueManifest,
     croissant_metadata,
@@ -97,6 +98,15 @@ def test_conformance_holds_ground_truth_labels():
     gt = check_ground_truth_labels(CueManifest())
     assert gt.passed and "1.0000" in gt.detail
     assert check_ordered_spectrum(CueManifest()).passed
+
+
+def test_contamination_control_separates_memorizer():
+    # H68: a public-seed memorizer is caught by the held-out shard (large gap); honest model isn't
+    small = CueManifest(seeds=tuple(range(700, 706)))
+    c = run_contamination(small)
+    assert c.memorizer_gap > c.honest_gap  # the overfit shows on the held-out shard
+    assert c.margin >= 0.2 and c.contamination_resistant  # materially separated
+    assert abs(c.honest_gap) < 0.2  # the honest model drifts equally on both shards (~0 gap)
 
 
 def test_emit_writes_four_artifacts(tmp_path):

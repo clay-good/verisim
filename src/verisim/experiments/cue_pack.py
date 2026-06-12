@@ -26,6 +26,7 @@ import json
 from pathlib import Path
 
 from verisim.cue.conformance import all_passed, run_conformance
+from verisim.cue.contamination import run_contamination
 from verisim.cue.pack import (
     CueManifest,
     croissant_metadata,
@@ -95,6 +96,11 @@ def main() -> None:  # pragma: no cover - CLI entry point
     for r in results:
         print(f"  [{'PASS' if r.passed else 'FAIL'}] {r.check}: {r.detail}")
     print(f"conformance: {'ALL PASS' if all_passed(results) else 'FAILURES'}")
+
+    c = run_contamination(manifest)
+    print(f"contamination control (H68): memorizer gap {c.memorizer_gap:+.3f} vs honest "
+          f"{c.honest_gap:+.3f} (margin {c.margin:+.3f}) -> "
+          f"{'overfit-resistant' if c.contamination_resistant else 'NOT resistant'}")
 
 
 if __name__ == "__main__":  # pragma: no cover

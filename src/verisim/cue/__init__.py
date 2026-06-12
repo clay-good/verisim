@@ -11,6 +11,7 @@ is the load-bearing signal -- which the SPEC-21 scale law sweeps across model ca
 from __future__ import annotations
 
 from .conformance import ConformanceResult, all_passed, run_conformance
+from .contamination import ContaminationResult, run_contamination
 from .pack import (
     CUE_VERSION,
     CueManifest,
@@ -46,6 +47,7 @@ __all__ = [
     "CUE_VERSION",
     "TASK_SUITE",
     "ConformanceResult",
+    "ContaminationResult",
     "CueManifest",
     "CueTask",
     "CueTaskSpec",
@@ -64,6 +66,7 @@ __all__ = [
     "reference_scores_from_csv",
     "rollout_keyed",
     "run_conformance",
+    "run_contamination",
     "score_model",
     "scorecard_headline",
     "task_card",

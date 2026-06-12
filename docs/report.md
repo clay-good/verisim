@@ -2516,8 +2516,12 @@ any GPU is rented — the GPU run is a config swap, not a rewrite. The CPU core 
   `xs` has all four tasks load-bearing, `s…l` catch process-control so only three remain). Its
   conformance contract — the property no oracle-free benchmark can offer — holds: **the faithful
   predictor scores exactly 1.000 on every task** (ground-truth labels), the spectrum is well-ordered,
-  the dimensions recognized. Committed under [`cue/`](../cue/), regenerable from the manifest hash;
-  adoption is not a hypothesis (SPEC-18 §9), so it ships regardless.
+  the dimensions recognized. And the frozen eval is **contamination-resistant** (the SPEC-18 H68
+  parallel): a model that memorizes the public seeds is caught by a disjoint held-out shard — the
+  memorizer's public-minus-held-out catch gap is **+0.875** versus the honest model's **+0.021**
+  (margin +0.854), so an adopter can trust a scorecard was earned on the dynamics, not the seeds.
+  Committed under [`cue/`](../cue/), regenerable from the manifest hash; adoption is not a hypothesis
+  (SPEC-18 §9), so it ships regardless.
 
 Reproduce (CPU-local; the apparatus' smoke instances run in CI):
 

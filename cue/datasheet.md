@@ -25,6 +25,12 @@ faithfulness research.
 Deterministic and seeded: every record is a pure function of (task, driver, seed), regenerable from
 this manifest (hash `53b53fefba0d267e`). No human annotation.
 
+## Contamination control
+The frozen eval is **overfit-resistant** (H68): a model that memorizes the public seeds scores
+conspicuously worse on a disjoint held-out shard, so the public-minus-held-out catch gap is a usable
+overfit detector. `run_contamination` separates a memorizer (large gap) from an honest model (~0) —
+trust a scorecard was earned on the dynamics, not the seeds.
+
 ## Intended use
 Defensive ACD environments and computer-use world-model faithfulness research. **Not** for offensive
 automation (SPEC.md §13).
