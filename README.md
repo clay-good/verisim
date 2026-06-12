@@ -2028,7 +2028,7 @@ cost forecast extends H89:** the cheap keyed drift forecasts the *knee* — not 
 **Spearman +0.717**, so one cheap free-run profile predicts both *where* faithfulness is load-bearing
 *and* how expensive it is to buy back.
 
-![SPEC-21 knee trajectory — the cost dimension of the scale law. The useful-knee ρ (consultation budget needed to buy back the faithful catch) per load-bearing task vs model capacity (log x). content-value (red, the deep residue) stays flat at ρ≈0.25 across every rung — cheaply and stably buyable, the cost not growing with scale — while file-integrity (orange) and fd-control (olive) sit near 0.10–0.20; process-control drops out as it stops being load-bearing](figures/cs1_knee_trajectory.png)
+![SPEC-21 the cost dimension of the scale law, two panels. Left — the knee trajectory: the useful-knee ρ (budget to buy back the faithful catch) per load-bearing task vs model capacity (log x); content-value (red, the deep residue) stays flat at ρ≈0.25 across every rung — cheaply and stably buyable, the cost not growing with scale — while file-integrity and fd-control sit near 0.10–0.20. Right — the cost forecast (H89 extended): the cheap keyed drift vs the knee on the load-bearing cells; higher-drift tasks (content, red) need a higher knee, so the cheap drift forecasts the cost at Spearman +0.717 (the gap forecast is +0.965)](figures/cs1_knee_trajectory.png)
 
 **The GPU-readiness gate (CP5).** [`configs/scale_law_gpu.json`](configs/scale_law_gpu.json) (the full
 `xs…xxxl` ladder + `device=cuda`) plus a `--dry-run` that validates shapes, device, and a pre-registered
@@ -2823,7 +2823,7 @@ rule). The decided tranche is the controlled-core + pure-oracle work; the negati
 H45→H46 turned SPEC-14 from "supervise the processor" to "the wall is the decoder," and RS1 + NA6
 banked that the exposure-bias cure does not pay at CPU scale on either the flat or the structured arm.
 
-### SPEC-19/20 hypothesis-verdict ledger (the flagship + usefulness era, H69–H81)
+### SPEC-19/20 hypothesis-verdict ledger (the flagship + usefulness era, H69–H84)
 
 The active-priority era: one real trained model (SPEC-19), and the first downstream-application spec
 (SPEC-20) — train an agent *inside* the model and transfer it to the oracle's reality. Same verdict
@@ -2853,6 +2853,48 @@ make verification sub-linear on a real model (H69) but smart scheduling decisive
 **on both worlds** (H84); and faithfulness is load-bearing for control **exactly when** the task keys
 on the content the model drifts on (H74 null + H80 positive), where it can still be bought at sub-linear
 oracle cost (H81) — a boundary that holds in **both** the host and network worlds (H82).
+
+### SPEC-21 hypothesis-verdict ledger (the scale-law era, H87–H90)
+
+Scaling the SPEC-20 boundary into a *law*: sweeping the SPEC-10 capacity ladder *through* the SPEC-20
+content/structure measurement, on a verifiable computer-use environment (`verisim-cue`), with a
+CPU-proven / GPU-ready core (one pipeline, one dial). The CPU core (CP0–CP5) proves the apparatus and
+the forecast; the wide-ladder headline (H87/H88) is the one-config-swap GPU run. **⟂** = CPU apparatus
+proven, GPU headline pending.
+
+| H | verdict | experiment | finding (one line) | figure |
+|---|---------|-----------|--------------------|--------|
+| **H87** | ⟂ | CS1 | the load-bearing frontier **recedes structural-first** with scale. *Apparatus + the gradient proven on CPU* — the structure→content gap gradient holds at every rung (process ≤0.16 → content 0.81–0.94), process-control drops below threshold after `xs` (the recession beginning); the full motion needs the wide GPU ladder | [cs1](figures/cs1_loadbearing_frontier.png) |
+| **H88** | ⟂ | CS1 | the frontier recedes toward but **not to zero** — an irreducible deep-content residue stays load-bearing at every reachable scale (content-value gap 0.81–0.94 across the CPU ladder), and the **cost** of buying it back is **flat at ρ≈0.25** (cheaply *and stably* buyable — a permanent but *cheap* primitive); GPU resolves the plateau | [cs1-knee](figures/cs1_knee_trajectory.png) |
+| **H89** | ✓ | CS2 | the **cheap drift profile forecasts the frontier** — the per-task keyed drift forecasts the gap (load-bearing verdict) at **Spearman +0.965**, *and* the knee (the cost) at **+0.717**: one cheap free-run predicts both *where* faithfulness is load-bearing and *how expensive* to buy back, without the ablation | [cs1](figures/cs1_loadbearing_frontier.png) |
+| **H90** | ○ | CS3 | the scale law **survives the real `/bin/sh` system oracle** — system-oracle-gated, deferred with the top GPU rungs (stated, not hidden) | — |
+
+The CPU core is shipped and green (CP0–CP5: the ordered task suite, the one-pipeline harness, the
+frontier + forecast reducers, the GPU-readiness gate); the committed numbers are the CPU-proven
+apparatus, and the headline scale law is one command away (`scale_law --config configs/scale_law_gpu.json
+--device cuda`). The lesson banked along the way: a finding on a coarse grid is resolved before a trend
+is claimed — the deep-residue knee read as "rising 0.3→0.5" on the coarse ρ grid was a quantization
+artifact the fine grid corrected to flat ρ≈0.25.
+
+### verisim-cue cheat-sheet (the adopted artifact — what you call)
+
+`verisim-cue` is the computer-use vertical of `verisim-bench`: a frozen, hashed, versioned benchmark
+(`verisim-cue@0.1.0+<hash>`) that scores any host (shell/file/process) world-model on the one axis no
+oracle-free benchmark can — *whether faithfulness was load-bearing for its success*.
+
+| you want… | you call | what you get |
+|---|---|---|
+| score a model | `cue.score_model(model)` | per-task scorecard: catch rate, exact faithful ceiling, gap, **load-bearing?** |
+| the one-line read | `cue.scorecard_headline(scores)` | mean catch + load-bearing footprint + structure-clean? |
+| the frozen battery | `cue.CueManifest()` | hashable, versioned manifest over the ordered structure→content suite |
+| the metadata triple | `cue_pack.emit(...)` | **Croissant** + **datasheet** + **model-card** + a **task-card** (the per-task load-bearing verdict) under [`cue/`](cue/) |
+| trust the labels | `cue.run_conformance()` | ground-truth labels exact (faithful predictor scores 1.000), ordered spectrum, recognized dims |
+| trust the eval | `cue.run_contamination()` | a public-seed memorizer is caught by a held-out shard (gap +0.875 vs honest +0.021) |
+
+The four ordered tasks (structure→content): `process-control` (procs, *structure*, gap ~0) → `fd-control`
+(fds, near-structure) → `file-integrity` (which files written, *content*) → `content-value` (the
+*(path, content)* pairs, the deepest content / irreducible-residue probe). The deeper the content, the
+more load-bearing faithfulness is — and the cost to buy it back stays cheap (ρ≈0.25).
 
 ## Design decisions (the load-bearing ones)
 

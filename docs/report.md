@@ -2501,7 +2501,7 @@ any GPU is rented — the GPU run is a config swap, not a rewrite. The CPU core 
   **Spearman +0.717**, so the single cheap free-run profile predicts both *where* faithfulness is
   load-bearing *and* how expensive it is to buy back, without ever running the ρ-sweep.
 
-  ![SPEC-21 knee trajectory — the cost dimension of the scale law. The useful-knee ρ (the consultation budget needed to buy back the faithful catch) per load-bearing task vs model capacity (log x). content-value (red, the deep residue) stays flat at ρ≈0.25 across every rung — the residue is cheaply and stably buyable, the cost does not grow with scale — while file-integrity (orange) and fd-control (olive) sit near 0.10–0.20; process-control drops out as it stops being load-bearing](../figures/cs1_knee_trajectory.png)
+  ![SPEC-21 the cost dimension of the scale law, two panels. Left — the knee trajectory: the useful-knee ρ (consultation budget to buy back the faithful catch) per load-bearing task vs model capacity (log x); content-value (red, the deep residue) stays flat at ρ≈0.25 across every rung — cheaply and stably buyable, the cost not growing with scale — while file-integrity and fd-control sit near 0.10–0.20. Right — the cost forecast (H89 extended): the cheap per-task keyed drift vs the knee on the load-bearing cells; higher-drift tasks (content, red) need a higher knee, so the cheap drift forecasts the cost at Spearman +0.717 (the gap forecast is +0.965)](../figures/cs1_knee_trajectory.png)
 
 - **The artifact half — `verisim-cue` (deliverable #2).** A scale law is the *result*; `verisim-cue`
   is the *thing others use*. The computer-use task suite is hardened the SPEC-18 way into a frozen,
