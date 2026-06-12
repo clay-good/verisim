@@ -2473,6 +2473,29 @@ trained in `E_oracle` / `E_grounded` / `E_free`, all evaluated in reality. The r
   third world surfaces.
 
   ![UA11: the structure/content boundary on the distributed world (third-world confirmation). A bar chart of the faithful-vs-free gap with bootstrap CIs for the two distributed tasks: partition-control (structure, green) at +0.23 and value-integrity (content, red) at +0.50 — the content gap materially exceeds the structure gap, so faithfulness is load-bearing on the content (replicated values) the model drifts on, not the structure (partition topology), completing the boundary law on host + network + distributed](../figures/ua11_dist_boundary.png)
+- **The operational completion — drift costs precision, not just recall (UA12 / H92 — SUPPORTED).**
+  UA8–UA11 scored the content-keyed defender by its **catch rate** (recall) — but the budget-limited
+  reward is *structurally blind to false alarms*: it caps the defender's flags at a budget and counts
+  only the hits, so a model that flags the *wrong* files pays nothing. A real detector does not get a
+  free budget; it flags every file it predicts will be corrupted, and a SOC gates on its **precision**
+  (false-alarm rate), not its recall. A drifting world model mis-predicts *which* files the workload
+  writes, so its predicted set diverges from the truth in *both* directions — it misses real
+  corruptions **and** flags untouched files. UA12 scores the **full confusion matrix**
+  ([`acd/host_detection.py`](../src/verisim/acd/host_detection.py)) over the uncapped predicted-vs-true
+  written-file set. **The faithful detector holds P = R = F1 = 1.000 at every horizon; the free
+  (trained `M_θ`) detector loses both — precision falls to 0.69–0.79 (≈1 in 4 alarms is false, the cost
+  UA8 could not see) and recall to 0.50–0.73, so the F1 (deployability) gap reaches +0.48** at h=14.
+  Two findings: (1) **drift degrades precision alongside recall** — the operational cost is a flood of
+  false alarms, not just missed corruptions, so a drifting world model gives an *undeployable* detector
+  even where its recall looks survivable, and faithfulness is what makes a content-keyed detector
+  precision-grade; (2) **the cheap knee restores the whole operating point** — the ρ-grounded detector
+  recovers deployable P + R + F1 (≥0.93) by **ρ≈0.1–0.2 (2–4 oracle calls of 20)**, the same sub-linear
+  regime as UA9's recall knee. The boundary law, read operationally: faithfulness is what makes the
+  content-keyed detector deployable, and the oracle-in-the-loop buys that deployability cheaply. (The
+  ρ-knee wiggles non-monotonically at ρ=0.3 — the re-anchoring grid's interaction with the cumulative
+  keyed set, the same UA9 quantization caveat; the knee is cheap, ρ≈0.1–0.2.)
+
+  ![UA12 / H92: the operational detection characteristic. Left — the horizon sweep: the faithful detector's F1 (blue) holds flat at 1.0 while the free trained-model detector's precision (red dotted, the false-alarm cost), recall (orange dashed, UA8's metric), and F1 (red solid, deployability) collapse together as the horizon grows; precision sits at 0.69–0.79, so ≈1 in 4 of its alarms is false. Right — the ρ-knee for F1 at horizon 20: precision, recall, and F1 climb from the free floor (0.58) to the faithful ceiling (1.0), reaching deployable ≥0.93 by ρ≈0.1–0.2 (2–4 oracle calls of 20), the same cheap regime as UA9's recall knee](../figures/ua12_host_detection.png)
 
 - **The distributed recession test — is the structural-first recession (H87) universal? NO (a refinement).**
   SPEC-21's H87 says the load-bearing frontier recedes *structural-first* with scale — structure tasks
@@ -2667,6 +2690,10 @@ python -m verisim.experiments.ua_net_integrity --checkpoint runs/flagship/net-l 
 # UA11/H85 — the boundary on the THIRD world (distributed): partition(structure) vs value(content);
 # content gap +0.50 > structure +0.23 (trains a small distributed M_θ; no checkpoint needed):
 python -m verisim.experiments.dist_boundary --out figures/ua11_dist_boundary.csv
+# UA12/H92 — the OPERATIONAL completion of UA8: the full confusion matrix (precision/recall/F1), not
+# recall only. Free detector loses precision (0.69-0.79, ~1 in 4 alarms false) AND recall; the cheap
+# knee restores the whole operating point at rho~0.1-0.2 (trains a host M_θ; --smoke for a fast run):
+python -m verisim.experiments.ua_host_detection --out figures/ua12_host_detection.csv
 # SPEC-21 CP5 — the GPU-readiness gate: validate the full ladder + cost estimate WITHOUT training:
 python -m verisim.experiments.scale_law --config configs/scale_law_gpu.json --dry-run
 # SPEC-21 CP0-CP4 — the committed 4-rung CPU ladder (the CPU-proven apparatus; structure->content
