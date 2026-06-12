@@ -1,0 +1,178 @@
+# SPEC-22 — The Agent-in-the-Loop: A Verified World Model as a Safety Layer for Computer-Use Agents and Autonomous Cyber Defense
+
+**Application-capstone specification: every prior spec studied the world model as an *object* — is it
+faithful (SPEC-2/5/6/7/10), where is faithfulness load-bearing (SPEC-20), does the boundary scale
+(SPEC-21), does the benchmark discriminate (SPEC-21 CL1). SPEC-22 closes the loop the program exists
+to close: it shows the one *deployment* that turns all of that into a directly useful thing for an AI
+agent operating a computer and for an autonomous cyber defender — the **safety gate**. A capable
+computer-use agent does not fire a risky action blind; it *previews* the consequence with a world
+model ("look before you leap"), checks the predicted outcome against a guardrail, and executes only if
+the preview says it is safe. This spec measures the one question that makes or breaks that pattern:
+can the preview be *trusted*? The answer is the whole program in one sentence, now at the point of
+action: a free (unverified) world model is unsafe to act on exactly where the guardrail keys on the
+content the model drifts on — the agent executes credential-corrupting plans it previewed as safe —
+and the oracle-in-the-loop is what makes the preview trustworthy, cheaply.**
+
+> **▶ PROPOSED — APPLICATION / DEPLOYMENT SPEC — 2026-06-12.** A *downstream-application* spec, sibling
+> to [SPEC-20](./SPEC-20.md) (the usefulness proof it operationalizes) and a direct answer to the
+> standing question *"how does this lead to real computer-use agents and cyber defense?"*. It invents
+> **no new world, oracle, or model**: it runs on the [SPEC-6](./SPEC-6.md) host world, the shipped
+> [`ReferenceHostOracle`](../../src/verisim/hostoracle/reference.py), the change-safety predicates
+> already in [`hostsim/goal.py`](../../src/verisim/hostsim/goal.py), the agent-callable simulator
+> ([`hostsim/simulator.py`](../../src/verisim/hostsim/simulator.py), `imagine`/`verify`), and the
+> trained host `M_θ` (the SPEC-20 HFL0 flagship). What it adds is the **gate framing** — the agent's
+> allow/abort decision and its *safety* confusion matrix (the asymmetric, catastrophic *missed-danger*
+> error) — and the demonstration that the boundary law and the cheap knee govern whether an agent can
+> act safely on its model.
+
+Read [SPEC-20 §7](./SPEC-20.md) (the boundary law: faithfulness is load-bearing iff control keys on
+the content the model drifts on — the law this spec deploys), [SPEC-19](./SPEC-19.md) (the useful
+knee, the cheap-verification mechanism), and [SPEC-6 §2.6/§7](./SPEC-6.md) (the change-safety /
+incident-response task family and the agent-callable simulator). This document is *whether a verified
+world model lets a computer-use agent and a cyber defender act safely, and what it costs.*
+
+---
+
+## 0. One-paragraph thesis
+
+A computer-use agent's core unsafe move is acting on a prediction that is wrong in the one way that
+matters. SPEC-22 makes that concrete and measures it: a battery of host action plans, each genuinely
+safe or unsafe by the *oracle's* verdict; an agent that previews each plan through a predictor and
+**allows** it iff the preview says a guardrail holds; and the **missed-danger rate** — truly-unsafe
+plans the agent wrongly executed. The thesis: **on a content guardrail (a credential file is not
+overwritten — keyed on the file writes the host model drifts on) a free preview misses real dangers,
+so the agent executes destructive plans; the oracle preview misses none; and the cheap ρ-knee
+(re-anchor the preview to the oracle every `round(1/ρ)` steps) drives missed-danger to zero at a
+fraction of the verification cost. On a structure guardrail (a protected process stays alive — keyed
+on the process tree the model learns faithfully) the free preview already gates correctly.** The
+boundary law, read at the point of action: *verification is what makes a world model safe for an agent
+to act on, exactly where the agent's guardrail keys on the dynamics the model gets wrong — and it is
+cheap.* The opposite branch is first-class and would be a clean negative: if the free preview gated
+the content guardrail correctly too, then faithfulness would not be load-bearing for safe computer use
+in this world, and the agent could act on a cheap unverified model.
+
+---
+
+## 1. Why the safety gate is the experiment that makes the value legible
+
+The program's results are sharp but they read as *metrology*: faithful-horizon curves, structure/
+content gaps, scale laws, discriminative leaderboards. A reader asking "so an AI agent uses this *how*,
+exactly?" has had to infer the answer. The safety gate *is* the answer, in the form the question is
+asked. It is the deployment pattern a frontier computer-use agent already uses — predict the
+consequence of a risky action before taking it — and it makes every prior result land as a property of
+*the agent's safety*, not of an abstract model:
+
+- the **faithful horizon** (SPEC-10/19) becomes *how many plan steps the agent can trust before it
+  must re-verify*;
+- the **structure/content boundary** (SPEC-20) becomes *which guardrails a free preview can gate and
+  which it cannot* — the agent can self-govern structural guardrails for free but needs the oracle for
+  content guardrails;
+- the **useful knee** (SPEC-19/UA9) becomes *the consultation budget that buys a safe gate*;
+- the **real-kernel anchor** (SPEC-11) becomes *the gate is safe against a real `/bin/sh`, not a model
+  of one*.
+
+And the metric is the one a security or safety reviewer actually gates on: not a catch rate but a
+**missed-danger rate**, the asymmetric error where the agent does the irreversible bad thing.
+
+## 2. The deployment picture (the architecture)
+
+The agent-in-the-loop loop, the thing a computer-use agent or an autonomous cyber defender runs (see
+[`figures/cu_architecture.png`](../../figures/cu_architecture.png)):
+
+1. **Agent (LLM).** Translates a natural-language intent into a host action plan (a sequence of
+   syscalls: open/write/fork/setuid/…). The LLM is good at intent→plan; it is *bad* at simulating
+   dynamics, which is why it does not gate itself.
+2. **World model `M_θ` (cheap).** `imagine` rolls the plan forward with no oracle — a fast "look before
+   you leap" preview. Cheap, but it drifts.
+3. **Oracle (free, exact).** `verify` re-anchors the preview to ground truth at rate ρ (the reference
+   oracle, or a real `/bin/sh` via SPEC-11). The propose–verify–correct loop spends a small ρ budget
+   to keep the preview faithful.
+4. **Safety gate.** A guardrail over the predicted final state. SAFE → ALLOW (execute on the real
+   computer); UNSAFE → ABORT/flag. The gate is only as trustworthy as the preview, which is why
+   verification is the load-bearing piece — exactly on the content the model drifts on (SPEC-20).
+
+The honest scope: this is shell/file/process computer use (the oracle-grounded slice), the agent is a
+fixed planner not a learned policy (the science is the *gate's* trustworthiness, not the agent's
+cleverness), and the adversary/workload is scripted (defender-side only, the SPEC.md §13 ethics
+commitment — no offensive agent is built).
+
+## 3. The guardrails (the measurement substrate)
+
+Two guardrails span the structure→content split the boundary law turns on, each a change-safety
+predicate over the final host state (reusing [`hostsim/goal.py`](../../src/verisim/hostsim/goal.py)):
+
+| guardrail | keyed dimension | the threat it encodes | predicted |
+|---|---|---|---|
+| **content** — `/passwd` not overwritten | file content (writes) | credential / config tampering | free preview **misses dangers** |
+| **structure** — a protected process stays alive | process tree | killing a defensive daemon | free preview **gates correctly** |
+
+The content guardrail is the canonical cyber/computer-use safety check ("do not let this plan tamper
+with the credential file"). The host model drifts ~25–36% on the written-file set (SPEC-20 host
+diagnostic), so the free preview mis-predicts whether `/passwd` is hit. The structure guardrail keys on
+the process tree the model learns faithfully (~0% drift), so the boundary law predicts the free preview
+gates it correctly — the agent can self-govern there without the oracle.
+
+## 4. The headline measurement (CU1) and hypothesis (H93)
+
+**CU1** ([`experiments/cu_safety_gate.py`](../../src/verisim/experiments/cu_safety_gate.py)): the plan
+battery × {free, oracle, ρ-grounded} preview × {content, structure} guardrail, scored by the safety
+confusion matrix ([`acd/safety_gate.py`](../../src/verisim/acd/safety_gate.py)). The headline figure
+[`figures/cu1_safety_gate.png`](../../figures/cu1_safety_gate.png): the missed-danger rate by preview
+and guardrail (left), and the missed-danger knee vs ρ on the content guardrail (right).
+
+- **H93 (a computer-use agent needs a verified model to gate its actions safely — and the oracle buys
+  it cheaply).** On the content guardrail the free preview's missed-danger rate is materially positive
+  (the agent executes credential-corrupting plans it previewed as safe), the oracle preview's is zero,
+  and the ρ-grounded preview drives missed-danger to zero at a sub-linear ρ (the UA9 knee, on agent
+  safety). On the structure guardrail the free preview's missed-danger rate is already low (faithfulness
+  not load-bearing). *Refuted if* the free preview gates the content guardrail as safely as the oracle
+  (faithfulness not load-bearing for safe computer use in this world — the agent can act on a cheap
+  unverified model, a clean and publishable negative that would redirect the deployment claim). Tested
+  as **CU1**.
+
+## 5. Milestones
+
+- **CU0 — the safety-gate core.** `Guardrail` + the safety confusion matrix (`SafetyOutcome`, the
+  missed-danger / false-block / caught / correct cells) + the free/oracle/ρ-grounded gate evaluators,
+  on the shipped predictive-rollout machinery. Deterministic tests; torch-free core. ✅
+- **CU1 — the headline run.** The plan battery × previews × guardrails, the missed-danger figure + the
+  ρ-knee, on the trained host `M_θ`. The committed result. ✅
+- **CU2 — cross-world / real-kernel (proposed).** Re-run the gate on the network world (a flow-tamper
+  guardrail) and against the SPEC-11 `SandboxOracle` (the gate is safe against a real `/bin/sh`).
+- **The writeup.** Fold the gate into the SPEC-21 essay / README "from foundation to application"
+  section — the legible bridge from the metrology to the deployment.
+
+## 6. Gate and what each branch licenses
+
+**Gate: H93** (the free preview misses content dangers the oracle catches).
+
+- **H93 confirmed** → the program's most legible application result: *a verified world model is the
+  safety layer that lets a computer-use agent and a cyber defender act on a cheap learned model
+  without doing the irreversible bad thing — and the verification is cheap (the knee).* Licenses the
+  "foundation → application" framing and the deployment story.
+- **H93 refuted** (the free preview gates content safely too) → faithfulness is not load-bearing for
+  safe computer use in this world; the agent can act on an unverified model, and the deployment claim
+  narrows to worlds/guardrails where the model drifts on the gated dimension. A clean negative, and the
+  oracle is what makes it trustworthy.
+
+## 7. Honest caveats, stated up front
+
+- **The agent is a fixed planner, not a learned policy.** The science is whether the *gate* can be
+  trusted; "a smarter agent" is out of scope (the SPEC-20 §13 discipline).
+- **Defender-side only.** The workload is scripted; no offensive/red-team agent is built (SPEC.md §13).
+- **Shell/file/process, not GUI.** The oracle-grounded slice (SPEC.md §11).
+- **Rung-1 reality is the reference oracle.** The real-`/bin/sh` anchor (CU2) is proposed, reusing the
+  CS3/SY1 SandboxOracle line; deferred and stated, not hidden.
+
+## 8. Status
+
+| ID | Hypothesis / artifact | State | Result |
+|---|---|---|---|
+| CU0 | the safety-gate core | ✅ shipped (CPU core) | `Guardrail` + `SafetyOutcome` (the asymmetric safety confusion matrix) + free/oracle/ρ-grounded gate evaluators ([`acd/safety_gate.py`](../../src/verisim/acd/safety_gate.py)), on the shipped `host_integrity` rollouts + the `hostsim.goal` change-safety predicates. 7 torch-free tests. |
+| CU1 | H93 — the agent needs a verified model to gate safely; the oracle buys it cheaply | ✅ shipped + **frontier run** — **SUPPORTED; the boundary law on the safety gate** ([`experiments/cu_safety_gate.py`](../../src/verisim/experiments/cu_safety_gate.py), [`cu1_safety_gate.csv`](../../figures/cu1_safety_gate.csv), [`.png`](../../figures/cu1_safety_gate.png)) | a 60-plan battery on the trained host `M_θ`, 29 plans truly overwriting `/passwd`. **Content guardrail — the free preview misses real dangers:** missed-danger **0.38** — the agent **executed 11 of 29 credential-corrupting plans** it previewed as safe (plus a 0.19 false-block rate, the over-caution cost) — while the **oracle preview misses 0** and the **ρ-knee drives missed-danger to zero at ρ=0.30 (6 oracle calls of 18, ~⅓ the budget)**: 0.38 → 0.28 (ρ0.1) → 0.10 (ρ0.2) → **0.00 (ρ0.3)**. **Structure guardrail (process stays alive, 17 truly unsafe) — the free preview already gates correctly:** missed-danger **0.00** (0 destructive plans executed), the boundary-law null. So a computer-use agent acting on an *unverified* world model executes credential-tampering plans exactly where the guardrail keys on the content the model drifts on, the oracle is what makes the preview safe to act on, and that safety is cheap (the knee). H93 SUPPORTED; the structure/content split the program proved as *metrology* now governs whether an agent can *act safely*. |
+| CU2 | cross-world / real-kernel gate | ▶ proposed | the network flow-tamper guardrail + the SPEC-11 `SandboxOracle` anchor |
+| — | the architecture diagram + the "foundation → application" writeup | ✅ shipped | [`figures/cu_architecture.png`](../../figures/cu_architecture.png) + the README section |
+
+This spec is the bridge the program needed: it does not add metrology, it *spends* the metrology, and
+the thing it buys is the one a frontier lab and a SOC both want — an AI agent that can act on a cheap
+world model without doing the irreversible bad thing, because a free oracle keeps the preview honest.

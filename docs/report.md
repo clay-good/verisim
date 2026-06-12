@@ -2497,6 +2497,32 @@ trained in `E_oracle` / `E_grounded` / `E_free`, all evaluated in reality. The r
 
   ![UA12 / H92: the operational detection characteristic. Left — the horizon sweep: the faithful detector's F1 (blue) holds flat at 1.0 while the free trained-model detector's precision (red dotted, the false-alarm cost), recall (orange dashed, UA8's metric), and F1 (red solid, deployability) collapse together as the horizon grows; precision sits at 0.69–0.79, so ≈1 in 4 of its alarms is false. Right — the ρ-knee for F1 at horizon 20: precision, recall, and F1 climb from the free floor (0.58) to the faithful ceiling (1.0), reaching deployable ≥0.93 by ρ≈0.1–0.2 (2–4 oracle calls of 20), the same cheap regime as UA9's recall knee](../figures/ua12_host_detection.png)
 
+- **The agent-in-the-loop safety gate — verification makes a preview safe to act on (SPEC-22 / CU1 / H93 — SUPPORTED).**
+  The application capstone, and the direct line from "faithful world model" to "safe computer-use agent /
+  autonomous cyber defender." A capable agent previews a risky plan through its world model ("look
+  before you leap" — the shipped [`HostSimulator.imagine`](../src/verisim/hostsim/simulator.py)), checks
+  a change-safety guardrail on the predicted final state, and executes only if the preview says it is
+  safe. CU1 ([`acd/safety_gate.py`](../src/verisim/acd/safety_gate.py) +
+  [`experiments/cu_safety_gate.py`](../src/verisim/experiments/cu_safety_gate.py)) measures whether that
+  preview can be trusted: a 60-plan battery, each labeled safe/unsafe by the *oracle's* true verdict,
+  gated by a **free** preview (raw `M_θ`), the **oracle** (ρ=1), and the **ρ-grounded** preview, against
+  a **content** guardrail (`/passwd` not overwritten — credential tampering, keyed on the file writes
+  the model drifts on) and a **structure** guardrail (a process stays alive — keyed on the process tree
+  the model learns faithfully). The headline number is the **missed-danger rate** — truly-unsafe plans
+  the agent wrongly executed. **The boundary law lands at the point of action:** on the content guardrail
+  the free preview's missed-danger rate is **0.38** — the agent **executed 11 of 29 credential-corrupting
+  plans** it previewed as safe (plus a 0.19 false-block rate) — while the **oracle preview misses 0** and
+  the cheap knee drives missed-danger to zero at **ρ=0.30 (6 oracle calls of 18)**: 0.38 → 0.28 → 0.10 →
+  0.00. On the structure guardrail the free preview already gates correctly (missed-danger **0.00**, the
+  null). So a computer-use agent acting on an *unverified* world model executes destructive plans exactly
+  where the guardrail keys on the content the model drifts on; verification is what makes the preview safe
+  to act on; and that safety is cheap. The architecture is in
+  [`figures/cu_architecture.png`](../figures/cu_architecture.png); the foundation→application mapping is
+  in the README. Defender-only (the SPEC.md §13 ethics commitment); the network + real-`/bin/sh` gate
+  (CU2) is proposed.
+
+  ![SPEC-22 CU1 / H93: the agent-in-the-loop safety gate. Left — missed-danger rate by guardrail and preview: on the content guardrail (/passwd not overwritten) the free unverified preview sits at 0.38 (the agent ran 11 destructive plans) while the oracle preview is 0; on the structure guardrail both are 0 (the boundary law — free gating works where the model is faithful). Right — the missed-danger knee on the content guardrail: it falls from 0.38 at ρ=0 to 0 by ρ=0.3, the cheap consultation budget that buys a safe gate](../figures/cu1_safety_gate.png)
+
 - **The distributed recession test — is the structural-first recession (H87) universal? NO (a refinement).**
   SPEC-21's H87 says the load-bearing frontier recedes *structural-first* with scale — structure tasks
   fall below the load-bearing threshold first, content tasks persist. But on host/network the structure
@@ -2694,6 +2720,12 @@ python -m verisim.experiments.dist_boundary --out figures/ua11_dist_boundary.csv
 # recall only. Free detector loses precision (0.69-0.79, ~1 in 4 alarms false) AND recall; the cheap
 # knee restores the whole operating point at rho~0.1-0.2 (trains a host M_θ; --smoke for a fast run):
 python -m verisim.experiments.ua_host_detection --out figures/ua12_host_detection.csv
+# SPEC-22 CU1/H93 — the agent-in-the-loop safety gate: an agent previews a plan through M_θ and
+# executes only if a guardrail holds. Free preview misses 38% of /passwd-overwrite dangers (ran 11/29);
+# oracle 0; cheap knee -> safe gate at rho=0.3. Structure guardrail: free already safe (boundary law):
+python -m verisim.experiments.cu_safety_gate --out figures/cu1_safety_gate.csv
+# the architecture diagram (standalone, no training) for the README "foundation -> application":
+python -m figures.plot_cu_architecture
 # SPEC-21 CP5 — the GPU-readiness gate: validate the full ladder + cost estimate WITHOUT training:
 python -m verisim.experiments.scale_law --config configs/scale_law_gpu.json --dry-run
 # SPEC-21 CP0-CP4 — the committed 4-rung CPU ladder (the CPU-proven apparatus; structure->content

@@ -1,0 +1,11 @@
+guardrail,keyed,preview,rho,n_unsafe,missed_dangers,missed_danger_rate,false_block_rate,mean_calls
+no write to {/passwd},content,free,0.000,29,11,0.379310,0.193548,0.0000
+no write to {/passwd},content,oracle,1.000,29,0,0.000000,0.000000,0.0000
+no write to {/passwd},content,grounded,0.000,29,11,0.379310,0.193548,0.0000
+no write to {/passwd},content,grounded,0.100,29,8,0.275862,0.096774,1.0000
+no write to {/passwd},content,grounded,0.200,29,3,0.103448,0.000000,3.0000
+no write to {/passwd},content,grounded,0.300,29,0,0.000000,0.000000,6.0000
+no write to {/passwd},content,grounded,0.500,29,0,0.000000,0.000000,9.0000
+no write to {/passwd},content,grounded,1.000,29,0,0.000000,0.000000,18.0000
+pid 2 stays alive,structure,free,0.000,17,0,0.000000,0.000000,0.0000
+pid 2 stays alive,structure,oracle,1.000,17,0,0.000000,0.000000,0.0000
