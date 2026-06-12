@@ -10,6 +10,8 @@ from __future__ import annotations
 
 import json
 
+import pytest
+
 from verisim.cue.conformance import (
     all_passed,
     check_ground_truth_labels,
@@ -21,6 +23,12 @@ from verisim.cue.pack import (
     croissant_metadata,
     datasheet,
     task_card,
+)
+from verisim.cue.scorecard import (
+    TaskScore,
+    model_card,
+    reference_scores_from_csv,
+    scorecard_headline,
 )
 from verisim.experiments.cue_pack import emit, load_verdicts
 
@@ -91,9 +99,77 @@ def test_conformance_holds_ground_truth_labels():
     assert check_ordered_spectrum(CueManifest()).passed
 
 
-def test_emit_writes_three_artifacts(tmp_path):
+def test_emit_writes_four_artifacts(tmp_path):
     paths = emit(CueManifest(), tmp_path, frontier_csv="does-not-exist.csv")
-    for key in ("croissant", "datasheet", "task_card"):
+    for key in ("croissant", "datasheet", "task_card", "model_card"):
         assert paths[key].exists() and paths[key].read_text()
     # the croissant file is valid JSON
     assert json.loads(paths["croissant"].read_text())["name"] == "verisim-cue"
+
+
+def _frontier_csv(tmp_path):
+    csv = tmp_path / "frontier.csv"
+    csv.write_text(
+        "label,params,task,order,keyed_dimension,faithful,free,gap,keyed_drift,knee_rho\n"
+        "xs,1024,process-control,0,procs,1.0,0.84,0.16,0.3,0.3\n"
+        "xs,1024,content-value,3,fs,1.0,0.19,0.81,0.9,0.3\n"
+        "l,110592,process-control,0,procs,1.0,0.97,0.03,0.2,-1.0\n"
+        "l,110592,content-value,3,fs,1.0,0.16,0.84,0.9,0.5\n"
+    )
+    return csv
+
+
+def test_reference_scores_per_rung(tmp_path):
+    ref = reference_scores_from_csv(_frontier_csv(tmp_path), threshold=0.05)
+    assert set(ref) == {"xs", "l"}
+    # each rung's scorecard is ordered by task; the load-bearing flag is gap > threshold
+    l_scores = {s.task: s for s in ref["l"]}
+    assert l_scores["process-control"].catch_rate == 0.97
+    assert not l_scores["process-control"].load_bearing  # gap 0.03 < 0.05
+    assert l_scores["content-value"].load_bearing  # gap 0.84 > 0.05
+    assert reference_scores_from_csv(tmp_path / "missing.csv") == {}
+
+
+def test_model_card_renders_schema_and_reference(tmp_path):
+    # with a frontier CSV -> shows the reference scorecards (the per-rung models)
+    card = model_card(CueManifest(), frontier_csv=_frontier_csv(tmp_path))
+    assert "Scorecard schema" in card and "Reference scorecards" in card
+    assert "`l`" in card and "process 0.97" in card  # a reference rung's catch rate
+    # without a CSV -> just the schema (no reference section)
+    bare = model_card(CueManifest(), frontier_csv=None)
+    assert "Scorecard schema" in bare and "Reference scorecards" not in bare
+
+
+def test_scorecard_headline_logic():
+    scores = [
+        TaskScore("process-control", 0, 0.97, 1.0, 0.03, False),
+        TaskScore("fd-control", 1, 0.84, 1.0, 0.16, True),
+        TaskScore("content-value", 3, 0.16, 1.0, 0.84, True),
+    ]
+    h = scorecard_headline(scores)
+    assert h["n_load_bearing"] == 2
+    assert h["load_bearing_tasks"] == ["fd-control", "content-value"]
+    assert h["structure_clean"]  # the order-0 task is not load-bearing (the model gets structure)
+
+
+# --- torch-gated: scoring a real (smoke) model through the suite ----------------------------------
+
+torch = pytest.importorskip("torch")
+
+from verisim.cue.scorecard import score_model  # noqa: E402
+from verisim.cue.tasks import TaskGapConfig  # noqa: E402
+from verisim.experiments.host_flagship import HostFlagshipConfig, train_host_flagship  # noqa: E402
+
+
+def test_score_model_through_the_suite():
+    model, _ = train_host_flagship(HostFlagshipConfig.smoke())
+    manifest = CueManifest()
+    config = TaskGapConfig(horizon=10, workload_seeds=tuple(range(700, 706)))
+    scores = score_model(model, manifest, config)
+    assert [s.order for s in scores] == [0, 1, 2, 3]
+    for s in scores:
+        assert 0.0 <= s.catch_rate <= 1.0 and s.faithful_ceiling == pytest.approx(1.0)
+        assert s.load_bearing == (s.gap > manifest.threshold)
+    # the headline summarizes the load-bearing footprint
+    h = scorecard_headline(scores, manifest)
+    assert 0.0 <= h["mean_catch_rate"] <= 1.0 and isinstance(h["n_load_bearing"], int)

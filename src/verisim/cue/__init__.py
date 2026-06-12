@@ -19,6 +19,13 @@ from .pack import (
     datasheet,
     task_card,
 )
+from .scorecard import (
+    TaskScore,
+    model_card,
+    reference_scores_from_csv,
+    score_model,
+    scorecard_headline,
+)
 from .tasks import (
     TASK_SUITE,
     CueTask,
@@ -44,6 +51,7 @@ __all__ = [
     "CueTaskSpec",
     "TaskGap",
     "TaskGapConfig",
+    "TaskScore",
     "alive_procs",
     "all_passed",
     "croissant_metadata",
@@ -51,9 +59,13 @@ __all__ = [
     "file_contents",
     "grounded_keyed_reward",
     "keyed_defense_reward",
+    "model_card",
     "open_fds",
+    "reference_scores_from_csv",
     "rollout_keyed",
     "run_conformance",
+    "score_model",
+    "scorecard_headline",
     "task_card",
     "task_gap",
     "task_knee_rho",

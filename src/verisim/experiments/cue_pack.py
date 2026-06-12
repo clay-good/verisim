@@ -32,6 +32,7 @@ from verisim.cue.pack import (
     datasheet,
     task_card,
 )
+from verisim.cue.scorecard import model_card
 
 
 def load_verdicts(frontier_csv: str | Path) -> dict[str, dict[str, float]]:
@@ -64,12 +65,14 @@ def emit(
         "croissant": out / "croissant.json",
         "datasheet": out / "datasheet.md",
         "task_card": out / "task-card.md",
+        "model_card": out / "model-card.md",
     }
     paths["croissant"].write_text(
         json.dumps(croissant_metadata(manifest), indent=2, sort_keys=True) + "\n"
     )
     paths["datasheet"].write_text(datasheet(manifest))
     paths["task_card"].write_text(task_card(manifest, verdicts))
+    paths["model_card"].write_text(model_card(manifest, frontier_csv=frontier_csv))
     return paths
 
 
