@@ -2487,6 +2487,20 @@ any GPU is rented — the GPU run is a config swap, not a rewrite. The CPU core 
 
   ![SPEC-21 CS1: the faithfulness-for-control scale law (CPU-proven apparatus). Left — the load-bearing frontier: the faithful-vs-free gap per task vs model capacity (log x), one line per task ordered structure→content; process-control (green) drops below the load-bearing threshold while content-value (red) stays high — the structural-first recession with an irreducible content residue. Right — the forecast: the cheap per-task keyed drift versus the expensive gap, every (rung, task) cell falling near the line (Spearman +0.965), so the cheap profile forecasts the load-bearing verdict](../figures/cs1_loadbearing_frontier.png)
 
+- **The cost dimension — how expensive it is to buy back faithfulness, across scale.** The frontier
+  says *where* faithfulness is load-bearing; the harness also computes a per-task **ρ-knee** (the
+  smallest consultation budget that buys back the faithful catch, UA9/H81) — the *cost* of buying it.
+  That signal sat in the CSV unanalyzed; `knee_trajectory` / `knee_verdict` surface it as the law's
+  second dimension. The committed run shows a real trend: **the deep-content residue's knee rises
+  0.3 → 0.5 as the model scales, while file-integrity stays cheap and flat at ~0.2.** So the
+  irreducible residue (H88) is **doubly hard** — not only does the content gap persist as scale closes
+  the structural gap, the *cost* of buying it back *grows*. Shallower content (file-integrity) stays
+  cheaply buyable; the deepest content gets both more load-bearing and more expensive. A CPU-scale
+  observation on a coarse ρ grid (the GPU run resolves it), and a sharpening of H88: verification is
+  not just a permanent primitive on the residue, it is an increasingly *costly* one.
+
+  ![SPEC-21 knee trajectory — the cost dimension of the scale law. The useful-knee ρ (the consultation budget needed to buy back the faithful catch) per load-bearing task vs model capacity (log x). content-value (red, the deep residue) rises from 0.3 to 0.5 as the model scales — the residue gets more expensive to buy back — while file-integrity (orange) stays flat at 0.2 (cheaply, stably buyable) and fd-control falls; process-control drops out as it stops being load-bearing](../figures/cs1_knee_trajectory.png)
+
 - **The artifact half — `verisim-cue` (deliverable #2).** A scale law is the *result*; `verisim-cue`
   is the *thing others use*. The computer-use task suite is hardened the SPEC-18 way into a frozen,
   hashed, versioned benchmark (`verisim-cue@0.1.0+<hash>`), emitting the full standardized metadata

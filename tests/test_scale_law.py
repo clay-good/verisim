@@ -21,6 +21,8 @@ from verisim.experiments.scale_law import (
     estimate_cost,
     forecast_check,
     frontier_verdict,
+    knee_trajectory,
+    knee_verdict,
     load_bearing_frontier,
 )
 
@@ -70,6 +72,31 @@ def test_forecast_check_h89():
     assert fc["n_cells"] == 12
     assert fc["forecastable"]  # cheap keyed drift strongly orders the gaps
     assert fc["spearman"] > 0.6
+
+
+def _knee_result() -> ScaleLawResult:
+    # content-value (order 3) load-bearing with a RISING knee; file-integrity flat; process not LB
+    rungs = []
+    for label, params, knees in (
+        ("xs", 1024, {"process-control": 0.3, "file-integrity": 0.2, "content-value": 0.3}),
+        ("l", 110592, {"file-integrity": 0.2, "content-value": 0.5}),
+    ):
+        r = _receding_result().rungs[0] if label == "xs" else _receding_result().rungs[-1]
+        rungs.append(ScaleRung(label, params, r.dimension_drift, r.gaps, r.keyed_drift, knees))
+    return ScaleLawResult(rungs=rungs)
+
+
+def test_knee_trajectory_and_verdict():
+    result = _knee_result()
+    traj = knee_trajectory(result, threshold=0.05)
+    # only tasks that are load-bearing (gap > threshold) AND have a knee appear
+    assert "content-value" in traj and "file-integrity" in traj
+    assert traj["content-value"] == [(1024, 0.3), (110592, 0.5)]  # sorted by capacity
+    v = knee_verdict(result, threshold=0.05)
+    # the deepest load-bearing task's knee rises with scale -> the residue is doubly hard
+    assert v["deepest_load_bearing"] == "content-value"
+    assert v["knee_trend"] == "rising"
+    assert v["knee_delta"] == pytest.approx(0.2)
 
 
 def test_estimate_cost_monotone_in_ladder():

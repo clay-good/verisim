@@ -232,6 +232,57 @@ def frontier_verdict(result: ScaleLawResult, threshold: float = 0.05) -> dict[st
     }
 
 
+def knee_trajectory(
+    result: ScaleLawResult, threshold: float = 0.05
+) -> dict[str, list[tuple[int, float]]]:
+    """The *cost* dimension of the scale law: the useful-knee ρ per load-bearing task across scale.
+
+    The frontier (`load_bearing_frontier`) says *where* faithfulness is load-bearing; the knee says
+    *how expensive it is to buy back* — the smallest consultation budget ρ recovering the
+    faithful catch (UA9/H81). Per task, the ρ-knee at each rung *where the task is load-bearing*
+    (gap > threshold; the harness leaves the knee at -1 elsewhere). Returns
+    ``{task: [(params, knee_ρ), ...]}`` sorted by capacity — the trajectory a figure reads to ask
+    whether the residue stays cheap to buy as the model scales, or gets more expensive.
+    """
+    traj: dict[str, list[tuple[int, float]]] = {}
+    for rung in result.rungs:
+        for g in rung.gaps:
+            if g.gap > threshold and g.task in rung.knees:
+                traj.setdefault(g.task, []).append((rung.params, rung.knees[g.task]))
+    for points in traj.values():
+        points.sort()
+    return traj
+
+
+def knee_verdict(result: ScaleLawResult, threshold: float = 0.05) -> dict[str, Any]:
+    """Does the cost of buying back faithfulness change with scale (the deepest-residue knee trend)?
+
+    For the deepest task that is load-bearing at ≥2 rungs, compare its knee at the smallest and
+    largest such capacity. A *rising* knee means the irreducible residue is doubly hard — both
+    load-bearing (H88) *and* increasingly expensive to buy; a *flat/falling* knee means the residue
+    stays cheaply buyable at every scale. CPU-scale observation on a coarse ρ grid; the GPU run
+    resolves it.
+    """
+    traj = knee_trajectory(result, threshold)
+    multi = {t: pts for t, pts in traj.items() if len(pts) >= 2}
+    if not multi:
+        return {"knee_by_task": traj, "deepest_load_bearing": None, "knee_trend": "n/a"}
+    order_of = {g.task: g.order for rung in result.rungs for g in rung.gaps}
+    deepest = max(multi, key=lambda t: order_of.get(t, -1))
+    pts = multi[deepest]
+    delta = pts[-1][1] - pts[0][1]
+    trend = "rising" if delta > 0.01 else ("falling" if delta < -0.01 else "flat")
+    return {
+        "knee_by_task": {t: {p: k for p, k in pts} for t, pts in traj.items()},
+        "deepest_load_bearing": deepest,
+        "knee_at_smallest": pts[0][1],
+        "knee_at_largest": pts[-1][1],
+        "knee_delta": delta,
+        # rising -> the residue is load-bearing AND increasingly expensive to buy (sharpens H88)
+        "knee_trend": trend,
+    }
+
+
 # --- CP5: the GPU-readiness gate (config + dry-run + cost) ----------------------------------------
 
 
@@ -380,6 +431,11 @@ def main() -> None:  # pragma: no cover - CLI entry point
           f"gap-by-scale={ {k: round(v, 2) for k, v in fv['deepest_gap_by_scale'].items()} }")
     print(f"H89 forecast (cheap drift -> gap): spearman={fc['spearman']:+.3f}  "
           f"forecastable={fc['forecastable']}")
+    kv = knee_verdict(result, config.threshold)
+    if kv["deepest_load_bearing"]:
+        print(f"knee (cost to buy back faithfulness) on {kv['deepest_load_bearing']}: "
+              f"ρ {kv['knee_at_smallest']:.2f} -> {kv['knee_at_largest']:.2f} "
+              f"({kv['knee_trend']}) across scale")
 
 
 if __name__ == "__main__":  # pragma: no cover
