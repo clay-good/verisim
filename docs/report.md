@@ -2524,6 +2524,22 @@ any GPU is rented — the GPU run is a config swap, not a rewrite. The CPU core 
   (margin +0.854), so an adopter can trust a scorecard was earned on the dynamics, not the seeds.
   Committed under [`cue/`](../cue/), regenerable from the manifest hash; adoption is not a hypothesis
   (SPEC-18 §9), so it ships regardless.
+- **The scale law is cross-world (CS1-net).** The host scale law lived on one world. SPEC-20's
+  *boundary* law was cross-world (host + network); this is the cross-world confirmation of its *scale*
+  law. A **network** task suite ordered structure→content — `service-control` (structure) →
+  `link-control` (near-structure) → `flow-integrity` (content, the dimension the net model drifts on) —
+  swept through a network capacity ladder, reusing the SPEC-20 net machinery and the host harness's
+  reducers *unchanged* (a network `ScaleLawResult` is the same data model). **The law reproduces,
+  sharply:** the structure→content gap gradient holds at every rung (service ≤0.16 / link ≤0.06 ≈ 0 →
+  **flow 0.91–0.94**), the flow content-residue stays load-bearing throughout (H88), the cheap drift
+  forecasts the gap at **Spearman +0.825** (H89 cross-world), and the flow knee is **flat at ρ≈0.20**
+  (cheaply and stably buyable, mirroring the host's ρ≈0.25). So the scale law's gradient and forecast
+  are a property of the structure-vs-content split, not the host world. The honest scope: the network's
+  structure tasks are so faithful (gap ~0) that only the content task is load-bearing, so the
+  cost-forecast spread is small (+0.18) — the network confirms the *gap* law cleanly; the cost forecast
+  needs the host's wider load-bearing spread.
+
+  ![SPEC-21 CS1-net — the scale law on the network world (cross-world confirmation), two panels. Left — the load-bearing frontier: the faithful-vs-free gap per task vs network-model capacity (log x); service-control (green) and link-control (olive) hug the load-bearing threshold (structure, gap ~0) while flow-integrity (orange) sits at ~0.94 (content) at every rung — the structure→content gradient, cross-world. Right — the forecast: the cheap keyed drift vs the gap; flow (high drift, high gap) separates cleanly from service/link, so the cheap drift forecasts the gap at Spearman +0.825 on the network too](../figures/cs1_net_frontier.png)
 
 Reproduce (CPU-local; the apparatus' smoke instances run in CI):
 
@@ -2581,6 +2597,9 @@ python -m verisim.experiments.scale_law --config configs/scale_law_gpu.json --dr
 # SPEC-21 CP0-CP4 — the committed 4-rung CPU ladder (the CPU-proven apparatus; structure->content
 # gap gradient + the cheap-forecasts-expensive check, Spearman +0.965):
 python -m verisim.experiments.scale_law --cpu --out figures/cs1_loadbearing_frontier.csv
+# CS1-net — the cross-world confirmation: the SAME scale law on the NETWORK world (service/link/flow)
+# — the structure->content gradient + the cheap forecast (+0.825) reproduce on the network:
+python -m verisim.experiments.net_scale_law --out figures/cs1_net_frontier.csv
 # the committed scale law (CS1/CS2/CS3) — the SAME pipeline, one dial (the GPU run):
 python -m verisim.experiments.scale_law --config configs/scale_law_gpu.json --device cuda
 # SPEC-21 deliverable #2 — package verisim-cue: emit Croissant + datasheet + the load-bearing

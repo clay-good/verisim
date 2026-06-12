@@ -23,6 +23,7 @@ from pathlib import Path
 
 def plot_cs1_frontier(  # pragma: no cover
     csv_path: str | Path, out_path: str | Path, *, threshold: float = 0.05,
+    title: str = "SPEC-21 CS1 -- the faithfulness-for-control scale law (CPU-proven apparatus)",
 ) -> Path:
     import matplotlib
 
@@ -73,9 +74,7 @@ def plot_cs1_frontier(  # pragma: no cover
     axr.legend(fontsize=8, loc="upper left")
     axr.grid(alpha=0.3)
 
-    fig.suptitle(
-        "SPEC-21 CS1 -- the faithfulness-for-control scale law (CPU-proven apparatus)", fontsize=11
-    )
+    fig.suptitle(title, fontsize=11)
     fig.tight_layout()
 
     out = Path(out_path)
