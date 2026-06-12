@@ -2455,6 +2455,24 @@ trained in `E_oracle` / `E_grounded` / `E_free`, all evaluated in reality. The r
   structure-vs-content split, not of one world.
 
   ![UA10: the network flow-integrity cross-world confirmation. Left — the content-keyed positive: the faithful predictor (green) stays at 1.0 while the free predictor (red) collapses from 0.58 to 0.08 as the workload horizon grows and flow drift compounds. Right — the useful knee: the ρ-grounded predictor's catch rate climbs from the free floor (0.08) to the faithful ceiling (1.0), recovering it at ρ=0.2 (4 oracle calls vs 20 for the every-step predictor)](../figures/ua10_net_integrity.png)
+- **The boundary holds on the third world — distributed (UA11 / H85 — SUPPORTED).** Two worlds is a
+  pattern; three is a law. UA11 lands the **distributed** world (SPEC-7) — the hardest, where the
+  global oracle is intractable and the state is replicated values under partition. The structure/content
+  split: `partition-control` (structure, keyed on the partition groups the fault ops move) vs
+  `value-integrity` (content, keyed on the replicated *(object, value)* pairs the client ops write).
+  A trained distributed `M_θ`, faithful-vs-free predictive-defense on each. **The content gap +0.50
+  materially exceeds the structure gap +0.23** (faithful 1.000 on both) — faithfulness is load-bearing
+  on the content the model drifts on, not the structure it learns, on the third world too. **The
+  distributed wrinkle, stated honestly:** (1) the structure gap is *not* ~0 like host/network — the
+  distributed world is hard enough that even partition structure isn't perfectly learned at this model
+  scale; (2) the content is load-bearing **but not cheaply buyable** — the useful knee is at **ρ=1**
+  (full grounding), unlike host's ρ≈0.25 and network's ρ≈0.2, because the in-flight/partition medium
+  (SPEC-7 H19/H20, where errors hide between re-anchors) makes partial grounding insufficient. So the
+  *gradient* (content > structure) is the universal cross-world law, now on all three worlds; the
+  *cheap knee* is a host/network property the distributed medium breaks — a genuinely new result the
+  third world surfaces.
+
+  ![UA11: the structure/content boundary on the distributed world (third-world confirmation). A bar chart of the faithful-vs-free gap with bootstrap CIs for the two distributed tasks: partition-control (structure, green) at +0.23 and value-integrity (content, red) at +0.50 — the content gap materially exceeds the structure gap, so faithfulness is load-bearing on the content (replicated values) the model drifts on, not the structure (partition topology), completing the boundary law on host + network + distributed](../figures/ua11_dist_boundary.png)
 
 **SPEC-21 — scaling the boundary into a law (the CPU-proven core).** SPEC-20 drew the structure/content
 boundary on *one tiny model per world*. The standing objection is the one every result of its kind
@@ -2592,6 +2610,9 @@ python -m verisim.experiments.ua_host_grounded --checkpoint runs/flagship/host-l
 # (faithful 1.0 vs free collapsing to 0.08) + the useful knee (ρ=0.2 recovers the ceiling, 5x cheaper):
 python -m verisim.experiments.ua_net_integrity --checkpoint runs/flagship/net-l \
     --out figures/ua10_net_integrity.csv
+# UA11/H85 — the boundary on the THIRD world (distributed): partition(structure) vs value(content);
+# content gap +0.50 > structure +0.23 (trains a small distributed M_θ; no checkpoint needed):
+python -m verisim.experiments.dist_boundary --out figures/ua11_dist_boundary.csv
 # SPEC-21 CP5 — the GPU-readiness gate: validate the full ladder + cost estimate WITHOUT training:
 python -m verisim.experiments.scale_law --config configs/scale_law_gpu.json --dry-run
 # SPEC-21 CP0-CP4 — the committed 4-rung CPU ladder (the CPU-proven apparatus; structure->content

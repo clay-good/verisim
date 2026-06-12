@@ -1,0 +1,3 @@
+task,band,faithful,free,gap,ci_lo,ci_hi,n
+partition-control,structure,1.000000,0.775000,0.225000,0.100000,0.375000,20
+value-integrity,content,1.000000,0.500000,0.500000,0.325000,0.675000,20

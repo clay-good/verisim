@@ -2823,7 +2823,7 @@ rule). The decided tranche is the controlled-core + pure-oracle work; the negati
 H45→H46 turned SPEC-14 from "supervise the processor" to "the wall is the decoder," and RS1 + NA6
 banked that the exposure-bias cure does not pay at CPU scale on either the flat or the structured arm.
 
-### SPEC-19/20 hypothesis-verdict ledger (the flagship + usefulness era, H69–H84)
+### SPEC-19/20 hypothesis-verdict ledger (the flagship + usefulness era, H69–H85)
 
 The active-priority era: one real trained model (SPEC-19), and the first downstream-application spec
 (SPEC-20) — train an agent *inside* the model and transfer it to the oracle's reality. Same verdict
@@ -2846,13 +2846,15 @@ glyphs.
 | **H81** | ✓ | UA9 | the **useful knee** — the ρ-grounded predictor recovers the faithful catch rate **monotonically** in ρ (the H76 mirror), reaching perfect catch at **ρ=0.5, half the oracle calls** — buying content-keyed faithfulness cheaply on the downstream task | [ua9](figures/ua9_grounded_knee.png) |
 | **H82** | ✓ | UA10 | the law **and** the knee are **cross-world** — on the network world (content = flows) the free predictor collapses 0.58→0.08 while faithful holds at 1.0 (gap widening to +0.92), and the ρ-grounded predictor recovers the ceiling at **ρ=0.2, 5× cheaper**; the boundary is a property of the structure-vs-content split, not one world | [ua10](figures/ua10_net_integrity.png) |
 | **H84** | ✓ | HFL1 | the **smart-scheduling win is cross-world** — on the harder host flagship (`H_free`≈9 vs the network's ≈18) the composed decode-entropy policy still beats the fixed clock (floor 9 → ceiling 48, **+50% at ρ=0.2, +60% at ρ=0.5**); the FL6/H77 ranking mechanism reproduces where the model is materially less faithful — scheduling is a property of the loop, not the network world | [hfl1](figures/hfl1_host_curve.png) |
+| **H85** | ✓ | UA11 | the boundary holds on the **third world** (distributed) — two is a pattern, three is a law. Content gap **+0.50** > structure gap **+0.23** (partition-control vs value-integrity, on a trained distributed `M_θ`). The distributed *wrinkle*: the content is load-bearing but **not cheaply buyable** — the knee is at ρ=1 (vs host ρ≈0.25 / net ρ≈0.2), because the in-flight/partition medium (H19/H20) hides error between re-anchors. The *gradient* is universal; the *cheap knee* is a host/network property the distributed medium breaks | [ua11](figures/ua11_dist_boundary.png) |
 
-The shape of the flagship era (15 hypotheses): **✓ 10** supported, **◐ 1** split (the H69 strict bar),
+The shape of the flagship era (16 hypotheses): **✓ 11** supported, **◐ 1** split (the H69 strict bar),
 **✗ 3** refuted, **⊟ 1** banked negative (H74). The headline pair: faithful one-step dynamics do **not**
 make verification sub-linear on a real model (H69) but smart scheduling decisively beats the clock —
 **on both worlds** (H84); and faithfulness is load-bearing for control **exactly when** the task keys
 on the content the model drifts on (H74 null + H80 positive), where it can still be bought at sub-linear
-oracle cost (H81) — a boundary that holds in **both** the host and network worlds (H82).
+oracle cost (H81) — a boundary that holds on **all three worlds** (host + network + distributed, H82 +
+H85), the cheap knee on two of them (the distributed in-flight medium breaks it).
 
 ### SPEC-21 hypothesis-verdict ledger (the scale-law era, H87–H90)
 
