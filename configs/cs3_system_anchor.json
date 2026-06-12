@@ -1,0 +1,9 @@
+{
+  "driver": "structural",
+  "alphas": [0.3, 0.5, 0.7, 0.9],
+  "horizon": 16,
+  "seeds": [800, 801, 802, 803, 804, 805, 806, 807, 808, 809, 810, 811],
+  "irreducible": 0.12,
+  "threshold": 0.05,
+  "anchor_tol": 1e-9
+}

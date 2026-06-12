@@ -2516,7 +2516,7 @@ any GPU is rented — the GPU run is a config swap, not a rewrite. The CPU core 
 - **The GPU-readiness gate (CP5).** [`configs/scale_law_gpu.json`](../configs/scale_law_gpu.json) (the
   full `xs…xxxl` ladder + `device=cuda`) plus a `--dry-run` that validates shapes, device, and a
   pre-registered cost estimate *without training* — green on the committed config, so a rented GPU runs
-  a proven program. The headline scale law (CS1/CS2/CS3) is now one command away.
+  a proven program. The wide-ladder headline scale law (CS1/CS2) is now one command away.
 
   ![SPEC-21 CS1: the faithfulness-for-control scale law (CPU-proven apparatus). Left — the load-bearing frontier: the faithful-vs-free gap per task vs model capacity (log x), one line per task ordered structure→content; process-control (green) drops below the load-bearing threshold while content-value (red) stays high — the structural-first recession with an irreducible content residue. Right — the forecast: the cheap per-task keyed drift versus the expensive gap, every (rung, task) cell falling near the line (Spearman +0.965), so the cheap profile forecasts the load-bearing verdict](../figures/cs1_loadbearing_frontier.png)
 
@@ -2535,6 +2535,26 @@ any GPU is rented — the GPU run is a config swap, not a rewrite. The CPU core 
   load-bearing *and* how expensive it is to buy back, without ever running the ρ-sweep.
 
   ![SPEC-21 the cost dimension of the scale law, two panels. Left — the knee trajectory: the useful-knee ρ (consultation budget to buy back the faithful catch) per load-bearing task vs model capacity (log x); content-value (red, the deep residue) stays flat at ρ≈0.25 across every rung — cheaply and stably buyable, the cost not growing with scale — while file-integrity and fd-control sit near 0.10–0.20. Right — the cost forecast (H89 extended): the cheap per-task keyed drift vs the knee on the load-bearing cells; higher-drift tasks (content, red) need a higher knee, so the cheap drift forecasts the cost at Spearman +0.717 (the gap forecast is +0.965)](../figures/cs1_knee_trajectory.png)
+
+- **The reality anchor — does the law survive a real kernel? (CS3 / H90).** The whole scale law is
+  measured against the deterministic *reference* oracle, so the standing question is whether the
+  load-bearing frontier is about *real* computer-use dynamics or only a model of them. CS3 answers it
+  on CPU by measuring the scale law's own headline object — the **load-bearing gap** — against a real
+  `/bin/sh` ([`experiments/cs3_system_anchor.py`](../src/verisim/experiments/cs3_system_anchor.py)),
+  the scale-law sibling of SY1/PB-transfer. On the content grammar SY1/H27 proved the system oracle
+  bit-exact, the per-task faithful-vs-free gap is swept across a **capacity-proxy α-ladder** — a
+  content-drifting `M_θ` stand-in (the trained arm deferred, the LP7 rule) faithful on structure,
+  drifting on content with prob `1−α`, carrying an **irreducible residue floor** (H88's
+  effectively-unlearnable content) — and scored against *both* anchors. The result: the load-bearing
+  gap is **anchor-invariant — `gap_sys == gap_ref` bit-for-bit (max Δ = 0.0e+00)** at every rung; the
+  structure→content **gradient** holds under the real kernel (file-integrity flat at 0.00,
+  content-value receding 0.76 → 0.56 → 0.41 → 0.28); the content **residue stays load-bearing under the
+  real shell** at the top rung (0.28 > 0.05, H88-consistency); and the cheap drift **forecasts the gap
+  under the real kernel** at **Spearman +1.000** (H89). The scale law is about real computer-use
+  dynamics, not a model of them. `skipif`-guarded and §2.5-disclosed; the GPU run extends the *trained*
+  arm and the wide capacity range.
+
+  ![SPEC-21 CS3 / H90: the faithfulness-for-control scale law survives the system oracle. Left — the load-bearing gap versus the capacity proxy α, overlaid for both reality anchors: file-integrity (blue) flat at zero (structure, never load-bearing) and content-value (red) receding from 0.76 to 0.28, with the reference-oracle (solid) and real-/bin/sh (open markers) curves lying exactly on top of each other — the frontier and its motion do not move when the real kernel replaces the reference oracle; the content curve stays above the load-bearing threshold (0.05) at the top of the ladder, the residue on a real OS. Right — the anchor delta |gap_sys − gap_ref| per cell, flat at zero (max Δ = 0.0e+00): the reference oracle and the real shell produce the identical keyed sets on the validated content grammar, the bit-exact form of H90](../figures/cs3_system_anchor.png)
 
 - **The artifact half — `verisim-cue` (deliverable #2).** A scale law is the *result*; `verisim-cue`
   is the *thing others use*. The computer-use task suite is hardened the SPEC-18 way into a frozen,
@@ -2636,7 +2656,10 @@ python -m verisim.experiments.scale_law --cpu --out figures/cs1_loadbearing_fron
 # CS1-net — the cross-world confirmation: the SAME scale law on the NETWORK world (service/link/flow)
 # — the structure->content gradient + the cheap forecast (+0.825) reproduce on the network:
 python -m verisim.experiments.net_scale_law --out figures/cs1_net_frontier.csv
-# the committed scale law (CS1/CS2/CS3) — the SAME pipeline, one dial (the GPU run):
+# SPEC-21 CS3/H90 — the reality anchor: the scale law's load-bearing gap measured against a real
+# /bin/sh, anchor-invariant bit-for-bit (gap_sys == gap_ref, max Δ=0.0e+00); skipif-guarded:
+python -m verisim.experiments.cs3_system_anchor --config configs/cs3_system_anchor.json
+# the committed wide-ladder scale law (CS1/CS2) — the SAME pipeline, one dial (the GPU run):
 python -m verisim.experiments.scale_law --config configs/scale_law_gpu.json --device cuda
 # SPEC-21 deliverable #2 — package verisim-cue: emit Croissant + datasheet + the load-bearing
 # task-card to cue/, and run the ground-truth-labels conformance suite (all CPU, torch-free):
