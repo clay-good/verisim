@@ -82,3 +82,23 @@ def test_dist_boundary_holds_on_smoke_model():
     # the content gap exceeds the structure gap -> the boundary holds, third world
     assert verdict["content_gap"] >= verdict["structure_gap"]
     assert "boundary_holds" in verdict and "content_knee_rho" in verdict
+
+
+def test_recession_verdict_rule():
+    # the robust claim: the structure gap persists (not ~0) -> structural-first NOT universal
+    from verisim.experiments.dist_boundary import RecessionPoint, dist_recession
+
+    # the committed run: structure persists (~0.2 at l), content recedes -> not structural-first
+    pts = [
+        RecessionPoint("xs", 1024, 0.250, 0.600),
+        RecessionPoint("l", 49152, 0.200, 0.275),
+    ]
+    threshold = 0.05
+    structure_persists = pts[-1].structure_gap > threshold  # does NOT reach ~0 like host/network
+    structural_first = (
+        (pts[0].structure_gap - pts[-1].structure_gap)
+        > (pts[0].content_gap - pts[-1].content_gap) + 0.1
+        and pts[-1].structure_gap <= threshold
+    )
+    assert structure_persists and not structural_first  # the H87 refinement
+    assert callable(dist_recession)

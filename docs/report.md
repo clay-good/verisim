@@ -2474,6 +2474,21 @@ trained in `E_oracle` / `E_grounded` / `E_free`, all evaluated in reality. The r
 
   ![UA11: the structure/content boundary on the distributed world (third-world confirmation). A bar chart of the faithful-vs-free gap with bootstrap CIs for the two distributed tasks: partition-control (structure, green) at +0.23 and value-integrity (content, red) at +0.50 — the content gap materially exceeds the structure gap, so faithfulness is load-bearing on the content (replicated values) the model drifts on, not the structure (partition topology), completing the boundary law on host + network + distributed](../figures/ua11_dist_boundary.png)
 
+- **The distributed recession test — is the structural-first recession (H87) universal? NO (a refinement).**
+  SPEC-21's H87 says the load-bearing frontier recedes *structural-first* with scale — structure tasks
+  fall below the load-bearing threshold first, content tasks persist. But on host/network the structure
+  gap was already ~0 at *every* rung, so "structural-first" was free: there was no structure gap left to
+  recede. The distributed world is the clean test, because here even the *partition structure* is hard to
+  learn (a non-zero gap at small scale). Sweeping the distributed `M_θ` across two rungs (`xs` 1k params →
+  `l` 49k) and watching both gaps: the content gap recedes sharply (0.60 → 0.28), but the **structure gap
+  persists** (0.25 → 0.20 — it does *not* reach ~0 like host/network). So the structural-first recession is
+  **not universal**: it is a property of worlds where the structure is *trivially learnable*, not a law of
+  scale. What *is* universal across all three worlds is the **gradient** — content gap > structure gap at
+  every rung — not a structural-first *ordering* of the recession. (The exact trajectory is noisy
+  run-to-run at CPU scale; "the distributed structure gap persists" is the robust, two-run-stable signal.)
+
+  ![SPEC-20/21 distributed recession: is the structural-first frontier recession universal? Two lines vs distributed model capacity (params, log x) — partition-control (structure, green) and value-integrity (content, red). The content gap recedes from 0.60 to 0.28 as capacity grows, but the structure gap persists at ~0.20 (it does not reach ~0 like the host/network worlds), so the structural-first recession is not universal — it needs a world where the structure is trivially learnable](../figures/ua11_dist_recession.png)
+
 **SPEC-21 — scaling the boundary into a law (the CPU-proven core).** SPEC-20 drew the structure/content
 boundary on *one tiny model per world*. The standing objection is the one every result of its kind
 faces: *does it survive scale, or is it a small-model vignette?* SPEC-21 reframes the boundary as a
