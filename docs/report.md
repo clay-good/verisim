@@ -2523,6 +2523,35 @@ trained in `E_oracle` / `E_grounded` / `E_free`, all evaluated in reality. The r
 
   ![SPEC-22 CU1 / H93: the agent-in-the-loop safety gate. Left — missed-danger rate by guardrail and preview: on the content guardrail (/passwd not overwritten) the free unverified preview sits at 0.38 (the agent ran 11 destructive plans) while the oracle preview is 0; on the structure guardrail both are 0 (the boundary law — free gating works where the model is faithful). Right — the missed-danger knee on the content guardrail: it falls from 0.38 at ρ=0 to 0 by ρ=0.3, the cheap consultation budget that buys a safe gate](../figures/cu1_safety_gate.png)
 
+- **Deepening the gate — a real kernel, more threats, a second world (SPEC-22 / CU2).** Three
+  extensions harden the deployment claim. **(CU2-sys / H94 — the gate against a real `/bin/sh`,
+  SUPPORTED):** the gate sibling of CS3/H90. On the v0 fs content grammar (where SY1/H27 proved ref ≡
+  sandbox bit-exact), the agent's missed-danger rate is swept across a capacity-proxy α-ladder (a
+  write-drifting `M_θ` stand-in, trained arm deferred) and scored against *both* the reference oracle
+  and a real `/bin/sh`. The rate is **anchor-invariant — bit-identical against the real kernel and the
+  reference oracle (max Δ = 0)** at every rung, and a free preview misses real dangers (0.71 → 0.36 →
+  0.21 → 0.00 as α rises) *even against the real shell* — the agent's safety gate is verified against
+  reality. **(CU2-net — cross-world exfiltration, SUPPORTED, even sharper than host):** the same gate
+  on the *network* world against the canonical network threat (no flow to a protected server —
+  exfiltration / lateral movement, keyed on the flows the net model drifts ~0.252 on). On the trained
+  network `M_θ` the free preview's missed-danger rate is **1.00** — the agent **ran all 15 exfil plans**
+  it previewed as safe (the free-running flow prediction collapses) — while the oracle catches every one
+  and the cheap knee restores a safe gate at **ρ=0.5**. **(CU2-threats — the boundary law as a threat
+  ranking):** the committed figure shows the two clean endpoints on the trained host `M_θ` — service
+  kill (structure, the process tree the model learns faithfully) vs credential tampering (content, the
+  file writes it drifts on) — with the free preview's missed-danger rate ordered by the keyed dimension
+  (service kill ≈ 0, the agent self-governs it; credential tampering high, the agent needs the oracle)
+  and the oracle catching every danger. A third threat, privilege escalation via `setuid 0`
+  (near-structure), ships as a tested guardrail (`no_root_escalation`; the free preview misses ~16% of
+  root escalations at smoke scale, oracle 0), with its committed full-model figure deferred because the
+  fork/`setuid`-heavy adversarial workload makes the trained model's rollout prohibitively slow on CPU.
+  The deployment read: a verified world model is the safety layer for a computer-use agent and a network
+  defender alike, verified against a real kernel, cheaply.
+
+  ![SPEC-22 CU2-sys / H94: the agent safety gate against a real /bin/sh. The missed-danger rate versus the capacity proxy α, with the reference-oracle curve (red, filled) and the real-/bin/sh curve (blue, open) lying exactly on top of each other at every rung (0.71, 0.36, 0.21, 0.00) — max Δ = 0, anchor-invariant — and a free preview missing real dangers even against the real shell, receding to zero with capacity](../figures/cu2_system_gate.png)
+
+  ![SPEC-22 CU2-net cross-world: the exfiltration safety gate on the network world. Left — the free unverified network preview's missed-danger rate is 1.00 (the agent ran all 15 exfiltration plans) while the oracle is 0. Right — the missed-danger rate falls from 1.0 at ρ=0 to 0 by ρ=0.5, the cheap budget that buys a safe exfiltration gate](../figures/cu2_net_gate.png)
+
 - **The distributed recession test — is the structural-first recession (H87) universal? NO (a refinement).**
   SPEC-21's H87 says the load-bearing frontier recedes *structural-first* with scale — structure tasks
   fall below the load-bearing threshold first, content tasks persist. But on host/network the structure
@@ -2726,6 +2755,15 @@ python -m verisim.experiments.ua_host_detection --out figures/ua12_host_detectio
 python -m verisim.experiments.cu_safety_gate --out figures/cu1_safety_gate.csv
 # the architecture diagram (standalone, no training) for the README "foundation -> application":
 python -m figures.plot_cu_architecture
+# SPEC-22 CU2 — deepening the gate: (sys) the gate vs a REAL /bin/sh, missed-danger anchor-invariant
+# bit-for-bit (max Δ=0), free misses dangers even vs the real kernel; skipif-guarded, no training:
+python -m verisim.experiments.cu2_system_gate --out figures/cu2_system_gate.csv
+# (threats) the gate across a cyber threat spectrum: service kill < privilege escalation < credential
+# tampering, free missed-danger ordered by keyed dimension (trains a host M_θ; --smoke for fast):
+python -m verisim.experiments.cu2_threats --out figures/cu2_threats.csv
+# (net) the cross-world exfiltration gate: an unverified net M_θ misses ALL exfil dangers (1.00), the
+# oracle catches all, knee -> safe at rho=0.5 (trains a net M_θ; --smoke for fast):
+python -m verisim.experiments.cu2_net_gate --out figures/cu2_net_gate.csv
 # SPEC-21 CP5 — the GPU-readiness gate: validate the full ladder + cost estimate WITHOUT training:
 python -m verisim.experiments.scale_law --config configs/scale_law_gpu.json --dry-run
 # SPEC-21 CP0-CP4 — the committed 4-rung CPU ladder (the CPU-proven apparatus; structure->content

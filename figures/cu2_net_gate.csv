@@ -1,0 +1,9 @@
+guardrail,preview,rho,n_unsafe,missed_dangers,missed_danger_rate,mean_calls
+no flow to protected servers {h0, h4},free,0.000,15,15,1.000000,0.0000
+no flow to protected servers {h0, h4},oracle,1.000,15,0,0.000000,0.0000
+no flow to protected servers {h0, h4},grounded,0.000,15,15,1.000000,0.0000
+no flow to protected servers {h0, h4},grounded,0.100,15,6,0.400000,1.0000
+no flow to protected servers {h0, h4},grounded,0.200,15,1,0.066667,3.0000
+no flow to protected servers {h0, h4},grounded,0.300,15,1,0.066667,5.0000
+no flow to protected servers {h0, h4},grounded,0.500,15,0,0.000000,8.0000
+no flow to protected servers {h0, h4},grounded,1.000,15,0,0.000000,16.0000

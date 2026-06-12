@@ -129,6 +129,15 @@ and guardrail (left), and the missed-danger knee vs ρ on the content guardrail 
   (faithfulness not load-bearing for safe computer use in this world — the agent can act on a cheap
   unverified model, a clean and publishable negative that would redirect the deployment claim). Tested
   as **CU1**.
+- **H94 (the safety gate is verified against a real `/bin/sh` — real computer-use).** The gate's
+  missed-danger rate, measured against the deterministic reference oracle, holds when the SPEC-11
+  `SandboxOracle` (a real `/bin/sh` on a real kernel) replaces it as the reality anchor — so the agent's
+  safety claim is about real computer-use dynamics, not a model of them. *Refuted if* real-kernel
+  semantics move the gate's verdict. Tested as **CU2-sys** (the gate sibling of CS3/H90). **Result —
+  SUPPORTED:** on the content grammar (where SY1/H27 proved ref ≡ sandbox bit-exact), the missed-danger
+  rate is **anchor-invariant — bit-identical against the real `/bin/sh` and the reference oracle (max
+  Δ = 0)** at every capacity-proxy rung, *and* a free preview misses real dangers (0.71 at low α,
+  receding to 0) even against the real kernel. The agent's safety gate, verified against reality.
 
 ## 5. Milestones
 
@@ -137,8 +146,10 @@ and guardrail (left), and the missed-danger knee vs ρ on the content guardrail 
   on the shipped predictive-rollout machinery. Deterministic tests; torch-free core. ✅
 - **CU1 — the headline run.** The plan battery × previews × guardrails, the missed-danger figure + the
   ρ-knee, on the trained host `M_θ`. The committed result. ✅
-- **CU2 — cross-world / real-kernel (proposed).** Re-run the gate on the network world (a flow-tamper
-  guardrail) and against the SPEC-11 `SandboxOracle` (the gate is safe against a real `/bin/sh`).
+- **CU2 — deepening: more threats, the real kernel, cross-world. ✅** Three deepenings: **CU2-sys** the
+  gate against a real `/bin/sh` (H94, anchor-invariant); **CU2-threats** a recognizable threat spectrum
+  (service kill / privilege escalation / credential tampering, ordered structure→content); **CU2-net**
+  the cross-world exfiltration / flow-tamper gate on the network world.
 - **The writeup.** Fold the gate into the SPEC-21 essay / README "from foundation to application"
   section — the legible bridge from the metrology to the deployment.
 
@@ -161,8 +172,9 @@ and guardrail (left), and the missed-danger knee vs ρ on the content guardrail 
   trusted; "a smarter agent" is out of scope (the SPEC-20 §13 discipline).
 - **Defender-side only.** The workload is scripted; no offensive/red-team agent is built (SPEC.md §13).
 - **Shell/file/process, not GUI.** The oracle-grounded slice (SPEC.md §11).
-- **Rung-1 reality is the reference oracle.** The real-`/bin/sh` anchor (CU2) is proposed, reusing the
-  CS3/SY1 SandboxOracle line; deferred and stated, not hidden.
+- **The real-`/bin/sh` anchor is shipped (CU2-sys / H94).** The gate's missed-danger rate is
+  anchor-invariant against a real shell (max Δ = 0) on the validated content grammar; the *trained*-arm
+  anchor (a real model gated against `/bin/sh`) is the deferred GPU extension, per the LP7 rule.
 
 ## 8. Status
 
@@ -170,7 +182,9 @@ and guardrail (left), and the missed-danger knee vs ρ on the content guardrail 
 |---|---|---|---|
 | CU0 | the safety-gate core | ✅ shipped (CPU core) | `Guardrail` + `SafetyOutcome` (the asymmetric safety confusion matrix) + free/oracle/ρ-grounded gate evaluators ([`acd/safety_gate.py`](../../src/verisim/acd/safety_gate.py)), on the shipped `host_integrity` rollouts + the `hostsim.goal` change-safety predicates. 7 torch-free tests. |
 | CU1 | H93 — the agent needs a verified model to gate safely; the oracle buys it cheaply | ✅ shipped + **frontier run** — **SUPPORTED; the boundary law on the safety gate** ([`experiments/cu_safety_gate.py`](../../src/verisim/experiments/cu_safety_gate.py), [`cu1_safety_gate.csv`](../../figures/cu1_safety_gate.csv), [`.png`](../../figures/cu1_safety_gate.png)) | a 60-plan battery on the trained host `M_θ`, 29 plans truly overwriting `/passwd`. **Content guardrail — the free preview misses real dangers:** missed-danger **0.38** — the agent **executed 11 of 29 credential-corrupting plans** it previewed as safe (plus a 0.19 false-block rate, the over-caution cost) — while the **oracle preview misses 0** and the **ρ-knee drives missed-danger to zero at ρ=0.30 (6 oracle calls of 18, ~⅓ the budget)**: 0.38 → 0.28 (ρ0.1) → 0.10 (ρ0.2) → **0.00 (ρ0.3)**. **Structure guardrail (process stays alive, 17 truly unsafe) — the free preview already gates correctly:** missed-danger **0.00** (0 destructive plans executed), the boundary-law null. So a computer-use agent acting on an *unverified* world model executes credential-tampering plans exactly where the guardrail keys on the content the model drifts on, the oracle is what makes the preview safe to act on, and that safety is cheap (the knee). H93 SUPPORTED; the structure/content split the program proved as *metrology* now governs whether an agent can *act safely*. |
-| CU2 | cross-world / real-kernel gate | ▶ proposed | the network flow-tamper guardrail + the SPEC-11 `SandboxOracle` anchor |
+| CU2-sys | H94 — the gate is verified against a real `/bin/sh` | ✅ shipped + **frontier run** — **SUPPORTED; anchor-invariant** ([`experiments/cu2_system_gate.py`](../../src/verisim/experiments/cu2_system_gate.py), [`cu2_system_gate.csv`](../../figures/cu2_system_gate.csv), [`.png`](../../figures/cu2_system_gate.png)) | the gate sibling of CS3/H90: on the v0 fs content grammar (where SY1/H27 proved ref ≡ sandbox bit-exact), the agent's missed-danger rate is swept across a capacity-proxy α-ladder (a write-drifting `M_θ` stand-in, the trained arm deferred per LP7) and scored against **both** the reference oracle and a real `/bin/sh`. **Committed 4-rung run (real `/bin/sh`, platform=darwin; Linux CI reproduces):** the missed-danger rate is **anchor-invariant — bit-identical against the real kernel and the reference oracle (max Δ = 0)** at every rung, *and* a free preview misses real dangers **even against the real shell** (0.71 → 0.36 → 0.21 → 0.00 as α rises). The agent's safety gate is verified against reality, not a model of it. `skipif`-guarded + §2.5-disclosed. |
+| CU2-threats | H93 deepened — the gate across a recognizable cyber threat spectrum | ✅ shipped (experiment + guardrails + CI-asserted spectrum) | the gate on a spectrum of named cyber threats, each ranked by the dynamics it keys on ([`experiments/cu2_threats.py`](../../src/verisim/experiments/cu2_threats.py)): the two clean boundary endpoints are **service kill** (a protected daemon killed — *structure*, the process tree the model learns faithfully) and **credential tampering** (`/passwd` overwrite — *content*, the file writes it drifts on). The free preview's missed-danger rate is **ordered by the keyed dimension** (service kill ≈ 0 — the agent self-governs it; credential tampering high — the agent needs the oracle), the oracle catching every danger on both — the boundary law as a *threat ranking*, asserted in CI ([`tests/test_cu2_gates.py`](../../tests/test_cu2_gates.py)). A third threat, **privilege escalation** via `setuid 0` (keyed on process *uid*, near-structure), ships as a tested guardrail ([`no_root_escalation`](../../src/verisim/acd/safety_gate.py)) — at smoke scale the free preview misses ~16% of root escalations (oracle 0), the predicted middle of the spectrum. The committed full-model *figure* is deferred (the run completes, but the trained host `M_θ`'s per-step rollout over fork-heavy workloads is too slow to render on the local CPU); the *result* is the CI-asserted ordering, not a figure. |
+| CU2-net | H93 cross-world — the exfiltration / flow-tamper gate (network) | ✅ shipped + **frontier run** — **SUPPORTED; cross-world, even sharper than host** ([`experiments/cu2_net_gate.py`](../../src/verisim/experiments/cu2_net_gate.py), [`cu2_net_gate.csv`](../../figures/cu2_net_gate.csv), [`.png`](../../figures/cu2_net_gate.png)) | the canonical network threat: **exfiltration / unauthorized lateral movement** — *the plan opens no flow to a protected server* (`{h0, h4}`, the crown-jewel hosts), keyed on the live-flow content the net flagship drifts ~0.252 on (UA10). 40 plans, 15 truly opening a protected flow. **Committed run on the trained network `M_θ`:** the **free preview's missed-danger rate is 1.00** — the agent **ran all 15 exfil plans** it previewed as safe (the net model's free-running flow prediction collapses, so it never foresees the connection — UA10's 0.083 floor), while the **oracle preview misses 0** and the cheap knee drives missed-danger to zero at **ρ=0.50 (8 oracle calls of 16)**: 1.00 → 0.40 (ρ0.1) → 0.07 (ρ0.2) → **0.00 (ρ0.5)**. The agent-safety value is not host-specific: a verified world model is the safety layer for a network defender too, and the oracle buys it cheaply. |
 | — | the architecture diagram + the "foundation → application" writeup | ✅ shipped | [`figures/cu_architecture.png`](../../figures/cu_architecture.png) + the README section |
 
 This spec is the bridge the program needed: it does not add metrology, it *spends* the metrology, and
