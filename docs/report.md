@@ -2689,6 +2689,28 @@ trained in `E_oracle` / `E_grounded` / `E_free`, all evaluated in reality. The r
 
   ![SPEC-22 CU10 / H103: targeted verification. Left — the cost/safety frontier (breach rate vs mean oracle calls): the uniform blind schedule (purple) only reaches zero breach at 48 calls, model self-targeting (red X) sits at breach 0.995 / 0.07 calls, and structure / crown-jewel targeting (green star) reaches zero breach at 4.07 calls, ~12× fewer than the full oracle. Right — breach rate by strategy with the cost annotated: free and model-self-targeting both ~0.995 (failures), structure and oracle both 0.000 (safe), but structure spends 4.1 calls to the oracle's 48](../figures/cu10_targeted_verification.png)
 
+- **Un-gameable targeting — the adversary controls *when* danger happens (SPEC-22 / CU11 / H104 — SUPPORTED).**
+  The adversarial worst case of CU10, and CU4's threat-model move carried from the safety gate to the
+  verification schedule ([`acd/adversarial_targeting.py`](../src/verisim/acd/adversarial_targeting.py)).
+  CU10 ranked the three schedules on a *random* workload; a cyber defender faces an **adversary** who
+  knows the deployed schedule and chooses the *timing* of the exfiltration to evade it. The result
+  turns on *what each schedule keys on*: **uniform** keys on the **clock phase** (a signal the attacker
+  reads off the schedule and steps around), **model** keys on its **own omitting output** (it expects
+  no activity on exactly the steps that matter, CU8), but **structure** keys on a **grammar-fixed
+  property** — in the v0 net grammar a flow is born *only* by `connect`, addressed to the connect's
+  destination (the only flow-opening edit is `FlowOpen`, emitted solely by `connect` — a structural
+  invariant of the oracle, not an empirical accident), so the attacker **cannot relocate an exfil off
+  the `connect`-to-crown-jewel surface**. On the same 200 deployments (horizon 48) and real trained
+  `M_θ` as CU10: **uniform and model targeting are gameable — adversarial breach 1.000 at every ρ<1**
+  (the CU9/CU10 knee is a *mirage*: random-timing 0.65 at ρ=0.5 becomes 1.000 under an attacker who
+  picks the step; only the *full* oracle at 48 calls is adversarially safe), while **structure
+  targeting is un-gameable — adversarial breach 0.000 at 4.07 calls**, identical to its random breach.
+  **The defender principle: target verification at what the adversary cannot move.** Structure
+  targeting is not just cheap on average — it is the only sub-oracle schedule whose guarantee survives
+  an adversary, CU4's worst-case robustness with a cheap constructive winner.
+
+  ![SPEC-22 CU11 / H104: un-gameable targeting. Left — random vs adversarial breach by schedule (paired bars): at the uniform ρ=0.5 knee the random-timing breach 0.65 jumps to 1.00 under adversarial timing, model self-targeting 0.99 → 1.00, structure / crown-jewel stays 0.00 → 0.00 (4.1 calls) — the only schedule the attacker can't time around. Right — the uniform knee is a mirage: uniform breach vs ρ, the random-timing curve (purple, the CU9 knee, falling to 0 at the full oracle) against the adversarial curve (red, flat at 1.0 until ρ=1), with structure's un-gameable 0 line (green dashed) for reference](../figures/cu11_adversarial_targeting.png)
+
 - **The distributed recession test — is the structural-first recession (H87) universal? NO (a refinement).**
   SPEC-21's H87 says the load-bearing frontier recedes *structural-first* with scale — structure tasks
   fall below the load-bearing threshold first, content tasks persist. But on host/network the structure
