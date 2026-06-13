@@ -2572,6 +2572,69 @@ trained in `E_oracle` / `E_grounded` / `E_free`, all evaluated in reality. The r
 
   ![SPEC-22 CU3 / H95: the certified safety gate. The certified missed-danger rate (blue) stays flat at or below the target α=0.1 at every consultation budget ρ — the distribution-free guarantee holds — while the false-block rate (red, the cost of the guarantee) collapses from 1.0 at ρ=0 to near zero by ρ=0.2. A drifting model is certified safe only by aborting everything (useless); the oracle-grounded model certifies the same guarantee while allowing the safe plans (safe and useful)](../figures/cu3_certified_gate.png)
 
+- **The un-gameable gate — worst-case robustness, not average faithfulness (SPEC-22 / CU4 / H96 — SUPPORTED).**
+  Security is *adversarial*: the question a threat model demands is whether the gate is gameable by an
+  attacker who knows the deployed model and fires only the plans it previews as safe (its blind spots).
+  Two warnings ([`acd/adversarial_gate.py`](../src/verisim/acd/adversarial_gate.py)): a **free gate is
+  fully gameable** — adversarial missed-danger **1.00** (every crafted attack lands) vs **0.46**
+  average — and verification collapses both to ≈0 at the cheap knee (un-gameable by ρ=0.2); and the
+  worst case is **fidelity-independent** — at ρ=0 a better model lowers the *average* miss
+  (0.71/0.46/0.22 at φ=0.4/0.6/0.8) but the *adversarial* miss is **1.00 at every φ**. So average-case
+  faithfulness is a *false sense of security*, and only verification removes the worst case: the
+  oracle's value is **worst-case robustness**, exactly what cyber needs.
+
+  ![SPEC-22 CU4 / H96: the un-gameable safety gate. Left — average-case missed-danger (blue) vs adversarial missed-danger (red) vs ρ; the free gate's adversarial rate is 1.0 (fully gameable) and verification collapses both to zero at the knee. Right — at ρ=0 across φ, the average miss falls with model fidelity but the adversarial worst case stays pinned at 1.0, so a better model is no safer against an adversary](../figures/cu4_adversarial_gate.png)
+
+- **The closed loop — the literal "computer use for an AI agent" (SPEC-22 / CU5 / H97 — SUPPORTED).**
+  CU1–CU4 judge a fixed plan pool; a real agent *acts in a loop* (propose → preview → execute-if-safe /
+  abort → repeat until done), scored on **both** finishing the job and never doing the irreversible bad
+  thing ([`acd/closed_loop_agent.py`](../src/verisim/acd/closed_loop_agent.py)). A free agent is in the
+  bad corner — **unsafe *and* unreliable** (task success **0.28**, unsafe-episode rate **0.57**) — the
+  oracle agent is safe *and* reliable (1.00 / 0.00), and ρ is the path between. And *where* you spend
+  the budget matters: a **stakes-aware** schedule (consult the actions the model is most uncertain
+  about) reaches the safe-and-reliable corner at **ρ=0.5** vs a uniform schedule's **ρ=1.0** — the knee.
+
+  ![SPEC-22 CU5 / H97: the closed-loop safe agent. Left — task success (green, up) and unsafe-episode rate (red, down) vs ρ; the free agent at ρ=0 is in the bad corner (0.28 success, 0.57 unsafe), the oracle agent at ρ=1 in the good corner, safe-and-reliable reached at ρ=0.5. Right — unsafe rate vs ρ for a uniform schedule (needs the full oracle) vs a stakes-aware one (reaches zero-harm at half the budget — the knee)](../figures/cu5_closed_loop.png)
+
+- **Replanning — capability and safety trade off without the oracle (SPEC-22 / CU6 / H98 — SUPPORTED).**
+  A capable agent **replans** (tries another route when the gate blocks one), which lifts capability
+  (success **0.52 → 0.88** free, **0.57 → 1.00** oracle) — but **for a free agent that capability is
+  danger**: replanning **amplifies the harm rate** (one-shot **0.05** → replanner **0.12** at ρ=0),
+  because the retry loop searches its own gate's blind spots (an unintentional CU4 adversary against
+  itself, [`acd/closed_loop_replan.py`](../src/verisim/acd/closed_loop_replan.py)). The oracle dissolves
+  the tension — it aborts every dangerous route regardless of retries, so persistence becomes **pure
+  benefit** (success 1.00, harm 0.00). **Only a verified agent is both capable and safe — the more
+  capable the agent, the more it needs the oracle.**
+
+  ![SPEC-22 CU6 / H98: the replanning agent. Left — success and harm vs ρ, the replanner (solid) above the one-shot agent (dashed) on success but with higher harm at ρ=0 (the persistence penalty). Right — the four agents in (harm, success) space: the free replanner is the most capable AND most dangerous, only the oracle replanner reaches the capable-and-safe corner](../figures/cu6_closed_loop_replan.png)
+
+- **Verify-before-commit — where you verify beats how much (SPEC-22 / CU7 / H99 — SUPPORTED).**
+  The harm only happens at the **moment of commit**, so verification belongs at one place: the route the
+  agent is about to execute. A verify-before-commit agent replans freely and verifies only the route it
+  commits to — verify the model's "yes," trust its "no" ([`acd/closed_loop_verify.py`](../src/verisim/acd/closed_loop_verify.py)).
+  It reaches the **zero-harm guarantee by construction** at **2.1× lower oracle cost** than verifying
+  everything (**1.19 vs 2.52 calls/goal**), because **58% of full verification is wasted** on "no"
+  decisions that can't cause harm — and the saving grows with how adversarial the environment is.
+
+  ![SPEC-22 CU7 / H99: verify-before-commit. Left — the cost/harm frontier: verify-before-commit (green star) reaches zero harm at 1.2 calls/goal, far left of full-verify (2.5 calls). Right — 58% of full verification is wasted on "no" decisions the agent would have aborted anyway; verify-before-commit keeps only the necessary calls](../figures/cu7_verify_before_commit.png)
+
+- **The trained-arm confirmation — the closed loop survives a real learned model (SPEC-22 / CU5-net / H100 — SUPPORTED, refined).**
+  CU5–CU7 ran on a controlled φ-dial stand-in. CU5-net closes the program's biggest credibility gap by
+  re-running the closed loop on the **real trained network flagship `M_θ`** (the transformer CU2-net
+  used), on the feasible substrate — the network world, whose live-flow content the model drifts ~0.252
+  on ([`acd/closed_loop_net.py`](../src/verisim/acd/closed_loop_net.py)). An agent works a connectivity
+  goal (flows to work hosts) while a workload tempts it with exfiltration (flows to protected crown-jewel
+  hosts), previewing each action through the *real* model. **The load-bearing safety axis closes exactly
+  as on the stand-in:** a free agent opens **every** exfiltration flow (unsafe **1.00**, mean **1.29**
+  missed exfil flows) and verification drives it to **0.00** (1.00 → 0.96 → 0.85 → 0.69 → 0.56 → 0.00
+  over ρ). **The honest refinement only a real model could show:** task success stays **1.00** at every
+  ρ, because the real drift is **one-sided** — the model *omits* flows (so it misses exfil) but never
+  *hallucinates* a protected flow (so it never false-aborts a benign connect), so the utility axis the
+  two-sided synthetic stand-in exercised is not triggered. The half that matters — **verification is
+  load-bearing for safety — is not an artifact of synthetic drift; it survives a real learned model.**
+
+  ![SPEC-22 CU5-net / H100: the closed loop on a real trained network model. Left — task success (green) flat at 1.0 while the unsafe rate (red) falls from 1.00 at ρ=0 to 0.00 at ρ=1; the free agent opens every exfil flow and verification removes them, and success is flat because the real drift is one-sided (omits exfil, never hallucinates it). Right — mean missed exfil flows (red) falls as mean oracle calls (blue) rise. A real transformer world-model, not a φ-dial stand-in](../figures/cu5_net_closed_loop.png)
+
 - **The distributed recession test — is the structural-first recession (H87) universal? NO (a refinement).**
   SPEC-21's H87 says the load-bearing frontier recedes *structural-first* with scale — structure tasks
   fall below the load-bearing threshold first, content tasks persist. But on host/network the structure
