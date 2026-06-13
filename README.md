@@ -1,5 +1,52 @@
 # Verisim
 
+> **The verdict, up front.** A computer-use AI agent is one mis-predicted action away from an
+> irreversible mistake — deleting the wrong file, overwriting a credential, opening a connection to a
+> server it should never touch. **Verisim is the safety layer that makes acting on a cheap, fallible
+> world model safe.** The agent *previews* each action through a learned model ("look before you leap"),
+> and a free, exact **oracle** checks that preview on a small budget so the agent can trust it. Measured
+> end-to-end on a real trained model: **an unverified agent does the irreversible bad thing almost every
+> time; a verified one never does — and verification is cheap, because danger lives on a small,
+> identifiable surface.** That is the deployment. The rest of this paper is the proof that the preview
+> can be trusted, and the price of trusting it.
+
+![The verisim agent-in-the-loop architecture: a four-stage loop. (1) An LLM agent translates a natural-language intent into a host action plan (open/write/fork/setuid). (2) The cheap learned world model M_θ previews the plan by rolling it forward with no oracle (imagine — look before you leap). (3) The free, exact oracle verifies the preview at a consultation rate ρ, re-anchoring to ground truth (the reference oracle, or a real /bin/sh via SPEC-11), via the propose-verify-correct loop. (4) A safety gate checks a guardrail on the predicted final state: SAFE allows execution on the real computer, UNSAFE aborts. The oracle's truth re-grounds the agent for the next action. The model is cheap but drifts; the oracle is exact but costs a call; the loop spends a small ρ budget to keep the preview faithful, so the agent's gate can be trusted](figures/cu_architecture.png)
+
+```
+   intent ─▶ M_θ preview ─▶ oracle verify (budget ρ) ─▶ gate ─┬─ SAFE  ✓ execute on the real computer
+            "look before        "is the preview          │
+             you leap"           still true?"            └─ UNSAFE ✗ abort
+```
+
+**Why this is possible at all:** computer environments are the *one* place where truth is checkable
+for free at every step. A filesystem, a process table, a network are digital and deterministic, so an
+oracle can return the exact next state and correct the model's drift *in the loop* — something no other
+domain (vision, robotics, open language) allows. Everyone else trains world models against *proxies*
+for truth; here the truth itself is on tap.
+
+### The headline verdicts
+
+Each is proven below — with its cost, and its honest negative.
+
+| verdict | the evidence | where |
+|---|---|---|
+| **An unverified agent does the irreversible bad thing.** | On the host world it executed 11 of 29 credential-corrupting plans (a 38% miss); on the network world it ran **all** exfiltration plans (100%). | [CU1, CU2-net](#from-foundation-to-application-how-an-ai-agent-and-a-cyber-defender-use-this) |
+| **The oracle is the only thing that drives that to zero — cheaply.** | With the oracle in the loop the missed-danger rate is **0**; a small budget ρ buys it back to zero at a cheap knee (ρ≈0.3, six calls of eighteen). | [CU1](#from-foundation-to-application-how-an-ai-agent-and-a-cyber-defender-use-this) |
+| **A better model is *no safer against an adversary* — only verification removes the worst case.** | A more faithful model lowers the *average* miss (0.71→0.22) but the *adversarial* miss stays pinned at 1.00 at every fidelity. | [CU4](#from-foundation-to-application-how-an-ai-agent-and-a-cyber-defender-use-this) |
+| **You can attach a *provable* guarantee.** | The agent certifies P(missed danger) ≤ α distribution-free; any model is safe by being useless, only a faithful one is safe *and* useful. | [CU3](#from-foundation-to-application-how-an-ai-agent-and-a-cyber-defender-use-this) |
+| **World models hide danger by *omission*.** | The real trained model missed 146 of 149 exfiltration flows while inventing just 1 (146:1) — drift concentrates in the catastrophic missed-danger cell. | [CU8](#from-foundation-to-application-how-an-ai-agent-and-a-cyber-defender-use-this) |
+| **What you verify beats how much.** | You can't ask the omitter where it omits; targeting the grammar-fixed danger surface reaches zero breach at ~4 calls instead of 48 (12× cheaper) and stays un-gameable when the adversary controls *timing* and your asset inventory is *wrong*. | [CU10–CU12](#from-foundation-to-application-how-an-ai-agent-and-a-cyber-defender-use-this) |
+| **The same shape appears in every world.** | The faithful-horizon-vs-budget curve `H_ε(ρ)` has one floor-and-cliff shape across filesystem, process, network, and a **real `/bin/sh`** (bit-for-bit). | [§22](#22-the-thesis-in-one-figure-the-floorcliff-is-the-same-in-every-world-cross-world-synthesis), [§35](#35-the-oracle-is-faithful-to-a-real-computer--the-one-structural-bet-measured-spec-11--sy1--h27) |
+
+**The honest negatives are part of the result.** A better one-step model does *not* automatically buy a
+longer faithful horizon ([§2](#2-but-better-one-step-prediction-does-not-yet-buy-free-running-horizon-the-honest-negative));
+online self-healing does not lift the floor ([§10](#10-online-self-healing-ttt-does-not-lift-the-floor--yet-network-en5--h7-an-honest-null));
+the structured arm's ceiling survives scaling ([§31](#31-but-the-capacity-lift-is-proposer-dependent--it-does-not-reproduce-for-the-structured-arm-spec-10--hs3--h26)).
+Verisim is an *instrument*: it reports what the proxy metrics everyone else uses cannot see — a bigger,
+per-step-*more*-accurate model that is *less* faithful over the horizon.
+
+## The foundation: the one asymmetry
+
 > **The claim.** Every other domain trains world models against *proxies* for truth — a fixed
 > corpus, a human annotator, a hackable reward. **Computer environments are the one exception:
 > filesystems, processes, networks, and APIs are digital, deterministic, and fully checkable, so a
@@ -57,16 +104,16 @@ the proxy metrics everyone else uses cannot see (a bigger, per-step-*more*-accur
 
 ## From foundation to application: how an AI agent and a cyber-defender use this
 
-**Bottom line.** The instrument cashes out as one deployment: a verified world model is the **safety
-layer** that lets a computer-use agent (and an autonomous cyber defender) act on a *cheap, learned*
-model without doing the irreversible bad thing. A capable agent does not fire a risky action blind —
-it **previews** the consequence with a world model ("look before you leap"), checks the predicted
-outcome against a guardrail, and executes only if the preview says it is safe. The whole program is
-the answer to the one question that makes or breaks that pattern: *can the preview be trusted?*
+This is the deployment the [top matter](#the-headline-verdicts) promised, proven step by step. Each
+result below maps to a role in the loop pictured at the top — the agent previews an action, a guardrail
+checks the predicted outcome, the oracle keeps the preview honest on a budget — and the whole arc
+answers the one question that makes or breaks the pattern: *can the preview be trusted, and what does
+trusting it cost?* The two audiences read the same loop two ways. A **computer-use agent** uses it to
+avoid an irreversible side effect it mis-predicted as safe; an **autonomous cyber defender** uses it
+to decide whether a response plan tampers with a protected asset and to catch an adversary's
+content-keyed activity it would otherwise miss.
 
-![The verisim agent-in-the-loop architecture: a four-stage loop. (1) An LLM agent translates a natural-language intent into a host action plan (open/write/fork/setuid). (2) The cheap learned world model M_θ previews the plan by rolling it forward with no oracle (imagine — look before you leap). (3) The free, exact oracle verifies the preview at a consultation rate ρ, re-anchoring to ground truth (the reference oracle, or a real /bin/sh via SPEC-11), via the propose-verify-correct loop. (4) A safety gate checks a guardrail on the predicted final state: SAFE allows execution on the real computer, UNSAFE aborts. The oracle's truth re-grounds the agent for the next action. The model is cheap but drifts; the oracle is exact but costs a call; the loop spends a small ρ budget to keep the preview faithful, so the agent's gate can be trusted](figures/cu_architecture.png)
-
-**We measured exactly that, on a real trained model (SPEC-22 / CU1 / H93).** A computer-use agent
+**Start with the core measurement, on a real trained model (SPEC-22 / CU1 / H93).** A computer-use agent
 previews a battery of host plans and executes each only if its preview says a guardrail holds. Against
 a **content guardrail** — *do not let this plan overwrite `/passwd`* (credential tampering, keyed on
 the file writes the host model drifts on) — the agent running on an **unverified** world model
@@ -95,13 +142,8 @@ worth having:
 | the **scale law + residue** (SPEC-21) | the guardrails that stay content-load-bearing at every model scale — where verification is a *permanent* primitive |
 | the **discriminative benchmark** (SPEC-21/CL1) | how an adopter ranks candidate world models by how safely they gate |
 
-The two audiences read the same loop two ways. A **computer-use agent** uses it to avoid taking a
-destructive action it mis-predicted as safe (the `/passwd` overwrite above is a stand-in for any
-irreversible side effect — a deletion, a config clobber, a spend). An **autonomous cyber defender**
-uses it to decide, before acting, whether a response plan tampers with a protected asset, and to
-detect an adversary's content-keyed activity it would otherwise miss (UA8/UA12). In both, the line is
-the same: *the world model is cheap and drifts; the oracle keeps it honest where it matters; and the
-agent acts safely on a budget.*
+(The `/passwd` overwrite is a stand-in for any irreversible side effect — a deletion, a config
+clobber, a spend.)
 
 **Deepening the gate (SPEC-22 / CU2): a real kernel, more threats, a second world.** Three extensions
 harden the deployment claim.
