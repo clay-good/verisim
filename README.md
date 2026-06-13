@@ -1,6 +1,6 @@
 # Verisim
 
-> **The verdict, up front.** A computer-use AI agent is one mis-predicted action away from an
+> A computer-use AI agent is one mis-predicted action away from an
 > irreversible mistake — deleting the wrong file, overwriting a credential, opening a connection to a
 > server it should never touch. **Verisim is the safety layer that makes acting on a cheap, fallible
 > world model safe.** The agent *previews* each action through a learned model ("look before you leap"),
