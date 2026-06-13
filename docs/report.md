@@ -2668,6 +2668,27 @@ trained in `E_oracle` / `E_grounded` / `E_free`, all evaluated in reality. The r
 
   ![SPEC-22 CU9 / H102: the agent-safety horizon. Left — survival curves (fraction still safe vs deployment step) per ρ; the free agent (red) decays toward zero (breach 0.995, safe ~20 steps), verification flattens it, the oracle (green) stays flat at 1.0. Right — mean safe runtime (blue, steps to first breach) rises from ~20 to 49 with ρ while the deployment breach rate (red) falls from 0.995 to 0.00](../figures/cu9_safety_horizon.png)
 
+- **Targeted verification — what to verify beats how much (SPEC-22 / CU10 / H103 — SUPPORTED).**
+  The constructive flip of CU8/CU9: the omission bias is a warning, but its structure is the remedy.
+  CU9 verified on a *blind, uniform* schedule that only reaches zero breach at the full oracle; CU10
+  asks which steps a limited budget should buy ([`acd/targeted_verification.py`](../src/verisim/acd/targeted_verification.py)).
+  The tempting answer — let the model flag when it is unsure — is exactly wrong, and CU8 says why: a
+  model that drifts by **omission** mis-predicts danger by predicting *no* consequence, so it cannot
+  flag its own blind spots. The answer that works is **structural** and the defender's: danger here is
+  *grammar-localized* — every exfiltration flow to a crown-jewel host is opened by a `connect` whose
+  destination is that host (empirically exact: all 364 protected opens over the battery are direct
+  connects, zero indirect) — so a defender who knows the crown jewels verifies exactly the rare action
+  class that can touch them. On the same 200 deployments (horizon 48) and the same real trained `M_θ`
+  as CU9: the **uniform** schedule needs the **full oracle (48 calls)** for zero breach (ρ=0.5 still
+  breaches 0.65); **model self-targeting fails — breach 0.995 at 0.07 calls** (the omitting model
+  never expects the activity that matters, so it never consults); **structure targeting reaches the
+  oracle's zero breach at 4.07 calls — 11.8× cheaper than the full oracle**, for identical safety.
+  CU7's *where you verify beats how much*, carried to the trained network arm, plus the negative that
+  the model itself cannot supply the "where." **You can't ask the omitter where it omits; you target
+  the danger surface, and danger is cheap to defend because it is concentrated.**
+
+  ![SPEC-22 CU10 / H103: targeted verification. Left — the cost/safety frontier (breach rate vs mean oracle calls): the uniform blind schedule (purple) only reaches zero breach at 48 calls, model self-targeting (red X) sits at breach 0.995 / 0.07 calls, and structure / crown-jewel targeting (green star) reaches zero breach at 4.07 calls, ~12× fewer than the full oracle. Right — breach rate by strategy with the cost annotated: free and model-self-targeting both ~0.995 (failures), structure and oracle both 0.000 (safe), but structure spends 4.1 calls to the oracle's 48](../figures/cu10_targeted_verification.png)
+
 - **The distributed recession test — is the structural-first recession (H87) universal? NO (a refinement).**
   SPEC-21's H87 says the load-bearing frontier recedes *structural-first* with scale — structure tasks
   fall below the load-bearing threshold first, content tasks persist. But on host/network the structure
