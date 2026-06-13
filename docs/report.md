@@ -2731,6 +2731,34 @@ trained in `E_oracle` / `E_grounded` / `E_free`, all evaluated in reality. The r
 
   ![SPEC-22 CU12 / H105: knowledge-free targeting. Left — breach over the true sensitive set vs inventory completeness |K|/|T|: the asset-indexed target rises from 0 (complete) to the unverified rate as the inventory empties (random solid red, adversarial-target dashed even higher), while the grammar-indexed target holds flat at 0, with the uniform ρ=0.5 reference. Right — the price of dropping the asset assumption: mean oracle calls per defense — full oracle 48, uniform ρ=0.5 24, grammar (all connects) 9.3 at zero breach, complete asset target 4.1 — the grammar target buys inventory-independent zero breach 5× under the full oracle](../figures/cu12_knowledge_free_targeting.png)
 
+- **Capability under real drift — the false-alarm channel prices CU6 and CU7 (SPEC-22 / CU13 / H106 — SUPPORTED).**
+  The trained-arm confirmation of the capable-agent results ([`acd/closed_loop_replan_net.py`](../src/verisim/acd/closed_loop_replan_net.py)).
+  CU6 (free replanning *amplifies* harm +0.06) and CU7 (verify-before-commit reaches zero harm at *2.1×*
+  lower cost) were both measured on the *two-sided* synthetic stand-in; CU5-net then showed the real `M_θ`
+  drifts *one-sided* (it omits exfil flows, never hallucinates one). CU13 re-runs both on a network
+  replanning world (single-`connect` routes from in-distribution start states, oracle-grounded danger
+  labels) and isolates the mechanism: both effects are priced by the model's **"no" channel**, but by
+  different halves. **CU6's harm-amplification is priced by the false-alarm rate** (a *wrong* "no"
+  false-aborts a safe route, forcing the agent to retry onto a route whose danger the model blind-spots),
+  and **CU7's verify-before-commit saving is priced by the danger recall** (a *right* "no" on a
+  truly-dangerous route is a call full verification wastes and verify-before-commit skips). On the
+  committed trained run (200 goals, 8 routes), the false-alarm dial (recall fixed at 0) lifts amplification
+  **0.000 → 0.160**; the recall dial (false-alarm fixed at 0) lifts the verify-before-commit saving
+  **1.00× → 1.70×** (wasted-call fraction 0 → 0.41); and the **real `M_θ` anchors at the origin of both** —
+  measured false-alarm **0.000**, recall **0.004**, so it says "yes" to every route — with **amplification
+  exactly 0.000 and cost saving exactly 1.000×**. So CU6's capable-agent warning and CU7's verify-where
+  economics are both properties of a model that says "no"; a real omission-biased one does not, so neither
+  appears. The honest other half: the danger does **not** vanish (the agent's one-shot harm is **0.53**
+  either way — it blind-spots the dangerous route it walks), and verify-before-commit keeps its **zero-harm
+  guarantee** at every rung. What survives to the real model is the *structural* guarantee and the omission
+  danger itself; the *quantitative* knee and saving are two-sided artifacts. (Network trained arm; host
+  deferred. Torch-gated trained arm; torch-free replanning core.)
+
+  ![SPEC-22 CU13 / H106: capability under real drift. Left — CU6's harm-amplification (replanner minus one-shot harm) vs the model's false-alarm rate (recall 0): the synthetic-dial curve (red) rises from 0 to 0.16, and the real trained M_θ (green star) sits at the origin (false-alarm 0.00, amplification 0.000). Right — CU7's verify-before-commit saving (full-verify / VBC calls) vs the model's danger recall (false-alarm 0): the dial curve (blue) rises from 1.0× to 1.7×, and the real M_θ (green star) sits at the origin (recall 0.00, saving 1.00×). A real omission-biased model says yes to everything, so it shows neither amplification nor saving, yet stays unsafe (one-shot harm 0.53) and keeps verify-before-commit zero-harm](../figures/cu13_replan_net.png)
+
+  Reproduce: `python -m verisim.experiments.cu13_replan_net` (reuses the frozen `runs/flagship/net-l`
+  checkpoint — no retrain; `--smoke` for the fast path).
+
 - **The distributed recession test — is the structural-first recession (H87) universal? NO (a refinement).**
   SPEC-21's H87 says the load-bearing frontier recedes *structural-first* with scale — structure tasks
   fall below the load-bearing threshold first, content tasks persist. But on host/network the structure
