@@ -2635,6 +2635,23 @@ trained in `E_oracle` / `E_grounded` / `E_free`, all evaluated in reality. The r
 
   ![SPEC-22 CU5-net / H100: the closed loop on a real trained network model. Left — task success (green) flat at 1.0 while the unsafe rate (red) falls from 1.00 at ρ=0 to 0.00 at ρ=1; the free agent opens every exfil flow and verification removes them, and success is flat because the real drift is one-sided (omits exfil, never hallucinates it). Right — mean missed exfil flows (red) falls as mean oracle calls (blue) rise. A real transformer world-model, not a φ-dial stand-in](../figures/cu5_net_closed_loop.png)
 
+- **The drift asymmetry — world models hide danger by omission (SPEC-22 / CU8 / H101 — SUPPORTED).**
+  CU5-net's one-sided drift, characterized into a structural law. A teacher-forced probe of the real
+  trained network `M_θ` (predict each step from the oracle's true state) classifies every flow-prediction
+  error as an **omission** (the oracle opened a flow the model missed — the gate's missed-danger source)
+  or a **hallucination** (the model invented a flow — the false-alarm source), split by protected/work
+  host ([`acd/drift_asymmetry.py`](../src/verisim/acd/drift_asymmetry.py)). Over 300 workloads / 7,200
+  steps, drift is **overwhelmingly omission-biased — 417 omissions vs 14 hallucinations** (30:1) — and
+  on the danger hosts the asymmetry is extreme: the model **missed 146 of 149 real exfiltration flows
+  while hallucinating just 1** (**146:1**; only 2% exfil recall). The mechanism is the point, not a
+  pathology: consequential events (a connection establishing) are *rare*, so the model's safe default is
+  to predict no consequence — and danger is exactly a rare consequence it then misses. **The catastrophic
+  missed-danger cell is the one drift inflates; the model hides danger, it does not invent it.** This
+  doubles the program's core asymmetry (the most costly cell is the one drift is biased toward) and is
+  the structural reason CU5-net's safety axis needed the oracle while its utility axis never moved.
+
+  ![SPEC-22 CU8 / H101: the drift asymmetry. Left — omissions (red) vs hallucinations (blue) for the danger (protected) and benign (work) hosts; omissions tower (146 vs 1 protected, 271 vs 13 work) — the model hides flows, it does not invent them. Right — the gate's error sources on protected hosts: the missed-danger source (omitted exfil, 146) dwarfs the false-alarm source (hallucinated exfil, 1); drift concentrates in the catastrophic cell, only 2% exfil recall](../figures/cu8_drift_asymmetry.png)
+
 - **The distributed recession test — is the structural-first recession (H87) universal? NO (a refinement).**
   SPEC-21's H87 says the load-bearing frontier recedes *structural-first* with scale — structure tasks
   fall below the load-bearing threshold first, content tasks persist. But on host/network the structure
