@@ -1,0 +1,10 @@
+row,label,rho,calls,harm_rate,success_rate,wasted_calls,phi,n_goals,n_routes
+budgeted,budgeted,0.000,0.000000,0.185000,0.800000,0.0,0.600,400,8
+budgeted,budgeted,0.100,0.307500,0.107500,0.880000,0.0,0.600,400,8
+budgeted,budgeted,0.200,0.642500,0.040000,0.955000,0.0,0.600,400,8
+budgeted,budgeted,0.300,0.642500,0.040000,0.955000,0.0,0.600,400,8
+budgeted,budgeted,0.500,1.297500,0.002500,0.995000,0.0,0.600,400,8
+budgeted,budgeted,0.750,2.005000,0.000000,1.000000,0.0,0.600,400,8
+budgeted,budgeted,1.000,2.522500,0.000000,1.000000,0.0,0.600,400,8
+point,full-verify (verify every route walked),,2.522500,0.000000,1.000000,1.452500,0.600,400,8
+point,verify-before-commit,,1.192500,0.000000,0.970000,0.000000,0.600,400,8
