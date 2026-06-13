@@ -2652,6 +2652,22 @@ trained in `E_oracle` / `E_grounded` / `E_free`, all evaluated in reality. The r
 
   ![SPEC-22 CU8 / H101: the drift asymmetry. Left — omissions (red) vs hallucinations (blue) for the danger (protected) and benign (work) hosts; omissions tower (146 vs 1 protected, 271 vs 13 work) — the model hides flows, it does not invent them. Right — the gate's error sources on protected hosts: the missed-danger source (omitted exfil, 146) dwarfs the false-alarm source (hallucinated exfil, 1); drift concentrates in the catastrophic cell, only 2% exfil recall](../figures/cu8_drift_asymmetry.png)
 
+- **The agent-safety horizon — unverified safety is a clock that runs out (SPEC-22 / CU9 / H102 — SUPPORTED).**
+  The deployment-level consequence of the omission bias, and the safety-outcome analogue of SPEC-10's
+  *faithful horizon*: that measured how long the model's *predictions* stay faithful; CU9 measures how
+  long the agent's *actions* stay safe. The agent runs the CU5-net closed loop over a long deployment on
+  the real trained network `M_θ` ([`acd/safety_horizon.py`](../src/verisim/acd/safety_horizon.py)); we
+  record the step of its first exfiltration and build the **survival curve** — the fraction still safe
+  after `t` steps — per consultation budget ρ. Over 200 deployments (horizon 48): a free agent's
+  survival **decays toward zero — breach rate 0.995**, safe for only **~20 steps on average** (median
+  safe horizon **17**), because it breaches at its first dangerous opportunity and over a long run that
+  is near-certain. Verification **flattens the curve**: ρ=0.3 → ~26 safe steps (breach 0.81), ρ=0.5 →
+  ~31 (breach 0.65), and the **oracle never breaches** (survival flat at 1.0). The practitioner lesson:
+  **unverified safety is not a property an agent has, it is a clock that runs out — verification stops
+  it.**
+
+  ![SPEC-22 CU9 / H102: the agent-safety horizon. Left — survival curves (fraction still safe vs deployment step) per ρ; the free agent (red) decays toward zero (breach 0.995, safe ~20 steps), verification flattens it, the oracle (green) stays flat at 1.0. Right — mean safe runtime (blue, steps to first breach) rises from ~20 to 49 with ρ while the deployment breach rate (red) falls from 0.995 to 0.00](../figures/cu9_safety_horizon.png)
+
 - **The distributed recession test — is the structural-first recession (H87) universal? NO (a refinement).**
   SPEC-21's H87 says the load-bearing frontier recedes *structural-first* with scale — structure tasks
   fall below the load-bearing threshold first, content tasks persist. But on host/network the structure
