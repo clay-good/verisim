@@ -2551,6 +2551,26 @@ trained in `E_oracle` / `E_grounded` / `E_free`, all evaluated in reality. The r
   ![SPEC-22 CU2-sys / H94: the agent safety gate against a real /bin/sh. The missed-danger rate versus the capacity proxy α, with the reference-oracle curve (red, filled) and the real-/bin/sh curve (blue, open) lying exactly on top of each other at every rung (0.71, 0.36, 0.21, 0.00) — max Δ = 0, anchor-invariant — and a free preview missing real dangers even against the real shell, receding to zero with capacity](../figures/cu2_system_gate.png)
 
   ![SPEC-22 CU2-net cross-world: the exfiltration safety gate on the network world. Left — the free unverified network preview's missed-danger rate is 1.00 (the agent ran all 15 exfiltration plans) while the oracle is 0. Right — the missed-danger rate falls from 1.0 at ρ=0 to 0 by ρ=0.5, the cheap budget that buys a safe exfiltration gate](../figures/cu2_net_gate.png)
+- **From empirically safe to provably safe — the certified gate (SPEC-22 / CU3 / H95 — SUPPORTED).**
+  The program's deepest synthesis. A CISO wants a guarantee, not an observation; CU3 supplies one. The
+  agent attaches a **distribution-free, finite-sample certificate** `P(missed danger) ≤ α` to its gate,
+  using the free oracle as a conformal calibration set ([`acd/certified_gate.py`](../src/verisim/acd/certified_gate.py),
+  reusing the SPEC-15 [`conformal.calibrate_threshold`](../src/verisim/conformal/calibrate.py)) — the
+  conformal idea applied to the agent's allow/abort decision rather than the model's faithfulness. A
+  plan is a *breach* iff the oracle's true rollout violates the guardrail; the gate aborts when an
+  ensemble of ρ-grounded previews scores the plan above the calibrated threshold τ; a *missed danger*
+  is a breach the gate allowed. The result is not just the guarantee but its **cost**: across a battery
+  of 200 plans (α=0.1, split-averaged), the certificate is **valid at every consultation budget ρ**
+  (certified missed-danger ≤ 0.1 at every rung), and its **false-block cost collapses with
+  faithfulness — 1.00 at ρ=0 (a drifting preview can only honor the guarantee by aborting *everything*,
+  perfectly safe and perfectly useless) → 0.01 at ρ=0.2 → 0.00**, after which the gate aborts exactly
+  the truly-unsafe fraction. The one-sentence synthesis of the program: **any world model can be made
+  safe by being useless, and only a *faithful* one is safe *and* useful — and the consultation budget ρ
+  buys that safety certificate down to ≈ free** (the safe-and-useful knee). CPU-only, torch-free,
+  seconds (a controlled stand-in on the v0 fs world, so it composes with the CU2-sys real-`/bin/sh`
+  anchor; the trained arm deferred).
+
+  ![SPEC-22 CU3 / H95: the certified safety gate. The certified missed-danger rate (blue) stays flat at or below the target α=0.1 at every consultation budget ρ — the distribution-free guarantee holds — while the false-block rate (red, the cost of the guarantee) collapses from 1.0 at ρ=0 to near zero by ρ=0.2. A drifting model is certified safe only by aborting everything (useless); the oracle-grounded model certifies the same guarantee while allowing the safe plans (safe and useful)](../figures/cu3_certified_gate.png)
 
 - **The distributed recession test — is the structural-first recession (H87) universal? NO (a refinement).**
   SPEC-21's H87 says the load-bearing frontier recedes *structural-first* with scale — structure tasks
@@ -2764,6 +2784,10 @@ python -m verisim.experiments.cu2_threats --out figures/cu2_threats.csv
 # (net) the cross-world exfiltration gate: an unverified net M_θ misses ALL exfil dangers (1.00), the
 # oracle catches all, knee -> safe at rho=0.5 (trains a net M_θ; --smoke for fast):
 python -m verisim.experiments.cu2_net_gate --out figures/cu2_net_gate.csv
+# SPEC-22 CU3/H95 — the CERTIFIED gate: a distribution-free certificate P(missed danger)<=alpha via the
+# oracle as a conformal calibration set; the cert is valid at every rho but its false-block COST falls
+# with faithfulness (1.00 at rho=0 -> ~0 by rho=0.2). Torch-free stand-in, runs in seconds:
+python -m verisim.experiments.cu3_certified_gate --out figures/cu3_certified_gate.csv
 # SPEC-21 CP5 — the GPU-readiness gate: validate the full ladder + cost estimate WITHOUT training:
 python -m verisim.experiments.scale_law --config configs/scale_law_gpu.json --dry-run
 # SPEC-21 CP0-CP4 — the committed 4-rung CPU ladder (the CPU-proven apparatus; structure->content
