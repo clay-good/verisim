@@ -166,6 +166,23 @@ and guardrail (left), and the missed-danger knee vs ρ on the content guardrail 
   of security*, and **only verification removes the worst case**. The oracle's value is not (only)
   average faithfulness but **worst-case robustness** — exactly what a security threat model requires.
 
+- **H97 (the closed-loop safe agent — finishing the job without the irreversible harm).** CU1–CU4
+  scored the gate's *verdict* on a fixed plan pool — the safety filter in isolation. But a computer-use
+  agent *acts in a loop*: propose, preview, execute-if-safe / abort, repeat until the task is done. H97
+  asks the loop's question: *can the agent finish the job without ever doing the irreversible bad
+  thing?* The agent is scored on **both axes at once** — `task_success_rate` (utility) and `unsafe_rate`
+  (safety) — and the deeper question (H97b) is *where* the consultation budget should be spent.
+  *Refuted if* grounding does not move the agent from the unsafe/unreliable corner to the safe/reliable
+  one, or if a stakes-aware consultation schedule buys no cheaper safety than a uniform one. Tested as
+  **CU5**. **Result — SUPPORTED:** (1) a **free agent is in the bad corner — unsafe *and* unreliable**
+  (task success **0.28**, unsafe-episode rate **0.57**: it both fails the job and does the irreversible
+  bad thing), while the **oracle agent is safe *and* reliable** (1.00 / 0.00), and ρ is the path
+  between them; (2) **where you spend the budget matters** — a *stakes-aware* schedule (consult the
+  actions the model is most **uncertain** about, the SPEC-15 thesis at the action level) reaches the
+  safe-and-reliable corner at **ρ=0.5**, vs a uniform schedule's **ρ=1.0** (the full oracle): the knee
+  is bought by spending verification on the model's own blind spots. The closed loop is the literal
+  "computer use for an AI agent," and a verified world model is what makes it both safe and useful.
+
 ## 5. Milestones
 
 - **CU0 — the safety-gate core.** `Guardrail` + the safety confusion matrix (`SafetyOutcome`, the
@@ -186,6 +203,12 @@ and guardrail (left), and the missed-danger knee vs ρ on the content guardrail 
   verification makes it un-gameable at the cheap knee. The deepest warning: the worst case is
   fidelity-independent (1.0 for *any* model), so faithfulness alone is a false sense of security — only
   the oracle removes the worst case.
+- **CU5 — the closed-loop safe agent. ✅** From the gate's verdict on a fixed pool to the *agent acting
+  in a loop* (H97): an agent works a task, previewing each action and executing the safe ones / aborting
+  the rest, scored on **both** task success and irreversible harm. A free agent is unsafe *and*
+  unreliable; the oracle agent is safe *and* reliable; and a stakes-aware consultation schedule (spend
+  the budget where the model is uncertain) reaches the safe-and-reliable corner at half a uniform
+  schedule's budget — the knee. The literal "computer use for an AI agent."
 - **The writeup.** Fold the gate into the SPEC-21 essay / README "from foundation to application"
   section — the legible bridge from the metrology to the deployment.
 
@@ -205,7 +228,9 @@ and guardrail (left), and the missed-danger knee vs ρ on the content guardrail 
 ## 7. Honest caveats, stated up front
 
 - **The agent is a fixed planner, not a learned policy.** The science is whether the *gate* can be
-  trusted; "a smarter agent" is out of scope (the SPEC-20 §13 discipline).
+  trusted; "a smarter agent" is out of scope (the SPEC-20 §13 discipline). CU5 closes the loop with a
+  *fixed* candidate-queue agent (it aborts and moves on; it does not learn a policy) — the variable
+  under study is the gate and the consultation schedule, never the planner.
 - **Defender-side only.** The workload is scripted; no offensive/red-team agent is built (SPEC.md §13).
 - **Shell/file/process, not GUI.** The oracle-grounded slice (SPEC.md §11).
 - **The real-`/bin/sh` anchor is shipped (CU2-sys / H94).** The gate's missed-danger rate is
@@ -223,6 +248,7 @@ and guardrail (left), and the missed-danger knee vs ρ on the content guardrail 
 | CU2-net | H93 cross-world — the exfiltration / flow-tamper gate (network) | ✅ shipped + **frontier run** — **SUPPORTED; cross-world, even sharper than host** ([`experiments/cu2_net_gate.py`](../../src/verisim/experiments/cu2_net_gate.py), [`cu2_net_gate.csv`](../../figures/cu2_net_gate.csv), [`.png`](../../figures/cu2_net_gate.png)) | the canonical network threat: **exfiltration / unauthorized lateral movement** — *the plan opens no flow to a protected server* (`{h0, h4}`, the crown-jewel hosts), keyed on the live-flow content the net flagship drifts ~0.252 on (UA10). 40 plans, 15 truly opening a protected flow. **Committed run on the trained network `M_θ`:** the **free preview's missed-danger rate is 1.00** — the agent **ran all 15 exfil plans** it previewed as safe (the net model's free-running flow prediction collapses, so it never foresees the connection — UA10's 0.083 floor), while the **oracle preview misses 0** and the cheap knee drives missed-danger to zero at **ρ=0.50 (8 oracle calls of 16)**: 1.00 → 0.40 (ρ0.1) → 0.07 (ρ0.2) → **0.00 (ρ0.5)**. The agent-safety value is not host-specific: a verified world model is the safety layer for a network defender too, and the oracle buys it cheaply. |
 | CU3 | H95 — the **certified** safety gate (provable, not just empirical) | ✅ shipped + **frontier run** — **SUPPORTED; the program's deepest synthesis** ([`acd/certified_gate.py`](../../src/verisim/acd/certified_gate.py), [`experiments/cu3_certified_gate.py`](../../src/verisim/experiments/cu3_certified_gate.py), [`cu3_certified_gate.csv`](../../figures/cu3_certified_gate.csv), [`.png`](../../figures/cu3_certified_gate.png)) | the agent attaches a **distribution-free, finite-sample certificate** `P(missed danger) ≤ α` to its gate, using the free oracle as a conformal calibration set — the SPEC-15 conformal idea ([`conformal.calibrate_threshold`](../../src/verisim/conformal/calibrate.py)) applied to the agent's allow/abort decision (a plan is a breach iff the oracle's true rollout violates the guardrail; the gate aborts when an ensemble-of-ρ-grounded-previews risk score exceeds the calibrated τ; a missed danger is a breach allowed). The trained arm deferred (the LP7 rule), a two-sided write-drifting stand-in on the v0 fs world (so it composes with the CU2-sys real-`/bin/sh` anchor). **Committed run (200 plans, α=0.1, split-averaged):** the certificate is **valid at every consultation budget ρ** (missed-danger ≤ 0.1 at all rungs), and its **false-block cost collapses with faithfulness — 1.00 at ρ=0 (a drifting preview can only be safe by aborting *everything*, useless) → 0.01 at ρ=0.2 → 0.00**, the gate then aborting exactly the unsafe fraction. So *any* model can be made safe by being useless; **only a faithful one is safe *and* useful**, and ρ buys the certificate down to ≈ free (the safe-and-useful knee). CPU-only, torch-free, seconds. |
 | CU4 | H96 — the **un-gameable** safety gate (adversarial, not average-case) | ✅ shipped + **frontier run** — **SUPPORTED; the cyber threat-model result** ([`acd/adversarial_gate.py`](../../src/verisim/acd/adversarial_gate.py), [`experiments/cu4_adversarial_gate.py`](../../src/verisim/experiments/cu4_adversarial_gate.py), [`cu4_adversarial_gate.csv`](../../figures/cu4_adversarial_gate.csv), [`.png`](../../figures/cu4_adversarial_gate.png)) | the question a threat model demands: *is the gate gameable by an attacker who knows the deployed model?* Attacks are plans that truly write a protected prefix; the gate previews each (ρ-grounded) and allows iff the preview shows no protected write; the **adversarial** missed-danger is over the attacker's arsenal — the attacks the *free* model previews as safe (its blind spots), fired by choice. **Committed run (240 plans, φ=0.6, 5 deployed models, v0 fs / omit-only stand-in, the trained arm deferred):** **(1) a free gate is fully gameable** — adversarial missed-danger **1.00** vs **0.46** average — and verification collapses *both* to ≈0 at the cheap knee (**un-gameable by ρ=0.2**); **(2) the worst case is fidelity-independent** — at ρ=0 the *average* missed-danger falls with model fidelity (0.71 → 0.46 → 0.22 at φ=0.4/0.6/0.8) but the *adversarial* one is **1.00 at all three** — so a "better" model is no safer against an adversary; average-case faithfulness is a **false sense of security**, and only verification removes the worst case. The oracle's value is **worst-case robustness**, exactly what cyber needs. CPU-only, torch-free, seconds. |
+| CU5 | H97 — the **closed-loop** safe agent (acting in a loop, not judging a pool) | ✅ shipped + **frontier run** — **SUPPORTED; the "computer use for an AI agent" result** ([`acd/closed_loop_agent.py`](../../src/verisim/acd/closed_loop_agent.py), [`experiments/cu5_closed_loop.py`](../../src/verisim/experiments/cu5_closed_loop.py), [`cu5_closed_loop.csv`](../../figures/cu5_closed_loop.csv), [`.png`](../../figures/cu5_closed_loop.png)) | the loop's question, the one that decides whether any of the gate work matters for real agents: *can the agent finish the job without ever doing the irreversible bad thing?* An agent works a task (benign files it must write) from a candidate queue salted with **dangerous traps** (writes to a protected prefix), previews each action through its world model's risk estimate, and EXECUTES the safe ones / ABORTS the rest — scored on **both axes at once**: `task_success_rate` (did it finish?) and `unsafe_rate` (did it ever execute a truly-dangerous action?). The danger labels are oracle-grounded (a write's real delta under the prefix), so the loop composes with the CU2-sys real-`/bin/sh` anchor. **Committed run (200 episodes, 16 actions each, φ=0.6, v0 fs / risk stand-in, trained arm deferred):** **(1) a free agent is in the bad corner — unsafe *and* unreliable** (task success **0.28**, unsafe-episode rate **0.57**) — while the **oracle agent is safe *and* reliable** (1.00 / 0.00), ρ the path between; **(2) where you spend the budget matters** — a *stakes-aware* schedule (consult the actions the model is most uncertain about, the SPEC-15 thesis at the action level) reaches the safe-and-reliable corner at **ρ=0.5** vs a uniform schedule's **ρ=1.0** (the knee). The closed loop is the literal computer-use deployment; a verified world model is what makes a fixed agent both safe and useful, cheaply. CPU-only, torch-free, seconds. |
 | — | the architecture diagram + the "foundation → application" writeup | ✅ shipped | [`figures/cu_architecture.png`](../../figures/cu_architecture.png) + the README section |
 
 This spec is the bridge the program needed: it does not add metrology, it *spends* the metrology, and
