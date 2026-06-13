@@ -2711,6 +2711,26 @@ trained in `E_oracle` / `E_grounded` / `E_free`, all evaluated in reality. The r
 
   ![SPEC-22 CU11 / H104: un-gameable targeting. Left — random vs adversarial breach by schedule (paired bars): at the uniform ρ=0.5 knee the random-timing breach 0.65 jumps to 1.00 under adversarial timing, model self-targeting 0.99 → 1.00, structure / crown-jewel stays 0.00 → 0.00 (4.1 calls) — the only schedule the attacker can't time around. Right — the uniform knee is a mirage: uniform breach vs ρ, the random-timing curve (purple, the CU9 knee, falling to 0 at the full oracle) against the adversarial curve (red, flat at 1.0 until ρ=1), with structure's un-gameable 0 line (green dashed) for reference](../figures/cu11_adversarial_targeting.png)
 
+- **Knowledge-free targeting — target the grammar, not the assets (SPEC-22 / CU12 / H105 — SUPPORTED).**
+  The robustness boundary CU10/CU11 left open ([`acd/knowledge_free_targeting.py`](../src/verisim/acd/knowledge_free_targeting.py)).
+  CU10/CU11 made targeted verification cheap *and* un-gameable by verifying the
+  `connect`-to-crown-jewel actions — but that rests on the **crown-jewel inventory being complete**, an
+  assumption a real defender cannot always meet (inventories drift, miss shadow services, lag the
+  network), and an adversary exfiltrates to the host you *didn't* flag. There are two structural
+  targets: **asset-indexed** (verify `connect` to a *known* jewel `K` — CU10/CU11, cheap but blind to
+  any sensitive host outside `K`) and **grammar-indexed** (verify *every* `connect`, the whole
+  flow-genesis surface — needs **zero asset knowledge**, since a flow is born only by `connect`, so
+  every exfil to *any* host is caught). Scored against the **true** sensitive set `{h0,h4}` on the same
+  battery and real `M_θ` as CU10: with a 50%-complete inventory (`K={h0}`, `h4` unflagged) the asset
+  target breaches **0.635 random / 0.960 adversarial** — nearly the unverified rate (0.995), a *false
+  sense of security*, fully gameable by an adversary who picks the unflagged host — while the
+  **grammar-indexed target reaches 0.000 breach inventory-independently at 9.35 calls, 5.1× cheaper
+  than the full oracle (48)**. **The defender principle: when you cannot trust your asset inventory,
+  target the grammar, not the assets** — the flow-genesis surface needs no asset list and is still
+  cheap. Completes the targeting arc (CU10 cheap → CU11 un-gameable → CU12 knowledge-free).
+
+  ![SPEC-22 CU12 / H105: knowledge-free targeting. Left — breach over the true sensitive set vs inventory completeness |K|/|T|: the asset-indexed target rises from 0 (complete) to the unverified rate as the inventory empties (random solid red, adversarial-target dashed even higher), while the grammar-indexed target holds flat at 0, with the uniform ρ=0.5 reference. Right — the price of dropping the asset assumption: mean oracle calls per defense — full oracle 48, uniform ρ=0.5 24, grammar (all connects) 9.3 at zero breach, complete asset target 4.1 — the grammar target buys inventory-independent zero breach 5× under the full oracle](../figures/cu12_knowledge_free_targeting.png)
+
 - **The distributed recession test — is the structural-first recession (H87) universal? NO (a refinement).**
   SPEC-21's H87 says the load-bearing frontier recedes *structural-first* with scale — structure tasks
   fall below the load-bearing threshold first, content tasks persist. But on host/network the structure
