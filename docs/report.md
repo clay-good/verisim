@@ -2908,6 +2908,41 @@ trained in `E_oracle` / `E_grounded` / `E_free`, all evaluated in reality. The r
   Reproduce: `python -m verisim.experiments.cu18_dist_targeting` (torch-free; the worst-case medium
   omitter stand-in runs in ~2 s, no checkpoint; `--smoke` for the fast path).
 
+- **The trained distributed arm — the targeting result closes on a real learned model, and drift
+  asymmetry is world-dependent (SPEC-22 / CU19 / H112 — SUPPORTED, honest refinement).** CU18 ran on a
+  *worst-case medium omitter* stand-in (LP7 defers the trained arm; the schedule keys on the oracle and
+  the medium grammar, not the model). CU19 closes that rigor gap exactly as CU5-net/CU8 closed it for
+  the network world: it trains a real flat distributed `M_θ` on the CU18 workload distribution (frozen
+  under `runs/flagship/dist-l`) and derives its staleness preview the way a deployed agent would — a
+  **belief rollout** that advances a believed cluster state by the model's own predicted deltas and
+  asks `is_stale(belief, …)` (the exact distributed analogue of CU5-net's believed-flow rollout; a
+  no-op delta model reproduces the omitter and an oracle delta model the perfect control, so the CU18
+  stand-ins are this rollout's recall endpoints — asserted in the tests). On the real model (200
+  deployments, horizon 48) the targeting result **closes exactly**: the model-free **medium** target
+  reaches **0.000 breach, un-gameable (0.000 adversarial), at 3.26 calls — 14.7× cheaper than the full
+  oracle**; **model self-targeting fails** (breach **0.475**, and now *wastes* **6.50** calls
+  consulting reads it wrongly believes stale); **`write_target` does not transfer** (0.475 at 5.16
+  calls); and uniform's sub-oracle knee is a mirage (adversarial breach **0.835–0.885 at every ρ<1**).
+  The load-bearing targeting result is not an artifact of the worst-case stand-in — it survives a real
+  learned model. The honest refinement only a real model could show: the drift is **not** the worst-case
+  omitter, and **not even omission-biased**. The free-running belief partially tracks the medium (free
+  breach **0.475**, below the omitter's 1.000) but in an *untrustworthy* way — it is
+  **hallucination-biased** (staleness recall **0.78**, precision **0.39**; **10,928 hallucinations vs
+  2,011 omissions**), the **opposite asymmetry of the network world's 146:1 omission bias** (CU8). The
+  mechanism is world-specific: in the network world a consequential event (a flow opening) is rare, so
+  the model's safe default is to predict *no* consequence (omission); in the distributed world a
+  free-running belief's replicas fall out of sync with truth over the rollout, so it predicts *spurious*
+  staleness (hallucination). Either asymmetry makes the model an unreliable staleness oracle, so model
+  self-targeting fails either way — and the **medium target is robust to both because it is model-free**
+  (it queries the oracle's medium, not the model). Drift asymmetry is world-dependent; the targeting
+  defense survives whichever way the real model drifts, because it keys on the world's grammar, not the
+  model's competence.
+
+  ![SPEC-22 CU19 / H112: the trained distributed arm, two panels. Left — the drift asymmetry on the medium: belief-vs-truth staleness errors over the rollout, omissions (true stale but the belief predicts fresh — the breach source, 2,011) vs hallucinations (true fresh but the belief predicts stale — wasted calls, 10,928). Unlike the network world's omission bias (CU8), the real free-running distributed belief is hallucination-biased — recall 0.78, precision 0.39 — the opposite asymmetry. Right — the cost/safety frontier on the real model: breach rate vs mean oracle calls per deployment. The uniform blind schedule (purple) falls from the free breach 0.475 only to zero at the full oracle (48 calls); model self-targeting (red X) and the write-to-key genesis-action target (orange plus) cluster near breach 0.475 while spending 5–6.5 calls (they fail and waste budget); only the model-free medium / stale-read-closure target (green star) sits in the safe-and-cheap corner — zero breach at 3.3 calls, ~15× fewer than the full oracle. The targeting result closes on a real learned model, and because the medium target is model-free it is robust to whichever way the model drifts](../figures/cu19_dist_trained.png)
+
+  Reproduce: `python -m verisim.experiments.cu19_dist_trained` (torch-gated trained arm; trains the
+  frozen `flagship-dist-l` once if absent, then reuses it; the belief-rollout core is torch-free).
+
 - **The distributed recession test — is the structural-first recession (H87) universal? NO (a refinement).**
   SPEC-21's H87 says the load-bearing frontier recedes *structural-first* with scale — structure tasks
   fall below the load-bearing threshold first, content tasks persist. But on host/network the structure
