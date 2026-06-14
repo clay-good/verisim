@@ -26,7 +26,8 @@ FIDELITY_DEGRADED = "degraded"
 
 # The trace artifact format version. Bumped if the on-disk shape changes, so a reader fails closed
 # on an unknown version rather than mis-parsing (the bridge schema-guard discipline, write side).
-TRACE_SCHEMA_VERSION = 1
+# v2 added ``syscall_events`` (the full-tier syscall stream).
+TRACE_SCHEMA_VERSION = 2
 
 # File-mutation kinds, drawn from the oracle's structural delta (reused, not recomputed).
 MUT_CREATED = "created"
@@ -68,6 +69,16 @@ class NetEvent:
 
 
 @dataclass(frozen=True, slots=True)
+class SyscallEvent:
+    """One observed syscall from the `full`-tier (`strace`) tracer: its name, raw argument text, and
+    return value. Empty at the degraded tier (no privileged tracer ran)."""
+
+    name: str
+    args: str
+    result: str
+
+
+@dataclass(frozen=True, slots=True)
 class RuntimeTrace:
     """One step's observable runtime effects, tagged with its fidelity tier and provenance."""
 
@@ -81,6 +92,7 @@ class RuntimeTrace:
     file_mutations: tuple[FileMutation, ...]
     net_events: tuple[NetEvent, ...]
     elapsed_s: float
+    syscall_events: tuple[SyscallEvent, ...] = ()
 
     def to_json(self) -> str:
         """Canonical JSON (sorted keys, stable separators) — stable across dict ordering.

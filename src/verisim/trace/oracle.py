@@ -58,7 +58,7 @@ class TracingOracle:
         overhead_budget_s: float | None = 1.0,
     ) -> None:
         self._inner = inner
-        self._tracer = tracer if tracer is not None else select_tracer()
+        self._tracer = tracer if tracer is not None else select_tracer(inner)
         self._fixture_source_sha = fixture_source_sha
         self._artifact_dir = None if artifact_dir is None else Path(artifact_dir)
         self._overhead_budget_s = overhead_budget_s
@@ -68,10 +68,25 @@ class TracingOracle:
     # -- the Oracle protocol (step is wrapped; the rest delegates) ------------
 
     def step(self, state: State, action: Action) -> StepResult:
-        """Run the inner step, record its trace, and return the result **unchanged**."""
+        """Run the inner step, record its trace, and return the result **unchanged**.
+
+        If the tracer is a ``full`` tier (it exposes an ``exec_wrapper``) and the inner oracle
+        exposes the exec-instrumentation seam, the wrapper is installed for the duration of the step
+        and restored after — so the real subprocess runs under the tracer without altering the
+        oracle's result.
+        """
         self._tracer.begin()
+        wrapper = getattr(self._tracer, "exec_wrapper", None)
+        seam = callable(wrapper) and hasattr(self._inner, "exec_wrapper")
+        previous = getattr(self._inner, "exec_wrapper", None) if seam else None
+        if seam:
+            self._inner.exec_wrapper = wrapper  # type: ignore[attr-defined]
         t0 = time.perf_counter()
-        result = self._inner.step(state, action)
+        try:
+            result = self._inner.step(state, action)
+        finally:
+            if seam:
+                self._inner.exec_wrapper = previous  # type: ignore[attr-defined]
         elapsed_s = time.perf_counter() - t0
 
         overhead_start = time.perf_counter()

@@ -26,10 +26,12 @@ from .model import (
     FileMutation,
     NetEvent,
     RuntimeTrace,
+    SyscallEvent,
 )
 from .oracle import TraceBudgetExceeded, TraceError, TracingOracle, write_trace
 from .tracer import (
     DegradedTracer,
+    StraceTracer,
     Tracer,
     full_tracing_available,
     select_tracer,
@@ -49,6 +51,8 @@ __all__ = [
     "FileMutation",
     "NetEvent",
     "RuntimeTrace",
+    "StraceTracer",
+    "SyscallEvent",
     "TraceBudgetExceeded",
     "TraceError",
     "Tracer",

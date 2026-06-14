@@ -44,6 +44,7 @@ import shutil
 import subprocess
 import sys
 import tempfile
+from collections.abc import Callable
 from dataclasses import dataclass
 
 from verisim.delta.edits import (
@@ -69,6 +70,10 @@ from verisim.env.state import (
 
 from .base import EXIT_ERR, EXIT_OK, DeterminismReport, StepResult
 from .sandbox_seal import DEFAULT_SEAL, DeterminismSeal, make_preexec
+
+# An exec-instrumentation seam: transforms a rendered argv into the argv actually exec'd (e.g. a
+# ``full``-tier tracer prepending ``strace … --``). A constant, trusted prefix only.
+ExecWrapper = Callable[[list[str]], list[str]]
 
 
 class SystemOracleUnavailable(RuntimeError):
@@ -209,6 +214,7 @@ def _diff_states(before: State, after: State, exit_code: int, stdout: str) -> De
 
 # --- rendering: one v0 action -> one real shell invocation ------------------
 
+
 def _render(action: Action, state: State, root: str) -> list[str] | None:
     """Render a v0 action into an argv to exec, or ``None`` for the rare action with no
     real-kernel filesystem analog (``export``: a pure state-vector op handled by the caller).
@@ -235,8 +241,9 @@ def _render(action: Action, state: State, root: str) -> list[str] | None:
     if name == "touch":
         return ["touch", real(action.args[0])]
     if name == "rm":
-        return ["rm", "-r", real(action.args[0])] if action.recursive else \
-               ["rm", real(action.args[0])]
+        return (
+            ["rm", "-r", real(action.args[0])] if action.recursive else ["rm", real(action.args[0])]
+        )
     if name == "mv":
         return ["mv", real(action.args[0]), real(action.args[1])]
     if name == "cp":
@@ -275,6 +282,7 @@ class SandboxOracle:
         shell: str = "/bin/sh",
         timeout_s: float = 2.0,
         seal: DeterminismSeal = DEFAULT_SEAL,
+        exec_wrapper: ExecWrapper | None = None,
     ) -> None:
         if shutil.which("mkdir") is None or not os.path.exists(shell):
             raise SystemOracleUnavailable(
@@ -285,6 +293,13 @@ class SandboxOracle:
         self.timeout_s = timeout_s
         self.seal = seal
         self.tier = TIER_PROCESS  # the always-on default; namespaced is opt-in (§2.5)
+        # The exec-instrumentation seam (OpenSpec ``add-sandbox-trace-oracle``): an optional,
+        # trusted transform applied to the rendered argv immediately before exec, so a ``full``
+        # tracer can wrap the real subprocess (e.g. prepend ``strace … --``). ``None`` is the
+        # default and is behavior-identical to no seam. The wrapper SHALL preserve the rendered
+        # argv as the traced program's args, so the grammar allowlist (no command injection) is
+        # untouched — only a constant, trusted prefix is added.
+        self.exec_wrapper = exec_wrapper
 
     # -- the Oracle protocol -------------------------------------------------
 
@@ -367,6 +382,11 @@ class SandboxOracle:
         ``cwd`` is the fs-root when it exists, else the throwaway tree -- a command that
         removes the fs-root must still have a valid cwd to exec from.
         """
+        # Apply the optional exec-instrumentation seam: a trusted transform (e.g. an strace prefix)
+        # wrapping the rendered argv. The original argv is preserved as the wrapped program's args,
+        # so the grammar allowlist is unchanged; the wrapper is Verisim code, never action input.
+        if self.exec_wrapper is not None:
+            argv = self.exec_wrapper(argv)
         try:
             # cwd is always the throwaway parent: every rendered path is absolute, so cwd is
             # irrelevant to resolution, and execing from the parent survives a command that

@@ -25,17 +25,21 @@ from verisim.oracle.reference import ReferenceOracle
 from verisim.oracle.sandbox import SandboxOracle, SystemOracleUnavailable
 from verisim.trace import (
     FIDELITY_DEGRADED,
+    FIDELITY_FULL,
     MUT_CREATED,
     TRACE_SCHEMA_VERSION,
     DegradedTracer,
     RuntimeTrace,
+    StraceTracer,
     TraceBudgetExceeded,
     TraceError,
     TracingOracle,
     full_tracing_available,
     select_tracer,
+    tracing_capability_note,
     write_trace,
 )
+from verisim.trace.tracer import _parse_strace
 
 try:
     _SHELL: SandboxOracle | None = SandboxOracle()
@@ -57,10 +61,11 @@ def test_file_write_and_exec_are_recorded_in_the_sandbox() -> None:
 
     assert len(oracle.traces) == 1
     trace = oracle.traces[0]
-    # The exec event, linked to the action.
+    # The exec event is recorded and the trace is linked to the action (tier-agnostically: at the
+    # degraded tier the exec command is the action name, at the full tier it is the real argv).
     assert trace.action_name == "write"
     assert trace.action_args == ("/hi.txt", "hello")
-    assert any(e.command == "write" for e in trace.exec_events)
+    assert trace.exec_events
     # The file mutation, reused from the oracle's structural delta.
     assert any(m.path == "/hi.txt" and m.kind == MUT_CREATED for m in trace.file_mutations)
     # Linked to the fixture source sha.
@@ -133,10 +138,7 @@ def test_traced_result_is_inner_result_verbatim() -> None:
 
 def test_degraded_tier_is_useful_and_labeled() -> None:
     """Scenario: where privileged tracing is unavailable, the trace is degraded yet still useful."""
-    assert full_tracing_available() is False
-    assert isinstance(select_tracer(), DegradedTracer)
-
-    oracle = TracingOracle(ReferenceOracle())  # defaults to the selected (degraded) tracer
+    oracle = TracingOracle(ReferenceOracle())  # ReferenceOracle has no exec seam → degraded
     oracle.step(State.empty(), parse_action("write /a hello"))
     trace = oracle.traces[0]
     assert trace.fidelity == FIDELITY_DEGRADED
@@ -144,6 +146,131 @@ def test_degraded_tier_is_useful_and_labeled() -> None:
     assert trace.exec_events  # exec recorded
     assert trace.file_mutations  # file delta recorded
     assert trace.net_events == ()  # binds recorded (empty for this grammar)
+    assert trace.syscall_events == ()  # no privileged tracer ran
+
+
+def test_full_tier_is_chosen_only_when_it_can_actually_work() -> None:
+    """Scenario: the full tier is never chosen where it would emit an empty syscall stream.
+
+    An oracle with no exec seam (ReferenceOracle) always degrades; selecting over a seam-ful oracle
+    yields the full tier iff strace is actually usable here (true only on a permitted-ptrace Linux).
+    """
+    assert isinstance(select_tracer(ReferenceOracle()), DegradedTracer)
+    assert full_tracing_available(ReferenceOracle()) is False  # no seam
+
+    seamful = SandboxOracle() if _SHELL is not None else None
+    if seamful is not None:
+        expect_full = full_tracing_available(seamful)
+        chosen = select_tracer(seamful)
+        assert isinstance(chosen, StraceTracer) == expect_full
+        assert ("full tier" in tracing_capability_note(seamful)) == expect_full
+
+
+def test_strace_output_parses_into_typed_events() -> None:
+    """The strace parser pins the real output format (pid prefixes, unfinished/resumed skipped)."""
+    sample = (
+        'execve("/bin/mkdir", ["mkdir", "/tmp/x/d"], 0x7ffd /* 12 vars */) = 0\n'
+        '[pid  4711] openat(AT_FDCWD, "/tmp/x/d", O_RDONLY|O_DIRECTORY) = 3\n'
+        '4711  write(1, "ok", 2)            = 2\n'
+        "strace: Process 4711 attached\n"
+        "connect(5, {sa_family=AF_INET, sin_port=htons(80)}, 16) <unfinished ...>\n"
+        "+++ exited with 0 +++\n"
+    )
+    events = _parse_strace(sample)
+    names = [e.name for e in events]
+    assert names == ["execve", "openat", "write"]  # attach line + unfinished + +++ all skipped
+    assert events[0].result == "0"
+
+
+# --- full tier: exec-wrapper seam + strace integration ---------------------------------------
+
+
+@requires_shell
+def test_exec_wrapper_seam_is_applied_and_preserves_the_result() -> None:
+    """The SandboxOracle exec seam wraps the real argv without changing the step's result."""
+    seen: list[list[str]] = []
+
+    def wrapper(argv: list[str]) -> list[str]:
+        seen.append(list(argv))
+        return ["/usr/bin/env", *argv]  # exec the rendered command through `env`
+
+    oracle = SandboxOracle(exec_wrapper=wrapper)
+    result = oracle.step(State.empty(), parse_action("mkdir /d"))
+    assert seen and seen[0][0] == "mkdir"  # the original rendered argv was passed through
+    assert "/d" in result.state.fs  # the wrapped command still produced the real effect
+
+
+def _make_fake_strace(dirpath: Path) -> Path:
+    """A stand-in for `strace -o`: writes a canned syscall log, then execs the real command.
+
+    Lets the full-tier wiring (wrapper → subprocess → log file → parse → trace) be exercised on
+    macOS, where real strace does not exist — the parser's format fidelity is pinned separately by
+    ``test_strace_output_parses_into_typed_events`` and the real binary by the Linux-gated e2e.
+    """
+    script = dirpath / "fake-strace"
+    script.write_text(
+        "#!/bin/sh\n"
+        'out=""\n'
+        "while [ $# -gt 0 ]; do\n"
+        '  case "$1" in\n'
+        '    -o) shift; out="$1" ;;\n'
+        "    --) shift; break ;;\n"
+        "  esac\n"
+        "  shift\n"
+        "done\n"
+        "# $@ is now the real command\n"
+        'printf \'execve("%s", ["%s"], 0x0) = 0\\nopenat(AT_FDCWD, "x", O_WRONLY) = 3\\n\' '
+        '"$1" "$1" > "$out"\n'
+        'exec "$@"\n',
+        encoding="utf-8",
+    )
+    script.chmod(0o755)
+    return script
+
+
+@requires_shell
+def test_full_tier_wiring_end_to_end_with_a_fake_strace(tmp_path: Path) -> None:
+    """The whole full-tier chain on macOS via a fake strace: wrapper installed, log parsed, result
+    preserved, trace tagged `full` with a real syscall stream."""
+    fake = _make_fake_strace(tmp_path)
+    tracer = StraceTracer(strace_bin=str(fake))
+    plain = SandboxOracle()
+    traced = TracingOracle(SandboxOracle(), tracer=tracer, fixture_source_sha="feed")
+
+    action = parse_action("mkdir /d")
+    r_plain = plain.step(State.empty(), action)
+    r_traced = traced.step(State.empty(), action)
+
+    # Determinism preserved: the wrapped command produced the identical result.
+    assert canonical_world(r_traced.state) == canonical_world(r_plain.state)
+    trace = traced.traces[0]
+    assert trace.fidelity == FIDELITY_FULL
+    assert any(sc.name == "execve" for sc in trace.syscall_events)
+    assert trace.exec_events[0].command == "mkdir"  # real argv from the execve line
+    assert any(m.path == "/d" and m.kind == MUT_CREATED for m in trace.file_mutations)
+    assert trace.fixture_source_sha == "feed"
+
+
+@pytest.mark.skipif(
+    _SHELL is None or not full_tracing_available(_SHELL),
+    reason="real strace not available/permitted (Linux + ptrace only)",
+)
+def test_full_tier_with_real_strace(tmp_path: Path) -> None:
+    """On a permitted-ptrace Linux host, real strace records the true syscall stream, and the
+    traced result still matches the untraced one."""
+    plain = SandboxOracle()
+    traced = TracingOracle(SandboxOracle(), tracer=StraceTracer())
+    action = parse_action("write /f.txt hello")
+    r_plain = plain.step(State.empty(), action)
+    r_traced = traced.step(State.empty(), action)
+
+    assert canonical_world(r_traced.state) == canonical_world(r_plain.state)
+    trace = traced.traces[0]
+    assert trace.fidelity == FIDELITY_FULL
+    assert trace.syscall_events  # real syscalls captured
+    assert any(sc.name in ("execve", "execveat") for sc in trace.syscall_events)
+    # the write went to a real file syscall
+    assert any(sc.name in ("openat", "open", "write", "creat") for sc in trace.syscall_events)
 
 
 # --- trace model + artifacts -----------------------------------------------------------------

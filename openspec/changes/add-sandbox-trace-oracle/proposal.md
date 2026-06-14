@@ -1,29 +1,34 @@
 # Sandbox runtime-trace oracle
 
-> Status: IMPLEMENTED (2026-06-14) — `src/verisim/trace/` + `tests/test_trace.py` (11 tests
+> Status: IMPLEMENTED (2026-06-14) — `src/verisim/trace/` + `tests/test_trace.py` (16 tests
 > green; ruff + bare mypy clean). Change 3 of the six is done; Changes 4–6 remain DRAFT.
+> **Both tiers ship.** The `full` tier was verified end-to-end against **real `strace` in a Linux
+> container** (and CI now installs `strace` so the full-tier e2e runs on every push); the degraded
+> tier is verified on the macOS dev host.
 > One sentence: **capture what the code actually does at runtime by tracing the real
 > `SandboxOracle` execution — exec, syscalls, file mutations, network binds — as typed records,
 > so dynamic reality can later correct the static call graph.**
 >
-> **Implementation notes (honest scope of the tiers):**
-> - **Degraded tier is what ships, and it is the spec's mandated floor — by design, not omission.**
->   The tracer is a *pure decorator* over the `Oracle` protocol (the "wrapper, not rewrite"
->   constraint), so it cannot inject `ptrace`/DTrace into the subprocess `SandboxOracle` spawns
->   *inside* its own `step`; a `full`-tier syscall tracer would have to instrument that spawn. On
->   the macOS dev host, privileged process tracing also needs SIP-disable/entitlements the
->   environment lacks (the proposal's stated risk). So `full_tracing_available()` honestly returns
->   `False` and `select_tracer()` returns the degraded tracer, which still records the floor the
->   spec requires: **exec + file delta + binds**, every trace tagged `degraded`.
-> - **File mutations are reused from the oracle's structural delta** (`StepResult.delta`), not
->   recomputed — the proposal's explicit instruction.
-> - **Net events are honestly empty.** The v0 filesystem grammar exposes no network action and the
->   sandbox blocks egress by allowlist, so binds are `()` — recorded, not omitted, so a future
->   grammar with a network action has a place to land.
-> - **Determinism is preserved by construction.** `TracingOracle.step` returns the inner oracle's
->   `StepResult` verbatim and builds the trace purely from the action + result, touching neither the
->   execution nor the `DeterminismSeal`; a traced step is bit-identical to an untraced one (tested
->   on a real-shell sequence).
+> **Implementation notes (the two tiers):**
+> - **Full tier — a real ptrace-based `strace` wraps the real subprocess.** `SandboxOracle` gained
+>   a small additive `exec_wrapper` seam (default `None`, behavior-identical when unused); the
+>   `StraceTracer` installs `strace -f -qq -e trace=… -o <log> --` in front of the *already-confined*
+>   rendered argv (a constant trusted prefix — the grammar allowlist is untouched) and parses the
+>   log into the real argv + syscall stream. Selected only where `strace` is present and permitted
+>   (Linux) **and** the oracle exposes the seam, so a `full` tracer is never an empty-stream
+>   pretender. The strace log is harness observability written to a Verisim temp file (like
+>   capturing stdout); the v0 command stays confined, as the snapshot/delta proves.
+> - **Degraded tier — the always-available floor.** Where privileged tracing is unavailable (the
+>   macOS dev host: DTrace needs SIP-disable/entitlements; any host without `strace`), the
+>   `DegradedTracer` records exec + file delta + binds post-hoc and tags the trace `degraded`.
+> - **File mutations are reused from the oracle's structural delta** (`StepResult.delta`) at both
+>   tiers — the proposal's explicit instruction; the full tier *adds* the syscall stream.
+> - **Net events** come from observed `connect`/`bind` syscalls at the full tier (expected empty
+>   for the v0 grammar — an egress attempt would be a real finding) and are honestly empty at the
+>   degraded tier.
+> - **Determinism is preserved.** `TracingOracle.step` returns the inner oracle's `StepResult`
+>   verbatim; even under real `strace` the canonical state matches an untraced run (verified on
+>   Linux). The `exec_wrapper` is installed only for the duration of the step and restored after.
 
 ## Why
 

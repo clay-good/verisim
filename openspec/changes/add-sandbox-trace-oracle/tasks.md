@@ -1,7 +1,8 @@
 # Tasks — Sandbox runtime-trace oracle
 
-> Status: IMPLEMENTED (2026-06-14) — `src/verisim/trace/` + `tests/test_trace.py` (11 tests
-> green; ruff + bare mypy clean). Change 3 of the six is done.
+> Status: IMPLEMENTED (2026-06-14) — `src/verisim/trace/` + `tests/test_trace.py` (16 tests
+> green; ruff + bare mypy clean). Change 3 of the six is done. Both tiers ship; the full (`strace`)
+> tier verified end-to-end against real strace in a Linux container, and CI installs strace.
 
 ## 1. Trace model
 - [x] Define `RuntimeTrace` (action id, fixture source sha, exec events, optional syscall stream,
@@ -20,14 +21,17 @@
       (`action_name`/`action_args` + `fixture_source_sha` constructor arg.)
 
 ## 3. Platform tracers
-- [ ] ~~Implement the macOS path (native profiler / ptrace / DTrace)~~ — **out of scope, disclosed.**
-      Not achievable as a *pure decorator* (cannot instrument the sandbox's internal subprocess
-      spawn) and unavailable on the SIP-locked dev host. `full_tracing_available()` returns `False`
-      with the reason; the degraded floor is shipped instead (the spec's mandated tier).
+- [x] Implement the **full** tier via a ptrace-based tracer (`strace`). Added a small additive
+      `exec_wrapper` seam to `SandboxOracle` (default `None`); `StraceTracer` wraps the real
+      subprocess (`strace -f -qq -e trace=… -o <log> --`), parses the log into the real argv +
+      syscall stream, and `TracingOracle` installs/restores the seam per step. Verified e2e against
+      real strace in a Linux container (`test_full_tier_with_real_strace`).
+      (macOS path: privileged DTrace needs SIP-disable/entitlements the dev host lacks, so macOS
+      degrades — the probe detects this. A privileged dtruss tracer is a future extension.)
 - [x] Implement the always-available **degraded** tracer (exec + file delta + binds from
       observable signals), tagged `degraded`. (`DegradedTracer`.)
-- [ ] (Scale) Optional Linux eBPF/strace path — not implemented; the spec forbids it as a default
-      and the pure-decorator architecture precludes wiring it here.
+- [x] The full tier uses ptrace-based `strace` (not eBPF — the spec forbids eBPF as a default);
+      `select_tracer` picks it only where strace is permitted **and** the oracle exposes the seam.
 - [x] Make every trace self-report its fidelity tier. (`RuntimeTrace.fidelity`, `is_degraded()`.)
 
 ## 4. Determinism + budget
@@ -46,7 +50,12 @@
 - [x] Golden trace test on a fixture action that performs a known file write + a known exec.
       (`test_file_write_and_exec_are_recorded_in_the_sandbox`.)
 - [x] Fidelity-tier test: when privileged tracing is unavailable, the degraded tier still records
-      exec + file delta + binds and is marked `degraded`. (`test_degraded_tier_is_useful_and_labeled`.)
+      exec + file delta + binds and is marked `degraded` (`test_degraded_tier_is_useful_and_labeled`);
+      the full tier is selected only when it can actually run
+      (`test_full_tier_is_chosen_only_when_it_can_actually_work`), the strace parser is pinned
+      (`test_strace_output_parses_into_typed_events`), and the full chain is exercised by a fake
+      strace on macOS (`test_full_tier_wiring_end_to_end_with_a_fake_strace`) and real strace on
+      Linux (`test_full_tier_with_real_strace`).
 - [x] Cross-POSIX: degraded tier works on macOS and Linux CI — the suite uses `SandboxOracle`
       (pure POSIX) and `ReferenceOracle` (pure Python); the shell-dependent cases skip, disclosed,
       when no shell is present.
