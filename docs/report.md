@@ -2811,6 +2811,37 @@ trained in `E_oracle` / `E_grounded` / `E_free`, all evaluated in reality. The r
   Reproduce: `python -m verisim.experiments.cu15_verification_exhaustion` (reuses the frozen
   `runs/flagship/net-l` checkpoint — no retrain; `--smoke` for the fast path).
 
+- **Cross-world targeting — the danger surface is grammar-fixed on the host too (SPEC-22 / CU16 / H109 — SUPPORTED).**
+  The generality test the targeting arc left open ([`acd/host_targeting.py`](../src/verisim/acd/host_targeting.py)).
+  CU10 (cheap), CU11 (un-gameable), and CU12 (knowledge-free) were all measured on the **network**
+  world, where danger is born by a single action-visible event (a flow to a crown jewel is opened only
+  by a `connect` addressed to it). Is the program's most-quoted result network-specific, or a general
+  property of any oracle-grounded world? CU16 carries it to the **host** world (credential / config
+  tampering — CU1's content guardrail). The host grammar invariant is just as exact: a `/passwd`
+  corruption is born only by a `write` to a file descriptor previously `open`-ed at that path. The host
+  adds a sharper twist the network could not show — unlike the `connect` (whose destination is a literal
+  argument), the host danger surface is the **action composed with the fd→path binding**, and that
+  binding lives in the *process structure* the boundary law says the model learns **faithfully** (host
+  `M_θ` drifts ~25-36% on file content but ~0% on the fd table; SPEC-20 §7), so structure targeting
+  localizes a *content* danger through *faithful structure*. The trained host arm is the deferred GPU
+  extension (its rollout over fork-heavy workloads is pathologically slow on the throttled CPU — the
+  LP7 rule), so the schedule result, which keys on the oracle and the grammar not the model's
+  competence, runs a **worst-case content omitter** stand-in (faithful on structure, omits writes — the
+  realistic drift CU8 measured and CU1 confirmed: a free preview misses 0.38 of real `/passwd`
+  corruptions). **Committed run (200 deployments, horizon 48):** the network result generalizes
+  exactly — **uniform** needs the full oracle (48 calls) for zero breach and its sub-oracle knee is a
+  mirage (adversarial breach **1.000 at every ρ<1**); **model self-targeting fails** (breach **1.000**
+  at 0 calls — the omitter cannot flag its own blind spots); and **structure targeting reaches zero
+  breach at 3.49 calls — 13.8× cheaper than the full oracle — and is un-gameable** (adversarial breach
+  **0.000**). The targeting result is a property of any oracle-grounded world whose danger has a
+  grammar-fixed genesis surface, not a network artifact, and the host shows that surface can be
+  localized through the very structure the model is faithful on.
+
+  ![SPEC-22 CU16 / H109: cross-world host targeting, two panels. Left — the cost/safety frontier under random timing: breach rate vs mean oracle calls per deployment. The uniform blind schedule (purple) only reaches zero breach at the full oracle (48 calls); model self-targeting (red X) sits at breach 1.0 at 0 calls; structure / write-to-jewel targeting (green star) reaches zero breach at 3.5 calls, ~14× fewer than the full oracle. Right — the uniform knee is a mirage under adversarial timing: uniform breach vs ρ, the random-timing curve (purple, falling toward 0 only at the full oracle) against the adversarial curve (red, flat at 1.0 until ρ=1), with structure's un-gameable 0 line (green dashed). The same cross-world lesson the network showed — a /passwd corruption is born only by a write to an fd bound to it, so structure targeting is cheap and un-gameable on the host too](../figures/cu16_host_targeting.png)
+
+  Reproduce: `python -m verisim.experiments.cu16_host_targeting` (torch-free; the worst-case content
+  omitter stand-in runs in seconds, no checkpoint; `--smoke` for the fast path, `--recall` to dial it).
+
 - **The distributed recession test — is the structural-first recession (H87) universal? NO (a refinement).**
   SPEC-21's H87 says the load-bearing frontier recedes *structural-first* with scale — structure tasks
   fall below the load-bearing threshold first, content tasks persist. But on host/network the structure
