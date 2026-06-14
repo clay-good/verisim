@@ -25,6 +25,10 @@ venv/
 /runs/*
 !/runs/.gitkeep
 
+# De-fanged codebase fixtures: Verisim-owned scratch copies of real repos (the prototype's
+# subject under test). Regenerable via verisim.fixture.materialize; never committed.
+/.verisim-fixtures/
+
 # OS
 .DS_Store
 
