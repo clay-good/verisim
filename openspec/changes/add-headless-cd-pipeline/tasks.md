@@ -1,35 +1,56 @@
 # Tasks — Headless CD pipeline
 
+> All implemented 2026-06-14. Code: `src/verisim/pipeline/model.py` (typed run model),
+> `src/verisim/pipeline/cd.py` (ordered fail-safe orchestrator + `verisim-cd` console entry).
+> Tests: `tests/test_pipeline.py` (10). Entry point registered in `pyproject.toml [project.scripts]`.
+
 ## 1. Entry point + run model
-- [ ] Define a headless entry point (console-script command + callable API) taking a fixture +
-      intent + seed.
-- [ ] Define a `RunReport` artifact aggregating every stage's typed output.
+- [x] Headless entry point — `run_pipeline(fixture, intent, ...)` callable + `main()` /
+      `verisim-cd` console script, taking a fixture + `Intent` (goal/actions/invariants/change) + seed.
+- [x] `RunReport` artifact (`model.py`) aggregating every stage's typed `StageResult` plus findings,
+      feedback counts, rollback recommendation, prepared delivery, and a content seal (`signature`).
 
 ## 2. Stage wiring (in order)
-- [ ] Stage 1 — Intent graph: load read-only `CodeGraph` (Change 2) + declared invariants; build intent.
-- [ ] Stage 2 — Speculative rollout: run M_θ imagination for the intent (existing machinery).
-- [ ] Stage 3 — Trace side-effects: execute verifying steps via the tracing `SandboxOracle` (Change 3).
-- [ ] Stage 4 — Evaluate invariants: check traces + graph against declared invariants → findings.
-- [ ] Stage 5 — Feedback: emit `verisim-feedback-v1` payload (Change 4).
-- [ ] Stage 6 — Breaker: run the oscillation monitor (Change 5) throughout; `critical` halts the run.
-- [ ] Stage 7 — Prepare delivery: signed report + prepared, unpushed commit/patch on the fixture.
+- [x] Stage 1 — Intent graph: `_stage_intent_graph` loads the read-only `CodeGraph` (Change 2;
+      `load_code_graph` / `analysis_db_path`) or accepts a passed graph, and records the intent.
+- [x] Stage 2 — Speculative rollout: `_stage_speculative` runs `loop/speculative.py`
+      `speculative_rollout` (oracle-as-drafter stand-in for M_θ) and fills the droppable rollout.
+- [x] Stage 3 — Trace side-effects: `_stage_trace` executes the verifying steps via `TracingOracle`
+      (Change 3), threading state forward into the breaker's trajectory.
+- [x] Stage 4 — Evaluate invariants: `_stage_evaluate` checks static + runtime-discovered edges
+      against the declared `ArchInvariant`s → `InvariantFinding`s.
+- [x] Stage 5 — Feedback: `_stage_feedback` emits + validates the `verisim-feedback-v1` payload
+      (Change 4; `build_feedback_payload` / `write_feedback` / `validate_payload`).
+- [x] Stage 6 — Breaker: `TrajectoryBreaker` (Change 5) observes every transition during stage 3;
+      `_stage_breaker` is the gate — a `critical` status halts the run before delivery.
+- [x] Stage 7 — Prepare delivery: `_stage_prepare_delivery` writes a content-sealed report + a
+      prepared, *unpushed* commit/patch on the fixture.
 
 ## 3. Gating + isolation
-- [ ] Enforce fail-safe ordering: a halted/failed stage blocks all later stages.
-- [ ] Require explicit human confirmation before commit/push/deploy; default is prepare-and-stop.
-- [ ] Assert local + network-isolated execution (no outbound network beyond loopback).
-- [ ] Honor the existing commit gate; never bypass it.
+- [x] Fail-safe ordering: the `guarded` runner marks a stage `failed` on exception and every later
+      stage `skipped`; the breaker may `halt` before delivery (tested: missing graph + breaker trip).
+- [x] Explicit human confirmation before commit: `confirm_delivery` defaults `False` (prepare and
+      stop); only `True` commits. Push/deploy never performed.
+- [x] Local + network-isolated: `_network_isolated` attests via the oracle's hermeticity; v0 grammar
+      exposes no network surface. Test asserts isolation + the original source is byte-identical.
+- [x] Honor the commit gate: `git commit` is run plainly, never `--no-verify` (tested: a refusing
+      fixture pre-commit hook fails the commit instead of being bypassed).
 
 ## 4. Determinism + artifacts
-- [ ] Make stages deterministic for fixed (fixture revision, intent, seed); write a typed artifact
-      per stage.
-- [ ] Make the run resumable/inspectable from artifacts.
+- [x] Deterministic for fixed (fixture revision, intent, seed): every artifact is canonical JSON
+      with wall-clock/volatile fields projected out (`_project_trace`); the report carries a content
+      seal. Test: same source materialized twice → identical signatures + artifacts.
+- [x] Resumable/inspectable: each stage writes a numbered typed artifact under `.verisim-run/`
+      (Verisim-owned scratch, outside the subject tree) plus a final `run-report.json`.
 
 ## 5. Verification
-- [ ] Happy-path e2e: a fixture + benign intent runs all stages and stops at "prepared, unpushed
-      commit + report" with no commit/push performed.
-- [ ] Gating test: a `critical` breaker trip halts before delivery and emits a rollback recommendation.
-- [ ] Isolation test: the run completes with no outbound network and never touches the source repo.
-- [ ] Confirmation test: only with explicit confirmation does a commit happen — and only on the
-      de-fanged fixture, which cannot push to the original.
-- [ ] Determinism test: same (fixture revision, intent, seed) → same stage artifacts.
+- [x] Happy-path e2e: `test_full_run_prepares_an_undelivered_change` — all 7 stages OK, prepared
+      unpushed commit + report, HEAD unchanged (no commit/push performed).
+- [x] Gating test: `test_breaker_trip_halts_before_delivery` — a flip-flop trajectory trips
+      `critical`, delivery is skipped, a rollback recommendation is surfaced, no commit.
+- [x] Isolation test: `test_source_untouched_and_network_isolated` — completes network-isolated and
+      leaves the original source repo byte-identical.
+- [x] Confirmation test: `test_confirmed_commit_lands_only_on_fixture_and_cannot_push` — only with
+      confirmation does a commit happen, on the fixture, and a push fails (no remote + pre-push hook).
+- [x] Determinism test: `test_deterministic_stages` — same (fixture revision, intent, seed) →
+      identical stage artifacts and report signature.

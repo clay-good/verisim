@@ -1,6 +1,9 @@
 # Headless CD pipeline (human-gated delivery)
 
-> Status: DRAFT — proposal + spec delta. No code yet.
+> Status: IMPLEMENTED (2026-06-14) — `src/verisim/pipeline/` (`model.py` + `cd.py`) +
+> `tests/test_pipeline.py` (10 tests, full suite green + `mypy` 728 files + `ruff` clean); console
+> script `verisim-cd` wired in `pyproject.toml`. Composes Changes 1–5 behind one ordered, fail-safe,
+> network-isolated entry point that prepares and stops before the human-gated delivery.
 > One sentence: **chain the whole stack behind one local, network-isolated headless entry point —
 > intent → simulate → trace → evaluate invariants → oscillation check → prepare an unpushed
 > commit/patch + report — and stop for a human to confirm delivery.**

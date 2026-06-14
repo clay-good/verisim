@@ -31,6 +31,12 @@ eval = ["inspect_ai>=0.3"]
 system = []
 dev = ["pytest>=8", "ruff>=0.6", "mypy>=1.11", "build>=1.2"]
 
+[project.scripts]
+# The headless CD pipeline entry point (OpenSpec ``add-headless-cd-pipeline``): materialize a
+# fixture from a source repo and run the full intent→simulate→trace→evaluate→breaker→prepare loop,
+# stopping before the human-gated delivery. Pure standard library — pins no third-party dependency.
+verisim-cd = "verisim.pipeline.cd:main"
+
 [project.urls]
 Homepage = "https://github.com/clay-good/verisim"
 Specification = "https://github.com/clay-good/verisim/blob/main/SPEC.md"

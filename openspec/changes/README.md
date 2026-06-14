@@ -41,6 +41,10 @@ A small, real, **human-gated** prototype that proves the research claim:
 
 ## Spec status convention
 
-Every `proposal.md` carries a `> Status:` line. All six start `DRAFT`. Each `specs/<domain>/spec.md`
+Every `proposal.md` carries a `> Status:` line. **All six are now `IMPLEMENTED`** (2026-06-14) —
+the full chain ships: fixture → graph adapter → trace oracle → synthesized-edge feedback →
+oscillation breaker → the headless CD pipeline (`src/verisim/pipeline/`, console script
+`verisim-cd`) that composes them behind one ordered, fail-safe, network-isolated, human-gated entry
+point. Each `specs/<domain>/spec.md`
 uses the standard OpenSpec delta headers (`## ADDED Requirements`, `### Requirement:`,
 `#### Scenario:` with GIVEN/WHEN/THEN). Tasks are checklists with explicit verification steps.
