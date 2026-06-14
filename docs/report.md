@@ -3016,6 +3016,35 @@ trained in `E_oracle` / `E_grounded` / `E_free`, all evaluated in reality. The r
   over all four arms on the worst-case-omitter substrate; the per-world trained arms already closed
   the rigor gap; ~3 min).
 
+- **The generative test — the unified framework *predicts* a defense for a danger it never saw
+  (SPEC-22 / CU22 / H115 — SUPPORTED, every prediction confirmed).** CU21 *unified four results we
+  already had*; the honest skeptic calls that a post-hoc fit, and a theory must **predict**. CU22
+  applies the CU21 `unified_targeting` engine *verbatim* to a danger the whole CU10–CU21 arc never
+  studied — **availability**, the third leg of the CIA triad: an automated containment /
+  incident-response agent must not cause a **self-inflicted outage** (execute a
+  `link_down`/`host_down`/`svc_down`/`fw_deny` that disconnects a critical work service from the
+  clients that need it — `can_reach` flipping `True → False` for a required pair; like CU17 the
+  surface is semantic and multi-hop, the reachability **closure**, not an action class). The
+  framework's `covers` invariant is used as a **model-free, a-priori predictor**: walk the oracle
+  trajectory and check whether a candidate target fires on every attack in the arsenal, *before
+  running a single deployment*. Carry over the existing catalogue and let `covers` predict each fate.
+  **Committed run (200 deployments × horizon 48, worst-case omitter, ~80 s):** the framework-*derived*
+  **disconnect-closure** (`target = realizes`) is `covers=True` — safe and un-gameable (**0.000
+  random / 0.000 adversarial**) at **2.94 calls = 16.3× cheaper** than the full oracle (48);
+  **connect-to-jewel** (CU10) and **exposure-closure** (CU17, the seductive same-world cousin, wrong
+  polarity) both `covers=False` → leak (adversarial **1.000**); a **syntactic disconnect** rule
+  `covers=False` → looks safe in-distribution (**0.020**) but leaks through multi-hop intermediates
+  (adversarial **0.195**); the uniform knee is a mirage (adversarial **1.000** at ρ=0.5), model
+  self-targeting fails (**1.000**), the perfect model self-governs (**0.000**). Every prediction
+  confirmed cell for cell — because un-gameability is a *theorem of coverage*, the run is not a fit, it
+  is the theorem instantiated on an unseen danger. **The unified framework is generative: it predicts
+  the covering defense, and which seductive ones leak, for dangers it has never studied.**
+
+  ![SPEC-22 CU22 / H115: the generative test, two panels. Left — the worst-case cost/safety frontier on a danger the framework never saw (availability / self-inflicted outage): adversarial breach rate vs mean oracle calls per deployment. The uniform blind clock (purple) is flat at 1.0 until the full oracle; the carried-over CU10 connect and CU17 exposure targets are stuck at adversarial breach 1.0 (covers=False, predicted a priori); the syntactic disconnect target leaks adversarially at 0.195 and overpays at 8.8 calls; only the framework-derived disconnect-closure (green star) is in the safe-and-cheap corner — zero adversarial breach at 2.9 calls, 16× cheaper than the full oracle. Right — prediction vs measurement: per candidate the a-priori covers verdict (covers check for the derived closure, covers cross for the three carried-over targets) above paired random and adversarial breach bars. Every covers=False target leaks; the one covers=True target is 0/0. The framework predicted each fate before a single deployment ran](../figures/cu22_availability_targeting.png)
+
+  Reproduce: `python -m verisim.experiments.cu22_availability_targeting` (torch-free, no checkpoint;
+  the CU21 engine applied verbatim to a new danger; ~80 s).
+
 - **The distributed recession test — is the structural-first recession (H87) universal? NO (a refinement).**
   SPEC-21's H87 says the load-bearing frontier recedes *structural-first* with scale — structure tasks
   fall below the load-bearing threshold first, content tasks persist. But on host/network the structure
