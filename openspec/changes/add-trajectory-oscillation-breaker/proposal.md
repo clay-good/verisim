@@ -1,6 +1,8 @@
 # Trajectory-oscillation circuit breaker (detect-and-halt)
 
-> Status: DRAFT — proposal + spec delta. No code yet.
+> Status: IMPLEMENTED (2026-06-14) — `src/verisim/safety/` + `tests/test_safety_breaker.py`
+> (12 tests, all green; full `mypy`/`ruff` clean). The breaker consumes a `PlanningTransition`
+> stream (the Change-6 loop is its producer); shipped and verified standalone.
 > One sentence: **watch the planning loop's own state transitions for oscillation and repetitive
 > edits; on breach, freeze the loop and drop the in-memory speculative rollout, then surface a
 > recommended workspace rollback for a human to confirm — never an autonomous git/file reset.**
