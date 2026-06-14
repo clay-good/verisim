@@ -1,0 +1,85 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://raw.githubusercontent.com/clay-good/verisim/main/schemas/verisim-feedback-v1.json",
+  "title": "Verisim Synthesized-Edge Feedback",
+  "description": "Contract-mediated payload of candidate synthesized call edges that Verisim's runtime traces recovered against OpenLore's static call graph. Additive and provenance-labeled only: every edge is confidence='synthesized', synthesizedBy='verisim-runtime', and evidence-bearing. OpenLore (or a local validator stand-in) ingests this on its own terms; Verisim never writes OpenLore's database. Schema version 1.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["version", "fixtureSourceSha", "generatedAgainst", "edges", "findings", "dropped"],
+  "properties": {
+    "version": { "const": "verisim-feedback-v1" },
+    "fixtureSourceSha": {
+      "type": ["string", "null"],
+      "description": "The fixture source revision the traces pertain to, for attribution to a known source state."
+    },
+    "generatedAgainst": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["dbContentHash", "schemaVersion"],
+      "description": "Pins the payload to the exact static graph state it was diffed against, so an ingest can detect a payload computed against a different graph.",
+      "properties": {
+        "dbContentHash": { "type": "string" },
+        "schemaVersion": { "type": "integer" }
+      }
+    },
+    "edges": {
+      "type": "array",
+      "description": "Candidate synthesized edges. Each conforms to OpenLore's CallEdge shape plus an evidence block.",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "callerId",
+          "calleeId",
+          "calleeName",
+          "file",
+          "line",
+          "kind",
+          "callType",
+          "confidence",
+          "synthesizedBy",
+          "evidence"
+        ],
+        "properties": {
+          "callerId": { "type": "string", "description": "OpenLore node id of the call site (filepath::name)." },
+          "calleeId": { "type": "string", "description": "OpenLore node id of the invoked node." },
+          "calleeName": { "type": "string" },
+          "file": { "type": "string", "description": "Caller file path (repo-relative)." },
+          "line": {
+            "type": ["integer", "null"],
+            "description": "Always null: a runtime exec has no source-level call-site line."
+          },
+          "kind": { "const": "calls" },
+          "callType": {
+            "type": ["string", "null"],
+            "description": "Always null: no AST call shape behind a subprocess invocation."
+          },
+          "confidence": { "const": "synthesized" },
+          "synthesizedBy": { "const": "verisim-runtime" },
+          "evidence": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["traceAction", "fixtureSourceSha", "execCommand", "fidelity"],
+            "description": "Why the edge is claimed: the runtime trace that witnessed the invocation.",
+            "properties": {
+              "traceAction": { "type": "string" },
+              "fixtureSourceSha": { "type": ["string", "null"] },
+              "execCommand": { "type": "string" },
+              "fidelity": { "type": "string", "enum": ["full", "degraded"] }
+            }
+          }
+        }
+      }
+    },
+    "findings": {
+      "type": "array",
+      "description": "Secondary architectural-invariant findings (reserved; empty in the prototype).",
+      "items": { "type": "object" }
+    },
+    "dropped": {
+      "type": "integer",
+      "minimum": 0,
+      "description": "Count of runtime invocations that could not be anchored to a known node (precision over recall; surfaced, not silently discarded)."
+    }
+  }
+}

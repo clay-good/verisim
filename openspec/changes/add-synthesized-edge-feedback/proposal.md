@@ -1,6 +1,11 @@
 # Contract-mediated synthesized-edge feedback
 
-> Status: DRAFT — proposal + spec delta. No code yet.
+> Status: IMPLEMENTED — `src/verisim/bridge/feedback.py`, `schemas/verisim-feedback-v1.json`,
+> `docs/openlore-ingest-contract.md`, tests in `tests/test_feedback.py` (17 tests, all green;
+> full suite + bare `mypy` + `ruff` clean). The secondary architectural-invariant **findings**
+> path is reserved (an empty, schema-present `findings[]` slot), not built — the primary
+> missed-edge payload is what ships. OpenLore-side ingest remains a cross-repo dependency, stood
+> in for by the local `validate_payload`.
 > One sentence: **when Verisim's runtime traces reveal a call the static graph missed, emit a
 > versioned, `synthesized_by`-conformant payload that OpenLore can ingest and integrate on its
 > own terms — never a direct write into OpenLore's database.**
