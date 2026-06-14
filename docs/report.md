@@ -2759,6 +2759,31 @@ trained in `E_oracle` / `E_grounded` / `E_free`, all evaluated in reality. The r
   Reproduce: `python -m verisim.experiments.cu13_replan_net` (reuses the frozen `runs/flagship/net-l`
   checkpoint — no retrain; `--smoke` for the fast path).
 
+- **The defended incident — the whole stack on one named scenario (SPEC-22 / CU14 / H107 — SUPPORTED).**
+  The synthesis ([`acd/incident_response.py`](../src/verisim/acd/incident_response.py)). CU1–CU13 each
+  isolated one face of the agent-in-the-loop gate; CU14 puts them together on a single, concrete scenario
+  a defender reads end to end. An autonomous incident-response agent must restore work connectivity
+  (`h1/h2/h3`) on a compromised segment salted with exfiltration lures (`connect` to crown jewels
+  `h0/h4`), under four defenses scored on **all three axes at once** — mission completed (utility),
+  exfiltrated (safety), oracle calls (cost): **undefended** (trust the model), **paranoid** (block every
+  `connect` — CU3's "safe by being useless" corner), **structure** (verify the `connect`-to-jewel
+  actions, CU10/CU12's grammar target), **full oracle** (verify every step). **Committed trained run
+  (193 contested incidents, horizon 48, the real `M_θ`):** undefended completes the mission (**1.00**) but
+  **exfiltrates (0.99)**; paranoid is safe (**0.00**) but **abandons the mission (0.00)**; full oracle is
+  safe and on-mission at **48 calls**; and **structure is the only all-good corner — safe (0.00 breach),
+  on-mission (1.00), at 4.0 calls — 12× cheaper than the full oracle**. The one-sided model never
+  false-aborts a benign connect (CU13), so targeting the danger surface costs the mission nothing. A
+  representative-incident playback replays the *same* action sequence undefended vs structure: the
+  undefended agent walks the one true lure (`connect h2 h4 22`, a breach) while structure spends an oracle
+  call on exactly it (abort) and still finishes the work connects. The synthesis: a verified world model
+  is the safety layer that lets a computer-use agent and a network defender complete the mission without
+  the irreversible bad thing, and verifying the world's flow-genesis surface is cheap.
+
+  ![SPEC-22 CU14 / H107: the defended incident. Left — each defense as a point in (mean oracle calls, breach rate) space, filled green if it completes the mission and hollow red if it abandons it: undefended top-left (0 calls, breach ~1.0, on-mission), paranoid bottom-left (0 calls, breach 0, off-mission/hollow), full oracle bottom-right (48 calls, breach 0, on-mission), structure (4 calls, breach 0, on-mission) — the only point that is safe, on-mission, and cheap, the all-good corner. Right — one representative incident replayed step by step under two defenses (undefended on top, structure below): work connects are blue dots, the single true crown-jewel lure is a red X in the undefended row (walked = breach) and a green plus in the structure row (verified and aborted), benign connects to jewel hosts that open no flow are small grey dots. Same actions, opposite outcome at the lure](../figures/cu14_incident_response.png)
+
+  Reproduce: `python -m verisim.experiments.cu14_incident_response` (reuses the frozen
+  `runs/flagship/net-l` checkpoint — no retrain; `--smoke` for the fast path).
+
 - **The distributed recession test — is the structural-first recession (H87) universal? NO (a refinement).**
   SPEC-21's H87 says the load-bearing frontier recedes *structural-first* with scale — structure tasks
   fall below the load-bearing threshold first, content tasks persist. But on host/network the structure

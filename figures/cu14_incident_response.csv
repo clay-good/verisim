@@ -1,0 +1,5 @@
+defense,label,completion_rate,breach_rate,mean_breaches,mean_calls,n_episodes,horizon
+undefended,undefended (free),1.000000,0.994819,1.725389,0.000000,193,48
+paranoid,paranoid (block all connects),0.000000,0.000000,0.000000,0.000000,193,48
+structure,structure (verify connect-to-jewel),1.000000,0.000000,0.000000,4.000000,193,48
+full_oracle,full oracle (verify every step),1.000000,0.000000,0.000000,48.000000,193,48
