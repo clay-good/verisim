@@ -19,6 +19,33 @@ SHALL deduplicate candidates against the static graph, including edges already l
 - **WHEN** the trace is diffed
 - **THEN** no candidate edge is produced for that call
 
+### Requirement: RuntimeInvariantFindings
+
+The system SHALL, when one or more architectural invariants are declared, classify a runtime path
+that crosses a forbidden layer boundary as a candidate **finding** and SHALL place such findings in
+the payload's `findings[]` slot, distinct from `edges[]`. A finding SHALL carry the violated
+invariant's name, the offending invocation's endpoints, and the same runtime evidence an edge
+carries, and SHALL be labeled `synthesizedBy = 'verisim-runtime'`. A finding SHALL be reported
+whether or not the violating edge already exists in the static graph (the invariant concerns the
+runtime path, not edge novelty). With no invariants declared, the `findings[]` slot SHALL be empty.
+
+#### Scenario: A runtime path crossing a forbidden boundary becomes a finding
+- **GIVEN** a declared invariant forbidding a caller layer from invoking a callee layer
+- **AND** a runtime path from a node in the caller layer to a node in the callee layer
+- **WHEN** the trace is diffed against the invariant
+- **THEN** exactly one finding is produced, evidence-bearing and labeled `verisim-runtime`
+
+#### Scenario: A non-violating path produces no finding
+- **GIVEN** a declared invariant and a runtime path that does not cross its forbidden boundary
+- **WHEN** the trace is diffed
+- **THEN** no finding is produced
+
+#### Scenario: An over-claiming finding is rejected
+- **GIVEN** a payload whose finding references a node id not present in the fixture graph, or is
+  mislabeled
+- **WHEN** the validator runs
+- **THEN** validation fails with an explicit unknown-node or provenance error
+
 ### Requirement: ContractConformantFeedbackPayload
 
 The system SHALL emit candidate edges as a versioned `verisim-feedback-v1` JSON payload, never as

@@ -4,10 +4,16 @@
 - [x] Implement a diff of a `RuntimeTrace` against the static `CodeGraph`: runtime calls with no
       matching static edge → candidate synthesized edges. (`detect_candidates` in
       `src/verisim/bridge/feedback.py`)
-- [ ] (Secondary) Detect runtime paths that violate a declared architectural invariant →
-      candidate findings. **Reserved, not built:** the payload carries a `findings[]` slot (schema +
-      `FeedbackPayload.findings`, empty in the prototype) so the invariant detector has a place to
-      land without a format change; the primary missed-edge path is what this change ships.
+- [x] (Secondary) Detect runtime paths that violate a declared architectural invariant →
+      candidate findings. (`detect_findings` in `src/verisim/bridge/feedback.py`: a
+      `LayerInvariant` is a one-directional forbidden layer dependency by repo-relative file-path
+      prefix; each resolved runtime invocation entrypoint→callee that crosses it becomes an
+      evidence-bearing `RuntimeFinding` landing in the payload's `findings[]` slot, deduped by
+      `(invariant, caller, callee)`. `build_feedback_payload(..., invariants=...)` populates the
+      slot; with no invariants it stays empty. The slot/schema/`FeedbackPayload.findings` reserved
+      by the primary change are now filled — no format change. A finding is reported even when the
+      edge is already static, since the invariant is about the runtime *path*, not edge novelty —
+      what distinguishes it from a missed-edge candidate.)
 - [x] Deduplicate against the static graph, including pre-existing `synthesized` edges.
       (`static_pairs` set is built from all `graph.edges`; tested by
       `test_pre_existing_synthesized_edge_is_not_re_proposed`)

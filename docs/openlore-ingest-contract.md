@@ -34,7 +34,13 @@ A single `verisim-feedback-v1` JSON document conforming to
   (`callerId`, `calleeId`, `calleeName`, `file`, `line`, `kind`, `callType`, `confidence`,
   `synthesizedBy`) plus an `evidence` block (`traceAction`, `fixtureSourceSha`, `execCommand`,
   `fidelity`).
-- `findings[]` — reserved for secondary architectural-invariant findings (empty in the prototype).
+- `findings[]` — secondary **architectural-invariant findings**: runtime paths that crossed a
+  declared forbidden layer boundary. Each carries the rule name (`invariant`), the offending
+  invocation (`callerId`, `calleeId`, `calleeName`, `callerFile`, `calleeFile`), `kind`
+  (`"layer-violation"`), `synthesizedBy = 'verisim-runtime'`, and the same `evidence` block as an
+  edge. Empty unless invariants were declared. A finding is **not** an edge — it reports a violation
+  for human/agent review, never a new call relationship to synthesize — so it is ingested (if at all)
+  as a separate concern, never written into the `edges` table.
 - `dropped` — count of runtime invocations Verisim could not anchor to a node (informational).
 
 ## Validation (reject, never best-effort)
@@ -44,10 +50,11 @@ The ingest **must fail closed**, mirroring Verisim's `validate_payload` stand-in
 1. **Version** — exactly `verisim-feedback-v1`, else reject.
 2. **Provenance label** — every edge must have `confidence == 'synthesized'` and
    `synthesizedBy == 'verisim-runtime'`. An edge claiming a direct-resolution confidence is an
-   over-claim and must be rejected.
-3. **Node anchoring** — every `callerId` and `calleeId` must resolve to a **known node** by stable
-   id. An edge referencing an unknown node is rejected (the unknown-node error). This is the
-   load-bearing guard: OpenLore only accepts edges it can anchor.
+   over-claim and must be rejected. Every **finding** must likewise carry
+   `synthesizedBy == 'verisim-runtime'`.
+3. **Node anchoring** — every edge **and finding** `callerId` / `calleeId` must resolve to a
+   **known node** by stable id. A reference to an unknown node is rejected (the unknown-node error).
+   This is the load-bearing guard: OpenLore only accepts edges and findings it can anchor.
 4. **Graph-state match** — `generatedAgainst` should agree with the live graph (see above).
 
 ## Additive write (through the existing synthesized-edge path)
@@ -68,7 +75,8 @@ Accepted edges are written through OpenLore's **existing** synthesized-edge inse
 |---|---|
 | `version != "verisim-feedback-v1"` | reject whole payload |
 | edge `confidence != "synthesized"` or `synthesizedBy != "verisim-runtime"` | reject edge (mislabel) |
-| `callerId` or `calleeId` not a known node | reject edge (unknown-node) |
+| finding `synthesizedBy != "verisim-runtime"` | reject finding (mislabel) |
+| edge/finding `callerId` or `calleeId` not a known node | reject (unknown-node) |
 | `generatedAgainst` does not match the live graph | reject or re-diff (stale) |
 | duplicate of an existing edge | no-op (idempotent) |
 

@@ -23,14 +23,17 @@ import pytest
 from verisim.bridge import (
     EDGE_CONFIDENCE,
     FEEDBACK_SCHEMA_VERSION,
+    FINDING_KIND,
     SYNTHESIZED_BY,
     CallEdge,
     CodeGraph,
     CodeNode,
     FeedbackError,
     FeedbackValidationError,
+    LayerInvariant,
     build_feedback_payload,
     detect_candidates,
+    detect_findings,
     validate_payload,
     write_feedback,
 )
@@ -376,3 +379,122 @@ def test_validator_rejects_missing_fields() -> None:
     del data["edges"][0]["evidence"]
     with pytest.raises(FeedbackValidationError, match="missing required fields"):
         validate_payload(data, graph)
+
+
+# --- RuntimeInvariantFindings (secondary architectural-invariant path) --------------------------
+
+# An invariant forbidding ``app/main.py`` from invoking ``app/plugin.py`` — the runtime path
+# ``main`` → ``run`` (which lives in ``app/plugin.py``) crosses it.
+NO_MAIN_TO_PLUGIN = LayerInvariant(
+    name="no_main_to_plugin",
+    forbidden_caller_prefix="app/main.py",
+    forbidden_callee_prefix="app/plugin.py",
+    description="main must not reach the plugin layer at runtime",
+)
+
+
+def test_runtime_path_violating_an_invariant_becomes_one_finding() -> None:
+    """Scenario: a runtime path that crosses a forbidden layer boundary yields one finding."""
+    graph = _graph()
+    findings = detect_findings(
+        _trace(_exec("app/main.py"), _exec("app/plugin.py")), graph, [NO_MAIN_TO_PLUGIN]
+    )
+    assert len(findings) == 1
+    f = findings[0]
+    assert f.invariant == "no_main_to_plugin"
+    assert f.caller_id == MAIN.id and f.callee_id == RUN.id
+    assert f.callee_name == "run"
+    assert f.caller_file == "app/main.py" and f.callee_file == "app/plugin.py"
+    assert f.kind == FINDING_KIND == "layer-violation"
+    assert f.synthesized_by == SYNTHESIZED_BY == "verisim-runtime"
+    assert f.evidence.trace_action == "run-app"
+    assert f.evidence.fixture_source_sha == "feed1234"
+    assert f.evidence.fidelity == FIDELITY_FULL
+
+
+def test_non_violating_runtime_path_yields_no_finding() -> None:
+    """A runtime path that does not cross the forbidden boundary produces no finding."""
+    graph = _graph()
+    # main → helper (app/util.py) is not forbidden by the no_main_to_plugin rule.
+    findings = detect_findings(
+        _trace(_exec("app/main.py"), _exec("app/util.py")), graph, [NO_MAIN_TO_PLUGIN]
+    )
+    assert findings == []
+
+
+def test_finding_is_reported_even_when_edge_is_already_static() -> None:
+    """A finding is about the runtime *path*, not edge novelty — reported even for a known edge.
+
+    This is what distinguishes a finding from a missed-edge candidate: the same path that produces
+    *no* candidate (because the edge is already in the static graph) still produces a finding.
+    """
+    graph = _graph(edges=(_edge(MAIN.id, RUN.id, "run"),))  # main→run known statically
+    trace = _trace(_exec("app/main.py"), _exec("app/plugin.py"))
+    candidates, _ = detect_candidates(trace, graph)
+    assert candidates == []  # not re-proposed as an edge
+    findings = detect_findings(trace, graph, [NO_MAIN_TO_PLUGIN])
+    assert [f.callee_id for f in findings] == [RUN.id]  # but still a violation
+
+
+def test_no_invariants_and_degraded_trace_yield_no_findings() -> None:
+    """No declared invariants, or a degraded trace, yields no findings."""
+    graph = _graph()
+    assert detect_findings(_trace(_exec("app/main.py"), _exec("app/plugin.py")), graph, []) == []
+    degraded = _trace(_exec("app/main.py"), _exec("app/plugin.py"), fidelity=FIDELITY_DEGRADED)
+    assert detect_findings(degraded, graph, [NO_MAIN_TO_PLUGIN]) == []
+
+
+def test_payload_findings_are_populated_deduped_and_idempotent() -> None:
+    """Scenario: declared invariants populate ``findings[]``, deduped across traces, byte-stable."""
+    graph = _graph()
+    traces = [
+        _trace(_exec("app/main.py"), _exec("app/plugin.py"), action="t1"),
+        _trace(_exec("app/main.py"), _exec("app/plugin.py"), action="t2"),  # same violating path
+    ]
+    p1 = build_feedback_payload(traces, graph, invariants=[NO_MAIN_TO_PLUGIN])
+    p2 = build_feedback_payload(traces, graph, invariants=[NO_MAIN_TO_PLUGIN])
+    assert p1.to_json() == p2.to_json()  # idempotent
+    assert len(p1.findings) == 1  # cross-trace dedup
+    finding = json.loads(p1.to_json())["findings"][0]
+    assert finding["invariant"] == "no_main_to_plugin"
+    assert finding["calleeId"] == RUN.id
+    assert finding["kind"] == "layer-violation"
+    assert finding["synthesizedBy"] == "verisim-runtime"
+    assert finding["evidence"]["fidelity"] == "full"
+
+
+def test_payload_findings_empty_without_invariants() -> None:
+    """With no declared invariants the slot stays empty — the missed-edge payload alone."""
+    graph = _graph()
+    payload = build_feedback_payload([_trace(_exec("app/main.py"), _exec("app/plugin.py"))], graph)
+    assert payload.findings == ()
+    assert json.loads(payload.to_json())["findings"] == []
+
+
+def test_validator_accepts_and_guards_findings() -> None:
+    """The validator accepts a well-formed findings payload and rejects over-claiming ones."""
+    graph = _graph()
+    payload = build_feedback_payload(
+        [_trace(_exec("app/main.py"), _exec("app/plugin.py"))],
+        graph,
+        invariants=[NO_MAIN_TO_PLUGIN],
+    )
+    validate_payload(payload, graph)  # well-formed with findings → must not raise
+
+    # an over-claiming finding referencing a node not in the fixture graph
+    data = payload.to_dict()
+    data["findings"][0]["calleeId"] = "app/nowhere.py::ghost"
+    with pytest.raises(FeedbackValidationError, match="unknown-node"):
+        validate_payload(data, graph)
+
+    # a mislabeled finding (wrong provenance)
+    data2 = payload.to_dict()
+    data2["findings"][0]["synthesizedBy"] = "some-rule"
+    with pytest.raises(FeedbackValidationError, match="synthesizedBy"):
+        validate_payload(data2, graph)
+
+    # a finding missing a required field
+    data3 = payload.to_dict()
+    del data3["findings"][0]["evidence"]
+    with pytest.raises(FeedbackValidationError, match="missing required fields"):
+        validate_payload(data3, graph)

@@ -34,6 +34,15 @@ side). The trace's flat exec list carries no parent-pid linkage, so every later 
 attributed conservatively to the step entrypoint rather than guessed into a chain — honest about
 what the surface can and cannot establish.
 
+The secondary discrepancy class: **architectural-invariant findings.** Given declared
+:class:`LayerInvariant` rules (one-directional forbidden layer dependencies by repo-relative
+file-path prefix), :func:`detect_findings` flags each resolved runtime invocation entrypoint→callee
+that crosses a forbidden boundary as a :class:`RuntimeFinding` — evidence-bearing like a candidate
+edge, but landing in the payload's ``findings[]`` slot rather than ``edges[]``. A finding is *not* a
+proposed call edge: it asserts a declared invariant was violated, and is reported whether or not the
+edge already exists statically (the invariant concerns the runtime *path*, not edge novelty). With
+no invariants declared the slot stays empty — the default missed-edge payload, format unchanged.
+
 Boundaries this module holds:
 
   - **Never writes ``call-graph.db``.** It reads the graph and writes a *payload file*; OpenLore (or
@@ -48,12 +57,13 @@ Boundaries this module holds:
 from __future__ import annotations
 
 import json
+from collections.abc import Sequence
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
 from verisim.fixture import DEFAULT_SOURCE_ROOT
-from verisim.trace.model import RuntimeTrace
+from verisim.trace.model import ExecEvent, RuntimeTrace
 
 from .graph import CodeGraph, CodeNode
 
@@ -68,6 +78,12 @@ FEEDBACK_SCHEMA_VERSION = "verisim-feedback-v1"
 EDGE_CONFIDENCE = "synthesized"
 SYNTHESIZED_BY = "verisim-runtime"
 EDGE_KIND = "calls"
+
+# The kind every architectural-invariant finding carries: a runtime path crossed a forbidden layer
+# boundary. A *finding* is not an edge — it asserts a declared invariant was violated, not that a
+# new call relationship should be synthesized — so it lands in the payload's ``findings[]`` slot,
+# never ``edges[]``.
+FINDING_KIND = "layer-violation"
 
 
 class FeedbackError(RuntimeError):
@@ -148,6 +164,77 @@ class CandidateEdge:
 
 
 @dataclass(frozen=True, slots=True)
+class LayerInvariant:
+    """A declared architectural invariant: a one-directional forbidden layer dependency.
+
+    A runtime invocation from a node whose ``file_path`` starts with ``forbidden_caller_prefix`` to
+    one whose ``file_path`` starts with ``forbidden_callee_prefix`` violates the rule. Prefix
+    matching keeps the rule expressible directly against OpenLore's repo-relative ``file_path``
+    values without a dependency on a richer module system — the same shape the pipeline's
+    ``ArchInvariant`` uses, kept here so the bridge owns the runtime-evidence detector and the
+    payload contract together.
+    """
+
+    name: str
+    forbidden_caller_prefix: str
+    forbidden_callee_prefix: str
+    description: str = ""
+
+    def violated_by(self, caller: CodeNode, callee: CodeNode) -> bool:
+        """True iff a ``caller``→``callee`` invocation crosses this rule's forbidden boundary."""
+        return caller.file_path.startswith(
+            self.forbidden_caller_prefix
+        ) and callee.file_path.startswith(self.forbidden_callee_prefix)
+
+
+@dataclass(frozen=True, slots=True)
+class RuntimeFinding:
+    """A declared architectural invariant that a runtime path violated — a candidate *finding*.
+
+    The secondary discrepancy class (proposal §"What changes" item 1): not a missed call edge, but a
+    runtime invocation that crossed a forbidden layer boundary. It is evidence-bearing in the same
+    way a :class:`CandidateEdge` is — it carries the trace that witnessed the violating path — so
+    OpenLore (and a human) can audit *why* the violation is claimed. It is reported whether or not
+    the violating edge is already in the static graph: the invariant is about the runtime *path*,
+    not the edge's novelty (that is what distinguishes a finding from a missed-edge candidate).
+    """
+
+    invariant: str
+    caller_id: str
+    callee_id: str
+    callee_name: str
+    caller_file: str
+    callee_file: str
+    kind: str
+    synthesized_by: str
+    evidence: RuntimeEvidence
+
+    @property
+    def key(self) -> tuple[str, str, str]:
+        """The ``(invariant, caller_id, callee_id)`` identity used for dedup and stable ordering."""
+        return (self.invariant, self.caller_id, self.callee_id)
+
+    def to_payload_dict(self) -> dict[str, Any]:
+        """The camelCase finding dict for the ``findings[]`` slot, plus an evidence block."""
+        return {
+            "invariant": self.invariant,
+            "callerId": self.caller_id,
+            "calleeId": self.callee_id,
+            "calleeName": self.callee_name,
+            "callerFile": self.caller_file,
+            "calleeFile": self.callee_file,
+            "kind": self.kind,
+            "synthesizedBy": self.synthesized_by,
+            "evidence": {
+                "traceAction": self.evidence.trace_action,
+                "fixtureSourceSha": self.evidence.fixture_source_sha,
+                "execCommand": self.evidence.exec_command,
+                "fidelity": self.evidence.fidelity,
+            },
+        }
+
+
+@dataclass(frozen=True, slots=True)
 class FeedbackPayload:
     """A versioned ``verisim-feedback-v1`` payload of candidate synthesized edges.
 
@@ -163,7 +250,7 @@ class FeedbackPayload:
     generated_against_schema_version: int
     edges: tuple[CandidateEdge, ...]
     dropped: int
-    findings: tuple[dict[str, Any], ...] = ()
+    findings: tuple[RuntimeFinding, ...] = ()
 
     def to_dict(self) -> dict[str, Any]:
         """The serializable payload dict (camelCase edges, stable key order)."""
@@ -175,7 +262,7 @@ class FeedbackPayload:
                 "schemaVersion": self.generated_against_schema_version,
             },
             "edges": [e.to_payload_dict() for e in self.edges],
-            "findings": list(self.findings),
+            "findings": [f.to_payload_dict() for f in self.findings],
             "dropped": self.dropped,
         }
 
@@ -240,6 +327,42 @@ def _resolve_exec_to_node(
 # --- discrepancy detection ---------------------------------------------------------------------
 
 
+def _resolve_runtime_invocations(
+    trace: RuntimeTrace, graph: CodeGraph, root: Path | None
+) -> tuple[CodeNode | None, list[tuple[CodeNode, ExecEvent]], int]:
+    """The shared static↔dynamic resolution behind both detectors.
+
+    Returns the step **entrypoint** (the first fixture node the exec stream resolves to), each
+    *later* resolved ``(callee_node, exec_event)`` the entrypoint invoked at runtime, and the count
+    of post-entrypoint invocations that could not be anchored to a known node (**dropped**,
+    surfaced not silently discarded). Pre-entrypoint launchers (e.g. ``/bin/sh``) simply do not
+    resolve and are skipped. A self-invocation (callee == entrypoint) is dropped from the list.
+
+    Only ``full``-tier traces yield invocations: a ``degraded`` trace observed no syscall stream and
+    cannot witness an inter-program call, so it returns ``(None, [], 0)`` rather than a
+    low-confidence guess.
+    """
+    if trace.is_degraded():
+        return None, [], 0
+
+    entry: CodeNode | None = None
+    invocations: list[tuple[CodeNode, ExecEvent]] = []
+    dropped = 0
+    for ev in trace.exec_events:
+        node = _resolve_exec_to_node(ev.command, ev.args, graph, root)
+        if entry is None:
+            if node is not None:
+                entry = node
+            continue
+        if node is None:
+            dropped += 1
+            continue
+        if node.id == entry.id:
+            continue
+        invocations.append((node, ev))
+    return entry, invocations, dropped
+
+
 def detect_candidates(
     trace: RuntimeTrace,
     graph: CodeGraph,
@@ -258,31 +381,15 @@ def detect_candidates(
     cannot witness an inter-program call, so it returns ``([], 0)`` rather than a low-confidence
     guess.
     """
-    if trace.is_degraded():
-        return [], 0
-
     root = None if fixture_root is None else Path(fixture_root)
-    static_pairs = {(e.caller_id, e.callee_id) for e in graph.edges}
+    entry, invocations, dropped = _resolve_runtime_invocations(trace, graph, root)
+    if entry is None:
+        return [], dropped
 
-    entry: CodeNode | None = None
+    static_pairs = {(e.caller_id, e.callee_id) for e in graph.edges}
     candidates: list[CandidateEdge] = []
     seen_pairs: set[tuple[str, str]] = set()
-    dropped = 0
-
-    for ev in trace.exec_events:
-        node = _resolve_exec_to_node(ev.command, ev.args, graph, root)
-        if entry is None:
-            # The entrypoint itself must anchor; pre-entrypoint launchers (e.g. /bin/sh) simply do
-            # not resolve and are not yet candidates.
-            if node is not None:
-                entry = node
-            continue
-        if node is None:
-            # A post-entrypoint invocation we saw but cannot anchor — dropped, not emitted.
-            dropped += 1
-            continue
-        if node.id == entry.id:
-            continue
+    for node, ev in invocations:
         pair = (entry.id, node.id)
         if pair in static_pairs or pair in seen_pairs:
             continue
@@ -309,29 +416,97 @@ def detect_candidates(
     return candidates, dropped
 
 
+def detect_findings(
+    trace: RuntimeTrace,
+    graph: CodeGraph,
+    invariants: Sequence[LayerInvariant],
+    *,
+    fixture_root: str | Path | None = None,
+) -> list[RuntimeFinding]:
+    """Diff one runtime trace against declared architectural ``invariants`` into a list of findings.
+
+    For each *resolved* runtime invocation entrypoint→callee, emit a finding for every declared
+    invariant the pair violates (the entrypoint's ``file_path`` under the forbidden caller prefix,
+    the callee's under the forbidden callee prefix). Each finding is evidence-bearing — it carries
+    the trace that witnessed the violating path — and deduplicated by
+    ``(invariant, caller, callee)`` so a path that fires twice in one trace yields one finding.
+
+    Unlike :func:`detect_candidates`, a finding is reported **whether or not** the violating edge is
+    already in the static graph: the invariant is about the runtime *path*, not the edge's novelty.
+    Like edge detection, only ``full``-tier traces yield findings, and no invariants (or a degraded
+    trace) returns ``[]``.
+    """
+    if not invariants:
+        return []
+    root = None if fixture_root is None else Path(fixture_root)
+    entry, invocations, _ = _resolve_runtime_invocations(trace, graph, root)
+    if entry is None:
+        return []
+
+    findings: list[RuntimeFinding] = []
+    seen: set[tuple[str, str, str]] = set()
+    for node, ev in invocations:
+        for inv in invariants:
+            if not inv.violated_by(entry, node):
+                continue
+            key = (inv.name, entry.id, node.id)
+            if key in seen:
+                continue
+            seen.add(key)
+            findings.append(
+                RuntimeFinding(
+                    invariant=inv.name,
+                    caller_id=entry.id,
+                    callee_id=node.id,
+                    callee_name=node.name,
+                    caller_file=entry.file_path,
+                    callee_file=node.file_path,
+                    kind=FINDING_KIND,
+                    synthesized_by=SYNTHESIZED_BY,
+                    evidence=RuntimeEvidence(
+                        trace_action=trace.action_name,
+                        fixture_source_sha=trace.fixture_source_sha,
+                        exec_command=ev.command,
+                        fidelity=trace.fidelity,
+                    ),
+                )
+            )
+    return findings
+
+
 def build_feedback_payload(
     traces: list[RuntimeTrace] | tuple[RuntimeTrace, ...],
     graph: CodeGraph,
     *,
     fixture_root: str | Path | None = None,
     fixture_source_sha: str | None = None,
+    invariants: Sequence[LayerInvariant] = (),
 ) -> FeedbackPayload:
     """Aggregate traces into one idempotent ``verisim-feedback-v1`` payload.
 
     Candidates from every trace are deduplicated by ``(caller_id, callee_id)`` (first occurrence
     wins, keeping its evidence) and sorted by that pair, so the payload is byte-stable for a fixed
-    set of traces and graph. Drops accumulate across traces. This **only reads** the graph — it
-    never writes ``call-graph.db``; the database content hash is unchanged across the call.
+    set of traces and graph. Drops accumulate across traces. When ``invariants`` are declared, the
+    secondary architectural-invariant **findings** are collected the same way — deduplicated by
+    ``(invariant, caller, callee)`` and sorted — and land in the payload's ``findings[]`` slot; with
+    no invariants the slot stays empty (the default, the missed-edge payload alone). This **only
+    reads** the graph — it never writes ``call-graph.db``; the database content hash is unchanged
+    across the call.
     """
     by_pair: dict[tuple[str, str], CandidateEdge] = {}
+    by_finding: dict[tuple[str, str, str], RuntimeFinding] = {}
     dropped = 0
     for trace in traces:
         candidates, n_dropped = detect_candidates(trace, graph, fixture_root=fixture_root)
         dropped += n_dropped
         for cand in candidates:
             by_pair.setdefault(cand.pair, cand)
+        if invariants:
+            for finding in detect_findings(trace, graph, invariants, fixture_root=fixture_root):
+                by_finding.setdefault(finding.key, finding)
 
     edges = tuple(by_pair[p] for p in sorted(by_pair))
+    findings = tuple(by_finding[k] for k in sorted(by_finding))
     sha = fixture_source_sha
     if sha is None:
         for trace in traces:
@@ -346,6 +521,7 @@ def build_feedback_payload(
         generated_against_schema_version=graph.schema_version,
         edges=edges,
         dropped=dropped,
+        findings=findings,
     )
 
 
@@ -383,6 +559,17 @@ _REQUIRED_EDGE = (
     "synthesizedBy",
     "evidence",
 )
+_REQUIRED_FINDING = (
+    "invariant",
+    "callerId",
+    "calleeId",
+    "calleeName",
+    "callerFile",
+    "calleeFile",
+    "kind",
+    "synthesizedBy",
+    "evidence",
+)
 
 
 def _as_dict(payload: FeedbackPayload | dict[str, Any] | str) -> dict[str, Any]:
@@ -411,7 +598,9 @@ def validate_payload(payload: FeedbackPayload | dict[str, Any] | str, graph: Cod
         ``synthesizedBy == 'verisim-runtime'`` (an additive, Verisim-provenance edge, never an
         over-claim of a direct resolution);
       - every edge's ``callerId`` and ``calleeId`` resolve to a **known node** in ``graph`` — an
-        unknown-node reference is rejected, as OpenLore would refuse an edge it cannot anchor.
+        unknown-node reference is rejected, as OpenLore would refuse an edge it cannot anchor;
+      - every architectural-invariant **finding** (if any) is likewise correctly labeled
+        (``synthesizedBy == 'verisim-runtime'``) and anchored to known nodes.
 
     Returns ``None`` on success.
     """
@@ -427,6 +616,8 @@ def validate_payload(payload: FeedbackPayload | dict[str, Any] | str, graph: Cod
         raise FeedbackValidationError(f"payload missing required fields: {missing}")
     if not isinstance(data["edges"], list):
         raise FeedbackValidationError("payload 'edges' must be a list")
+    if not isinstance(data["findings"], list):
+        raise FeedbackValidationError("payload 'findings' must be a list")
 
     node_ids = {n.id for n in graph.nodes}
     for i, edge in enumerate(data["edges"]):
@@ -449,4 +640,22 @@ def validate_payload(payload: FeedbackPayload | dict[str, Any] | str, graph: Cod
                 raise FeedbackValidationError(
                     f"edge[{i}] {endpoint} {edge[endpoint]!r} is not a known node in the fixture "
                     "graph (unknown-node)"
+                )
+
+    for i, finding in enumerate(data["findings"]):
+        if not isinstance(finding, dict):
+            raise FeedbackValidationError(f"finding[{i}] is not an object")
+        absent = [k for k in _REQUIRED_FINDING if k not in finding]
+        if absent:
+            raise FeedbackValidationError(f"finding[{i}] missing required fields: {absent}")
+        if finding["synthesizedBy"] != SYNTHESIZED_BY:
+            raise FeedbackValidationError(
+                f"finding[{i}] synthesizedBy {finding['synthesizedBy']!r} "
+                f"must be {SYNTHESIZED_BY!r}"
+            )
+        for endpoint in ("callerId", "calleeId"):
+            if finding[endpoint] not in node_ids:
+                raise FeedbackValidationError(
+                    f"finding[{i}] {endpoint} {finding[endpoint]!r} is not a known node in the "
+                    "fixture graph (unknown-node)"
                 )

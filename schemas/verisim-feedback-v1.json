@@ -73,8 +73,44 @@
     },
     "findings": {
       "type": "array",
-      "description": "Secondary architectural-invariant findings (reserved; empty in the prototype).",
-      "items": { "type": "object" }
+      "description": "Secondary architectural-invariant findings: runtime paths that crossed a declared forbidden layer boundary. Empty unless invariants were declared. Each is evidence-bearing and provenance-labeled (synthesizedBy='verisim-runtime'), and is a finding (not an edge): it asserts a declared invariant was violated, never that a new call edge should be synthesized.",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "invariant",
+          "callerId",
+          "calleeId",
+          "calleeName",
+          "callerFile",
+          "calleeFile",
+          "kind",
+          "synthesizedBy",
+          "evidence"
+        ],
+        "properties": {
+          "invariant": { "type": "string", "description": "Name of the declared architectural invariant the runtime path violated." },
+          "callerId": { "type": "string", "description": "OpenLore node id of the runtime entrypoint (the violating caller)." },
+          "calleeId": { "type": "string", "description": "OpenLore node id of the invoked node (the forbidden callee)." },
+          "calleeName": { "type": "string" },
+          "callerFile": { "type": "string", "description": "Caller file path (repo-relative)." },
+          "calleeFile": { "type": "string", "description": "Callee file path (repo-relative)." },
+          "kind": { "const": "layer-violation" },
+          "synthesizedBy": { "const": "verisim-runtime" },
+          "evidence": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["traceAction", "fixtureSourceSha", "execCommand", "fidelity"],
+            "description": "Why the finding is claimed: the runtime trace that witnessed the violating path.",
+            "properties": {
+              "traceAction": { "type": "string" },
+              "fixtureSourceSha": { "type": ["string", "null"] },
+              "execCommand": { "type": "string" },
+              "fidelity": { "type": "string", "enum": ["full", "degraded"] }
+            }
+          }
+        }
+      }
     },
     "dropped": {
       "type": "integer",
