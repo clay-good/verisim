@@ -2842,6 +2842,35 @@ trained in `E_oracle` / `E_grounded` / `E_free`, all evaluated in reality. The r
   Reproduce: `python -m verisim.experiments.cu16_host_targeting` (torch-free; the worst-case content
   omitter stand-in runs in seconds, no checkpoint; `--smoke` for the fast path, `--recall` to dial it).
 
+- **The genesis-grammar boundary — target the danger's genesis, not a single action (SPEC-22 / CU17 / H110 — SUPPORTED).**
+  The whole targeting arc (CU10 cheap, CU11 un-gameable, CU12 knowledge-free, CU16 cross-world) rested
+  on one assumption it never examined: that danger is born on a single, syntactically visible action
+  class (the `connect` to a crown jewel). CU17 tests whether the targeting *principle* is a real result
+  or an artifact of that sparse grammar, by exhibiting a second, recognizable danger in the *same* world
+  with a genuinely richer genesis — **network-segmentation exposure**, a crown jewel becoming *reachable*
+  from an untrusted host (`can_reach` flipping `False → True`). Unlike an exfil flow, that reachability
+  is not born by a `connect`: it is opened by the *config* grammar — `svc_up`, `fw_allow`, `host_up`,
+  and above all `link_up` (a link completes a *path*, which is **multi-hop**, so a `link_up` between two
+  hosts that are *neither* the jewel can still expose it). The danger surface is therefore **semantic**
+  (reachability), not **syntactic** (an action class), and to enumerate it you must compute the
+  reachability *closure* — the SPEC-12 landmark-reachability machinery. On a worst-case content omitter
+  (200 segmented deployments, horizon 48): the cheap CU10–CU16 `connect` target **does not transfer** —
+  breach **1.000** (the free rate) at **3.86 calls**, a false sense of security; a *syntactic*
+  genesis-grammar target reaches near-zero random breach (**0.025**) but **leaks through multi-hop
+  intermediates** (adversarial breach **0.370** — an attacker exposes a jewel via a `host_up` of a
+  non-jewel relay it cannot name) and overpays (**13.72 calls**); only the *semantic* **reachability-
+  closure** target reaches the oracle's **0.000 breach, un-gameable (0.000 adversarial), at 4.17 calls —
+  11.5× cheaper than the full oracle**, dominating the syntactic target on *both* axes. The principle:
+  **target the danger's genesis grammar — compute its reachability closure (SPEC-12), do not
+  pattern-match an action class.** The cheapness of CU10–CU16 was a property of a *sparse* genesis
+  grammar, not magic; a richer danger needs a richer (but still bounded, still sub-oracle) target, and
+  getting the grammar wrong gives false security.
+
+  ![SPEC-22 CU17 / H110: the genesis-grammar boundary, two panels. Left — the cost/safety frontier under random timing: breach rate vs mean oracle calls per deployment. The uniform blind schedule (purple) only reaches zero breach at the full oracle (48 calls); the CU10–CU16 connect target (red X) is stuck at the free breach 1.0 while spending 3.9 calls (blind to the config genesis); the syntactic grammar target (orange diamond) reaches near-zero breach but at 13.7 calls (it overpays, verifying every link_up); the semantic reachability-closure target (green star) sits in the safe-and-cheap corner — zero breach at 4.2 calls, ~12× fewer than the full oracle. Right — the gameability axis: random vs adversarial breach per targeted schedule with calls annotated. Connect breaches at the free rate either way (1.0 / 1.0); the syntactic grammar target is near-safe on random workloads (0.025) but gameable (adversarial 0.37) — an adversary exposes a jewel through a multi-hop intermediate it cannot name; only closure is un-gameable (0 / 0)](../figures/cu17_segmentation_targeting.png)
+
+  Reproduce: `python -m verisim.experiments.cu17_segmentation_targeting` (torch-free; the worst-case
+  content omitter stand-in runs in ~20 s, no checkpoint; `--smoke` for the fast path).
+
 - **The distributed recession test — is the structural-first recession (H87) universal? NO (a refinement).**
   SPEC-21's H87 says the load-bearing frontier recedes *structural-first* with scale — structure tasks
   fall below the load-bearing threshold first, content tasks persist. But on host/network the structure

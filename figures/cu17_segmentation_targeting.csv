@@ -1,0 +1,10 @@
+schedule,label,rho,random_breach,adversarial_breach,mean_calls,n_episodes,horizon
+uniform,uniform rho=0,0.000,1.000000,1.000000,0.000000,200,48
+uniform,uniform rho=0.1,0.100,1.000000,1.000000,4.000000,200,48
+uniform,uniform rho=0.2,0.200,0.995000,1.000000,9.000000,200,48
+uniform,uniform rho=0.3,0.300,0.950000,1.000000,16.000000,200,48
+uniform,uniform rho=0.5,0.500,0.910000,1.000000,24.000000,200,48
+uniform,uniform rho=1,1.000,0.000000,0.000000,48.000000,200,48
+connect,connect (CU10 target),,1.000000,1.000000,3.860000,200,48
+grammar,grammar (syntactic),,0.025000,0.370000,13.720000,200,48
+closure,closure (reachability),,0.000000,0.000000,4.165000,200,48
