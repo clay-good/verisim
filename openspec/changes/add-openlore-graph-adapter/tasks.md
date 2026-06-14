@@ -1,7 +1,7 @@
 # Tasks — Read-only OpenLore call-graph adapter
 
-> Status: IMPLEMENTED (2026-06-14) — `src/verisim/bridge/` + `tests/test_bridge.py` (16 tests
-> green; ruff + bare mypy clean). Change 2 of the six is done.
+> Status: IMPLEMENTED (2026-06-14) — `src/verisim/bridge/` + `tests/test_bridge.py` (17 tests
+> green; ruff + bare mypy clean). Change 2 of the six is done. Verified against OpenLore 2.0.18.
 
 ## 1. Analysis trigger
 - [x] Implement a step that runs OpenLore's analyzer over a fixture (CLI/MCP), so the DB is
@@ -16,11 +16,13 @@
       is_hub), call edge (caller_id, callee_id, line, `confidence`, `kind`, `call_type`,
       `synthesizedBy`), class, optional cfg overlay. (`bridge/graph.py`: `CodeNode`, `CallEdge`,
       `CodeClass`, `CfgEntry`, `CodeGraph`.)
-- [x] Implement the MCP/CLI loader path (primary). **Honest scope:** the supported MCP surface
-      (`get_call_graph`) returns a *derived aggregate summary*, not the provenance-bearing edge
-      set, so it cannot be the full-graph loader; it is implemented as
-      `call_graph_summary_via_mcp` and used as the cross-check below. The provenance-bearing graph
-      is read from SQLite (the supported "fast path"), which is the only faithful source.
+- [x] Implement the MCP/CLI loader path (primary). The MCP contract has two faces (settled on
+      OpenLore 2.0.18, ran e2e): `subgraph_via_mcp` reads the **real call graph** (`get_subgraph`,
+      real per-edge relationships) after (re)building the index e2e via `analyze_codebase` in the
+      same session; `call_graph_summary_via_mcp` reads the **aggregate summary** (`get_call_graph`).
+      **Honest scope:** neither MCP face carries per-edge provenance
+      (`confidence`/`synthesized_by`) — that is SQLite-only — so SQLite is the canonical loader and
+      the MCP surface is the cross-check below.
 - [x] Implement the read-only SQLite fast path (read-only open), guarded by a `schema_version`
       compatibility check that fails closed on mismatch. (`load_code_graph` + `_open_readonly` +
       `_read_schema_version`; supported range 5–7, column-defensive across in-range schema drift.)
@@ -41,11 +43,13 @@
 - [x] Schema-mismatch test: an unsupported `schema_version` fails closed with a clear error.
       (`test_unsupported_schema_above_range_fails_closed`, `..._below_range_...`,
       `test_non_openlore_db_fails_closed`.)
-- [x] Parity test: MCP-path graph and SQL-path graph agree on counts for a fixture.
-      (`test_sql_read_agrees_with_supported_mcp_surface` — asserts the clean invariants:
-      internal-node count and entry-point count. The surface's `total_edges` is a derived expanded
-      count that diverges from the raw `edges` table and is recorded, not asserted — the finding
-      that motivates reading the provenance-bearing graph from SQLite, not the summary.)
+- [x] Parity test: MCP-path graph and SQL-path graph agree for a fixture. Two tests:
+      `test_sql_read_agrees_with_real_mcp_call_graph` — the **strong, real-graph** parity: the
+      actual `get_subgraph` edges (index built e2e) equal the SQLite read's internal edges exactly;
+      `test_sql_read_agrees_with_supported_mcp_aggregates` — the count-level invariants
+      (internal-node count, entry-point count). The summary's `total_edges` is a derived expanded
+      count and is recorded, not asserted — the finding that motivates reading the
+      provenance-bearing graph from SQLite, not the summary.
 - [x] Provenance test: a known `synthesized` edge round-trips with its `synthesizedBy` rule intact.
       (`test_synthesized_edge_provenance_is_preserved`,
       `test_all_edge_provenance_fields_preserved_verbatim`.)

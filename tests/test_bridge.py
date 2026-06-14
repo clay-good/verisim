@@ -27,6 +27,7 @@ from verisim.bridge import (
     call_graph_summary_via_mcp,
     load_code_graph,
     openlore_available,
+    subgraph_via_mcp,
 )
 
 # --- synthetic-DB helpers (OpenLore schema, no CLI required) ------------------------------------
@@ -402,12 +403,12 @@ def test_analyze_fixture_produces_loadable_openlore_db(tmp_path: Path) -> None:
 
 
 @_REQUIRES_OPENLORE
-def test_sql_read_agrees_with_supported_mcp_surface(tmp_path: Path) -> None:
-    """Task 4 parity: the canonical SQLite read matches OpenLore's supported MCP aggregates.
+def test_sql_read_agrees_with_supported_mcp_aggregates(tmp_path: Path) -> None:
+    """Task 4 parity (aggregates): the canonical SQLite read matches OpenLore's summary surface.
 
-    The supported surface reports a *derived* view, so the clean invariants are the internal-node
-    count and the entry-point count (verified empirically); its ``total_edges`` is an expanded
-    count that diverges from the raw ``edges`` table and is not asserted.
+    ``get_call_graph`` reports a *derived* view, so the clean invariants are the internal-node count
+    and the entry-point count (verified empirically); its ``total_edges`` is an expanded count that
+    diverges from the raw ``edges`` table and is not asserted.
     """
     repo = _make_git_repo(tmp_path)
     analyze_fixture(repo)
@@ -415,3 +416,23 @@ def test_sql_read_agrees_with_supported_mcp_surface(tmp_path: Path) -> None:
     summary = call_graph_summary_via_mcp(repo)
     assert len(graph.internal_nodes()) == summary.total_nodes
     assert len(graph.internal_entry_point_ids()) == summary.entry_point_count
+
+
+@_REQUIRES_OPENLORE
+def test_sql_read_agrees_with_real_mcp_call_graph(tmp_path: Path) -> None:
+    """Task 4 parity (real graph): the SQLite read's edges match OpenLore's real ``get_subgraph``.
+
+    The strong parity — not aggregate counts but the *actual* call edges. ``subgraph_via_mcp``
+    (re)builds the MCP graph index e2e (a version upgrade resets it) and returns the real edges; the
+    SQLite read's internal edges around the same function must equal them exactly.
+    """
+    repo = _make_git_repo(tmp_path)
+    analyze_fixture(repo)
+    graph = load_code_graph(analysis_db_path(repo))
+
+    mcp_edges = subgraph_via_mcp(repo, "main", direction="both", max_depth=1)
+    mcp_pairs = {e.as_pair() for e in mcp_edges}
+    sql_pairs = {p for p in graph.internal_edges_named() if "main" in (p[1], p[3])}
+
+    assert mcp_edges, "get_subgraph returned no real edges (index not built?)"
+    assert mcp_pairs == sql_pairs

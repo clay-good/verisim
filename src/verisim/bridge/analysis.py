@@ -10,14 +10,24 @@ Two narrow jobs that keep the call-graph read (in :mod:`verisim.bridge.graph`) h
     :class:`OpenLoreUnavailable` — a first-class, disclosed failure (the fixture module's
     ``GitUnavailable`` discipline), never a silent half-analysis.
 
-  - **Supported-surface cross-check** (:func:`call_graph_summary_via_mcp`) — read the call graph's
-    *aggregate summary* (node/edge counts, entry points, hubs) through OpenLore's **supported MCP
-    contract** (``get_call_graph`` over the stdio MCP server), independently of the raw-SQL read.
-    The full provenance-bearing edge set lives only in the SQLite ``edges`` table, so the SQLite
-    read is canonical; this cross-check confirms that canonical read agrees with the supported
-    contract on the aggregates the contract *does* expose — the honest, achievable form of the
-    proposal's MCP/SQL "parity" (a raw-SQL read that silently diverged from the supported surface
-    would be exactly the schema-drift hazard the schema guard defends against).
+  - **Supported-surface cross-check** — confirm the canonical SQLite read agrees with what
+    OpenLore's MCP contract serves, independently of the raw-SQL read (a raw read that silently
+    diverged from the supported surface would be the schema-drift hazard the guard defends against).
+    The MCP surface has two faces, both verified against the latest OpenLore (2.0.18):
+
+      * :func:`subgraph_via_mcp` — the **real call graph**. ``get_subgraph`` returns actual
+        per-edge ``caller``/``callee``/``kind``/``callType`` relationships (not an aggregate). It
+        reads an in-memory graph index that an OpenLore *version upgrade resets*, so the call must
+        first **(re)build the index e2e** via the ``analyze_codebase`` tool in the same MCP session
+        — exactly the "run it to generate" step. This is the strong parity: the real MCP edges
+        equal the SQLite read's internal edges.
+      * :func:`call_graph_summary_via_mcp` — the **aggregate summary**. ``get_call_graph`` returns
+        counts/hubs/entry-points (a *derived* view: its ``total_edges`` is an expanded count, not
+        the raw table size), used for the cheap count-level invariants.
+
+    Neither MCP face carries the per-edge **provenance** (``confidence``/``synthesized_by``) — that
+    lives only in the SQLite ``edges`` table — so the SQLite read remains the canonical loader and
+    the MCP surface is a cross-check, not a replacement.
 """
 
 from __future__ import annotations
@@ -69,6 +79,29 @@ class CallGraphSummary:
     total_edges: int
     entry_point_count: int
     hub_count: int
+
+
+@dataclass(frozen=True, slots=True)
+class McpEdge:
+    """A single real call edge from OpenLore's ``get_subgraph`` MCP surface.
+
+    Carries the actual call relationship (caller/callee plus their files and the call kind/type) but
+    **not** the ``confidence``/``synthesized_by`` provenance — that is SQLite-only. ``get_subgraph``
+    reports only internal endpoints (external call targets are excluded, matching the summary's
+    internal-node count).
+    """
+
+    caller: str
+    callee: str
+    caller_file: str
+    callee_file: str
+    kind: str | None
+    call_type: str | None
+
+    def as_pair(self) -> tuple[str, str, str, str]:
+        """The ``(caller_file, caller, callee_file, callee)`` identity, for set comparison with the
+        SQLite read's internal edges (``CodeGraph.internal_edges_named``)."""
+        return (self.caller_file, self.caller, self.callee_file, self.callee)
 
 
 def openlore_available() -> bool:
@@ -166,35 +199,33 @@ def _read_until_result(
             return msg
 
 
-def _mcp_request_summary(repo: Path) -> dict[str, object]:
-    """Speak the minimal MCP stdio handshake to OpenLore and return parsed ``get_call_graph`` JSON.
+class _McpSession:
+    """A minimal stdio MCP session against ``openlore mcp``: initialize once, then call tools.
 
-    Spawns ``openlore mcp`` (stdio transport), performs the initialize handshake, calls the
-    ``get_call_graph`` tool for ``repo``, and parses the tool's text payload. Raises
-    :class:`OpenLoreUnavailable` if the CLI is absent and :class:`BridgeError` on a protocol error.
+    Spawns one server process, performs the initialize handshake, and lets the caller issue several
+    ``tools/call`` requests on the same connection (the index ``analyze_codebase`` builds is held by
+    the server process, so the build and the query that uses it must share a session). Use as a
+    context manager so the process is always reaped. ``select`` bounds every read so a silent server
+    cannot hang the caller (POSIX; the prototype is macOS/Linux only).
     """
-    try:
-        proc = subprocess.Popen(
-            [OPENLORE_BIN, "mcp"],
-            cwd=str(repo),
-            stdin=subprocess.PIPE,
-            stdout=subprocess.PIPE,
-            stderr=subprocess.DEVNULL,
-            text=True,
-        )
-    except FileNotFoundError as exc:
-        raise OpenLoreUnavailable("openlore executable not found on PATH") from exc
 
-    def send(obj: dict[str, object]) -> None:
-        assert proc.stdin is not None
-        proc.stdin.write(json.dumps(obj) + "\n")
-        proc.stdin.flush()
-
-    try:
-        send(
+    def __init__(self, repo: Path) -> None:
+        try:
+            self._proc: subprocess.Popen[str] = subprocess.Popen(
+                [OPENLORE_BIN, "mcp", "--no-watch-auto"],
+                cwd=str(repo),
+                stdin=subprocess.PIPE,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.DEVNULL,
+                text=True,
+            )
+        except FileNotFoundError as exc:
+            raise OpenLoreUnavailable("openlore executable not found on PATH") from exc
+        self._next_id = 1
+        self._send(
             {
                 "jsonrpc": "2.0",
-                "id": 1,
+                "id": self._take_id(),
                 "method": "initialize",
                 "params": {
                     "protocolVersion": _MCP_PROTOCOL_VERSION,
@@ -203,54 +234,70 @@ def _mcp_request_summary(repo: Path) -> dict[str, object]:
                 },
             }
         )
-        send({"jsonrpc": "2.0", "method": "notifications/initialized"})
-        send(
+        self._send({"jsonrpc": "2.0", "method": "notifications/initialized"})
+
+    def __enter__(self) -> _McpSession:
+        return self
+
+    def __exit__(self, *_exc: object) -> None:
+        self.close()
+
+    def _take_id(self) -> int:
+        rid = self._next_id
+        self._next_id += 1
+        return rid
+
+    def _send(self, obj: dict[str, object]) -> None:
+        assert self._proc.stdin is not None
+        self._proc.stdin.write(json.dumps(obj) + "\n")
+        self._proc.stdin.flush()
+
+    def call(self, name: str, arguments: dict[str, object]) -> dict[str, object]:
+        """Call MCP tool ``name`` and return the parsed JSON payload of its text result."""
+        rid = self._take_id()
+        self._send(
             {
                 "jsonrpc": "2.0",
-                "id": 2,
+                "id": rid,
                 "method": "tools/call",
-                "params": {"name": "get_call_graph", "arguments": {"directory": str(repo)}},
+                "params": {"name": name, "arguments": arguments},
             }
         )
-        # Read responses line by line: the MCP server is long-lived (it does not exit after a call),
-        # so we read until the id=2 result arrives rather than waiting for the process to terminate.
-        # ``select`` bounds the wait so a silent server cannot hang the caller (POSIX; the prototype
-        # is macOS/Linux only).
-        call_result = _read_until_result(proc, request_id=2, deadline_s=_MCP_TIMEOUT_S)
-    finally:
-        proc.terminate()
+        msg = _read_until_result(self._proc, request_id=rid, deadline_s=_MCP_TIMEOUT_S)
+        if msg is None:
+            raise BridgeError(f"openlore mcp returned no result for {name}")
         try:
-            proc.wait(timeout=5)
+            result = msg["result"]
+            assert isinstance(result, dict)
+            content = result["content"]
+            assert isinstance(content, list)
+            first = content[0]
+            assert isinstance(first, dict)
+            parsed = json.loads(first["text"])
+        except (KeyError, IndexError, AssertionError, TypeError, json.JSONDecodeError) as exc:
+            raise BridgeError(f"unexpected MCP payload for {name}: {msg}") from exc
+        if not isinstance(parsed, dict):
+            raise BridgeError(f"MCP payload for {name} was not a JSON object")
+        return parsed
+
+    def close(self) -> None:
+        self._proc.terminate()
+        try:
+            self._proc.wait(timeout=5)
         except subprocess.TimeoutExpired:
-            proc.kill()
-
-    if call_result is None:
-        raise BridgeError("openlore mcp returned no get_call_graph result")
-
-    try:
-        result = call_result["result"]
-        assert isinstance(result, dict)
-        content = result["content"]
-        assert isinstance(content, list)
-        first = content[0]
-        assert isinstance(first, dict)
-        parsed = json.loads(first["text"])
-    except (KeyError, IndexError, AssertionError, TypeError, json.JSONDecodeError) as exc:
-        raise BridgeError(f"unexpected get_call_graph MCP payload: {call_result}") from exc
-    if not isinstance(parsed, dict):
-        raise BridgeError("get_call_graph payload was not a JSON object")
-    return parsed
+            self._proc.kill()
 
 
 def call_graph_summary_via_mcp(repo_path: str | Path) -> CallGraphSummary:
     """The call-graph aggregate summary via OpenLore's supported MCP surface (``get_call_graph``).
 
     Used to cross-check the canonical SQLite read against the supported contract on the aggregates
-    the contract exposes (node/edge counts, entry points). Raises :class:`OpenLoreUnavailable` if
+    the contract exposes (internal-node/entry-point counts). Raises :class:`OpenLoreUnavailable` if
     the CLI is absent and :class:`BridgeError` on a protocol error.
     """
     repo = Path(repo_path)
-    payload = _mcp_request_summary(repo)
+    with _McpSession(repo) as session:
+        payload = session.call("get_call_graph", {"directory": str(repo)})
 
     stats_obj = payload.get("stats", {})
     stats: dict[str, object] = stats_obj if isinstance(stats_obj, dict) else {}
@@ -265,6 +312,62 @@ def call_graph_summary_via_mcp(repo_path: str | Path) -> CallGraphSummary:
         entry_point_count=len(entries),
         hub_count=len(hubs),
     )
+
+
+def subgraph_via_mcp(
+    repo_path: str | Path,
+    function_name: str,
+    *,
+    direction: str = "both",
+    max_depth: int = 1,
+    build_index: bool = True,
+) -> tuple[McpEdge, ...]:
+    """The **real call graph** around ``function_name`` via OpenLore's ``get_subgraph`` MCP surface.
+
+    Returns the actual call edges (caller/callee/kind/callType) — not an aggregate. Because an
+    OpenLore version upgrade resets the in-memory graph index ``get_subgraph`` reads,
+    ``build_index`` (default) first (re)builds it e2e via the ``analyze_codebase`` tool **in the
+    same session**; pass ``build_index=False`` only when a fresh index is known to exist. Raises
+    :class:`OpenLoreUnavailable` if the CLI is absent and :class:`BridgeError` on a protocol error.
+    """
+    repo = Path(repo_path)
+    with _McpSession(repo) as session:
+        if build_index:
+            session.call("analyze_codebase", {"directory": str(repo), "force": True})
+        payload = session.call(
+            "get_subgraph",
+            {
+                "directory": str(repo),
+                "functionName": function_name,
+                "direction": direction,
+                "maxDepth": max_depth,
+            },
+        )
+
+    if "error" in payload:
+        raise BridgeError(f"get_subgraph failed for {function_name!r}: {payload['error']}")
+    edges_obj = payload.get("edges", [])
+    edges = edges_obj if isinstance(edges_obj, list) else []
+    out: list[McpEdge] = []
+    for e in edges:
+        if not isinstance(e, dict):
+            continue
+        out.append(
+            McpEdge(
+                caller=str(e.get("caller", "")),
+                callee=str(e.get("callee", "")),
+                caller_file=str(e.get("callerFile", "")),
+                callee_file=str(e.get("calleeFile", "")),
+                kind=_opt_str(e.get("kind")),
+                call_type=_opt_str(e.get("callType")),
+            )
+        )
+    return tuple(out)
+
+
+def _opt_str(value: object) -> str | None:
+    """Coerce a JSON value to ``str | None`` (a missing field stays ``None``)."""
+    return None if value is None else str(value)
 
 
 def _as_int(value: object) -> int:

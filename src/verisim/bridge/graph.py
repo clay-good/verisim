@@ -202,6 +202,26 @@ class CodeGraph:
         """Ids of internal nodes flagged as entry points — the set the supported surface reports."""
         return frozenset(n.id for n in self.nodes if n.is_entry_point and not n.is_external)
 
+    def internal_edges_named(self) -> frozenset[tuple[str, str, str, str]]:
+        """Internal call edges as ``(caller_file, caller_name, callee_file, callee_name)`` tuples.
+
+        Both endpoints are internal nodes (external call targets excluded), matching the shape of
+        OpenLore's real-graph ``get_subgraph`` surface so the SQLite read and the MCP real edges can
+        be compared directly (``McpEdge.as_pair``). Deduplicated to a set — call-site multiplicity
+        is not part of the identity."""
+        by_id = {n.id: n for n in self.nodes}
+        internal = {n.id for n in self.nodes if not n.is_external}
+        return frozenset(
+            (
+                by_id[e.caller_id].file_path,
+                by_id[e.caller_id].name,
+                by_id[e.callee_id].file_path,
+                by_id[e.callee_id].name,
+            )
+            for e in self.edges
+            if e.caller_id in internal and e.callee_id in internal
+        )
+
     def is_stale_against(self, repo_path: str | Path) -> bool:
         """True iff the fixture's current source no longer matches what this graph was read at.
 

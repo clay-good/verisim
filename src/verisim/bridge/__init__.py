@@ -15,10 +15,12 @@ from __future__ import annotations
 
 from .analysis import (
     CallGraphSummary,
+    McpEdge,
     OpenLoreUnavailable,
     analyze_fixture,
     call_graph_summary_via_mcp,
     openlore_available,
+    subgraph_via_mcp,
 )
 from .graph import (
     ANALYSIS_DB_RELPATH,
@@ -46,6 +48,7 @@ __all__ = [
     "CodeClass",
     "CodeGraph",
     "CodeNode",
+    "McpEdge",
     "OpenLoreUnavailable",
     "SchemaVersionError",
     "analysis_db_path",
@@ -53,4 +56,5 @@ __all__ = [
     "call_graph_summary_via_mcp",
     "load_code_graph",
     "openlore_available",
+    "subgraph_via_mcp",
 ]

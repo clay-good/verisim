@@ -1,26 +1,35 @@
 # Read-only OpenLore call-graph adapter
 
-> Status: IMPLEMENTED (2026-06-14) — `src/verisim/bridge/` + `tests/test_bridge.py` (16 tests
+> Status: IMPLEMENTED (2026-06-14) — `src/verisim/bridge/` + `tests/test_bridge.py` (17 tests
 > green; ruff + bare mypy clean). Change 2 of the six is done; Changes 3–6 remain DRAFT.
+> Verified against OpenLore **2.0.18** (latest).
 > One sentence: **let Verisim read OpenLore's static call graph for a fixture as a typed,
 > read-only substrate it can ground a world model and architectural invariants on, treating the
 > database as the regenerable cache it actually is.**
 >
-> **Implementation notes (two honest findings only running the real CLI could surface):**
-> 1. **The supported MCP surface is a *derived summary*, not the call graph.** OpenLore's
->    `get_call_graph` returns aggregates (internal-node/edge counts, entry points, hubs), not the
->    provenance-bearing edge set — and its `total_edges` is an *expanded* count that diverges from
->    the raw `edges` table (e.g. 1361 vs 723 on a 36-file fixture). So the **read-only SQLite open
->    is the canonical loader** (the only faithful source of per-edge `confidence`/`synthesized_by`),
->    and the MCP surface is used as an independent **cross-check** on the invariants that *are*
->    clean (internal-node count, entry-point count). This divergence is exactly the schema-drift
->    hazard the schema guard exists for: the graph must be read, not reconstructed from a summary.
-> 2. **The schema drifts *within* the supported range.** The installed CLI authors `schema_version`
->    5; older committed analyses are v7, and `edges.synthesized_by` exists in v7 but not v5. The
->    loader is therefore **column-defensive** across the supported 5–7 range (a known in-range
->    column absent degrades to its default) while still failing closed on an *unknown* version.
->    `file_hashes` is populated only on some runs, so staleness anchors on a Verisim-computed source
->    tree hash, not the DB's own `file_hashes`.
+> **The MCP surface, settled on the latest OpenLore (2.0.18, ran e2e to confirm).** The MCP contract
+> has *two* faces, and the cross-check uses both:
+> - `get_subgraph` is the **real call graph** — actual per-edge `caller`/`callee`/`kind`/`callType`
+>   relationships. It reads an in-memory graph index that an OpenLore *version upgrade resets*, so a
+>   query must first **(re)build the index e2e** via the `analyze_codebase` tool in the same MCP
+>   session (the "run it to generate" step). The strong parity test confirms these real MCP edges
+>   **equal** the SQLite read's internal edges, exactly (`subgraph_via_mcp`).
+> - `get_call_graph` is an **aggregate summary** (counts/hubs/entry-points), a *derived* view whose
+>   `total_edges` is an expanded count (1496 vs raw 840 on a 36-file fixture), used for the cheap
+>   count-level invariants.
+>
+> **Two honest findings that hold even on the latest OpenLore:**
+> 1. **Per-edge provenance lives only in SQLite.** Neither MCP face carries `confidence` /
+>    `synthesized_by` — `get_subgraph` omits them, `get_call_graph` is an aggregate. So the
+>    **read-only SQLite open is the canonical loader** (the only faithful source of the provenance
+>    Change 4 needs), and the MCP surface is a cross-check, not a replacement. This is exactly the
+>    schema-drift hazard the schema guard exists for: the graph is read, not reconstructed.
+> 2. **The schema drifts *within* the supported range.** OpenLore 2.0.15 authored `schema_version`
+>    5; 2.0.18 (and older committed analyses) author 7, and `edges.synthesized_by` exists in v7 but
+>    not v5. The loader is therefore **column-defensive** across the supported 5–7 range (a known
+>    in-range column absent degrades to its default) while still failing closed on an *unknown*
+>    version. `file_hashes` is populated only on some runs, so staleness anchors on a
+>    Verisim-computed source tree hash, not the DB's own `file_hashes`.
 
 ## Why
 
