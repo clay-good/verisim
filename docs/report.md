@@ -2979,6 +2979,43 @@ trained in `E_oracle` / `E_grounded` / `E_free`, all evaluated in reality. The r
   Reproduce: `python -m verisim.experiments.cu20_host_trained` (torch-gated trained arm; loads the
   frozen `flagship-host-l` and reuses it — no retrain; the teacher-forced core is torch-free).
 
+- **The unified target — the four per-world defenses are one model-free rule, and its un-gameability
+  is a theorem of coverage (SPEC-22 / CU21 / H114 — SUPPORTED, decisively).** The targeting arc
+  shipped four targets that each looked bespoke — verify a `connect`-to-jewel (network, CU10/CU11), a
+  `write` to a jewel-bound fd (host, CU16), the actions that flip `can_reach` to a jewel
+  (segmentation, CU17), a `get` iff the medium shows it stale (distributed, CU18). CU21 proves they
+  are **one rule**: strip each to its parts and the same three model-free objects appear — a danger
+  `D.realizes(state, action)` (the exact breach event, on the *observed structure* via the exact
+  oracle, never the drifting model), an arsenal `D.attacks(state)`, and a `target(state, action)`
+  consult rule — and the single schedule is "consult iff `target(state, action)`." The whole arc's
+  headline (safe, cheap, un-gameable) follows from one property — **coverage**: for every state and
+  action, `D.realizes(s, a) ⇒ target(s, a)`. The un-gameability is then a **theorem**: under the
+  target schedule an attacker can win only by executing an `a` with `realizes(s, a)` that is not
+  blocked, but coverage makes `target(s, a)` fire, so the agent consults the oracle, which sees the
+  true `realizes` and blocks — and the consult decision *never reads the model*, so the bound is
+  model-independent (a covering, model-free target is un-gameable at a cost of exactly the number of
+  on-surface actions). The CU17/CU18 boundary becomes one mechanism: a target that *breaks* coverage
+  leaks exactly the danger it fails to cover. A single generic driver — a `Danger` + `World` +
+  `target` + `Defender` core — is instantiated on all four arms (200 deployments × horizon 48 each,
+  the worst-case-omitter substrate the per-world milestones used) and **reproduces every per-world
+  number exactly**: the covering rule reaches **0.000 random and 0.000 adversarial breach, cheaper
+  than the full oracle, in every world** — network **4.07** calls (**11.8×**), host **3.49**
+  (**13.8×**), distributed **3.26** (**14.7×**), segmentation **4.17** (**11.5×**), the *same* numbers
+  as CU10/CU16/CU18/CU17, which is itself the proof they are one rule — with `covers=True` for every
+  covering target; model self-targeting fails in every world (breach **1.000**) and the perfect model
+  self-governs (**0.000**); the uniform knee is gameable in every world (adversarial **1.000** at 24
+  calls); and the two non-covering shortcuts carried in from another world (the distributed
+  `write_target`, the segmentation `connect`) both leak (random and adversarial **1.000**,
+  `covers=False`). The program's most-quoted result is not network-, host-, or sparse-grammar-specific:
+  **danger in an oracle-grounded world has a model-free surface, and verifying that surface is cheap,
+  safe, and un-gameable — provided the surface covers the danger.**
+
+  ![SPEC-22 CU21 / H114: the unified target, two panels. Left — one safe-and-cheap corner across four dangers: adversarial breach rate vs mean oracle calls per deployment, one color per world (network, host, distributed, segmentation). Every world's uniform knee sits on the gameable line (adversarial breach 1.0 at 24 calls) and its model self-targeting fails (breach 1.0 at 0 calls), while every world's unified covering target (star) lands in the same bottom-left corner — zero adversarial breach at ~3–4 calls — and the full oracle (square) is safe only at 48 calls. The same model-free rule lands every world's star in the same corner. Right — the coverage boundary: for the two worlds where a target from another world is carried over as a shortcut (distributed: the genesis write; segmentation: the connect), the covering target's adversarial breach (green, 0.000, covers=True) against the non-covering shortcut's (red, 1.000, covers=False). The un-gameability is a theorem of coverage; break coverage and you buy false security](../figures/cu21_unified_targeting.png)
+
+  Reproduce: `python -m verisim.experiments.cu21_unified_targeting` (torch-free; one generic driver
+  over all four arms on the worst-case-omitter substrate; the per-world trained arms already closed
+  the rigor gap; ~3 min).
+
 - **The distributed recession test — is the structural-first recession (H87) universal? NO (a refinement).**
   SPEC-21's H87 says the load-bearing frontier recedes *structural-first* with scale — structure tasks
   fall below the load-bearing threshold first, content tasks persist. But on host/network the structure
