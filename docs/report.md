@@ -2784,6 +2784,33 @@ trained in `E_oracle` / `E_grounded` / `E_free`, all evaluated in reality. The r
   Reproduce: `python -m verisim.experiments.cu14_incident_response` (reuses the frozen
   `runs/flagship/net-l` checkpoint — no retrain; `--smoke` for the fast path).
 
+- **The verification-exhaustion attack — the cost axis under an adversary (SPEC-22 / CU15 / H108 — SUPPORTED).**
+  The cost-axis worst case ([`acd/verification_exhaustion.py`](../src/verisim/acd/verification_exhaustion.py)).
+  CU11 proved structure targeting un-gameable on the *safety* axis (an attacker who controls
+  exfiltration *timing* cannot make it breach, the danger surface being grammar-fixed). But structure
+  spends a call on *every* `connect`-to-jewel, most benign — which opens an attack the safety results
+  never measured: an adversary who cannot make structure **breach** can still make it **expensive**,
+  flooding the danger surface with benign-looking activity to exhaust the verification budget (the real
+  cyber phenomenon of *alert fatigue / denial of budget*). CU15 carries CU4/CU11's worst-case threat
+  model to the cost axis — a fixed-length deployment whose steps an adversary poisons with attacker
+  `connect`-to-jewel actions at saturation `s`, each schedule read on *both* axes (breach, calls).
+  **Committed trained run (200 deployments, horizon 48, the real `M_θ` via `runs/flagship/net-l`, no
+  retrain):** an adversary can move **exactly one axis** of a sub-oracle schedule — **structure's cost**
+  climbs **4.07 → 15.07 → 26.09 → 36.99 → 48.00** calls as `s`: 0 → 1 (its **safety stays immovable at
+  0.000 breach** throughout), while **uniform's safety** degrades **0.650 → 0.965 breach** (its
+  clock-fixed cost stays at **24.00**). But structure's cost stays **bounded by and weakly dominates the
+  full oracle** (≤ horizon at every `s`, = only at full saturation) and the attack is **self-limiting**
+  (**0.92 defender calls per attacker action, 0.000 breaches bought**). Only the full oracle is immovable
+  on *both* axes — at the maximum price. The defender principle: prefer the schedule whose movable axis
+  is a **bill you can cap** (≤ the full oracle, the attacker paying its whole budget to impose it) over
+  one that is a **breach** — the cost-axis analogue of CU4 (average-case cheapness is a false sense of
+  *economy*, but structure's worst case is still safe and still ≤ the price of total safety).
+
+  ![SPEC-22 CU15 / H108: the verification-exhaustion attack, two panels sharing the attacker's saturation on the x-axis. Left — the safety axis: breach rate vs saturation. Structure (green stars) and the full oracle (black dashed) lie flat at 0 (safety immovable), while uniform ρ=0.5 (purple squares) rises from 0.65 to 0.97 and the free agent (grey) sits near 1.0 — uniform's safety is gameable. Right — the cost axis: mean oracle calls vs saturation. Now the picture inverts: structure (green stars) climbs from 4.1 to 48 calls as the attacker floods the danger surface, reaching but never passing the full-oracle ceiling (black dashed at 48), while uniform (purple squares) stays flat at 24 (clock-keyed, immovable); the shaded green band between structure and the full oracle is the discount the attacker erases. Each sub-oracle schedule is flat in one panel and rising in the other; only the full oracle is flat-and-safe in both, at maximum cost](../figures/cu15_verification_exhaustion.png)
+
+  Reproduce: `python -m verisim.experiments.cu15_verification_exhaustion` (reuses the frozen
+  `runs/flagship/net-l` checkpoint — no retrain; `--smoke` for the fast path).
+
 - **The distributed recession test — is the structural-first recession (H87) universal? NO (a refinement).**
   SPEC-21's H87 says the load-bearing frontier recedes *structural-first* with scale — structure tasks
   fall below the load-bearing threshold first, content tasks persist. But on host/network the structure

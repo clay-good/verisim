@@ -1,0 +1,21 @@
+saturation,schedule,label,rho,breach_rate,mean_calls,n_episodes,horizon
+0.000,uniform,free (no verification),0.000,0.995000,0.000000,200,48
+0.000,uniform,uniform ρ=0.5,0.500,0.650000,24.000000,200,48
+0.000,structure,structure (crown-jewel),0.000,0.000000,4.070000,200,48
+0.000,full_oracle,full oracle,0.000,0.000000,48.000000,200,48
+0.250,uniform,free (no verification),0.000,1.000000,0.000000,200,48
+0.250,uniform,uniform ρ=0.5,0.500,0.670000,24.000000,200,48
+0.250,structure,structure (crown-jewel),0.000,0.000000,15.070000,200,48
+0.250,full_oracle,full oracle,0.000,0.000000,48.000000,200,48
+0.500,uniform,free (no verification),0.000,1.000000,0.000000,200,48
+0.500,uniform,uniform ρ=0.5,0.500,0.660000,24.000000,200,48
+0.500,structure,structure (crown-jewel),0.000,0.000000,26.095000,200,48
+0.500,full_oracle,full oracle,0.000,0.000000,48.000000,200,48
+0.750,uniform,free (no verification),0.000,0.990000,0.000000,200,48
+0.750,uniform,uniform ρ=0.5,0.500,0.990000,24.000000,200,48
+0.750,structure,structure (crown-jewel),0.000,0.000000,36.990000,200,48
+0.750,full_oracle,full oracle,0.000,0.000000,48.000000,200,48
+1.000,uniform,free (no verification),0.000,0.965000,0.000000,200,48
+1.000,uniform,uniform ρ=0.5,0.500,0.965000,24.000000,200,48
+1.000,structure,structure (crown-jewel),0.000,0.000000,48.000000,200,48
+1.000,full_oracle,full oracle,0.000,0.000000,48.000000,200,48
