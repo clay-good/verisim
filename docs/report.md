@@ -2871,6 +2871,43 @@ trained in `E_oracle` / `E_grounded` / `E_free`, all evaluated in reality. The r
   Reproduce: `python -m verisim.experiments.cu17_segmentation_targeting` (torch-free; the worst-case
   content omitter stand-in runs in ~20 s, no checkpoint; `--smoke` for the fast path).
 
+- **The asynchronous danger — target the medium, not the action (SPEC-22 / CU18 / H111 — SUPPORTED).**
+  The targeting arc was network (CU10–CU12) + host (CU16), and across both worlds it held one tacit
+  feature: the danger's *genesis* and its *consumption* were the same event, or the genesis persisted
+  in the state until consumption (a corrupted `/passwd` stays corrupted, so verifying the corrupting
+  `write` catches it forever after). CU18 carries the result to the **distributed** world — the one
+  world the CU arc never touched, and the one whose defining feature is an *asynchronous medium* — and
+  finds the boundary that breaks the cheap transfer for a *new* reason. The danger is a **stale read**:
+  an agent reads a sensitive key from a node whose replica is behind the value the cluster will
+  converge to (the `get` returns the coordinator's *local* replica, stale under partition / in-flight
+  replication — the canonical distributed hazard), and acting on it is the irreversible bad thing. The
+  new structural fact: the danger's **genesis** (a write that creates a newer version elsewhere) is
+  separated from its **consumption** (a stale read on another node, later) by the medium — the
+  staleness lives neither on the write nor persists on the read's node; it is a transient property of
+  the medium (in-flight messages + partition + replica versions) at the moment of the read. So the
+  CU10–CU16 cheap target — verify the *genesis action class* — **does not transfer**, and the target
+  that works is the distributed analogue of CU17's closure: verify a read **iff the medium shows it is
+  stale**. On a worst-case medium omitter (200 deployments, horizon 48): the genesis-action
+  `write_target` (verify writes to sensitive keys) **does not transfer** — breach **1.000** (the free
+  rate) at **5.16 calls**, a false sense of security (it spends its budget on writes while the danger
+  is consumed at a temporally-separated read); model self-targeting fails (**1.000** at 0 calls);
+  uniform's sub-oracle knee is a mirage (adversarial breach **1.000 at every ρ<1**); only the
+  **medium** target reaches the oracle's **0.000 breach, un-gameable (0.000 adversarial), at 3.26
+  calls — 14.7× cheaper than the full oracle**, and cheaper than the *failing* genesis-action target.
+  The principle sharpens CU17's: **target the danger's genesis grammar — and when the genesis is
+  separated from consumption by an asynchronous medium, the surface to verify is the medium condition
+  at consumption, not the action that planted the danger.** This completes the targeting result across
+  all three worlds (network, host, distributed) and three distinct genesis-grammar flavors — a
+  syntactic action class, an action composed with structure, and a transient medium condition. The
+  trained distributed `M_θ` is the deferred GPU arm (per LP7); the schedule result keys on the oracle
+  and the medium grammar, not the model, so the worst-case medium omitter (it never foresees
+  staleness — the distributed face of CU8's omission bias) is the right substrate.
+
+  ![SPEC-22 CU18 / H111: the asynchronous danger, two panels. Left — the cost/safety frontier under random timing: breach rate vs mean oracle calls per deployment. The uniform blind schedule (purple) only reaches zero breach at the full oracle (48 calls); model self-targeting (red X) sits at the free breach 1.0 at 0 calls (the omitter never foresees staleness); the write-to-key genesis-action target (orange plus) is stuck at breach 1.0 while spending 5.2 calls — blind to a danger consumed at a temporally-separated read, a false sense of security; the medium / stale-read-closure target (green star) sits in the safe-and-cheap corner — zero breach at 3.3 calls, ~15× fewer than the full oracle and even cheaper than the failing genesis-action target. Right — the uniform knee is a mirage under adversarial timing: uniform breach vs ρ, the random-timing curve (purple, falling toward 0 only at the full oracle) against the adversarial curve (red, flat at 1.0 until ρ=1), with the medium target's un-gameable 0 line (green dashed). When a danger's genesis is separated from its consumption by an asynchronous medium, target the medium condition at consumption, not the action that planted it](../figures/cu18_dist_targeting.png)
+
+  Reproduce: `python -m verisim.experiments.cu18_dist_targeting` (torch-free; the worst-case medium
+  omitter stand-in runs in ~2 s, no checkpoint; `--smoke` for the fast path).
+
 - **The distributed recession test — is the structural-first recession (H87) universal? NO (a refinement).**
   SPEC-21's H87 says the load-bearing frontier recedes *structural-first* with scale — structure tasks
   fall below the load-bearing threshold first, content tasks persist. But on host/network the structure

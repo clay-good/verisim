@@ -1,0 +1,10 @@
+schedule,label,rho,random_breach,adversarial_breach,mean_calls,n_episodes,horizon
+uniform,uniform ρ=0,0.000,1.000000,1.000000,0.000000,200,48
+uniform,uniform ρ=0.1,0.100,0.990000,1.000000,4.000000,200,48
+uniform,uniform ρ=0.2,0.200,0.955000,1.000000,9.000000,200,48
+uniform,uniform ρ=0.3,0.300,0.910000,1.000000,16.000000,200,48
+uniform,uniform ρ=0.5,0.500,0.865000,1.000000,24.000000,200,48
+uniform,uniform ρ=1,1.000,0.000000,0.000000,48.000000,200,48
+model,model self-targeting,,1.000000,1.000000,0.000000,200,48
+write_target,write-to-key (genesis action),,1.000000,1.000000,5.160000,200,48
+medium,medium (stale-read closure),,0.000000,0.000000,3.260000,200,48
