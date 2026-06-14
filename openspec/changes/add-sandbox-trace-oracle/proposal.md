@@ -1,9 +1,29 @@
 # Sandbox runtime-trace oracle
 
-> Status: DRAFT — proposal + spec delta. No code yet.
+> Status: IMPLEMENTED (2026-06-14) — `src/verisim/trace/` + `tests/test_trace.py` (11 tests
+> green; ruff + bare mypy clean). Change 3 of the six is done; Changes 4–6 remain DRAFT.
 > One sentence: **capture what the code actually does at runtime by tracing the real
 > `SandboxOracle` execution — exec, syscalls, file mutations, network binds — as typed records,
 > so dynamic reality can later correct the static call graph.**
+>
+> **Implementation notes (honest scope of the tiers):**
+> - **Degraded tier is what ships, and it is the spec's mandated floor — by design, not omission.**
+>   The tracer is a *pure decorator* over the `Oracle` protocol (the "wrapper, not rewrite"
+>   constraint), so it cannot inject `ptrace`/DTrace into the subprocess `SandboxOracle` spawns
+>   *inside* its own `step`; a `full`-tier syscall tracer would have to instrument that spawn. On
+>   the macOS dev host, privileged process tracing also needs SIP-disable/entitlements the
+>   environment lacks (the proposal's stated risk). So `full_tracing_available()` honestly returns
+>   `False` and `select_tracer()` returns the degraded tracer, which still records the floor the
+>   spec requires: **exec + file delta + binds**, every trace tagged `degraded`.
+> - **File mutations are reused from the oracle's structural delta** (`StepResult.delta`), not
+>   recomputed — the proposal's explicit instruction.
+> - **Net events are honestly empty.** The v0 filesystem grammar exposes no network action and the
+>   sandbox blocks egress by allowlist, so binds are `()` — recorded, not omitted, so a future
+>   grammar with a network action has a place to land.
+> - **Determinism is preserved by construction.** `TracingOracle.step` returns the inner oracle's
+>   `StepResult` verbatim and builds the trace purely from the action + result, touching neither the
+>   execution nor the `DeterminismSeal`; a traced step is bit-identical to an untraced one (tested
+>   on a real-shell sequence).
 
 ## Why
 
