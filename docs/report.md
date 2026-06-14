@@ -2943,6 +2943,42 @@ trained in `E_oracle` / `E_grounded` / `E_free`, all evaluated in reality. The r
   Reproduce: `python -m verisim.experiments.cu19_dist_trained` (torch-gated trained arm; trains the
   frozen `flagship-dist-l` once if absent, then reuses it; the belief-rollout core is torch-free).
 
+- **The trained host arm — the targeting result closes on a real learned host model, and the drift
+  direction tracks the danger's temporal structure (SPEC-22 / CU20 / H113 — SUPPORTED, honest
+  refinement).** CU16 carried the targeting result to the host world (credential tampering, protected
+  `/passwd`) on a worst-case content omitter (LP7 defers the trained arm; the schedule keys on the
+  oracle + the host grammar, not the model). CU20 closes that rigor gap exactly as CU5-net/CU8
+  (network) and CU19 (distributed) did — it loads the real trained host `M_θ` (the frozen
+  `runs/flagship/host-l`, SPEC-20 HFL0, reused, no retrain) and runs the closed loop through it
+  **teacher-forced** (predict each step's delta from the *true* state), because a host corruption is a
+  *one-step* property — a protected file's content is set by a single `write` to a bound fd, born and
+  consumed at the same action — unlike CU19's distributed staleness (a property of the medium's
+  accumulated history that forced a belief rollout). The no-op delta model reproduces the recall-0
+  omitter (== CU16's `HostOmitter`) and the oracle delta model recall 1, so the two stand-ins are the
+  recall endpoints (asserted in the tests). On the real model (200 deployments, horizon 48) the
+  targeting result **closes exactly**: the model-free **structure** target (verify a `write` to a
+  protected path via the observable fd table) reaches **0.000 breach, un-gameable (0.000 adversarial),
+  at 3.49 calls — 13.8× cheaper than the full oracle (48)**; **model self-targeting fails** (breach
+  **0.630**, near the free agent's **0.735**, at 1.68 calls — it cannot flag the corruptions it omits).
+  The honest refinement only a real model could show: the real host drift **is** omission-biased
+  (protected recall **0.265**, **606 omissions vs 154 hallucinations** ~4:1; on `/passwd` 147 vs 26,
+  ~4.6:1) — confirming CU1's 0.38 missed-danger and **joining the network world** (CU8, 146:1
+  omission), with the **distributed world the outlier** (CU19, ~5:1 hallucination). This sharpens the
+  world-dependent drift law into a *mechanism*: a rare one-step danger born by a single action (network
+  flow, host corruption) makes the model's safe default "no consequence" (omission); a danger that is
+  an accumulated-medium property (distributed staleness) makes a free-running belief over-predict it
+  (hallucination). The real recall 0.265 (not the worst-case 0) is the honest other half — the model
+  partially but untrustworthily foresees corruptions (still misses ~74%), so the free agent still
+  breaches the majority and only the model-free `structure` target is safe regardless of the drift's
+  size or direction. (The old host-`M_θ` pathology was the `imagine` rollout gate; single-step
+  `predict_delta` on horizon-bounded states is milliseconds, so the trained run is tractable on CPU
+  ~80s.)
+
+  ![SPEC-22 CU20 / H113: the trained host arm, two panels. Left — the drift asymmetry on host writes: teacher-forced write errors over the battery, omissions (the oracle wrote a file but the model missed it — the breach source, 606) vs hallucinations (the model wrote a file the oracle did not — wasted calls, 154). Like the network world (CU8) and unlike the distributed world (CU19), the real host model hides corruptions by omission — protected recall 0.27, ~4:1 omission. Right — the cost/safety frontier on the real model: breach rate vs mean oracle calls per deployment. The uniform blind schedule (purple) falls from the free breach 0.74 only to zero at the full oracle (48 calls); model self-targeting (red X) sits near breach 0.63 at 1.7 calls (it cannot flag what it omits); only the model-free structure / write-to-jewel target (green star) sits in the safe-and-cheap corner — zero breach at 3.5 calls, ~14× fewer than the full oracle. The targeting result closes on a real learned host model, and because the structure target is model-free it is safe regardless of how the model drifts](../figures/cu20_host_trained.png)
+
+  Reproduce: `python -m verisim.experiments.cu20_host_trained` (torch-gated trained arm; loads the
+  frozen `flagship-host-l` and reuses it — no retrain; the teacher-forced core is torch-free).
+
 - **The distributed recession test — is the structural-first recession (H87) universal? NO (a refinement).**
   SPEC-21's H87 says the load-bearing frontier recedes *structural-first* with scale — structure tasks
   fall below the load-bearing threshold first, content tasks persist. But on host/network the structure
