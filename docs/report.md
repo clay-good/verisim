@@ -3240,6 +3240,33 @@ trained in `E_oracle` / `E_grounded` / `E_free`, all evaluated in reality. The r
   Reproduce: `python -m verisim.experiments.cu29_forensic_oracle` (torch-free core; the real-`M_θ`
   forensic point is torch-gated, reusing the frozen flagship `runs/flagship/net-l` — no retrain).
 
+- **The remediation oracle — the recovery dual of the forensic oracle (SPEC-22 / CU30 / H123 — SUPPORTED).**
+  CU29 *diagnosed* an incident (which step realized it, what determined it). CU30 closes the
+  incident-response loop with the defender's next *action* — recovery: compute a remediation (a set of
+  actions to **block**) that undoes the breach, and **prove it**. A remediation must satisfy two axes at
+  once, both certified by re-running the exact oracle as an SCM (abduct the trace, `do` the removals,
+  predict): **avert** (the breach does not recur) and **collateral** (benign mission actions sacrificed).
+  The non-obvious headline, CU29's diagnosis completed as an action: **undoing the action that *realized*
+  the breach does not undo the breach.** Where a danger has *redundant consumers* (a protected file two
+  writes corrupt, a stale value two reads consume), removing the one realizing action just hands the
+  breach to the next consumer — the naive **surgical** undo averts in net/distributed but **fails in the
+  genesis-separated host world at 0.37** (a second write re-corrupts the file). The robust fix removes the
+  **genesis** (CU29's root cause), and only the oracle's counterfactual finds it: the four genesis-grammar
+  flavors read a *third* time — forward the prevention surface (CU21), backward the root cause (CU29),
+  acted-on the remediation target. Only the oracle-computed **minimal certified** remediation (the
+  smallest averting removal set) averts **every** incident in all four worlds (**1.000**) at minimal
+  collateral — ≤ the capability-disabling **sledgehammer's**, world by world (net **0.0** / host **1.5** /
+  dist **0.0** / seg **0.8** vs **4.0 / 4.7 / 5.8 / 1.9**) — with **collateral exactly the redundancy tax**
+  (zero wherever the surgical undo already averts). The **model's** fix is empty (avert **0.000**
+  everywhere), and the *real* trained network `M_θ` remediates **0.000** of incidents (CU29 localization
+  0.000 — not a strawman). **The exact oracle is a recovery engine — it certifies the minimal fix that
+  averts the breach and preserves the mission; a world model that omitted the breach can do none of it.**
+
+  ![SPEC-22 CU30 / H123: the remediation oracle, two panels. Left — the recovery plane: mean collateral (mission cost, x) vs avert rate (safety, y), one marker per (policy, world). Only the min-certified fix (green) sits in the all-good corner (top-left: averts at low collateral) in every world; the sledgehammer (brown) averts but far to the right (mission destroyed); the surgical undo (orange) is cheap but drops to 0.37 avert in the host world; the model fix (red) sits at the origin (empty, blind). Right — avert rate per world for the surgical undo (orange) vs the oracle's min-certified fix (green): undoing the realizing action averts in net/dist but fails in host (0.37) and segmentation (0.72), while the certified fix averts everywhere (1.00); a dark diamond marks the real trained network M_θ model fix at 0.00. Only the oracle's counterfactual computes a fix that averts the breach and preserves the mission.](../figures/cu30_remediation.png)
+
+  Reproduce: `python -m verisim.experiments.cu30_remediation` (torch-free core; the real-`M_θ`
+  remediation point is torch-gated, reusing the frozen flagship `runs/flagship/net-l` — no retrain).
+
 - **The distributed recession test — is the structural-first recession (H87) universal? NO (a refinement).**
   SPEC-21's H87 says the load-bearing frontier recedes *structural-first* with scale — structure tasks
   fall below the load-bearing threshold first, content tasks persist. But on host/network the structure
