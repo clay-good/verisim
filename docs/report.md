@@ -3045,6 +3045,38 @@ trained in `E_oracle` / `E_grounded` / `E_free`, all evaluated in reality. The r
   Reproduce: `python -m verisim.experiments.cu22_availability_targeting` (torch-free, no checkpoint;
   the CU21 engine applied verbatim to a new danger; ~80 s).
 
+- **The second generative test — the framework predicts again, in a new world, and the same candidate
+  class flips fate (SPEC-22 / CU23 / H116 — SUPPORTED, every prediction confirmed).** CU22 made the
+  generative claim *once* (network availability); the residual objection is that one prediction could
+  be luck — a theory earns the word *generative* by predicting **again**. CU23 carries availability —
+  the CIA third leg — into the **host** world on a different resource: not network reachability (CU22)
+  but **process liveness**. An automated containment / incident-response agent's job is to terminate
+  malicious processes; the danger is that it terminates a **critical defensive daemon** (an EDR
+  sensor, a firewall service, the audit logger — a `RUNNING → ZOMBIE` transition of a process the
+  mission depends on), the availability self-own a real SOAR playbook commits. The `covers` invariant
+  again predicts each candidate a priori. **Committed run (200 deployments × horizon 48, worst-case
+  omitter, ~3 s):** the framework-*derived* **process-liveness closure** (consult iff the action
+  terminates a *running daemon*, a model-free read of the process table) is `covers=True` — safe and
+  un-gameable (**0.000 random / 0.000 adversarial**) at **1.47 calls = 32.8× cheaper** than the full
+  oracle (48); the host world's *own* **CU16 integrity target** (write-to-fd, the seductive same-world
+  cousin) `covers=False` → leaks (random **1.000** / adversarial **1.000**) — a termination is not a
+  `write`, so the host's most-quoted defense is *false security* against its availability danger; a
+  **syntactic** terminate rule (verify every `kill`/`exit`) `covers=True` (process death has no
+  cascade — a daemon dies only by an action that names it) but overpays (**2.87** vs 1.47 calls); the
+  uniform knee is a mirage (adversarial **1.000** at ρ=0.5), model self-targeting fails (**1.000**),
+  the perfect model self-governs (**0.000**). **The sharp cross-world contrast:** the *same* syntactic
+  class **leaked** in CU22 (network reachability is a multi-hop closure, so a `link_down` between two
+  relays it cannot name still severs a pair) but **covers** here (process death is single-action, so
+  every daemon death names its own victim) — and `covers` calls both a priori by computing coverage on
+  the real oracle, not by pattern-matching an action class. **The framework is generative repeatably,
+  and `covers` tracks the danger's true structure across worlds — calling the same candidate class
+  safe in one world and a leak in another.**
+
+  ![SPEC-22 CU23 / H116: the second generative test, host process-availability, two panels. Left — the worst-case cost/safety frontier on a second danger the framework never saw (terminating a critical defensive daemon): adversarial breach rate vs mean oracle calls per deployment. The uniform blind clock (purple) is flat at 1.0 until the full oracle; the carried-over CU16 write-to-fd integrity target (red X) is stuck at adversarial breach 1.0 (covers=False, predicted a priori — a termination is not a write); the syntactic terminate-any target (orange diamond) is safe but overpays at 2.9 calls; only the framework-derived process-liveness closure (green star) is in the safe-and-cheap corner — zero adversarial breach at 1.5 calls, 33× cheaper than the full oracle. Right — prediction vs measurement: per candidate the a-priori covers verdict (covers cross for the CU16 carry-over, covers check for both liveness-aware targets) above paired random and adversarial breach bars, with the cross-world note that the same syntactic class leaked in CU22 but covers here. The framework predicted each fate before a single deployment ran](../figures/cu23_process_availability.png)
+
+  Reproduce: `python -m verisim.experiments.cu23_process_availability` (torch-free, no checkpoint;
+  the CU21 engine applied verbatim to a second new danger, in a second world; ~3 s).
+
 - **The distributed recession test — is the structural-first recession (H87) universal? NO (a refinement).**
   SPEC-21's H87 says the load-bearing frontier recedes *structural-first* with scale — structure tasks
   fall below the load-bearing threshold first, content tasks persist. But on host/network the structure
