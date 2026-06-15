@@ -3267,6 +3267,35 @@ trained in `E_oracle` / `E_grounded` / `E_free`, all evaluated in reality. The r
   Reproduce: `python -m verisim.experiments.cu30_remediation` (torch-free core; the real-`M_θ`
   remediation point is torch-gated, reusing the frozen flagship `runs/flagship/net-l` — no retrain).
 
+- **The concurrent (multi-agent) safety gate — the multi-principal coverage law (SPEC-22 / CU31 / H124 — SUPPORTED).**
+  Every CU result (CU1–CU30) is *single-agent*; a real deployment is a **fleet** of agents (SOAR
+  playbooks, containment bots, an agent alongside a human operator) acting on **one shared
+  host/network**. CU31 carries the targeting result across that boundary. `K` agents share one network
+  (each owns a disjoint set of source hosts; a flow is attributed to its src's owner), and the danger is
+  CU26's cumulative mass-collection on the **JOINT** state — the org concurrently holding flows to
+  `>= B` distinct sensitive hosts, its data lost regardless of *which* agent collected it (the canonical
+  *fleet-distributed* exfiltration that per-host DLP misses). The realistic **per-agent** gate is CU26's
+  covering closure scoped to one principal ("no single agent should hoard `B`"); the fix is the same
+  closure on the **JOINT** accumulator — a single **shared gate over the merged action stream** — and
+  `covers` over the *join* is the a-priori predictor. On 200 fleet deployments (K=2, joint budget B=3,
+  worst-case omitter, ~3 s) the per-agent gate is *genuinely covering against a single-principal hoarder*
+  but **leaks the joint danger**: a fleet adversary spreads the collection so each agent stays under `B`
+  while the union crosses it (adversarial breach **1.000**, `covers(joint)=False`, predicted a priori),
+  and even the benign fleet self-collects past it (random **0.140**). The **shared closure** is safe +
+  un-gameable (**0.000 / 0.000**) at **0.255 calls — 35× cheaper than the paranoid shared grammar (9.03),
+  188× than the full oracle (48)**; the uniform clock is a mirage, model self-targeting fails, the perfect
+  model self-governs. And the **fragmentation law**: the per-agent gate covers iff a single principal must
+  hold `>= B` (K=1) and leaks the instant the fleet fragments (K≥2, adversarial 1.000), while the shared
+  gate is invariant to K (covers, flat 0.255 cost). **You cannot defend a shared resource with per-agent
+  budgets — a gate must be as wide as the danger it covers** (the multi-agent analogue of CU24's "a point
+  defense is not a threat-model defense," read across *principals*).
+
+  ![SPEC-22 CU31 / H124: the concurrent multi-agent safety gate, two panels. Left — the worst-case cost/safety frontier for the JOINT mass-collection danger (B=3, K=2): adversarial (fleet low-and-slow) breach vs mean oracle calls. The uniform blind clock (purple) is flat at 1.0 (the knee a mirage); the per-agent gate (red X) is stuck at breach 1.0 though cheap — it watches the wrong scope, so a fleet adversary spreads the collection under it (covers=False, predicted a priori); the shared grammar (orange diamond) is safe but overpays at 9 calls; only the shared closure on the JOINT accumulator (green star) sits in the safe-and-cheapest corner (0 breach, 0.26 calls, 35× cheaper than grammar); the full oracle is at 48 calls. Right — the fragmentation law: adversarial breach vs fleet size K. The per-agent gate (red) covers at K=1 (breach 0, a single principal must hold >= B) but leaks (breach 1.0) the instant the fleet fragments to K>=2; the shared closure (green) is flat at 0 — invariant to fragmentation.](../figures/cu31_concurrent_targeting.png)
+
+  Reproduce: `python -m verisim.experiments.cu31_concurrent_targeting` (torch-free; the danger,
+  accumulator, fleet low-and-slow adversary, and every target are grounded in the real reference
+  network oracle — the worst-case-omitter substrate of CU16–CU26).
+
 - **The distributed recession test — is the structural-first recession (H87) universal? NO (a refinement).**
   SPEC-21's H87 says the load-bearing frontier recedes *structural-first* with scale — structure tasks
   fall below the load-bearing threshold first, content tasks persist. But on host/network the structure

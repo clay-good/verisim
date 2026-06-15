@@ -1,0 +1,18 @@
+kind,name,label,rho,random_breach,adversarial_breach,mean_calls,covers,n_episodes,horizon,budget,n_agents
+uniform,uniform,uniform rho=0,0.000,0.170000,1.000000,0.000000,,200,48,3,2
+uniform,uniform,uniform rho=0.1,0.100,0.155000,1.000000,4.000000,,200,48,3,2
+uniform,uniform,uniform rho=0.2,0.200,0.135000,1.000000,9.000000,,200,48,3,2
+uniform,uniform,uniform rho=0.5,0.500,0.100000,1.000000,24.000000,,200,48,3,2
+uniform,uniform,uniform rho=1,1.000,0.000000,0.000000,48.000000,,200,48,3,2
+model,model,model self-targeting,,0.170000,1.000000,0.000000,,200,48,3,2
+candidate,per_agent,per-agent budget (CU26 closure scoped per principal),,0.140000,1.000000,0.070000,False,200,48,3,2
+candidate,shared_grammar,shared grammar (watch every sensitive flow, merged),,0.000000,0.000000,9.030000,True,200,48,3,2
+candidate,shared_closure,shared closure (DERIVED: joint accumulator boundary),,0.000000,0.000000,0.255000,True,200,48,3,2
+full_oracle,full_oracle,full oracle,,0.000000,0.000000,48.000000,,200,48,3,2
+oracle_free,oracle_free,perfect model (rho=0),0.000,0.000000,0.000000,0.000000,,200,48,3,2
+by_n_agents,per_agent,n_agents=1,,,0.000000,0.000000,True,200,48,3,1
+by_n_agents,shared_closure,n_agents=1,,,0.000000,0.000000,True,200,48,3,1
+by_n_agents,per_agent,n_agents=2,,,1.000000,0.070000,False,200,48,3,2
+by_n_agents,shared_closure,n_agents=2,,,0.000000,0.255000,True,200,48,3,2
+by_n_agents,per_agent,n_agents=3,,,1.000000,0.075000,False,200,48,3,3
+by_n_agents,shared_closure,n_agents=3,,,0.000000,0.255000,True,200,48,3,3
