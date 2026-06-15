@@ -3105,6 +3105,28 @@ trained in `E_oracle` / `E_grounded` / `E_free`, all evaluated in reality. The r
   Reproduce: `python -m verisim.experiments.cu24_composite` (torch-free, no checkpoint; three
   coexisting network dangers, the composition theorem on the CU21 engine; ~4 min).
 
+- **The composite under real drift — high per-leg foresight is not worst-case safety (SPEC-22 / CU25 /
+  H118 — SUPPORTED, the sharper refinement).** CU24 proved the composition theorem on the worst-case
+  omitter, a result that is model-independent by construction (the union target never reads the model).
+  CU25 closes the trained-arm rigor gap (the CU5-net / CU19 / CU20 tradition): it re-runs the composite
+  on the **real trained network `M_θ`** (frozen `runs/flagship/net-l`, no retrain) and measures what the
+  model actually self-governs, leg by leg. The model's per-leg **self-governance recall** is
+  heterogeneous along the content→structure axis — **exfil 0.07** (a content flow-genesis event,
+  *blind*, the CU8 omission), **exposure 0.57** (a config reachability opening, *partial*), **outage
+  0.78** (a direct-structural disconnection, *mostly foreseen*) — the boundary law read at the composite.
+  **Yet model self-targeting is adversarially breached on *every* leg at 1.000**, the 0.57-recall
+  exposure and 0.78-recall outage legs included: the worst-case adversary needs a *single* blind spot,
+  and over 48 steps a per-action recall below 1 always leaves one. Only the **model-free union target**
+  is safe and un-gameable on every leg (**0.000 / 0.000**), *model-independently* (exactly as on the
+  omitter), at **7.58 calls = 6.3× cheaper** than the full oracle. High average foresight is not
+  worst-case safety: you cannot drop a leg from the union target on the grounds that the model "usually"
+  sees it — the CU4/CU11/CU15 average-vs-worst-case lesson, now at the composite, on the real model.
+
+  ![SPEC-22 CU25 / H118: the composite under real drift, two panels. Left — the boundary law at the composite: a grouped bar chart, per danger leg (exfil/content, exposure/multi-hop, outage/structural), of the real trained M_theta's self-governance recall (blue: exfil 0.07, exposure 0.57, outage 0.78) beside the model-self-targeting adversarial breach (red, all three at 1.00) — the model sees the structural legs progressively better than the content leg, but the red bars are flat at 1.00, annotated at the outage pair (0.78 foreseen yet 1.00 breached). Right — the cost/safety frontier on the real model: composite adversarial breach vs mean oracle calls; model self-targeting is a failed red X near breach 1.0, the model-free union target is the green star at zero breach and 7.6 calls (6.3x cheaper), the full oracle the grey square at zero breach and 48 calls](../figures/cu25_composite_trained.png)
+
+  Reproduce: `python -m verisim.experiments.cu25_composite_trained` (torch-gated, reuses the frozen
+  `runs/flagship/net-l` flagship, no retrain; the trained-arm closure of CU24; ~3 min).
+
 - **The distributed recession test — is the structural-first recession (H87) universal? NO (a refinement).**
   SPEC-21's H87 says the load-bearing frontier recedes *structural-first* with scale — structure tasks
   fall below the load-bearing threshold first, content tasks persist. But on host/network the structure
