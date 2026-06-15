@@ -1,0 +1,23 @@
+anchor,schedule,label,rho,random_breach,adversarial_breach,mean_calls,n_scenarios
+reference,uniform,uniform ρ=0,0.000,1.000000,1.000000,0.000000,20
+reference,uniform,uniform ρ=0.1,0.100,1.000000,1.000000,2.000000,20
+reference,uniform,uniform ρ=0.2,0.200,1.000000,1.000000,5.000000,20
+reference,uniform,uniform ρ=0.3,0.300,1.000000,1.000000,8.000000,20
+reference,uniform,uniform ρ=0.5,0.500,1.000000,1.000000,13.000000,20
+reference,uniform,uniform ρ=1,1.000,0.000000,0.000000,26.000000,20
+reference,model,model self-targeting,,1.000000,1.000000,0.000000,20
+reference,target,target (write-under-protected-prefix),,0.000000,0.000000,6.100000,20
+reference,full_oracle,full oracle,,0.000000,0.000000,26.000000,20
+reference,oracle_free,perfect model (ρ=0),0.000,0.000000,0.000000,0.000000,20
+reference,target,shortcut (write-to-known-credential (CU12 shortcut)),,0.000000,1.000000,6.100000,20
+sandbox,uniform,uniform ρ=0,0.000,1.000000,1.000000,0.000000,20
+sandbox,uniform,uniform ρ=0.1,0.100,1.000000,1.000000,2.000000,20
+sandbox,uniform,uniform ρ=0.2,0.200,1.000000,1.000000,5.000000,20
+sandbox,uniform,uniform ρ=0.3,0.300,1.000000,1.000000,8.000000,20
+sandbox,uniform,uniform ρ=0.5,0.500,1.000000,1.000000,13.000000,20
+sandbox,uniform,uniform ρ=1,1.000,0.000000,0.000000,26.000000,20
+sandbox,model,model self-targeting,,1.000000,1.000000,0.000000,20
+sandbox,target,target (write-under-protected-prefix),,0.000000,0.000000,6.100000,20
+sandbox,full_oracle,full oracle,,0.000000,0.000000,26.000000,20
+sandbox,oracle_free,perfect model (ρ=0),0.000,0.000000,0.000000,0.000000,20
+sandbox,target,shortcut (write-to-known-credential (CU12 shortcut)),,0.000000,1.000000,6.100000,20

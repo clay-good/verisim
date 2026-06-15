@@ -3186,6 +3186,29 @@ trained in `E_oracle` / `E_grounded` / `E_free`, all evaluated in reality. The r
   Reproduce: `python -m verisim.experiments.cu27_reversibility_boundary` (torch-free, no checkpoint;
   the CU21-grounded network exfil + segmentation dangers on the worst-case-omitter substrate; ~1 s).
 
+- **The targeting result against a real kernel (SPEC-22 / CU28 / H121 — SUPPORTED).** The whole
+  targeting arc (CU10–CU27 — *danger has a model-free surface; verifying it is cheap, safe, and
+  un-gameable*) ran against the deterministic *reference* oracle; CU2-sys (H94) anchored only the
+  *gate* (CU1) to a real `/bin/sh`. So a reviewer's first objection to the arc — *your oracle is a
+  toy* — stood open. CU28 closes it: it builds the CU21 `unified_targeting` engine **verbatim** on
+  the v0 filesystem world (content tampering — a credential file corrupted under a protected prefix)
+  with the **oracle as a parameter**, and runs the whole schedule sweep against the reference oracle
+  **and** a real `/bin/sh` (the slice SY1/H27 proved bit-exact). The covering (grammar-indexed)
+  target verifies any write under the prefix (`covers=True`); the asset-indexed shortcut verifies
+  only the known credential (the CU12 boundary, one world over, `covers=False`). The entire targeting
+  verdict is **anchor-invariant — bit-identical against the real kernel and the reference oracle
+  (max Δ = 0)**: the model-free **covering target** is safe + un-gameable (**0.000 random / 0.000
+  adversarial**) at **6.10 calls — 4.3× cheaper than the full oracle (26)**; the **asset-indexed
+  shortcut** is *false security* — random **0.000** but adversarial **1.000** (`covers=False`, the
+  CU12 result reproduced against reality); the uniform clock is a mirage (adversarial **1.000** at
+  every ρ<1), model self-targeting fails, the perfect model self-governs. **The program's central
+  applied result is verified against real computer-use dynamics, not a model of them.**
+
+  ![SPEC-22 CU28 / H121: the targeting result against a real /bin/sh, two panels, each overlaying the reference oracle (filled bars) and a real /bin/sh (hatched bars) which lie exactly on top of each other. Left — adversarial breach rate by schedule: free, uniform-knee, model self-targeting, and the asset-indexed shortcut all sit at 1.0 (gameable), while the model-free covering target and the full oracle sit at 0.0 (un-gameable); reference and real-kernel bars are bit-identical. Right — mean oracle calls per deployment by schedule: the covering target reaches the full oracle's safety at 6.1 calls versus the full oracle's 26 (4.3× cheaper), the asset shortcut costs the same 6.1 but leaks, again bit-identical against the real kernel. The targeting verdict is anchor-invariant, max Δ = 0, platform darwin.](../figures/cu28_realkernel_targeting.png)
+
+  Reproduce: `python -m verisim.acd.realkernel_targeting` (torch-free — the schedule is model-free;
+  `skipif`-guarded + §2.5-disclosed when no real shell; ~3 min for the committed both-anchor run).
+
 - **The distributed recession test — is the structural-first recession (H87) universal? NO (a refinement).**
   SPEC-21's H87 says the load-bearing frontier recedes *structural-first* with scale — structure tasks
   fall below the load-bearing threshold first, content tasks persist. But on host/network the structure
