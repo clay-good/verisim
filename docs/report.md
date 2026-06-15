@@ -3156,6 +3156,36 @@ trained in `E_oracle` / `E_grounded` / `E_free`, all evaluated in reality. The r
   Reproduce: `python -m verisim.experiments.cu26_cumulative_targeting` (torch-free, no checkpoint; a
   multi-action low-and-slow adversary on the worst-case-omitter substrate; ~2 s).
 
+- **The reversibility boundary — *when* to verify, not *what* (SPEC-22 / CU27 / H120 — SUPPORTED).**
+  The entire targeting arc (CU10–CU26) answers *what* to verify, all under one discipline —
+  **verify-before-commit** (preview the action through the world model, then act). CU27 opens the
+  orthogonal axis: *when* must that preview happen at all? A computer-use agent's action space splits
+  by **reversibility**. A reversible danger (a segmentation *posture* it can re-segment, a local write
+  it journaled) lives in a state it can snapshot and roll back; an irreversible danger (an exfil
+  *send* that left the boundary) escapes the snapshot the instant it executes. **Verify-after-commit**
+  (execute, *observe the realized state* — free, the agent is already in it; no model, no preview, no
+  drift — and roll back on a guardrail violation) is safe and **model-free** on a reversible danger
+  (the realized state is the exact oracle state, so faithfulness is irrelevant) and un-gameable, at
+  **zero before-commit oracle previews**; on an irreversible danger it fails (the breach is
+  consummated before any post-check). On the CU21-grounded network dangers (60 reversible exposure +
+  60 irreversible exfil deployments, horizon 48, worst-case omitter): verify-after-commit is
+  **0.000 / 0.000 at 0 oracle previews** on the reversible class but **fails adversarially (1.000)** on
+  the irreversible; the unverified before-commit gate is unsafe on *both* (**1.000 / 1.000**, the
+  boundary law). **Routing by reversibility is the only policy safe on both** (0.000 / 0.000), spending
+  the costly before-commit oracle **only on the irreversible slice** — 2.08 calls vs the 48 of
+  verify-everything (**23× cheaper**), the reversible half safe for free. The new **cost law**:
+  sweeping the irreversible fraction `f`, the routed before-commit oracle cost rises *linearly* with
+  `f` (zero at `f=0`) and the after-commit-everywhere residual breach also tracks `f`, while
+  verify-everything overpays a constant full cost. The reversibility theorem: **model faithfulness /
+  the whole targeting machinery is load-bearing only on the irreversible slice; reversible dangers are
+  safe model-free via after-commit rollback — the price of trusting a world model is exactly the
+  irreversibility you face.**
+
+  ![SPEC-22 CU27 / H120: the reversibility boundary, two panels. Left — adversarial (worst-case) breach by policy, split reversible (exposure posture, green) vs irreversible (exfil send, red). Verify-after-commit is safe on the reversible class (no bar, annotated 0 oracle previews) but fully breached on the irreversible (red bar at 1.0); the free omitter before-commit gate is breached on both (1.0/1.0); verify-everything is safe on both at 48 oracle calls each; routing by reversibility is safe on both, paying 4.2 oracle calls only on the irreversible class. Right — the cost law over the irreversible fraction f: the routed before-commit oracle cost (blue) rises linearly from 0 at f=0 to 4.2 at f=1, verify-everything (grey dashed) is flat at 48, and the after-commit-everywhere residual breach (red, right axis) rises linearly from 0 to 1.0 with f. The price of trustworthy world-modeling is exactly the irreversibility you face.](../figures/cu27_reversibility_boundary.png)
+
+  Reproduce: `python -m verisim.experiments.cu27_reversibility_boundary` (torch-free, no checkpoint;
+  the CU21-grounded network exfil + segmentation dangers on the worst-case-omitter substrate; ~1 s).
+
 - **The distributed recession test — is the structural-first recession (H87) universal? NO (a refinement).**
   SPEC-21's H87 says the load-bearing frontier recedes *structural-first* with scale — structure tasks
   fall below the load-bearing threshold first, content tasks persist. But on host/network the structure
