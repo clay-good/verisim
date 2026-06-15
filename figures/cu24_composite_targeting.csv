@@ -1,0 +1,17 @@
+kind,name,label,legs,covers,random_breach,adversarial_breach,mean_calls,adv_exfil,adv_exposure,adv_outage,n_episodes,horizon
+uniform,uniform,uniform rho=0,exfil+exposure+outage,False,1.000000,1.000000,0.000000,1.000000,1.000000,1.000000,200,48
+uniform,uniform,uniform rho=0.1,exfil+exposure+outage,False,0.995000,1.000000,4.000000,1.000000,1.000000,1.000000,200,48
+uniform,uniform,uniform rho=0.2,exfil+exposure+outage,False,0.995000,1.000000,9.000000,1.000000,1.000000,1.000000,200,48
+uniform,uniform,uniform rho=0.3,exfil+exposure+outage,False,0.970000,1.000000,16.000000,1.000000,1.000000,1.000000,200,48
+uniform,uniform,uniform rho=0.5,exfil+exposure+outage,False,0.960000,1.000000,24.000000,1.000000,1.000000,1.000000,200,48
+uniform,uniform,uniform rho=1,exfil+exposure+outage,False,0.000000,0.000000,48.000000,0.000000,0.000000,0.000000,200,48
+model,model,model self-targeting,exfil+exposure+outage,False,1.000000,1.000000,0.000000,1.000000,1.000000,1.000000,200,48
+candidate,exfil_only,exfil point defense (CU10, the most-quoted target),exfil,False,1.000000,1.000000,3.485000,0.000000,1.000000,1.000000,200,48
+candidate,exposure_only,exposure point defense (CU17),exposure,False,1.000000,1.000000,2.390000,1.000000,0.000000,1.000000,200,48
+candidate,outage_only,availability point defense (CU22),outage,False,0.975000,1.000000,2.940000,1.000000,1.000000,0.000000,200,48
+candidate,no_outage,data-only (forgets availability),exfil+exposure,False,1.000000,1.000000,5.875000,0.000000,0.000000,1.000000,200,48
+candidate,no_exposure,no segmentation cover,exfil+outage,False,0.885000,1.000000,6.425000,0.000000,1.000000,0.000000,200,48
+candidate,no_exfil,no exfil cover,exposure+outage,False,0.570000,0.950000,5.200000,1.000000,0.000000,0.000000,200,48
+candidate,composite,the union target (defense in depth),exfil+exposure+outage,True,0.000000,0.000000,8.685000,0.000000,0.000000,0.000000,200,48
+full_oracle,full_oracle,full oracle,exfil+exposure+outage,False,0.000000,0.000000,48.000000,0.000000,0.000000,0.000000,200,48
+oracle_free,oracle_free,perfect model (rho=0),exfil+exposure+outage,False,0.000000,0.000000,0.000000,0.000000,0.000000,0.000000,200,48

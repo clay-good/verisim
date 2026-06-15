@@ -3077,6 +3077,34 @@ trained in `E_oracle` / `E_grounded` / `E_free`, all evaluated in reality. The r
   Reproduce: `python -m verisim.experiments.cu23_process_availability` (torch-free, no checkpoint;
   the CU21 engine applied verbatim to a second new danger, in a second world; ~3 s).
 
+- **The composite defense — one union target defends the whole threat model at once (SPEC-22 / CU24 /
+  H117 — SUPPORTED, every prediction confirmed).** CU10–CU23 each defend *one* danger; a real cyber
+  defender faces them all together. CU24 builds three coexisting network dangers on CU22's
+  provisioned-work battery — exfil to a crown jewel (confidentiality), a jewel exposed to the untrusted
+  set (segmentation), a work service disconnected (availability) — and runs every point / partial /
+  union schedule against the composite threat model. The answer is CU21's coverage theorem composed —
+  the **composition theorem**: given legs `D₁…Dₖ` with covering targets `t₁…tₖ`, the **union target**
+  `T = t₁ ∨ … ∨ tₖ` covers the **union danger** `D = D₁ ∨ … ∨ Dₖ` (`realizes_D = ∃i realizes_i ⇒ ∃i tᵢ
+  = T`), so by the CU21 theorem T is **un-gameable against the composite adversary** (any leg, any
+  timing) at the cost of the **union of the surfaces**. **Committed run (200 deployments × horizon 48,
+  worst-case omitter, ~4 min):** the **union target** is `covers=True` — safe and un-gameable on *every*
+  leg (**0.000 random / 0.000 adversarial**, per-leg adversarial 0.000 for exfil, exposure, *and*
+  outage) — at **8.69 calls = 5.5× cheaper** than the full oracle (48), the sum of the three disjoint
+  per-leg surfaces (exfil 3.48 + exposure 2.39 + outage 2.94 ≈ 8.69). The boundary is the realistic SOC
+  failure: every **partial** schedule breaks coverage and leaks **exactly its omitted leg** — the
+  most-quoted **exfil point defense** (CU10) is un-gameable on its own confidentiality leg (0.000) but
+  fully gameable on the composite (adversarial **1.000**), and each leave-one-out pair leaks only the leg
+  it drops. The uniform knee is a mirage, model self-targeting fails, the perfect model self-governs, and
+  `covers` predicted all seven schedules' fates a priori. A point defense is not a threat-model defense:
+  the whole threat model has the *union* of the rare model-free surfaces — still cheap, still
+  un-gameable — and `covers` tells the defender whether their schedule covers everything before any
+  deployment runs.
+
+  ![SPEC-22 CU24 / H117: the composite defense, defending the whole threat model at once, two panels. Left — the defender's coverage matrix: rows are the schedules a defender might deploy (each single point defense, each leave-one-out pair, and the union); columns are the three danger legs (exfil/confidentiality, exposure/segmentation, outage/availability); each cell is the adversarial breach rate, colored green (un-gameable, 0.00) to red (leaks, 1.00). Only the union row (defense in depth) is green across the whole row at covers check and 8.7 calls; every partial schedule is red in exactly the leg(s) it omits, and the covers check/cross column predicts each row a priori. Right — the cost of defense in depth: a stacked bar showing the union target (8.7 calls) is the sum of the three disjoint per-leg surfaces (exfil 3.5 + exposure 2.4 + outage 2.9), still far below the full oracle's 48 calls — 5.5x cheaper than verifying everything](../figures/cu24_composite_targeting.png)
+
+  Reproduce: `python -m verisim.experiments.cu24_composite` (torch-free, no checkpoint; three
+  coexisting network dangers, the composition theorem on the CU21 engine; ~4 min).
+
 - **The distributed recession test — is the structural-first recession (H87) universal? NO (a refinement).**
   SPEC-21's H87 says the load-bearing frontier recedes *structural-first* with scale — structure tasks
   fall below the load-bearing threshold first, content tasks persist. But on host/network the structure
