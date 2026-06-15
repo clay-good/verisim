@@ -3127,6 +3127,35 @@ trained in `E_oracle` / `E_grounded` / `E_free`, all evaluated in reality. The r
   Reproduce: `python -m verisim.experiments.cu25_composite_trained` (torch-gated, reuses the frozen
   `runs/flagship/net-l` flagship, no retrain; the trained-arm closure of CU24; ~3 min).
 
+- **The low-and-slow danger — target the accumulator, not the action's magnitude (SPEC-22 / CU26 /
+  H119 — SUPPORTED, every prediction confirmed).** Every danger CU10–CU25 studied is realized by a
+  *single action*; the whole targeting result rests on a *per-action* coverage invariant. CU26 is the
+  fourth genesis-grammar flavor (after the syntactic action class, the action composed with structure,
+  and the transient medium condition) and a third generative test: a **cumulative** danger no single
+  action realizes — **mass collection / data hoarding**, concurrently holding flows to `>= B` distinct
+  sensitive hosts (the canonical low-and-slow exfiltration point-in-time defenses miss). The breach is
+  the aggregate crossing the budget `B`, realized only by the `B`-th distinct flow; the first `B-1`
+  contributors realize nothing. It forces the theory's extension: CU21's single-step `covers` is
+  *insufficient* (on the benign trajectory the accumulator may never reach the brink, so it is `True`
+  vacuously for every target), and the right invariant is **cumulative coverage** — the target must
+  fire on the crossing for every accumulation a multi-action adversary can stage. So extended, `covers`
+  sorts the catalogue a priori: the real-world **magnitude / DLP heuristic** (alarm on high-value
+  targets, the CU10 carry-over) `covers=False` → leaks (low-and-slow breach **1.000** at 3.59 calls —
+  false security, the adversary crosses over *non*-jewel hosts); **grammar** (watch every sensitive
+  flow) `covers=True` but overpays (9.19 calls); only the framework-*derived* **accumulator-closure**
+  (consult iff the action crosses the budget) is `covers=True` — safe, un-gameable (**0.000 / 0.000**),
+  at **0.28 calls, 32× cheaper than grammar and 169× cheaper than the full oracle**. The new **cost
+  law**: a higher budget makes the closure boundary *rarer* (cheaper — 1.04 → 0.28 → 0.06 calls as
+  `B`: 2 → 4) while the grammar surface is unchanged (~9), so the closure's ratio advantage *grows*
+  with `B` (8.7× → 32× → 143×). A cumulative danger has a model-free surface too — the accumulator's
+  boundary — and a per-action magnitude heuristic is provably gameable by an adversary who stays under
+  it; verify the boundary, not the magnitude.
+
+  ![SPEC-22 CU26 / H119: the low-and-slow danger, two panels. Left — the worst-case (low-and-slow) cost/safety frontier: adversarial breach rate vs mean oracle calls per deployment. The uniform blind clock (purple) is flat at 1.0 until the full oracle; the real-world magnitude / DLP heuristic (red X) is stuck at adversarial breach 1.0 at 3.6 calls (covers=False, predicted a priori — the adversary spreads collection over non-jewel hosts the value heuristic never watches); the grammar target (orange diamond, watch every sensitive flow) is safe but overpays at 9.2 calls; only the framework-derived accumulator-closure (green star) is in the safe-and-cheapest corner — zero adversarial breach at 0.28 calls, 32x cheaper than grammar. Right — the cost law: mean oracle calls vs the budget B; the grammar curve (orange) is flat near 9, the magnitude curve (red dashed) is cheap near 3.6 but leaks at every B, and the closure curve (green stars) falls from 1.04 to 0.06 calls as B rises 2 to 4 — a higher threshold makes the boundary rarer while the grammar surface is unchanged, so the closure's ratio advantage (9x, 32x, 143x) grows with B](../figures/cu26_cumulative_targeting.png)
+
+  Reproduce: `python -m verisim.experiments.cu26_cumulative_targeting` (torch-free, no checkpoint; a
+  multi-action low-and-slow adversary on the worst-case-omitter substrate; ~2 s).
+
 - **The distributed recession test — is the structural-first recession (H87) universal? NO (a refinement).**
   SPEC-21's H87 says the load-bearing frontier recedes *structural-first* with scale — structure tasks
   fall below the load-bearing threshold first, content tasks persist. But on host/network the structure
