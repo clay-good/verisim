@@ -1,0 +1,5 @@
+world,danger,n_breached,oracle_localization,model_localization,model_detection,surface_covers,n_single_breach,mean_root_cause_lag,fraction_cause_precedes_breach
+network,exfil flow to a crown jewel,50,1.000000,0.000000,0.000000,True,33,0.545455,0.212121
+host,protected file corruption,59,1.000000,0.000000,0.000000,True,59,5.762712,0.745763
+distributed,agent acts on a stale sensitive value,60,1.000000,0.000000,0.000000,True,19,4.157895,0.842105
+network (segmentation),jewel reachable from the untrusted set,60,1.000000,0.000000,0.000000,True,18,0.222222,0.055556

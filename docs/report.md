@@ -3209,6 +3209,37 @@ trained in `E_oracle` / `E_grounded` / `E_free`, all evaluated in reality. The r
   Reproduce: `python -m verisim.acd.realkernel_targeting` (torch-free — the schedule is model-free;
   `skipif`-guarded + §2.5-disclosed when no real shell; ~3 min for the committed both-anchor run).
 
+- **The forensic oracle — the posterior dual of the targeting arc (SPEC-22 / CU29 / H122 — SUPPORTED).**
+  The whole targeting arc (CU10–CU28) is *a priori* and *preventive*: a danger has a model-free
+  surface, and `covers` predicts, before any deployment runs, that verifying it is cheap, safe, and
+  un-gameable. CU29 turns the same exact oracle to the *a posteriori*, **forensic** question a defender
+  faces after an incident has already happened — which action caused the breach, and what was the root
+  cause? Two findings, on all four unified worlds (network exfil / host / distributed / segmentation).
+  **(1) Attribution needs the exact oracle.** It replays the breached trace and pinpoints the realizing
+  step **exactly** (localization **1.000** in every world). A world model cannot: one that drifts by
+  *omission* (CU8 — the real network `M_θ` omits 98% of exfil flows) predicts *no consequence* at the
+  very step that breached, so a model-based forensic reports *no incident occurred* — the omitting model
+  is forensically **blind** (localization **0.000**, detection **0.000**), and so is the *real* trained
+  `M_θ` (localization **0.000**, detection **0.10** on the network arm — not a strawman, CU8's omission).
+  The preventive slogan "you can't ask the omitter where it omits" has a forensic dual: **you can't ask
+  the omitter where it breached.** The steps the oracle flags are exactly a covering target's consults,
+  so **forensics and prevention converge on the same model-free surface**. **(2) The realizing step is
+  not the root cause.** A deterministic, resettable oracle is an exact **Structural Causal Model**
+  (SPEC-17), so a counterfactual `do`(remove an earlier action) — abduct (the recorded trace *is* the
+  exogenous state), intervene, predict — finds the earliest averting intervention, exact and free. In
+  the **genesis-separated** worlds it **precedes the breach** (host mean lag **5.8** steps, 75% upstream
+  — the `open` that bound the fd before the `write` corrupted it; distributed **4.2** steps, 84% — the
+  `put` before the stale `get`), while it is the breach step itself where genesis ≈ consumption (network
+  exfil **0.5**, segmentation **0.2**). The four genesis-grammar flavors of the targeting arc reappear
+  as four root-cause structures, read backward. **The exact oracle is not only a preventive verifier but
+  a forensic attributor — which step breached, how far upstream the incident was determined — and a
+  world model can do neither.**
+
+  ![SPEC-22 CU29 / H122: the forensic oracle, two panels. Left — breach localization accuracy by world (network exfil, host corruption, distributed staleness, network segmentation): the exact oracle forensic attributes every breach (green bars at 1.00) while the world-model (omitter) forensic is blind (red bars at 0.00); a dark diamond marks the real trained network M_θ at 0.00 (detection 0.10) on the network arm, confirming the omitter is not a strawman. Right — the root-cause lag: mean steps from the breach to the earliest averting intervention, with the genesis-separated worlds (host 5.8 steps / 75% upstream, distributed 4.2 / 84%) in dark bars and the genesis≈consumption worlds (network 0.5, segmentation 0.2) in light bars. The exact oracle attributes the breach and finds the upstream root cause; the world model cannot do either.](../figures/cu29_forensic_oracle.png)
+
+  Reproduce: `python -m verisim.experiments.cu29_forensic_oracle` (torch-free core; the real-`M_θ`
+  forensic point is torch-gated, reusing the frozen flagship `runs/flagship/net-l` — no retrain).
+
 - **The distributed recession test — is the structural-first recession (H87) universal? NO (a refinement).**
   SPEC-21's H87 says the load-bearing frontier recedes *structural-first* with scale — structure tasks
   fall below the load-bearing threshold first, content tasks persist. But on host/network the structure
