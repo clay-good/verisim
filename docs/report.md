@@ -3490,6 +3490,39 @@ trained in `E_oracle` / `E_grounded` / `E_free`, all evaluated in reality. The r
   oracle's write surface restricted to a watched path set, serving as both target and verifier, no
   trained model).
 
+- **CU38 / H131 — the heterogeneous verifier ensemble: the verifier-side dual of CU24's composite. SUPPORTED.**
+  CU24 proved the *target*-side composition theorem (the union target covers the union danger) with a
+  *perfect* verifier; CU36 then showed no single cheap monitor a defender can actually run is faithful on
+  the whole CIA triad — a state-diff monitor is exact on integrity + availability but blind on the
+  footprintless confidentiality leg (a read mutates nothing — CU34), a structure monitor exact only on
+  availability, a read-audit monitor exact only on confidentiality. CU36 *scored* each partial verifier
+  per leg ("globally partial, locally safe") but never *composed* them. CU38 does, holding the union
+  target fixed (covering — every leg is *consulted*, CU24's condition met) and varying the verifier from a
+  single partial monitor to an **ensemble** that OR-combines a panel of them. On 200 host deployments
+  (worst-case omitter): **no single cheap monitor is safe on the composite** — with every leg consulted, a
+  state-diff monitor still leaks (adversarial breach 1.000 on the composite, the confidentiality attack
+  *consulted but waved through* — the CU35 verifier-fidelity failure, distinct from CU24's *not-consulted*
+  failure), and symmetrically read-audit leaks integrity + availability; **the ensemble {state-diff,
+  read-audit} is exactly as safe as a perfect oracle** (adversarial breach 0.000 on every leg *and* the
+  composite, bit-identical to the exact oracle) because its members' faithful surfaces *jointly tile* CIA;
+  and **dropping a member re-opens exactly its uncovered leg** (drop read-audit → only the footprintless
+  confidentiality leg leaks 1.000, CU34's most-dangerous-to-omit danger; drop state-diff → integrity +
+  availability re-open). The ensemble is faithful on a leg iff *some* member is (an OR), and
+  `faithful_on_surface` is read off the danger grammar a priori in every cell. The footprintless
+  sharpening: confidentiality leaves no *state* footprint but DOES leave an *action* footprint (the read
+  on a secret fd), so the panel needs a third observation modality — a read-audit monitor that watches the
+  action, not the state delta. The defender payoff: you do not need to build a perfect oracle — assemble
+  the cheap, single-channel monitors a defender already runs (file-integrity + process + read-audit/DLP)
+  so their faithful surfaces tile the danger, and the panel is provably as safe as a perfect oracle while
+  every member is individually cheap and globally wrong.
+
+  ![SPEC-22 CU38 / H131: the heterogeneous verifier ensemble. A grid heat-map, rows the verifier panel (exact oracle, state-diff, structure, read-audit, the ensemble {state-diff, read-audit}, ensemble-minus-read-audit, ensemble-minus-state-diff, no gate) and columns the three CIA legs (integrity, availability, confidentiality) plus the composite, cell color the adversarial breach (green = 0.000 = as safe as the perfect oracle, red = leaks). The exact-oracle row is all green; every single cheap monitor has a red cell and so leaks the composite column (state-diff red on confidentiality, structure red on integrity + confidentiality, read-audit red on integrity + availability); the ensemble {state-diff, read-audit} row is all green — bit-identical to the exact oracle — because its members tile CIA; and the two ensemble-minus rows show that dropping a member re-opens exactly that member's leg. No single monitor is a perfect oracle, but a panel whose faithful surfaces tile the danger is.](../figures/cu38_verifier_ensemble.png)
+
+  Reproduce: `python -m verisim.experiments.cu38_verifier_ensemble` (torch-free; reuses the CU34 host CIA
+  battery, the union target over the three legs, CU36's state-diff/structure verifiers, and CU35's
+  verifier-gated runners; the read-audit verifier and the OR-ensemble combinator are new; no trained
+  model).
+
 - **The distributed recession test — is the structural-first recession (H87) universal? NO (a refinement).**
   SPEC-21's H87 says the load-bearing frontier recedes *structural-first* with scale — structure tasks
   fall below the load-bearing threshold first, content tasks persist. But on host/network the structure

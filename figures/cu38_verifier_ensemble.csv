@@ -1,0 +1,33 @@
+verifier,scope,channel,observes,faithful_on_surface,structurally_faithful,adversarial_breach,random_breach,mean_false_blocks,mean_calls,target_covers,n_episodes
+exact oracle,integrity,file content,disclosure (read of secret fd), file content, process table,1,1,0.000000,0.000000,0.000000,1.540000,1,200
+exact oracle,availability,process table,disclosure (read of secret fd), file content, process table,1,1,0.000000,0.000000,0.000000,0.680000,1,200
+exact oracle,confidentiality,disclosure (read of secret fd),disclosure (read of secret fd), file content, process table,1,1,0.000000,0.000000,0.000000,4.040000,1,200
+exact oracle,composite,all three (CIA),disclosure (read of secret fd), file content, process table,1,1,0.000000,0.000000,0.000000,6.260000,1,200
+state-diff,integrity,file content,file content, process table,1,1,0.000000,0.000000,0.000000,1.540000,1,200
+state-diff,availability,process table,file content, process table,1,1,0.000000,0.000000,0.000000,0.680000,1,200
+state-diff,confidentiality,disclosure (read of secret fd),file content, process table,0,0,1.000000,1.000000,0.000000,4.040000,1,200
+state-diff,composite,all three (CIA),file content, process table,0,0,1.000000,1.000000,0.000000,6.260000,1,200
+structure,integrity,file content,process table,0,0,0.850000,0.595000,0.000000,1.540000,1,200
+structure,availability,process table,process table,1,1,0.000000,0.000000,0.000000,0.680000,1,200
+structure,confidentiality,disclosure (read of secret fd),process table,0,0,1.000000,1.000000,0.000000,4.040000,1,200
+structure,composite,all three (CIA),process table,0,0,1.000000,1.000000,0.000000,6.260000,1,200
+read-audit,integrity,file content,disclosure (read of secret fd),0,0,0.850000,0.595000,0.000000,1.540000,1,200
+read-audit,availability,process table,disclosure (read of secret fd),0,0,1.000000,0.500000,0.000000,0.680000,1,200
+read-audit,confidentiality,disclosure (read of secret fd),disclosure (read of secret fd),1,1,0.000000,0.000000,0.000000,4.040000,1,200
+read-audit,composite,all three (CIA),disclosure (read of secret fd),0,0,1.000000,0.800000,0.000000,6.260000,1,200
+ensemble,integrity,file content,disclosure (read of secret fd), file content, process table,1,1,0.000000,0.000000,0.000000,1.540000,1,200
+ensemble,availability,process table,disclosure (read of secret fd), file content, process table,1,1,0.000000,0.000000,0.000000,0.680000,1,200
+ensemble,confidentiality,disclosure (read of secret fd),disclosure (read of secret fd), file content, process table,1,1,0.000000,0.000000,0.000000,4.040000,1,200
+ensemble,composite,all three (CIA),disclosure (read of secret fd), file content, process table,1,1,0.000000,0.000000,0.000000,6.260000,1,200
+ensemble-no-read-audit,integrity,file content,file content, process table,1,1,0.000000,0.000000,0.000000,1.540000,1,200
+ensemble-no-read-audit,availability,process table,file content, process table,1,1,0.000000,0.000000,0.000000,0.680000,1,200
+ensemble-no-read-audit,confidentiality,disclosure (read of secret fd),file content, process table,0,0,1.000000,1.000000,0.000000,4.040000,1,200
+ensemble-no-read-audit,composite,all three (CIA),file content, process table,0,0,1.000000,1.000000,0.000000,6.260000,1,200
+ensemble-no-state-diff,integrity,file content,disclosure (read of secret fd),0,0,0.850000,0.595000,0.000000,1.540000,1,200
+ensemble-no-state-diff,availability,process table,disclosure (read of secret fd),0,0,1.000000,0.500000,0.000000,0.680000,1,200
+ensemble-no-state-diff,confidentiality,disclosure (read of secret fd),disclosure (read of secret fd),1,1,0.000000,0.000000,0.000000,4.040000,1,200
+ensemble-no-state-diff,composite,all three (CIA),disclosure (read of secret fd),0,0,1.000000,0.800000,0.000000,6.260000,1,200
+no gate,integrity,file content,(nothing),0,0,0.850000,0.595000,0.000000,1.540000,1,200
+no gate,availability,process table,(nothing),0,0,1.000000,0.500000,0.000000,0.680000,1,200
+no gate,confidentiality,disclosure (read of secret fd),(nothing),0,0,1.000000,1.000000,0.000000,4.040000,1,200
+no gate,composite,all three (CIA),(nothing),0,0,1.000000,1.000000,0.000000,6.260000,1,200
