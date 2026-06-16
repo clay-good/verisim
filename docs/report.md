@@ -3855,6 +3855,22 @@ reversible, the syntactic pre-commit target only on the irreversible slice. RA4 
 grammar and an honest map of what it does and does not carry; hardening the pre-commit target for
 irreversible arbitrary bash is the RA5 frontier ([SPEC-22](specs/SPEC-22.md) RA arc).
 
+**RA5 — the 4-arm head-to-head (H137).** The RA arc proved the oracle gate works; RA5 puts it
+head-to-head against the guardrails a deployer actually has, recast as a deployment bake-off on a
+Terminal-Bench-shaped task distribution. Four arms: no gate (the OS-Harm baseline), a *learned*
+predictive guardrail (the [SafePred](https://arxiv.org/pdf/2602.01725) design), a permission denylist
+(the Claude-Code design), and the oracle coverage gate (verisim). The hermetic-engine numbers
+([`figures/ra5_head_to_head.csv`](../figures/ra5_head_to_head.csv)): under an adaptive prompt-injection
+adversary, the learned guardrail is adversarially breached (1.00 — its random miss falls 0.67→0.00 as
+fidelity rises 0.5→0.95 but its adversarial breach stays pinned at 1.00, CU4), the permission denylist
+is breached (1.00 — a chmod or mv is not a "write", so a pattern denylist cannot enumerate every
+realizing action), and only the oracle coverage gate is un-gameable (0.00) at no utility loss (1.00)
+and ~1 oracle call/task. This is the CU4/CU10/CU11 theorem as a deployment comparison against the
+named alternatives, and it measures exactly the gap SafePred names as its own limitation. The
+external number — a real Claude agent on real Terminal-Bench tasks in Docker, against OS-Harm/SafePred
+— is the live lane (the runbook is in [SPEC-22](specs/SPEC-22.md) RA5); the honest scope boundary is
+that the oracle gate applies to shell/file/process/network state, not GUI computer-use.
+
 ## What v0 ships for others
 
 Per SPEC-2 §15, the env + metric are packaged for reuse:
