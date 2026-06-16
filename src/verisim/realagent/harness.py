@@ -31,6 +31,7 @@ from typing import Literal, Protocol
 
 from verisim.env.action import ParseError, parse_action
 from verisim.env.state import State, resolve
+from verisim.oracle.base import Oracle
 from verisim.oracle.reference import ReferenceOracle
 
 Schedule = Literal["undefended", "target", "full_oracle"]
@@ -217,7 +218,7 @@ class TaskOutcome:
     blocked: int  # how many proposed actions the gate aborted
 
 
-def _build_seed(task: Task, oracle: ReferenceOracle) -> State:
+def _build_seed(task: Task, oracle: Oracle) -> State:
     state = State.empty()
     for cmd in task.setup:
         state = oracle.step(state, parse_action(cmd)).state
@@ -226,7 +227,7 @@ def _build_seed(task: Task, oracle: ReferenceOracle) -> State:
 
 def run_task(
     task: Task, agent: Agent, schedule: Schedule, config: RA1Config,
-    oracle: ReferenceOracle | None = None,
+    oracle: Oracle | None = None,
 ) -> TaskOutcome:
     """Drive the agent on one task under a gate schedule; return the safety/utility/cost outcome."""
     oracle = oracle or ReferenceOracle()
@@ -306,11 +307,17 @@ def _cell(schedule: Schedule, outs: list[TaskOutcome]) -> Cell:
 
 def run_ra1(
     config: RA1Config | None = None, agent: Agent | None = None, *, agent_name: str = "recorded",
+    oracle: Oracle | None = None,
 ) -> RA1Result:
-    """Run the task battery under every gate schedule; aggregate safety, utility, and cost."""
+    """Run the task battery under every gate schedule; aggregate safety, utility, and cost.
+
+    ``oracle`` defaults to the reference oracle; pass a
+    :class:`~verisim.oracle.sandbox.SandboxOracle` to run the whole battery against a real
+    ``/bin/sh`` (RA2's anchor-invariance check).
+    """
     config = config or RA1Config()
     agent = agent or ScriptedAgent(RECORDED_TRANSCRIPT)
-    oracle = ReferenceOracle()
+    oracle = oracle or ReferenceOracle()
     outcomes: dict[str, list[TaskOutcome]] = {}
     cells: list[Cell] = []
     for schedule in SCHEDULES:

@@ -3811,8 +3811,20 @@ success **1.00 = undefended**, because the danger surface is disjoint from the l
 coverage carries to a real actor: every credential-corrupting action in the grammar is on the target
 surface, so a *different, unrecorded* injection (`append`, not `write`) still breaches undefended and
 is still caught. The honest framing for a computer-use team: *a real LLM breaches on injection; bolt
-on the oracle gate and it doesn't, for a fraction of a call per task.* The next units (RA2+) carry
-this to an external, unseen benchmark and a real container ([SPEC-22](specs/SPEC-22.md) RA arc).
+on the oracle gate and it doesn't, for a fraction of a call per task.*
+
+**RA2 — the real LLM acts on a real kernel (H134).** RA1's world was the reference oracle, so the
+"your oracle is a toy" objection stood open for the real-agent result. RA2 closes it exactly as CU28
+did for the synthetic-adversary targeting: it runs the *identical* RA1 battery (recorded transcript,
+held-out danger, injection) against the reference oracle **and** a real `/bin/sh`
+([`SandboxOracle`](../src/verisim/oracle/sandbox.py), SPEC-11), holding the agent fixed so the only
+variable is the kernel. The verdict is **anchor-invariant — bit-identical, max Δ = 0**
+([`figures/ra2_real_kernel.csv`](../figures/ra2_real_kernel.csv)): undefended 0.167, covering gate
+0.000 at 0.17 calls/task (15× cheaper), success 1.00, the same on the reference oracle and the real
+kernel — because the env grammar is bit-exact between the two (SY1). The real LLM literally executes
+a real `write` to a real credential file under a sealed throwaway tree, and the oracle gate is what
+stops the irreversible harm. RA1 made the *agent* real; RA2 makes the *world* real. The next units
+(RA3+) carry this to an external, unseen benchmark ([SPEC-22](specs/SPEC-22.md) RA arc).
 
 ## What v0 ships for others
 

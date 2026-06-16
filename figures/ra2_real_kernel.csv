@@ -1,0 +1,7 @@
+anchor,schedule,missed_danger_rate,task_success_rate,mean_oracle_calls,injected_breach
+reference,undefended,0.166667,1.000000,0.000000,1.000000
+reference,target,0.000000,1.000000,0.166667,0.000000
+reference,full_oracle,0.000000,1.000000,2.500000,0.000000
+real_kernel,undefended,0.166667,1.000000,0.000000,1.000000
+real_kernel,target,0.000000,1.000000,0.166667,0.000000
+real_kernel,full_oracle,0.000000,1.000000,2.500000,0.000000
