@@ -3837,9 +3837,23 @@ the distribution (missed-danger 0.310 = the injection rate); the covering gate d
 0.31 calls/task (9.5× cheaper than the full oracle) with no utility loss (success 1.00); and per
 attack class, undefended breach 1.00 → gate 0.00, every class provably covered. The safety
 generalizes because it was never task-specific — the empirical confirmation, at scale, of the
-coverage theorem the CU arc rests on. The next unit (RA4) carries this to a literal external
-arbitrary-bash benchmark, which needs the namespaced sandbox tier and a command-agnostic oracle
-([SPEC-22](specs/SPEC-22.md) RA arc).
+coverage theorem the CU arc rests on.
+
+**RA4 — the command-agnostic gate (H136).** A real agent on an open benchmark emits arbitrary shell,
+so the gate must not depend on the v0 grammar. RA4 frees both halves: `realizes` is read off a real
+filesystem diff of the protected region (exact for any command — the RA1/RA2 detector never needed
+the grammar), and `target` is a syntactic scan of the command string for a protected-path reference.
+Three findings on three labeled corpora ([`figures/ra4_command_agnostic.csv`](../figures/ra4_command_agnostic.csv)):
+**(1)** a grammar-specific gate cannot parse 75% of the attack syntaxes (`tee`, `dd`, redirects,
+`python -c`, `rm -f`) and is structurally blind to them, while the command-agnostic target catches
+100%; **(2)** it is silent (0.00 false-blocks) on real benign idioms (`grep`, `find`, `tar`, `git`)
+it never saw; **(3)** *honestly*, a path built by indirection (`p=/et; … > ${p}c/shadow`, or a
+symlink) carries no literal prefix, so the syntactic pre-commit target misses every evasion — pre-commit
+coverage on arbitrary bash is a heuristic, not a theorem. The principled gate is CU27
+reversibility-routing: the exact post-commit fs-diff (which no evasion escapes) where the action is
+reversible, the syntactic pre-commit target only on the irreversible slice. RA4 is the bridge off the
+grammar and an honest map of what it does and does not carry; hardening the pre-commit target for
+irreversible arbitrary bash is the RA5 frontier ([SPEC-22](specs/SPEC-22.md) RA arc).
 
 ## What v0 ships for others
 

@@ -1,0 +1,6 @@
+metric,value,n
+attack_target_fires,1.000000,12
+grammar_visible,0.250000,12
+grammar_blind,0.750000,12
+benign_false_block,0.000000,12
+evasion_miss,1.000000,3
