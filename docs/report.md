@@ -3296,6 +3296,38 @@ trained in `E_oracle` / `E_grounded` / `E_free`, all evaluated in reality. The r
   accumulator, fleet low-and-slow adversary, and every target are grounded in the real reference
   network oracle — the worst-case-omitter substrate of CU16–CU26).
 
+- **The verification-latency barrier — the throughput cost of safety (SPEC-22 / CU32 / H125 — SUPPORTED).**
+  The whole arc prices verification in *oracle calls* and assumes the consult is instantaneous and
+  blocking. A real verifier is not free in wall-clock: replaying a plan through a sandbox or a real
+  kernel takes time (CU28's `SandboxOracle` is ~5 ms/step), and a SOC analyst or a SOAR approval gate
+  takes seconds to minutes. Verification has a **latency** `L`, and during `L` the agent is either
+  stalled or running ahead — so CU32 opens the throughput axis: *given latency `L`, how fast can a safe
+  agent act?* The obvious latency-hiding move is to **pipeline** — commit the action speculatively,
+  reconcile the verdict `L` steps later (how a CPU hides memory latency) — and it is a trap on the
+  **irreversible** slice: the send has left the boundary before the verdict confirms it was a breach, so
+  pipelining re-opens *exactly the irreversible slice CU27 isolated*. **The latency theorem:** safety on
+  the irreversible slice requires a **synchronous barrier** (stall `L` before committing); reversible
+  actions need none (their consult can be deferred, costing at worst a deeper rollback), so the CU27
+  reversibility router — stall the irreversible, pipeline the reversible — is *also* the routing that
+  minimizes throughput, at cost `L` × the irreversible covered rate. On the CU21-grounded network
+  dangers (60 reversible exposure + 60 irreversible exfil deployments, horizon 48, ref L=8, worst-case
+  omitter): `pipeline_all` is fast (throughput **1.0**) but adversarially breached on the irreversible
+  class (**1.000**); `barrier_all` is safe everywhere but stalls every consult (throughput **0.60**);
+  `routed` is **safe everywhere (0.000 / 0.000) and never stalls the reversible class**, so on a 50/50
+  mix its throughput is **0.74 = 1.24× barrier_all's**, both safe policies decaying with `L` while
+  pipeline stays flat-1 (and unsafe). The **mix law**: as the irreversible fraction `f → 0` routed
+  throughput rises to **1.0** (a fully reversible world is safe *for free* at any latency) while
+  `pipeline_all`'s residual breach grows linearly with `f`. **Verification latency makes safety cost
+  throughput, and the bill is `L` × the irreversible danger rate — you can defer verification you can
+  undo, you must stall for verification you can't** (the throughput-axis sequel to CU27's reversibility
+  router and CU15's cost-axis exhaustion).
+
+  ![SPEC-22 CU32 / H125: the verification-latency barrier, two panels. Left — safe throughput (actions per wall-clock unit) vs verifier latency L on a balanced 50/50 reversible/irreversible mix. The pipeline-all policy (red dashed) is flat at throughput 1.0 but adversarially breached on the irreversible slice — fast and unsafe; barrier-all (grey, stall every consult) is safe but decays fastest in L; routing by reversibility (green) is safe everywhere and decays slower, running 1.24× faster than barrier-all at L=8 because it never stalls the reversible consults. Right — the mix law at L=8: as the irreversible fraction f falls toward 0 the routed throughput (green) rises to 1.0 (safety free in a reversible world) while barrier-all (grey) stays flat-slow, and the pipeline-all residual adversarial breach (red, twin axis) grows linearly with f. Safety costs throughput, and the bill is L times the irreversible danger rate.](../figures/cu32_latency_barrier.png)
+
+  Reproduce: `python -m verisim.experiments.cu32_latency_barrier` (torch-free; the two danger classes,
+  the latency-hiding pipeline, the synchronous barrier, and the reversibility router are grounded in the
+  real reference network oracle — the CU21/CU27 deployments verbatim).
+
 - **The distributed recession test — is the structural-first recession (H87) universal? NO (a refinement).**
   SPEC-21's H87 says the load-bearing frontier recedes *structural-first* with scale — structure tasks
   fall below the load-bearing threshold first, content tasks persist. But on host/network the structure
