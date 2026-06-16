@@ -3328,6 +3328,38 @@ trained in `E_oracle` / `E_grounded` / `E_free`, all evaluated in reality. The r
   the latency-hiding pipeline, the synchronous barrier, and the reversibility router are grounded in the
   real reference network oracle — the CU21/CU27 deployments verbatim).
 
+- **The value of the oracle — the cost-optimal verification policy (SPEC-22 / CU33 / H126 — SUPPORTED).**
+  The whole arc reports two numbers per policy — a breach rate and an oracle-call count — but never in a
+  *common currency*, so every "N× cheaper" claim treats safety and cost as incomparable. A defender's
+  objective is **expected operational loss** `L = C · p_breach + c · calls` (`C` = the cost of one breach;
+  `c` = the cost of one oracle call). CU33 converts the arc into a CISO's decision rule. The practitioner's
+  natural model is a **tuning dial** ("spend more verification when stakes are high, find the sweet spot");
+  under a worst-case adversary that dial is an **illusion**, and the reason is the CU11/CU21 coverage
+  theorem. Every **non-covering** policy (uniform at any budget, model self-targeting) has adversarial
+  `p_breach = 1` *pinned* at every sub-oracle budget — so raising the budget only raises `c · calls` while
+  the breach stays catastrophic; every interior budget is strictly worse than doing nothing. Every
+  **covering** policy has adversarial `p_breach = 0`, and the **structure target Pareto-dominates the full
+  oracle** (same zero breach, strictly fewer calls), so the full oracle is never cost-optimal. The
+  efficient frontier collapses to **two points** — accept the loss (free, `L = C`) or cover it (structure,
+  `L = c · calls_structure`) — and the whole decision is one threshold: **verify iff
+  `C/c > calls_structure`** (a handful of oracle calls). On the network + host targeting arms (worst-case
+  omitter, torch-free ~6 s): structure dominates the full oracle and is the unique cost-optimal covering
+  policy in *both* worlds; the deploy threshold is **`C/c = 4.07` (net) / `3.49` (host)** (structure
+  **11.8× / 13.8×** cheaper than the full oracle), and *no* non-covering policy is ever optimal. The
+  honest contrast: against *nature* the uniform dial is real (random breach slopes
+  `1.00 → 0.96 → 0.93 → 0.82 → 0.66 → 0.00` with the budget), but against the *adversary* it is **flat at
+  1.00** until the full-oracle cliff. **Under an adversary there is no safety/cost tradeoff to tune — the
+  coverage theorem replaces it with a binary "cover or accept the loss," and coverage is cheap, so a
+  defender verifies the structure surface whenever a breach costs more than a few oracle calls** (the
+  economic closure of the arc: CU14 scored mission/breach/cost separately, CU15 attacked the cost axis;
+  CU33 puts them in one currency and reads off the rule).
+
+  ![SPEC-22 CU33 / H126: the value of the oracle, two panels. Left — the safety/cost dial: real vs nature, an illusion vs an adversary. The uniform schedule's breach as a function of the verification budget — the random-workload breach (blue) slopes smoothly down with the budget (the tuning dial), while the adversarial breach (red, dashed) is flat at 1.0 across every sub-oracle budget and drops only at the full-oracle cliff (the dial does nothing); the structure target (green star) is safe against both at a small fraction of the budget. Right — the value of the oracle: expected operational loss (in units of the call cost c) vs the stake ratio C/c under the adversary. Free (accept the loss) rises as C/c; structure is flat at its small call count; the full oracle is flat higher and dashed (Pareto-dominated, never optimal). They cross at the critical ratio C/c = calls_structure ≈ 4: below it accept the loss, above it verify the structure surface.](../figures/cu33_oracle_value.png)
+
+  Reproduce: `python -m verisim.experiments.cu33_oracle_value` (torch-free; reuses the CU21
+  `unified_targeting` network + host arms; the economic layer is pure functions over the per-policy
+  breach / call points the arc already measures).
+
 - **The distributed recession test — is the structural-first recession (H87) universal? NO (a refinement).**
   SPEC-21's H87 says the load-bearing frontier recedes *structural-first* with scale — structure tasks
   fall below the load-bearing threshold first, content tasks persist. But on host/network the structure
