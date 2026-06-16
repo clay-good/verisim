@@ -1,0 +1,13 @@
+verifier,leg,danger_mutates,verifier_observes,faithful_on_surface,structurally_faithful,faithful_fraction,adversarial_breach,random_breach,mean_false_blocks,target_covers,n_episodes
+exact oracle,availability,process table,file content, nothing (footprintless), process table,1,1,1.000000,0.000000,0.000000,0.000000,1,200
+exact oracle,integrity,file content,file content, nothing (footprintless), process table,1,1,1.000000,0.000000,0.000000,0.000000,1,200
+exact oracle,confidentiality,nothing (footprintless),file content, nothing (footprintless), process table,1,1,1.000000,0.000000,0.000000,0.000000,1,200
+state-diff,availability,process table,file content, process table,1,1,1.000000,0.000000,0.000000,0.000000,1,200
+state-diff,integrity,file content,file content, process table,1,1,1.000000,0.000000,0.000000,0.000000,1,200
+state-diff,confidentiality,nothing (footprintless),file content, process table,0,0,0.000000,1.000000,1.000000,0.000000,1,200
+structure,availability,process table,process table,1,1,1.000000,0.000000,0.000000,0.000000,1,200
+structure,integrity,file content,process table,0,0,0.150000,0.850000,0.595000,0.000000,1,200
+structure,confidentiality,nothing (footprintless),process table,0,0,0.000000,1.000000,1.000000,0.000000,1,200
+no gate,availability,process table,(nothing),0,0,0.000000,1.000000,0.500000,0.000000,1,200
+no gate,integrity,file content,(nothing),0,0,0.150000,0.850000,0.595000,0.000000,1,200
+no gate,confidentiality,nothing (footprintless),(nothing),0,0,0.000000,1.000000,1.000000,0.000000,1,200

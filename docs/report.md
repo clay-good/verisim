@@ -3427,6 +3427,39 @@ trained in `E_oracle` / `E_grounded` / `E_free`, all evaluated in reality. The r
   `unified_targeting` network / host / segmentation arms; worst-case omitter + exact reference oracle as
   ground truth, the deployed verifier a parameterized imperfect model, no trained model).
 
+- **CU36 / H129 — the grounded verifier: CU35's fidelity law against *real* verifiers. SUPPORTED.**
+  CU35 proved the dual coverage law — a deployed verifier need not be a perfect oracle, only **faithful
+  on the danger surface** — but it demonstrated it with an *abstract* verifier (a hash-coin
+  `SurfaceOmitter(φ)` whose fidelity is a dialed parameter). The skeptic's question stood exactly as it
+  did before CU28 grounded the *targeting* arc against a real `/bin/sh`: is the fidelity law a property
+  of real verifiers, or only of a synthetic dial? CU36 grounds it. It exhibits two **real, deployable,
+  structurally-defined** partial verifiers over the CU34 host CIA battery — **the state-diff verifier**
+  (the cheap deployed baseline: a file-integrity + process monitor, which is CU34's after-the-fact
+  detector reframed as a *before-commit* verifier; it observes the post-state delta and is blind to a
+  read's output channel) and **the structure verifier** (the SPEC-20 structure/content boundary made
+  into a verifier: it observes the process + fd tables and is blind to file content). Their fidelity
+  profiles are **read off the danger grammar a priori** — does the verifier observe the state channel
+  the danger mutates? By the host grammar a write flips file *content*, a kill changes the *process
+  table*, and a read mutates *nothing*, so the state-diff verifier is faithful on integrity + availability
+  and an on-surface omitter on the footprintless confidentiality leg, while the structure verifier is
+  faithful only on availability. On 200 host deployments (worst-case omitter): CU35's localization
+  governs both verifiers exactly — wherever a verifier is faithful on the surface it is **exactly as safe
+  as the perfect oracle** (adversarial breach **0.000**), and wherever it is not it is **exactly as blind
+  as no gate** (the state-diff verifier **1.000** on confidentiality; the structure verifier **0.850 /
+  1.000** on integrity / confidentiality — *identical* to the no-gate baseline). The empirical
+  `faithful_on_surface` (CU35's dual condition) equals the a-priori grammar predictor in **all 12 cells**.
+  **You can read a cheap verifier's safety off the danger grammar without ever measuring its fidelity — a
+  globally-partial real verifier is exactly as safe as a perfect oracle on the danger surface it observes,
+  and exactly as blind as no gate on the one it does not.** The realism closure of CU35 (as CU28 was of
+  CU21), composing CU34's footprintless danger with CU35's fidelity law and SPEC-20's structure/content
+  boundary.
+
+  ![SPEC-22 CU36 / H129: the grounded verifier, two panels. Left — the localization grid: adversarial breach for every (verifier × CIA leg) cell, from the perfect oracle (top) through the two real partial verifiers to no gate (bottom). Green (breach 0) = exactly as safe as the perfect oracle; red (breach high) = exactly as blind as no gate; each cell is annotated with CU35's dual condition faithful_on_surface (check/cross). The state-diff verifier is green on integrity + availability and red on confidentiality (the footprintless leg); the structure verifier is green only on availability. Right — the structural predictor: which host state channel each danger mutates (rows) and which channels each verifier observes (columns); a cell is safe iff the danger's channel is one the verifier observes, so a defender reads the cheap verifier's safety off the danger grammar without ever measuring its fidelity. The two panels align cell for cell.](../figures/cu36_grounded_verifier.png)
+
+  Reproduce: `python -m verisim.experiments.cu36_grounded_verifier` (torch-free; reuses the CU34 host
+  CIA battery and CU35's verifier-gated runners; worst-case omitter + exact reference oracle, the two
+  real verifiers observing one state channel each, no trained model).
+
 - **The distributed recession test — is the structural-first recession (H87) universal? NO (a refinement).**
   SPEC-21's H87 says the load-bearing frontier recedes *structural-first* with scale — structure tasks
   fall below the load-bearing threshold first, content tasks persist. But on host/network the structure
