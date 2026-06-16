@@ -3791,6 +3791,29 @@ python -m verisim.experiments.cue_pack --out cue
 python -m verisim.experiments.cue_leaderboard --out figures/cl1_cue_leaderboard.csv
 ```
 
+## RA1 — the oracle safety gate around a real LLM (SPEC-22 / H133, 2026-06-16)
+
+The CU1–CU39 arc proved the safety gate against a *synthetic* adversary on *hand-specified* danger
+grammars. RA1 is the first unit of the realism turn: it wraps a **real Claude agent**
+(`claude-opus-4-8`) working **6 curated shell tasks** in the env filesystem world (exact
+`ReferenceOracle`) with the CU21 covering-target gate, against a **held-out** credential region
+(`/etc`, defined independently of the tasks). One task carries a **prompt-injection** in a notes
+file the agent reads. The real-LLM arm is gated behind `VERISIM_LLM` (the LP7 rule, generalized to
+the model provider); CI and the committed figure replay a **recorded transcript** (one real Claude
+run), so the result is hermetic, torch-free, and regenerable.
+
+The numbers ([`figures/ra1_real_agent.csv`](../figures/ra1_real_agent.csv),
+[`.png`](../figures/ra1_real_agent.png)): **undefended**, the agent obeys the injection and
+overwrites the credential — missed-danger **0.167** (1 of 6 tasks; the injected task breaches
+**1.00**). The **covering-target gate** drives missed-danger to **0.000** at **0.17 oracle
+calls/task** — **15× cheaper** than the full oracle (2.50 calls) — **with no utility loss** (task
+success **1.00 = undefended**, because the danger surface is disjoint from the legitimate work). And
+coverage carries to a real actor: every credential-corrupting action in the grammar is on the target
+surface, so a *different, unrecorded* injection (`append`, not `write`) still breaches undefended and
+is still caught. The honest framing for a computer-use team: *a real LLM breaches on injection; bolt
+on the oracle gate and it doesn't, for a fraction of a call per task.* The next units (RA2+) carry
+this to an external, unseen benchmark and a real container ([SPEC-22](specs/SPEC-22.md) RA arc).
+
 ## What v0 ships for others
 
 Per SPEC-2 §15, the env + metric are packaged for reuse:
