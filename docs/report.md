@@ -3523,6 +3523,37 @@ trained in `E_oracle` / `E_grounded` / `E_free`, all evaluated in reality. The r
   verifier-gated runners; the read-audit verifier and the OR-ensemble combinator are new; no trained
   model).
 
+- **CU39 / H132 — the redundant verifier: defense in depth requires failure independence. SUPPORTED.**
+  CU38 tiled the CIA triad with verifier members held *exact* on their channel (a state-diff monitor
+  literally observes the post-state delta, so it is bit-exact on integrity). CU35's premise is the
+  opposite — a real verifier *drifts* (faithful on its surface only with probability `φ < 1`: a sandbox
+  misses a syscall, a DLP rule has a gap, a monitor is mis-tuned). CU39 asks what CU38's tiling theorem
+  does when the members are imperfect, and recovers the oldest principle in security with a
+  coverage-theoretic statement: **defense in depth** — stack redundant monitors so a danger one misses
+  another catches, but only if they fail *independently*. On the CU21 network + host arms (worst-case
+  omitter): a **single imperfect monitor is adversarially gameable** (the attacker fires in its `(1−φ)`
+  blind spot — CU35's cliff, breach pinned near the no-gate rate); **homogeneous** redundancy (`m`
+  copies of one monitor, a shared blind spot) is **flat in stack height** — running the same scanner
+  twice buys nothing, the adversary's target never moves (net adversarial breach **1.000** at every
+  `m`, host **0.662**); **heterogeneous** redundancy (`m` monitors with *independent* blind spots)
+  drives adversarial breach to the oracle's **0.000** at a knee `m* ~ ln A / ln(1/(1−φ))` (net reaches
+  0 at `m=6`, host at `m=6` for φ=0.5; the knee moves left as φ rises — φ=0.7 reaches 0 at `m≈3–4`),
+  because the members' faithful surfaces **tile the leg** (a danger action escapes only where *all m*
+  are independently blind, a `(1−φ)ᵐ` fraction). **Independence is load-bearing** (heterogeneous is
+  strictly safer than homogeneous at the top of the stack on every arm), and **depth costs a
+  compounding false-block tax** `1 − ψᵐ` (net false blocks rise **0.21 → 1.84**) — you pay for depth in
+  utility, not safety (CU37's precision tax × the stack height). The defender principle: **stack
+  diverse monitors, not copies — the adversary defeats correlated redundancy for free.** Defense in
+  depth is the CU38 tiling theorem operating *within* one danger leg at the sub-action granularity, and
+  the heterogeneity that gave CU38 *breadth* (tile across CIA) is exactly what gives *depth* (tile a
+  single leg); the worst-case-robustness arc (CU4/CU11/CU15/CU33) carried to the verifier panel.
+
+  ![SPEC-22 CU39 / H132: the redundant verifier, two panels. Left — adversarial breach versus stack height m at fixed member fidelity φ=0.5: the homogeneous stack (red dashed, copies of one monitor) is flat at 1.0 for every m, while the heterogeneous stack (green, independent blind spots) falls to the oracle's 0 by m=6 as the members' faithful surfaces tile the leg — independence is load-bearing. Right — the defense-in-depth knee: heterogeneous adversarial breach versus m at φ=0.3/0.5/0.7, with the knee m* ~ ln A / ln(1/(1−φ)) shifting left as each member gets more faithful — a weaker monitor needs a taller stack.](../figures/cu39_verifier_redundancy.png)
+
+  Reproduce: `python -m verisim.experiments.cu39_verifier_redundancy` (torch-free; reuses the CU21
+  net/host arms and CU35's verifier-gated runners + the CU38 OR-ensemble; the salt-keyed imperfect
+  monitor and the homogeneous/heterogeneous combinators are new; no trained model).
+
 - **The distributed recession test — is the structural-first recession (H87) universal? NO (a refinement).**
   SPEC-21's H87 says the load-bearing frontier recedes *structural-first* with scale — structure tasks
   fall below the load-bearing threshold first, content tasks persist. But on host/network the structure
