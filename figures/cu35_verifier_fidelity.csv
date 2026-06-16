@@ -1,0 +1,29 @@
+world,sweep,fidelity,adversarial_breach,random_breach,mean_false_blocks,n_scenarios
+network,on_surface,0.000,1.000000,1.000000,0.000000,80
+network,on_surface,0.200,1.000000,0.875000,0.000000,80
+network,on_surface,0.400,0.987500,0.575000,0.000000,80
+network,on_surface,0.600,0.987500,0.562500,0.000000,80
+network,on_surface,0.800,0.950000,0.250000,0.000000,80
+network,on_surface,1.000,0.000000,0.000000,0.000000,80
+network,off_surface,0.000,0.000000,0.000000,2.300000,80
+network,off_surface,0.200,0.000000,0.000000,1.737500,80
+network,off_surface,0.400,0.000000,0.000000,1.325000,80
+network,off_surface,0.600,0.000000,0.000000,0.737500,80
+network,off_surface,0.800,0.000000,0.000000,0.300000,80
+network,off_surface,1.000,0.000000,0.000000,0.000000,80
+host,on_surface,0.000,1.000000,1.000000,0.000000,80
+host,on_surface,0.200,0.887500,0.937500,0.000000,80
+host,on_surface,0.400,0.900000,0.862500,0.000000,80
+host,on_surface,0.600,0.650000,0.575000,0.000000,80
+host,on_surface,0.800,0.587500,0.375000,0.000000,80
+host,on_surface,1.000,0.000000,0.000000,0.000000,80
+host,off_surface,0.000,0.000000,0.000000,0.000000,80
+host,off_surface,0.200,0.000000,0.000000,0.000000,80
+host,off_surface,0.400,0.000000,0.000000,0.000000,80
+host,off_surface,0.600,0.000000,0.000000,0.000000,80
+host,off_surface,0.800,0.000000,0.000000,0.000000,80
+host,off_surface,1.000,0.000000,0.000000,0.000000,80
+network (segmentation),grid_covers_exact,,0.000000,,,
+network (segmentation),grid_covers_blind,,1.000000,,,
+network (segmentation),grid_leak_exact,,1.000000,,,
+network (segmentation),grid_leak_blind,,1.000000,,,

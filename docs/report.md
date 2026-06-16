@@ -3393,6 +3393,40 @@ trained in `E_oracle` / `E_grounded` / `E_free`, all evaluated in reality. The r
   `unified_targeting` host machinery + the CU16 integrity / CU23 availability legs; worst-case omitter +
   exact host oracle, no trained model).
 
+- **CU35 / H128 — the verifier-fidelity condition: the dual coverage law. SUPPORTED.**
+  The whole targeting arc (CU10–CU34) hard-codes one assumption it never names: when the schedule
+  *consults*, the oracle returns the **exact** verdict (`block = realizes`). The arc's only variable was
+  the **target** (*which* actions to consult), and its theorem is that the target must **cover** the
+  danger surface (`realizes ⇒ target`). But a real deployed verifier is not a free, bit-exact oracle: it
+  is itself a *model* of the world (a sandbox, an emulator, a cheaper reference) that can drift, exactly
+  along the structure/content boundary the foundation measured. CU35 turns that variable and finds the
+  matching **dual** condition: the verifier must be **faithful on** the danger surface (for every danger
+  action, the consulted verifier's verdict equals the oracle's). The two coverage conditions —
+  target-covers (CU21) and verifier-faithful-on-surface (CU35) — are **independent and both necessary**.
+  The non-obvious payoff is **localization**: under a covering target the verifier is consulted *only* on
+  the danger's sparse surface, so a verifier **globally wrong but exact on the danger grammar is exactly
+  as safe as a perfect oracle** (its off-surface drift is never consulted, buying only false blocks,
+  never a missed danger) — a cheap sandbox is a safe verifier **iff** it is faithful on the danger
+  surface, a far weaker, checkable condition than a high-fidelity replica of production; the dual
+  negative is a verifier faithful everywhere *except* the surface (an on-surface omitter), which is as
+  blind as no gate at all — CU8's omission bias relocated from the agent's world model into the verifier
+  itself. On the network + host arms (worst-case omitter): on-surface fidelity is asymmetric — *vs
+  nature* a **sloped faithful-horizon** (random breach `1.00 → 0.00` as the verifier's on-surface
+  fidelity rises), *vs the adversary* a **cliff** (adversarial breach pinned ≥0.5 until the verifier is
+  exact — the verifier analogue of CU11 / CU33's flat dial); off-surface fidelity is **irrelevant to
+  safety** (adversarial breach flat at 0) but **costs utility** (false blocks rise). The **2×2** confirms
+  independence: only (covers ∧ faithful) is safe (**0.000**), a covering target with a blind verifier
+  leaks (**1.000**), and a faithful verifier does not save a non-covering target (**1.000**). This is the
+  structure/content boundary and the faithful horizon applied to the *verifier* rather than the agent.
+  **The oracle's value was never that it is perfect everywhere — it is that it is faithful exactly on the
+  sparse danger surface; a verifier needs nothing more, and nothing less.**
+
+  ![SPEC-22 CU35 / H128: the verifier-fidelity condition, three panels. Left — the on-surface fidelity dial is load-bearing: random breach falls smoothly with the verifier's fidelity on the danger surface (a faithful horizon vs nature), but adversarial breach is a cliff that stays high until the verifier is exact (a mirage vs the adversary), for both the network and host arms. Middle — the off-surface fidelity dial is irrelevant to safety: adversarial breach is flat at zero for all off-surface fidelity, because a covering target consults the verifier only on the surface; off-surface drift buys only rising false blocks (the utility cost, twin axis). Right — the 2×2 across {target covers?} × {verifier faithful on surface?}: only the (covers AND faithful) corner is safe (green, 0.00); a covering target with a blind verifier leaks (1.00), and a faithful verifier does not rescue a non-covering target (1.00) — both coverage conditions independently necessary.](../figures/cu35_verifier_fidelity.png)
+
+  Reproduce: `python -m verisim.experiments.cu35_verifier_fidelity` (torch-free; reuses the CU21
+  `unified_targeting` network / host / segmentation arms; worst-case omitter + exact reference oracle as
+  ground truth, the deployed verifier a parameterized imperfect model, no trained model).
+
 - **The distributed recession test — is the structural-first recession (H87) universal? NO (a refinement).**
   SPEC-21's H87 says the load-bearing frontier recedes *structural-first* with scale — structure tasks
   fall below the load-bearing threshold first, content tasks persist. But on host/network the structure
