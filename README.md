@@ -1,5 +1,7 @@
 # Verisim
 
+> **New here?** The fastest path to the signal is the distilled preprint: **[docs/paper.md](docs/paper.md)** (about 8 pages). It states the thesis, the coverage theorem, the head-to-head against the guardrails the field ships (SafePred and the permission-system status quo), and, plainly, what is proven versus what still awaits a live external-benchmark run. This README is the exhaustive companion.
+
 > A computer-use AI agent is one mis-predicted action away from an
 > irreversible mistake — deleting the wrong file, overwriting a credential, opening a connection to a
 > server it should never touch. **Verisim is the safety layer that makes acting on a cheap, fallible
