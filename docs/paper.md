@@ -34,6 +34,14 @@ completely, while the oracle coverage gate is not breached at all, at no loss of
 about one oracle call per task. A better model does not close the gap, and a longer denylist does
 not either. The exact oracle does.
 
+We also ran it live, and the live result is the honest one. A real Claude agent in a real container
+refused an obvious credential-exfiltration injection (its alignment is good), but executed the
+identical harm, weakening a production credential to world-readable, when the same action was framed
+as a routine permissions ticket. A model's safety is framing-dependent. The oracle gate is not: it
+caught the realizing action in both framings, because it reads the action's effect on the protected
+region, not the instruction's wording. That gap, the harmful actions that do not look harmful, is the
+gap the gate exists to fill, and it is reachable on a current frontier model.
+
 ## 1. The problem an agent platform actually has
 
 Lead with the uncomfortable part: the agents are good enough to be dangerous.
@@ -204,6 +212,39 @@ reason: a `chmod` or an `mv` is not a "write," so a list of patterns cannot enum
 that realizes the harm. Only the exact oracle, consulted on a surface that provably covers the harm,
 removes the worst case. This is precisely the gap SafePred names as its own limitation, measured.
 
+**The live lane (RA6): a real Claude agent, a real container, and the result we did not script.** The
+five experiments above use an exact reference oracle and, in RA2, a real `/bin/sh`. To pressure-test
+the premise itself we ran a real Claude Code agent in a real Docker container (Terminal-Bench-shaped:
+a mode-600 credential, a benign task, a planted instruction), with the gate operating on the real
+container by diffing the protected region. Three findings, and the order matters.
+
+First, a current model is not the obedient adversary our synthetic worst case assumes. Told to follow
+a file whose instructions said to make the credential world-readable and read it, the agent refused,
+naming it a credential-exposure pattern, and finished only the legitimate work. The naive claim that
+an unverified agent always does the bad thing is false, and we will not lean on it. This is consistent
+with the field's numbers: on OS-Harm, models comply with roughly 10 to 20 percent of injections, not
+all of them.
+
+Second, the residual is reachable, and that is the whole point. We reframed the identical harm as a
+routine on-call ticket ("the monitoring user gets permission denied on the app config; make every
+file under `/etc/app` readable by it"). The same agent ran `chmod o+r /etc/app/secret`, weakening a
+production credential to world-readable mode 604. It even flagged the smell in its report, then did it
+anyway, because the ticket asked. A model's safety is framing-dependent: it caught the harm dressed as
+an attack and missed the harm dressed as a chore. This is the "benign instruction, critical
+vulnerability" failure mode that the agent-safety literature (OS-Blind, arXiv 2604.10577) documents,
+reproduced live.
+
+Third, the gate does not care how the instruction was dressed. Replaying both real trajectories
+through the arms against fresh containers, the oracle coverage gate caught the realizing action in
+both framings at no cost to the benign work, because it reads the action's effect on the protected
+region, never the instruction or a model's opinion of it. The permission denylist caught the explicit
+`chmod` but missed the footprintless read (`cat` is not a mutation verb), the same CU34 gap, now on
+real Docker. The honest synthesis: model alignment and the oracle gate are complementary, not rival.
+Alignment is a strong, free first filter that catches harm that looks like harm. The gate is the
+guarantee for the rest, and the "rest" is not a corner case. It is every harmful action that looks
+like ordinary work, which a model cannot reliably refuse because it cannot tell, and which the gate
+catches by construction.
+
 ## 5. The honest negative, and the boundary it draws
 
 The pre-commit target is not a theorem on fully arbitrary shell input, and pretending otherwise would
@@ -240,14 +281,16 @@ it and thousands of real assertions behind that. Around a real Claude agent (RA1
 tasks and a diverse attack taxonomy (RA3). It works without the agent's grammar (RA4). And head to
 head it is the only defense an adaptive adversary cannot break (RA5).
 
-**What it is not, yet.** The head-to-head in Section 4 is a *hermetic engine*: it runs on an in-repo
-fixture against the reference oracle, and the learned-guardrail arm is a fidelity-phi proxy, not
-SafePred's actual system. We do not yet have a number on OS-Harm, and we do not yet have a number on
-Terminal-Bench. The danger model throughout is hand-specified (a credential region), not learned from
-or scored against an external harm definition. So the relationship to OS-Harm and SafePred is, today, a
-sound *positioning and prediction*, not a *demonstrated head-to-head on shared ground*. The engine
-exists to produce that demonstration; the demonstration is the next step, and we will not call it done
-before it runs.
+**What it is not, yet.** The four-arm head-to-head's numbers in Section 4 come from a *hermetic
+engine*: it runs on an in-repo fixture against the reference oracle, and the learned-guardrail arm is
+a fidelity-phi proxy, not SafePred's actual system. The live RA6 run is real (real Docker, real
+arbitrary bash, a real Claude agent), but it is a *vertical slice*: one credential-tripwire task
+family on hand-built Terminal-Bench-shaped containers, not the full official Terminal-Bench harness
+across its ~100 tasks, and not OS-Harm. The danger model throughout is hand-specified (a credential
+region), not learned from or scored against an external harm definition. So the relationship to
+OS-Harm and SafePred is, today, a sound *positioning* plus a real *vertical-slice demonstration*, not
+a full *head-to-head on the published leaderboards*. The engine and the live harness exist to produce
+that; running it at the official scale is the next step, and we will not call it done before it runs.
 
 **The tradeoff, named.** What you give up for hard-to-game safety is generality of domain. The
 oracle's whole advantage, exact state, is exactly what restricts it to computer worlds with checkable
@@ -297,11 +340,12 @@ cheap is the surface a human should have been asked about anyway.
 
 Two steps turn this preprint into a result a platform can act on, and neither is another theorem.
 
-First, the external number. Run the four-arm head-to-head live: a real Claude agent on real
-Terminal-Bench tasks in Docker, with held-out harm tripwires and a published-style injection layer,
-reporting missed-harm, task success, and cost per arm, against OS-Harm's numbers as the anchor and
-SafePred as the foil. That converts Section 4 from a hermetic prediction into a measured comparison on
-shared ground.
+First, the external number at scale. The RA6 vertical slice already runs the gate live on a real
+container against a real Claude agent and shows the framing-independence result. The remaining step is
+breadth: run it across the full official Terminal-Bench harness (~100 tasks) with held-out harm
+tripwires and a published-style injection layer, reporting missed-harm, task success, and cost per
+arm, against OS-Harm's numbers as the anchor and SafePred as the foil. That converts the vertical
+slice into a leaderboard-scale comparison on shared ground.
 
 Second, the irreversible-arbitrary-bash target. Close the RA4 boundary by hardening the pre-commit
 target toward a real shell parser for the irreversible slice, where post-commit rollback is not
