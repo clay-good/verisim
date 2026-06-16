@@ -3360,6 +3360,39 @@ trained in `E_oracle` / `E_grounded` / `E_free`, all evaluated in reality. The r
   `unified_targeting` network + host arms; the economic layer is pure functions over the per-policy
   breach / call points the arc already measures).
 
+- **CU34 / H127 — the footprintless danger: host confidentiality completes the CIA triad. SUPPORTED.**
+  Every danger the targeting arc localized — a network flow, a host file corruption, a process death, a
+  host exposure, an accumulator crossing — **mutates a protected resource**, which is exactly what an
+  after-the-fact detector watches for (a file-integrity monitor sees the corruption, a process monitor
+  sees the dead daemon; CU29 attributes it, CU30 remediates it). CU34 exhibits the danger with **no
+  footprint**: host **confidentiality** — an agent reads a secret. In the host grammar a `read` returns
+  the file's content as the read's *output* and leaves the state **byte-for-byte unchanged** (the
+  reference oracle's read delta is a single `SetExit`; the secret leaves through stdout, which is not in
+  the state at all). The disclosure is real and irreversible — you cannot un-read it — and leaves
+  **nothing to detect after the fact**. So confidentiality completes the host CIA triad (integrity CU16
+  / availability CU23 / confidentiality CU34) and sharpens the defense story along an axis **orthogonal
+  to CU27's reversibility**: an after-the-fact state-diff detector catches integrity and availability
+  *because they mutate state* but is **structurally blind** to a secret read, and after-commit rollback
+  (CU27) is inapplicable (the read is irreversible *and* there is no effect to observe), so
+  confidentiality must be **verified before commit** on the model-free `read`-to-a-secret-fd surface —
+  the dual of CU16's `write`-to-a-protected-fd, resolved through the same faithfully-tracked fd table.
+  The coverage theorem ignores whether the danger mutates state, so the covering target still wins.
+  **Committed run (200 deployments, horizon 48, worst-case omitter, torch-free ~7 s):** the
+  after-the-fact detector catches **1.00 / 1.00 / 0.00** (integrity / availability / **confidentiality —
+  blind**, over 808 disclosing reads); the derived `read`-to-secret-fd target reaches **0.000 breach,
+  un-gameable, at 4.04 calls = 11.9×** cheaper than the full oracle (48), while the CU16 **write target
+  carried over leaks** (adversarial 1.000, covers = False — a read is never a write); the uniform knee is
+  a mirage and model self-targeting fails. The three host CIA legs **compose** (CU24): the union covers
+  every leg, while dropping confidentiality leaks it (adversarial 1.000) — the most dangerous leg to
+  omit, because it is the one an after-the-fact detector would never have caught. **You cannot detect
+  what leaves no trace — a footprintless danger must be prevented before commit, not detected after.**
+
+  ![SPEC-22 CU34 / H127: the footprintless danger, two panels. Left — after-the-fact detection is blind to the footprintless danger. For each host CIA leg, the catch rate of an after-the-fact state-diff detector (it watches protected resources for a change) vs the safety of the before-commit covering target. The detector catches integrity (write) and availability (kill) at 1.00 because they mutate state, but is at ZERO on confidentiality (read) — a secret read changes nothing, so there is no footprint to detect; the before-commit target prevents all three. Right — the confidentiality frontier: adversarial breach vs oracle calls. The uniform schedule is pinned at 1.0 until the full oracle (the knee is a mirage); model self-targeting fails; the CU16 write target carried over leaks (a read is not a write, covers=False); only the derived read-to-secret-fd target (green star) reaches zero breach, at 4 calls (12× cheaper than the full oracle) and un-gameably.](../figures/cu34_footprintless.png)
+
+  Reproduce: `python -m verisim.experiments.cu34_footprintless` (torch-free; reuses the CU21
+  `unified_targeting` host machinery + the CU16 integrity / CU23 availability legs; worst-case omitter +
+  exact host oracle, no trained model).
+
 - **The distributed recession test — is the structural-first recession (H87) universal? NO (a refinement).**
   SPEC-21's H87 says the load-bearing frontier recedes *structural-first* with scale — structure tasks
   fall below the load-bearing threshold first, content tasks persist. But on host/network the structure
