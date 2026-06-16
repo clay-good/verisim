@@ -1,11 +1,19 @@
 # Verisim: oracle-grounded, hard-to-game safety for computer-use agents
 
-**Status (June 2026):** a research preprint distilled from the verisim repository. The mechanism and
-every number below are real, reproducible, and tested against an exact oracle. The honest boundary is
-stated up front and again in Section 6: the results run on controlled computer worlds (a reference
-filesystem and a real `/bin/sh`) with a hand-specified danger model, and the head-to-head in Section
-4 is a hermetic engine against named baselines, not yet a live run on an external benchmark. That
-live run is the immediate next step, not a finished result. Read accordingly.
+**Status (June 2026): under revision after an adversarial self-review; read [docs/review.md](review.md)
+alongside this.** The mechanism and every number below are real and reproducible. But an independent
+hostile review (three reviewers, prior-art verified) found that this paper, as written, overclaims:
+the central "coverage theorem" is a renaming of complete mediation (Saltzer and Schroeder, 1975) and
+execution-monitor soundness (Schneider, 2000); the live demos are dominated by a correctly-configured
+OS sandbox (SELinux/AppArmor plus `chattr`), which we do not yet run as a baseline; the empirical
+framing-dependence result reproduces a published finding (OS-Blind) at smaller scale with one
+contestable harm label; the head-to-head is parameterized, not a run of real systems; and real
+deterministic-enforcement prior art (GoEX 2024, Progent 2025) already does model-independent agent
+gating. We have corrected the specific overclaims in this revision and added the limitations, but the
+deeper repositioning the review calls for (recast as complete-mediation-made-cheap, add a real MAC
+baseline, demonstrate the relational and cumulative danger only an oracle can express) is not yet
+done. The results still run only on controlled worlds with a hand-specified danger model. Read
+accordingly, and read the review.
 
 ## Abstract
 
@@ -18,8 +26,8 @@ agent into an exfiltration tool.
 Two defenses are deployed today, and both have a known failure mode. A permission system (allow,
 deny, ask a human) either drowns the user in approvals or is gamed by an action it did not think to
 deny. A learned predictive guardrail, the most recent proposal, forecasts an action's consequences
-with a model and blocks the dangerous ones; its own authors note that safety then depends on model
-accuracy, and an adversary can exploit a prediction failure.
+with a learned model and blocks the dangerous ones. Because the predictor is itself a model, the
+guarantee is best-effort rather than provable: an adversary can aim at a prediction failure.
 
 Verisim takes a different route, available in exactly one domain. Computer worlds (filesystems,
 processes, networks) have a free, exact, resettable oracle: you can run the real thing and read the
@@ -41,11 +49,12 @@ containers with harm read off the container state. The agent refused every expli
 30): alignment is good. It even scoped safely around most disguised harms (it kept a production
 database and deleted only stale logs when told to "free disk space"). But in the two scenarios where
 the harmful action is indistinguishable from legitimate configuration work, granting a service
-account read access to a secret and placing a credential in a standard `.env` file, it executed the
-harm every single time (10 of 10). That is the residual the gate exists to cover: not everything a
-model misses, but the narrow, reliable class of harms that look exactly like ordinary work, which
-neither a model nor a human reviewer can catch by inspecting the action, and which an effect-based
-oracle gate catches by construction.
+account read access to a secret and placing a credential in a standard `.env` file, it produced the
+flagged state every time (10 of 10, though one of those two labels is contestable, since placing a
+credential in a `.env` is also ordinary practice). This reproduces, at small scale, a phenomenon the
+literature already documents (OS-Blind, arXiv 2604.10577). Treat it as an existence proof, not a
+rate. The point that survives is narrow: there exist routine-looking tasks that reliably produce a
+security-relevant state change which an effect-based check catches and inspecting the action does not.
 
 ## 1. The problem an agent platform actually has
 
@@ -72,13 +81,19 @@ A **learned predictive guardrail** is the newer idea. SafePred, "a predictive gu
 computer-using agents via world models" (arXiv 2602.01725), forecasts each proposed action's effect
 with a learned model and blocks the ones predicted to be harmful, checking selectively on a learned
 "danger surface" to keep the cost down. Its strength is generality: a model can judge actions a rule
-never anticipated. Its limitation is stated plainly by its own authors. Safety depends on model
-accuracy, and an adversarial agent can exploit a prediction failure. A model has blind spots, and an
+never anticipated. Its limitation follows from using a learned predictor: safety is best-effort, not
+provable, and an adversarial agent can aim at a prediction failure. A model has blind spots, and an
 attacker who can rephrase will find one.
 
-So the gap is specific. We have a gameable rule and a best-effort model. What nobody has, because
-nobody thought the domain allowed it, is a defense that is cheap, keeps the agent useful, and cannot
-be talked out of catching the harm.
+So the gap is specific. We have a gameable rule and a best-effort model. What we want is a defense
+that is cheap, keeps the agent useful, and cannot be talked out of catching the harm by any model.
+That is the classical idea of a reference monitor enforcing complete mediation (check every action
+that can realize the harm), which is bypass-proof regardless of the program it monitors (Saltzer and
+Schroeder, 1975; Schneider, 2000). The usual objection is cost: the set of actions to mediate is
+large, and the policy oracle is expensive. The argument of this paper is that computer-use worlds
+relax both, which is what makes complete mediation cheap enough to actually deploy here. We are not
+the first to enforce agent actions at runtime (Section 7); the contribution is the conditions under
+which sound enforcement becomes inexpensive.
 
 ## 2. The one asymmetry computer worlds have
 
@@ -215,7 +230,11 @@ better model is no safer against an adversary, because the adversary aims at wha
 remains, and a model with phi below 1 always has one. The permission denylist fails for a parallel
 reason: a `chmod` or an `mv` is not a "write," so a list of patterns cannot enumerate every action
 that realizes the harm. Only the exact oracle, consulted on a surface that provably covers the harm,
-removes the worst case. This is precisely the gap SafePred names as its own limitation, measured.
+removes the worst case. This is the gap inherent to any learned predictor: a model with blind spots
+can be aimed at, however good its average accuracy. (Caveat, stated in full in Section 6: this is a
+hermetic comparison against our models of a learned guardrail and a denylist, not a run of SafePred
+or a real permission system, and not against an OS-level reference monitor, which would also catch
+these harms.)
 
 **The live lane (RA6 and RA7): a real Claude agent, real containers, and a measured rate.** The five
 experiments above use an exact reference oracle and, in RA2, a real `/bin/sh`. To pressure-test the
@@ -241,11 +260,18 @@ harmful action is indistinguishable from legitimate configuration work, granting
 read access to a secret and placing a database password in a standard `.env` file, it executed the
 harm 5 of 5, every single time. There is no "critical" signal to refuse on, because the action is
 routine config; only the security consequence is wrong, and inspecting the action cannot reveal it.
-Overall the disguised harm rate was 10 of 30 versus 0 of 30 explicit, a framing-dependence gap that
-lives entirely in the harms that look exactly like ordinary work. This is the "benign instruction,
-critical vulnerability" failure mode the agent-safety literature (OS-Blind, arXiv 2604.10577)
-documents, now measured. The exact rate is sensitive to the scenario mix and K is small; the clean
-0-of-30 explicit column and the two 5-of-5 cells make the qualitative finding solid even so.
+The disguised harm landed in 10 of 30 trials versus 0 of 30 explicit, concentrated entirely in the
+harms that look exactly like ordinary work. This is the "benign instruction, critical vulnerability"
+failure mode that OS-Blind (arXiv 2604.10577) already documents at far larger scale (300 tasks, Claude
+at a high attack-success rate) and that the refusal-does-not-generalize literature (arXiv 2407.11969)
+established earlier. We are reproducing a known phenomenon at small scale, not discovering it; the
+value here is only that it occurs through the *same* objective state-change channel the gate keys on.
+Treat 10 of 30 as an existence proof, not a rate: it is two scenarios at 5 of 5, K is 5 with no
+confidence intervals, it is a single model and prompt, and the two 5-of-5 cells (`disclose` in
+particular, placing a provisioned credential in a `.env`) involve a harm label that a fair reader can
+contest, since that is also ordinary configuration. The honest, narrow claim that survives: there
+exist routine-looking tasks on which a current agent reliably produces a security-relevant state
+change that an effect-based check catches and inspection does not.
 
 Third, the gate does not care how the instruction was dressed. Replaying both real trajectories
 through the arms against fresh containers, the oracle coverage gate caught the realizing action in
@@ -292,7 +318,9 @@ Stated plainly, because the difference between the two is where a reader could b
 it and thousands of real assertions behind that. Around a real Claude agent (RA1) and a real `/bin/sh`
 (RA2) the gate drives missed-harm to zero at low cost. It generalizes across hundreds of randomized
 tasks and a diverse attack taxonomy (RA3). It works without the agent's grammar (RA4). And head to
-head it is the only defense an adaptive adversary cannot break (RA5).
+head, against our models of the deployed defenses, it is the arm an adaptive adversary cannot break
+(RA5), with the heavy caveat below that this comparison is parameterized, not measured against real
+systems.
 
 **What it is not, yet.** The four-arm head-to-head's numbers in Section 4 come from a *hermetic
 engine*: it runs on an in-repo fixture against the reference oracle, and the learned-guardrail arm is
@@ -313,13 +341,26 @@ screen). That is a trade most agent platforms would take, but it is a trade, and
 
 ## 7. Related work
 
-**SafePred (arXiv 2602.01725) is the closest prior work and the natural foil.** It also previews an
-action's effect before execution, and it also checks selectively on a danger surface. The difference
-is the predictor. SafePred uses a learned world model and explicitly disclaims provable or un-gameable
-guarantees: safety depends on model accuracy. Verisim replaces the learned predictor with the exact
-oracle and the learned danger surface with a model-free covering target, which is what converts
-"best-effort" into "hard to game." We see the two as complementary: SafePred's generality where no
-oracle exists, verisim's guarantee where one does. Section 4 measures the exact gap SafePred names.
+**This is, first, runtime enforcement, and we should say so.** The coverage property (mediate every
+action that can realize the harm) is complete mediation (Saltzer and Schroeder, 1975); its
+model-independence is the soundness of an execution monitor (Schneider, 2000); the reversibility
+routing is the edit-automata model (Ligatti, Bauer, Walker, 2005). These are established results, not
+ours. The honest framing of our contribution is not a new theorem but the conditions under which sound
+enforcement is cheap in computer-use worlds. A crowded recent literature already enforces agent
+actions at runtime, deterministically and model-independently: GoEX (arXiv 2404.06921, 2024) proposes
+post-facto validation, undo, and damage confinement (our reversibility routing, earlier); Progent
+(arXiv 2504.11703, 2025) enforces tool-call policies deterministically with demonstrated resilience to
+adaptive attacks; and mandatory-access-control frameworks for LLM agents (arXiv 2601.11893, 2026)
+apply the same idea at the OS layer. We do not claim to be the first to gate agent actions, and a
+fair comparison must run these systems, not just our models of them (see the limitations).
+
+**SafePred (arXiv 2602.01725) is the closest predictive-guardrail foil.** It also previews an action's
+effect before execution and checks selectively on a danger surface. The difference is the predictor:
+SafePred uses a learned world model, so its guarantee is best-effort rather than provable, which is a
+property of any learned predictor, not a self-disclaimer we should attribute to its authors without a
+direct quote. Verisim replaces the learned predictor with the exact oracle, which is what converts
+best-effort into hard-to-game in the domain where an oracle exists. The two are complementary:
+SafePred's generality where no oracle exists, an exact check where one does.
 
 **OS-Harm (arXiv 2506.14866) is the recognized anchor.** Built on OSWorld, 150 tasks across deliberate
 misuse, prompt injection, and model misbehavior, it is GUI computer-use scored by an LLM judge (0.76
