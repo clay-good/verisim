@@ -3460,6 +3460,36 @@ trained in `E_oracle` / `E_grounded` / `E_free`, all evaluated in reality. The r
   CIA battery and CU35's verifier-gated runners; worst-case omitter + exact reference oracle, the two
   real verifiers observing one state channel each, no trained model).
 
+- **CU37 / H130 — the verifier precision tax: the utility half of the dual coverage law, grounded. SUPPORTED.**
+  CU36 grounded the *safety* half of CU35's law (a real verifier is as safe as the oracle iff it observes
+  the channel the danger mutates) but left the *utility* half untouched — both of CU36's verifiers happen
+  to sit at zero false-blocks (they observe the state at exactly the danger's granularity, so they never
+  over-fire). The matching skeptic's question stood: is CU35's off-surface / utility axis (`ψ`) a property
+  of a real verifier, or only of the synthetic dial? CU37 grounds it with the most ordinary host defense —
+  a **file-integrity monitor** that watches a *set of paths* and blocks any write to one of them, serving
+  as *both* the targeting surface and the verifier (as it does in deployment). Its two structural
+  properties are independent and each governs one axis: **coverage sets safety** (the monitor is exactly
+  as safe as the perfect oracle iff the danger file `/cfg` is in its watch set, *however coarse*, and as
+  leaky as no gate otherwise — CU16/CU21 coverage), and **precision sets utility** (over-watching benign
+  files costs a false-block tax that rises monotonically with coarseness, while safety stays pinned at 0 —
+  CU35's `ψ` axis). On 200 host deployments (worst-case omitter): every covering monitor holds adversarial
+  breach **0.000** at every precision while its false-block tax rises **0 → 7.18** (oracle calls **1.5 →
+  8.7**) from precise (`{/cfg}`) to coarsest (watch every path); every sub-coverage monitor leaks **0.850**
+  *however coarse it is* (precision cannot buy safety); and the 2×2 of {covers `/cfg`?} × {watches benign
+  files?} is **perfectly orthogonal** — breach tracks the coverage axis only, the tax tracks the precision
+  axis only. **A file-integrity monitor's safety is set by coverage and its utility by precision, and the
+  two are independent — so a defender can coarsen the monitor freely (for cheapness, or for robustness to
+  an incomplete inventory, CU12) at zero safety cost, paying only a bounded, predictable utility tax.** The
+  verifier analogue of CU3's "safe by being useless," sharpened (the uselessness is bounded and priced);
+  completes the grounding CU36 began (CU36 = `φ`/safety, CU37 = `ψ`/utility).
+
+  ![SPEC-22 CU37 / H130: the verifier precision tax, two panels. Left — the precision tax: for file-integrity monitors that all cover the danger file /cfg, the mean false blocks (bars) and oracle calls (line) rise monotonically with the number of watched files, while the adversarial breach (green line, twin axis) stays pinned at 0. Precision sets utility, not safety. Right — the orthogonality 2×2: the four corners of {covers /cfg?} × {watches benign files?}, cell color the adversarial breach (green = as safe as the oracle, red = as leaky as no gate) with the false-block tax annotated. Breach varies only down the coverage rows; the false-block tax varies only across the precision columns — the two axes are independent, so a coarse-but-covering monitor is exactly as safe as the oracle and pays only a bounded utility tax.](../figures/cu37_verifier_precision.png)
+
+  Reproduce: `python -m verisim.experiments.cu37_verifier_precision` (torch-free; reuses the CU34 host
+  integrity leg and CU35's verifier-gated runners; the file-integrity monitor is the exact reference
+  oracle's write surface restricted to a watched path set, serving as both target and verifier, no
+  trained model).
+
 - **The distributed recession test — is the structural-first recession (H87) universal? NO (a refinement).**
   SPEC-21's H87 says the load-bearing frontier recedes *structural-first* with scale — structure tasks
   fall below the load-bearing threshold first, content tasks persist. But on host/network the structure
