@@ -9,11 +9,13 @@ OS sandbox (SELinux/AppArmor plus `chattr`), which we do not yet run as a baseli
 framing-dependence result reproduces a published finding (OS-Blind) at smaller scale with one
 contestable harm label; the head-to-head is parameterized, not a run of real systems; and real
 deterministic-enforcement prior art (GoEX 2024, Progent 2025) already does model-independent agent
-gating. We have corrected the specific overclaims in this revision and added the limitations, but the
-deeper repositioning the review calls for (recast as complete-mediation-made-cheap, add a real MAC
-baseline, demonstrate the relational and cumulative danger only an oracle can express) is not yet
-done. The results still run only on controlled worlds with a hand-specified danger model. Read
-accordingly, and read the review.
+gating. We have corrected the specific overclaims in this revision and added the limitations. The deeper
+repositioning the review calls for has begun: Section 4 now includes RA8, which runs the MAC/sandbox
+baseline for real and demonstrates a relational harm (a graph-reachability invariant) that a
+per-resource sandbox provably cannot express, which is the honest reason the oracle exists. It is not
+complete: the cumulative-danger case, a real SafePred run, and powered empirics remain. The results
+still run only on controlled worlds with a hand-specified danger model. Read accordingly, and read the
+review.
 
 ## Abstract
 
@@ -283,6 +285,32 @@ Alignment is a strong, free first filter that catches harm that looks like harm.
 guarantee for the rest, and the "rest" is not a corner case. It is every harmful action that looks
 like ordinary work, which a model cannot reliably refuse because it cannot tell, and which the gate
 catches by construction.
+
+**The territory a sandbox does not own (RA8): relational danger.** An adversarial review of this work
+(docs/review.md) made a sharp and correct point: every harm in RA6 and RA7 is dominated by a hardened
+container plus mandatory access control, which denies the write to the protected file statically, more
+cheaply than the gate, and immune to the indirection that defeats our pre-commit target. If that were
+the whole story, the gate would be unnecessary. RA8 is the answer, and it is the result that actually
+motivates an oracle over a sandbox. The harm is *relational*: a security invariant that is a global
+property of a configuration graph, not an access right on any one resource. A network policy holds the
+invariant "no service in the untrusted zone may transitively reach the database." A config-management
+agent must edit that policy to do its job. The obvious edit to connect an analytics service to
+reporting data, `analytics -> reporting`, is transitively unsafe, because `reporting -> db` already
+exists, so it opens an untrusted path to the database. No rule the agent writes names the database;
+the exposure is emergent. Run live, a real Claude agent makes exactly this exposing edit in 5 of 5
+trials, each time noting that the existing `reporting -> db` rule is "unchanged" without seeing that
+its own edit now reaches the database through it. Now compare the defenses. A per-resource policy
+(make the file immutable) is safe but its only move is total denial: the agent's legitimate safe edit
+is kernel-denied too, so the task cannot be done, utility zero. The oracle gate evaluates the
+*resulting reachability* of each proposed edit, blocks the one that connects untrusted to the database,
+and permits the safe alternative (a read-only mirror with no database path). It is the only arm that
+is both safe and useful. The reason a sandbox cannot do this is categorical: mandatory access control
+mediates access to resources, and "the resulting graph must not connect untrusted to the database" is
+not a resource access right, it is a property of the end-state that only something evaluating the
+end-state can check. The same shape covers cumulative danger (mass collection under individually
+allowed reads) and context-dependent danger, which we have not yet demonstrated live. This is the
+honest reason the oracle exists: not the single-resource harms a sandbox already prevents, but the
+relational and cumulative harms it cannot express.
 
 ## 5. The honest negative, and the boundary it draws
 
