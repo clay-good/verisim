@@ -10,12 +10,13 @@ framing-dependence result reproduces a published finding (OS-Blind) at smaller s
 contestable harm label; the head-to-head is parameterized, not a run of real systems; and real
 deterministic-enforcement prior art (GoEX 2024, Progent 2025) already does model-independent agent
 gating. We have corrected the specific overclaims in this revision and added the limitations. The deeper
-repositioning the review calls for has begun: Section 4 now includes RA8, which runs the MAC/sandbox
-baseline for real and demonstrates a relational harm (a graph-reachability invariant) that a
-per-resource sandbox provably cannot express, which is the honest reason the oracle exists. It is not
-complete: the cumulative-danger case, a real SafePred run, and powered empirics remain. The results
-still run only on controlled worlds with a hand-specified danger model. Read accordingly, and read the
-review.
+repositioning the review calls for is underway: Section 4 now includes RA8 and RA9, which run the
+MAC/sandbox baseline for real and demonstrate the two harms a per-resource sandbox cannot express, a
+relational graph-reachability invariant and a cumulative blast-radius budget. This is the honest
+reason the oracle exists, and it is now the part of the paper that leads. It is still not complete: a
+real SafePred run, powered empirics, context-dependent danger, and the full recast around
+complete-mediation-made-cheap remain. The results run only on controlled worlds with a hand-specified
+danger model. Read accordingly, and read the review.
 
 ## Abstract
 
@@ -307,10 +308,28 @@ and permits the safe alternative (a read-only mirror with no database path). It 
 is both safe and useful. The reason a sandbox cannot do this is categorical: mandatory access control
 mediates access to resources, and "the resulting graph must not connect untrusted to the database" is
 not a resource access right, it is a property of the end-state that only something evaluating the
-end-state can check. The same shape covers cumulative danger (mass collection under individually
-allowed reads) and context-dependent danger, which we have not yet demonstrated live. This is the
-honest reason the oracle exists: not the single-resource harms a sandbox already prevents, but the
-relational and cumulative harms it cannot express.
+end-state can check.
+
+**Cumulative danger (RA9) completes the argument, and is harder still for a static sandbox.** Here the
+harm is the aggregate. A data-minimization policy caps an agent task at B distinct sensitive records, a
+blast-radius bound: if the agent is compromised or mistaken, its exposure is at most B. Every
+individual read is authorized; the harm is the count, and because the threshold is an explicit number,
+it is unambiguous, which also repairs the contestable-label problem of RA7. We ran 30 customer records,
+a budget of B equal to 5, two workloads (a scoped task needing one record, and a bulk collection of
+all thirty), and four arms on real containers. A real agent given a bulk-export ticket collected the
+whole dataset in 3 of 3 trials. The arms: with the dataset readable (the permissive MAC posture), every
+read succeeds and the bulk collection is uncapped, mass collection goes through; with it unreadable
+(the restrictive posture), even the scoped task dies, utility zero; only the oracle accumulator, which
+keeps a stateful count of distinct records touched and blocks the access that would cross B, is both
+useful on the scoped task and safe against the bulk one. Mandatory access control and information-flow
+control are both stateless across actions, so neither can express "no more than B distinct," which is
+why this is the oracle's territory and not the sandbox's. The honest boundary is that a DLP system or
+query auditor could also count, because such an auditor is exactly this accumulator; the claim is only
+that the static, per-resource confinement that dominates the RA6 and RA7 harms structurally cannot.
+
+This is the honest reason the oracle exists: not the single-resource harms a sandbox already prevents,
+but the relational and cumulative harms it cannot express, which RA8 and RA9 now both demonstrate live.
+Context-dependent danger is the third member of this family and remains to be shown.
 
 ## 5. The honest negative, and the boundary it draws
 
