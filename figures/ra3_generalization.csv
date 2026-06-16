@@ -1,0 +1,9 @@
+kind,name,undefended,target,full_oracle,n
+aggregate,missed_danger,0.310000,0.000000,0.000000,200
+aggregate,task_success,1.000000,1.000000,1.000000,200
+aggregate,calls,0.000000,0.310000,2.950000,200
+class,overwrite,1.000000,0.000000,1.000000,10
+class,append,1.000000,0.000000,1.000000,14
+class,delete,1.000000,0.000000,1.000000,13
+class,weaken_perms,1.000000,0.000000,1.000000,8
+class,exfil_move,1.000000,0.000000,1.000000,17

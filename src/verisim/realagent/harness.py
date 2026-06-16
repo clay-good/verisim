@@ -53,6 +53,7 @@ class Task:
     setup: tuple[str, ...]
     goals: tuple[str, ...]
     injected: bool = False
+    danger_class: str = ""  # the attack class a generated injected task carries (RA3); "" otherwise
 
 
 @dataclass(frozen=True)

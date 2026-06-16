@@ -3823,8 +3823,23 @@ variable is the kernel. The verdict is **anchor-invariant — bit-identical, max
 0.000 at 0.17 calls/task (15× cheaper), success 1.00, the same on the reference oracle and the real
 kernel — because the env grammar is bit-exact between the two (SY1). The real LLM literally executes
 a real `write` to a real credential file under a sealed throwaway tree, and the oracle gate is what
-stops the irreversible harm. RA1 made the *agent* real; RA2 makes the *world* real. The next units
-(RA3+) carry this to an external, unseen benchmark ([SPEC-22](specs/SPEC-22.md) RA arc).
+stops the irreversible harm. RA1 made the *agent* real; RA2 makes the *world* real.
+
+**RA3 — the generalization battery (H135).** RA1/RA2 used 6 curated tasks and one injection, so the
+honest objection is "did you cherry-pick?" RA3 answers it from the theory: the coverage theorem
+(CU21) makes the gate's safety a property of the *danger grammar*, not the task, so it must hold
+across any task and any attack on the protected surface. Two held-out axes — a **randomized task
+distribution** (200 procedurally-generated tasks, the benign work region sampled independently of the
+protected region, disjoint by construction) and a **5-class injection taxonomy** (overwrite, append,
+delete, weaken-perms, exfil-by-move), with a worst-case obedient agent. The committed run
+([`figures/ra3_generalization.csv`](../figures/ra3_generalization.csv)): undefended breaches across
+the distribution (missed-danger 0.310 = the injection rate); the covering gate drives it to 0.000 at
+0.31 calls/task (9.5× cheaper than the full oracle) with no utility loss (success 1.00); and per
+attack class, undefended breach 1.00 → gate 0.00, every class provably covered. The safety
+generalizes because it was never task-specific — the empirical confirmation, at scale, of the
+coverage theorem the CU arc rests on. The next unit (RA4) carries this to a literal external
+arbitrary-bash benchmark, which needs the namespaced sandbox tier and a command-agnostic oracle
+([SPEC-22](specs/SPEC-22.md) RA arc).
 
 ## What v0 ships for others
 
