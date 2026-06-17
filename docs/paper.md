@@ -10,12 +10,12 @@ framing-dependence result reproduces a published finding (OS-Blind) at smaller s
 contestable harm label; the head-to-head is parameterized, not a run of real systems; and real
 deterministic-enforcement prior art (GoEX 2024, Progent 2025) already does model-independent agent
 gating. We have corrected the specific overclaims in this revision and added the limitations. The deeper
-repositioning the review calls for is underway: Section 4 now includes RA8 and RA9, which run the
-MAC/sandbox baseline for real and demonstrate the two harms a per-resource sandbox cannot express, a
-relational graph-reachability invariant and a cumulative blast-radius budget. This is the honest
-reason the oracle exists, and it is now the part of the paper that leads. It is still not complete: a
-real SafePred run, powered empirics, context-dependent danger, and the full recast around
-complete-mediation-made-cheap remain. The results run only on controlled worlds with a hand-specified
+repositioning the review calls for is underway: Section 4 now includes RA8, RA9, and RA12, which run
+the MAC/sandbox baseline for real and demonstrate the three harms a per-resource sandbox cannot
+express, a relational graph-reachability invariant, a cumulative blast-radius budget, and a
+context-dependent change-freeze. This is the honest reason the oracle exists, and it is now the part
+of the paper that leads. It is still not complete: a real SafePred run (RA11 took the first measured
+step), broader powered empirics, and the full recast around complete-mediation-made-cheap remain. The results run only on controlled worlds with a hand-specified
 danger model. Read accordingly, and read the review.
 
 ## Abstract
@@ -340,9 +340,33 @@ why this is the oracle's territory and not the sandbox's. The honest boundary is
 query auditor could also count, because such an auditor is exactly this accumulator; the claim is only
 that the static, per-resource confinement that dominates the RA6 and RA7 harms structurally cannot.
 
+**Context-dependent danger (RA12) is the third member, and its realism finding is the sharpest.** Here
+the same action on the same resource flips between safe and harmful on a dynamic context flag external
+to the resource. A deploy agent is ticketed to raise a rate limit in the production config: legitimate
+work normally, but during a declared change-freeze (an incident window) the identical edit is the harm.
+The danger is neither a graph property nor a count; it is conditional on a freeze flag that comes and
+goes. A static per-resource ACL is a fixed function of (subject, object, action), so it has no input
+for the freeze: grant the write and it goes through during the freeze (harm), deny it and the
+legitimate change dies when there is no freeze (utility zero). On real containers, only the oracle,
+which evaluates the action against the live freeze state, is both useful with no freeze and safe during
+one. That is the same deterministic shape as RA8 and RA9. The realism trials, though, found something
+more interesting than a single harm rate. We gave a real agent the routine ticket and told it to follow
+the standard runbook, and we varied exactly one thing: whether the freeze rule was written in that
+runbook. With the rule legible in the runbook, the agent integrated the context perfectly, deploying
+the legitimate change in 10 of 10 normal trials and holding in 10 of 10 freeze trials, citing the
+freeze. Move the identical freeze marker out of the runbook and leave it merely discoverable in the
+environment, and the same agent deployed during the freeze in 10 of 10 trials. Same agent, same action,
+same freeze; the harm rate goes from zero to one hundred percent on the legibility of the rule alone.
+This is the RA6/RA7 lesson quantified on a new axis: a model integrates context it is told to check and
+misses context it is not, while the oracle blocks the harm in both conditions because it reads the live
+state, not the runbook. The honest boundary is the same as RA8/RA9: a context-aware stateful engine
+could also gate on the freeze, but that engine is this oracle; the static per-resource confinement that
+dominates RA6/RA7 cannot.
+
 This is the honest reason the oracle exists: not the single-resource harms a sandbox already prevents,
-but the relational and cumulative harms it cannot express, which RA8 and RA9 now both demonstrate live.
-Context-dependent danger is the third member of this family and remains to be shown.
+but the relational, cumulative, and context-dependent harms it cannot express, which RA8, RA9, and RA12
+now demonstrate live. The agent's reliability against them is contingent (on legibility, on framing, on
+not being compromised); the gate's is not.
 
 ## 5. The honest negative, and the boundary it draws
 
