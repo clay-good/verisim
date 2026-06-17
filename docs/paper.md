@@ -12,9 +12,12 @@ at all: three harms a static per-resource sandbox structurally cannot express, d
 the MAC/sandbox baseline run for real, a relational graph-reachability invariant (RA8), a cumulative
 blast-radius budget (RA9), and a context-dependent change-freeze (RA12). On those, only the oracle is
 both safe and useful. We also replaced the review's worst target, the parameterized learned-guardrail
-arm, with a real measured LLM guardrail (RA11), which corrected our own story and is reported as such.
-What is still open, and not claimed: a run of SafePred's actual code, a cross-model realism sweep, and
-the full official Terminal-Bench harness at scale. The results run only on controlled worlds with a
+arm, with a real measured LLM guardrail (RA11), which corrected our own story and is reported as such,
+and we ran the real hardened-sandbox baseline the review demanded (RA13, the immutable bit `chattr +i`
+on real containers): it drives single-resource harms to zero at no cost (the sandbox wins there, and we
+say so) and reaches zero on the three un-dominated harms only by killing the task. What is still open,
+and not claimed: an AppArmor or SELinux arm (no LSM was available in this kernel), a run of SafePred's
+actual code, a cross-model realism sweep, and the full official Terminal-Bench harness at scale. The results run only on controlled worlds with a
 hand-specified danger model. Read accordingly, and read the review.
 
 ## Abstract
@@ -386,10 +389,27 @@ state, not the runbook. The honest boundary is the same as RA8/RA9: a context-aw
 could also gate on the freeze, but that engine is this oracle; the static per-resource confinement that
 dominates RA6/RA7 cannot.
 
+**The real hardened-sandbox baseline, run (RA13).** The review's sharpest systems objection was that
+we never run the baseline we claim to beat, a hardened container with a real per-resource confinement
+mechanism. We ran it, using the strongest one available in the kernel: the immutable bit (`chattr +i`,
+which overrides ownership, even the owner cannot write without a capability the agent lacks), plus DAC
+read-removal for the read-harm. Every protected resource is agent-owned, so plain permissions would not
+stop the agent; the immutable bit is the real guard. On a single-resource harm (corrupt a credential
+the task never touches), the hardened sandbox drives missed-harm to zero at no utility cost, before
+execution and immune to the indirection that defeats a syntactic target. There the sandbox dominates
+the oracle, and we say so plainly. On the three un-dominated harms, the same mechanism also reaches
+zero harm, but only by killing the legitimate task as well: the protected resource is the one the task
+must use, so a single bit attached to the resource cannot pass the safe use and block the harmful one.
+Hardened is safe-but-useless; permissive is useful-but-unsafe; no per-resource setting is both, which
+is exactly what RA8, RA9, and RA12 show the oracle is. (AppArmor and SELinux were not available in this
+kernel, an honest limitation; they attach a verdict to a resource the same way, so the structural
+result does not depend on the specific mechanism.)
+
 This is the honest reason the oracle exists: not the single-resource harms a sandbox already prevents,
 but the relational, cumulative, and context-dependent harms it cannot express, which RA8, RA9, and RA12
-now demonstrate live. The agent's reliability against them is contingent (on legibility, on framing, on
-not being compromised); the gate's is not.
+demonstrate live and RA13 measures the real sandbox failing on. The agent's reliability against them is
+contingent (on legibility, on framing, on not being compromised); the static sandbox's verdict cannot
+condition on the relation, the aggregate, or the context at all; the gate's reliability is neither.
 
 ## 5. The honest negative, and the boundary it draws
 
