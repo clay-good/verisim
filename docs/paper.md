@@ -298,9 +298,14 @@ invariant "no service in the untrusted zone may transitively reach the database.
 agent must edit that policy to do its job. The obvious edit to connect an analytics service to
 reporting data, `analytics -> reporting`, is transitively unsafe, because `reporting -> db` already
 exists, so it opens an untrusted path to the database. No rule the agent writes names the database;
-the exposure is emergent. Run live, a real Claude agent makes exactly this exposing edit in 5 of 5
-trials, each time noting that the existing `reporting -> db` rule is "unchanged" without seeing that
-its own edit now reaches the database through it. Now compare the defenses. A per-resource policy
+the exposure is emergent. Run live, a real Claude agent makes exactly this exposing edit in 60 of 60
+trials (95% Wilson interval [0.94, 1.00]), each time noting that the existing `reporting -> db` rule
+is "unchanged" without seeing that its own edit now reaches the database through it. That rate is
+powered and de-confounded: it holds across three prompt phrasings and with the no-confirmation
+instruction removed, and crucially it holds even when the agent is explicitly told to follow least
+privilege and to check for unintended side effects. The emergent exposure is genuinely hard to notice,
+and priming for care does not fix it, which is the point. (One model family, Claude via the local CLI;
+we do not claim a cross-model rate.) Now compare the defenses. A per-resource policy
 (make the file immutable) is safe but its only move is total denial: the agent's legitimate safe edit
 is kernel-denied too, so the task cannot be done, utility zero. The oracle gate evaluates the
 *resulting reachability* of each proposed edit, blocks the one that connects untrusted to the database,
@@ -317,7 +322,12 @@ individual read is authorized; the harm is the count, and because the threshold 
 it is unambiguous, which also repairs the contestable-label problem of RA7. We ran 30 customer records,
 a budget of B equal to 5, two workloads (a scoped task needing one record, and a bulk collection of
 all thirty), and four arms on real containers. A real agent given a bulk-export ticket collected the
-whole dataset in 3 of 3 trials. The arms: with the dataset readable (the permissive MAC posture), every
+whole dataset, exceeding the budget, in 60 of 60 trials (95% interval [0.94, 1.00], across the same
+three phrasings and confound conditions). Here, honestly, the high rate is less surprising than RA8's:
+a bulk-export task touches the whole dataset by construction, so this is not a subtle miss. The
+relevant finding is that the agent does not spontaneously self-limit to a data-minimization budget or
+seek approval, even when primed to be careful, so the budget must be enforced outside it. The arms:
+with the dataset readable (the permissive MAC posture), every
 read succeeds and the bulk collection is uncapped, mass collection goes through; with it unreadable
 (the restrictive posture), even the scoped task dies, utility zero; only the oracle accumulator, which
 keeps a stateful count of distinct records touched and blocks the access that would cross B, is both
