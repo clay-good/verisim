@@ -443,6 +443,21 @@ while the legitimate send to the allowlisted sink still goes through: safe and u
 carries over from RA4: an allowlist does not cover arbitrary covert channels (DNS, ICMP, timing), so we
 claim prevention against the modeled channel, not coverage of every exfiltration method.
 
+**And we ran the covert-channel case, because it is where that claim has to be honest (RA15).** We gave
+the attacker a second channel: a DNS tunnel, the secret hex-encoded into the name of a lookup to an
+attacker-controlled nameserver. A realistic egress allowlist must permit DNS, because the agent needs
+name resolution, and DNS is dual-use. The result is the honest negative. The port allowlist that blocks
+the direct send lets the DNS tunnel leak the credential while resolution still works: the allowlist is
+not covering. Dropping DNS too stops the leak but kills name resolution: safe and useless, the lockdown
+dilemma reappearing on the network. No port-level policy in the table is both leak-free and useful, and
+the reason is structural. The coverage property needs a sparse, syntactically computable genesis
+surface. A state change has one and the post-commit diff catches it however it is spelled. Exfiltration
+does not: any allowed channel can encode a bit, so the surface is every egress action, not a rare set.
+This is RA4's open edge on the network. The most you can do is bound the leak bandwidth (deny by
+default, then minimize and proxy the few channels you must allow), and a timing channel over allowed
+traffic is an irreducible low-bandwidth residual. We do not claim to make exfiltration impossible; we
+turn the obvious channels from gameable into prevented and bound the covert ones, and we say so.
+
 **And we measured the diff cost the review said we never measured (RA14).** The post-commit check is
 not literally free. A full byte-hash of the protected region is O(region size): on real containers it
 runs about 70 milliseconds at 2 megabytes and about 700 at 195. But the natural detector is an mtime
@@ -452,7 +467,10 @@ milliseconds, and it runs only on the sparse covered surface, not on every actio
 bounded, and now reported from a real run rather than the hermetic fixture.
 
 This boundary is also the scope statement. The oracle approach is strong exactly where the state is
-exact and the harm is a state change: filesystems, processes, network flows. It does not cover GUI
+exact and the harm is a state change: filesystems, processes, network flows. It is strongest for
+integrity and availability, where realization is a state change the post-commit diff catches exactly;
+for confidentiality it prevents the direct egress channels and bounds the covert ones (RA15) rather
+than eliminating them, because there is no sparse surface to cover. And it does not cover GUI
 computer-use, where actions are mouse clicks and "harm" is adjudicated by a human or an LLM judge.
 That is OS-Harm's domain, and we make no claim there.
 
