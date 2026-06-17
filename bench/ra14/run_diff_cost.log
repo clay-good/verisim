@@ -1,0 +1,22 @@
+
+RA14b per-action change-detection cost at container scale (the numbers behind #6/2d)
+  did the protected region change, two ways, swept over region size: full = sha256 of
+  every byte (O bytes); mtime = find -newer a checkpoint (O files, no content read).
+  End-to-end wall-clock incl. docker exec, median of 3.
+
+    files | KB/file | region MB | full-hash ms |  mtime ms | detected
+     1000 |       1 |       1.0 |         57.7 |      53.4 |     True
+     5000 |       1 |       4.9 |         80.2 |      50.9 |     True
+    20000 |       1 |      19.5 |        214.9 |      79.8 |     True
+     2000 |       1 |       2.0 |         63.6 |      63.2 |     True
+     2000 |      10 |      19.5 |        133.5 |      59.7 |     True
+     2000 |     100 |     195.3 |        731.9 |      60.6 |     True
+
+  Read-off:
+  - full-hash time tracks region MB (rows 4-6, fixed count, rising size): the naive
+    byte-diff IS O(region size), as the review says. A real cost.
+  - mtime-scan time tracks FILE COUNT (rows 1-3), flat in bytes (rows 4-6): it stats,
+    it does not read, so a per-action check on a large region is milliseconds.
+  - Both detect the single change. The honest takeaway: pay the cheap mtime check per
+    action, reserve byte-hash for when you need exact content equality, and note the
+    check is only run on the sparse covered surface, not on every action.

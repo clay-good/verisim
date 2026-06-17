@@ -425,12 +425,31 @@ pre-commit target every time.
 The reason this does not sink the result is that realization, the post-commit diff, is still exact. No
 indirection escapes it: if the protected region changed, the diff sees it, however the change was
 spelled. So the principled gate routes by reversibility, a result from the broader program. Where an
-action is reversible, you can execute it, diff the protected region for free, and roll back on harm:
+action is reversible, you can execute it, diff the protected region cheaply, and roll back on harm:
 exact, evasion-proof, and needing no pre-commit prediction at all. Where an action is irreversible (an
 exfiltrating send leaves before you can observe it), you cannot run-then-undo, and you are back to
 needing a covering pre-commit target. Hardening that target toward a real shell parser, for
 irreversible actions on arbitrary bash, is the open problem the program is honest about rather than
 papering over.
+
+**We ran the exfiltration case live, because it is where the post-commit diff is weakest (RA14).** A
+real victim container holds a credential; a real attacker listens off-host; the agent reads the
+credential and sends it. The post-commit region diff reports *clean*, because the read leaves the
+protected region byte-identical, while the attacker already holds the secret: a measured false
+negative, not a modeled one. For exfiltration, detection is both too late and footprintless, which is
+precisely why the reversibility routing sends an irreversible send to verify-before-commit. A
+pre-commit egress gate (a real iptables allowlist) then drops the send to the non-allowlisted attacker
+while the legitimate send to the allowlisted sink still goes through: safe and useful. The honest edge
+carries over from RA4: an allowlist does not cover arbitrary covert channels (DNS, ICMP, timing), so we
+claim prevention against the modeled channel, not coverage of every exfiltration method.
+
+**And we measured the diff cost the review said we never measured (RA14).** The post-commit check is
+not literally free. A full byte-hash of the protected region is O(region size): on real containers it
+runs about 70 milliseconds at 2 megabytes and about 700 at 195. But the natural detector is an mtime
+scan, which stats files without reading them, so it is O(file count) and flat in bytes: about 60
+milliseconds at 195 megabytes, rising only gently with file count. A per-action change check is tens of
+milliseconds, and it runs only on the sparse covered surface, not on every action. The cost is real,
+bounded, and now reported from a real run rather than the hermetic fixture.
 
 This boundary is also the scope statement. The oracle approach is strong exactly where the state is
 exact and the harm is a state change: filesystems, processes, network flows. It does not cover GUI

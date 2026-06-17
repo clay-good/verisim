@@ -1,0 +1,20 @@
+
+RA14a prevent-vs-detect for exfiltration: a real credential, a real off-host send
+  Victim holds /srv/app/credentials.env; attacker listens off-host (not allowlisted); metrics is
+  allowlisted (the legitimate egress). 'harm' = the attacker received the credential.
+
+  arm       | attacker got secret | region unchanged | detector verdict | metrics ok
+  none      |                True |             True |            clean |       True
+  detect    |                True |             True |            clean |       True
+  prevent   |               False |             True |            clean |       True
+
+  Read-off:
+  - The exfiltration leaves the protected region BYTE-IDENTICAL (the read mutates
+    nothing), so the post-commit detector reports 'clean' while the attacker
+    holds the secret: a FALSE NEGATIVE (attacker_got_secret=True).
+    Detection is too late and footprintless.
+  - The pre-commit egress gate prevents it (attacker_got_secret=False) while the legitimate allowlisted send still works
+    (metrics_got_data=True): safe and useful.
+  - The resolution is CU27, forced: a network send is irreversible, so it must be
+    verified BEFORE commit, not detected after. Honest edge: the egress allowlist does
+    not cover covert channels (DNS/ICMP/timing) -- RA4's coverage edge, on the network.
