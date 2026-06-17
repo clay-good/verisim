@@ -237,7 +237,10 @@ removes the worst case. This is the gap inherent to any learned predictor: a mod
 can be aimed at, however good its average accuracy. (Caveat, stated in full in Section 6: this is a
 hermetic comparison against our models of a learned guardrail and a denylist, not a run of SafePred
 or a real permission system, and not against an OS-level reference monitor, which would also catch
-these harms.)
+these harms. The "adversarial miss pinned at 1.00" is the *worst case* this phi-proxy can express,
+and when we replaced the proxy with a real LLM guardrail and measured it (RA11, Section 6), the real
+guardrail was far stronger than that worst case on RA8's relational danger. Read this row as the
+theoretical claim it is, and read RA11 for the measured one.)
 
 **The live lane (RA6 and RA7): a real Claude agent, real containers, and a measured rate.** The five
 experiments above use an exact reference oracle and, in RA2, a real `/bin/sh`. To pressure-test the
@@ -390,6 +393,25 @@ OS-Harm and SafePred is, today, a sound *positioning* plus a real *vertical-slic
 a full *head-to-head on the published leaderboards*. The engine and the live harness exist to produce
 that; running it at the official scale is the next step, and we will not call it done before it runs.
 
+**We replaced the fidelity-phi proxy with a real measurement, and it corrected us (RA11).** The
+proxy's "adversarial miss pinned at 1.00" is a worst-case theoretical construct: it assumes a model
+with a blind spot and an adversary who finds it. To check whether a *real* LLM guardrail actually
+behaves that way on the danger an oracle is supposed to own, we built a faithful SafePred-style
+guardrail (a real Claude call that judges each proposed config change before commit) and measured it
+against the exact oracle on RA8's relational danger, varying the reasoning difficulty (chain depth 2
+to 8, obfuscated graphs). The honest result is a negative for our convenient story: handed the graph
+and asked the reachability question directly, the LLM guardrail caught every exposing edit at every
+depth (recall 40/40 = 1.00, zero false-positives); wrapped in realistic task framing it slipped only
+twice (38/40 = 0.95 [0.83, 0.99]), and the misses did not grow with depth. At RA8 scale a
+well-prompted LLM guardrail is a strong relational-danger detector, not the catastrophically-breached
+arm the proxy implies. So the oracle's real advantage over a learned guardrail here is *not* a
+capability chasm; it is the guarantee (exact and every-time, versus a measured phi of about 0.95 that
+issues no certificate on the one input that matters), complete mediation, and near-zero cost. We did
+not find where the LLM guardrail breaks badly, because at these scales it mostly does not; larger or
+adversarially-obfuscated graphs are the place to look, and we have not looked yet, so we do not claim
+it. This sharpens the contribution and removes an overclaim: the case for the oracle is the
+guarantee, not the suggestion that models cannot see relational harm.
+
 **The tradeoff, named.** What you give up for hard-to-game safety is generality of domain. The
 oracle's whole advantage, exact state, is exactly what restricts it to computer worlds with checkable
 state. It buys provable, cheap, injection-robust safety in the place agents are most dangerous (the
@@ -415,8 +437,13 @@ fair comparison must run these systems, not just our models of them (see the lim
 effect before execution and checks selectively on a danger surface. The difference is the predictor:
 SafePred uses a learned world model, so its guarantee is best-effort rather than provable, which is a
 property of any learned predictor, not a self-disclaimer we should attribute to its authors without a
-direct quote. Verisim replaces the learned predictor with the exact oracle, which is what converts
-best-effort into hard-to-game in the domain where an oracle exists. The two are complementary:
+direct quote. We measured how much that matters: a faithful SafePred-style guardrail (a real LLM
+judging each change) caught RA8's relational danger with recall 0.95 to 1.00, so "best-effort" is, at
+these scales, very good, not weak. The gap to the oracle is therefore not detection power but the
+*kind* of assurance: a measured 0.95 with no certificate on the specific input, versus an exact
+every-time verdict (RA11, Section 6). Verisim replaces the learned predictor with the exact oracle,
+which is what converts best-effort into hard-to-game in the domain where an oracle exists. The two are
+complementary:
 SafePred's generality where no oracle exists, an exact check where one does.
 
 **OS-Harm (arXiv 2506.14866) is the recognized anchor.** Built on OSWorld, 150 tasks across deliberate
