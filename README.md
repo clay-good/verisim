@@ -1,6 +1,6 @@
 # Verisim
 
-> **New here?** The fastest path to the signal is the distilled preprint: **[docs/paper.md](docs/paper.md)** (about 8 pages). It states the thesis, the coverage theorem, the head-to-head against the guardrails the field ships (SafePred and the permission-system status quo), and, plainly, what is proven versus what still awaits a live external-benchmark run. This README is the exhaustive companion.
+> **New here?** The fastest path to the signal is the distilled preprint: **[docs/paper.md](docs/paper.md)** (about 8 pages). It states the thesis (complete mediation, an old principle, made cheap in a domain with a free exact oracle), the three harms a static sandbox cannot express that are the oracle's reason to exist (relational RA8, cumulative RA9, context-dependent RA12), the head-to-head against the guardrails the field ships (SafePred and the permission-system status quo), and, plainly, what is proven versus what still awaits a live external-benchmark run. This README is the exhaustive companion.
 
 > A computer-use AI agent is one mis-predicted action away from an
 > irreversible mistake — deleting the wrong file, overwriting a credential, opening a connection to a

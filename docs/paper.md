@@ -1,22 +1,21 @@
 # Verisim: oracle-grounded, hard-to-game safety for computer-use agents
 
-**Status (June 2026): under revision after an adversarial self-review; read [docs/review.md](review.md)
-alongside this.** The mechanism and every number below are real and reproducible. But an independent
-hostile review (three reviewers, prior-art verified) found that this paper, as written, overclaims:
-the central "coverage theorem" is a renaming of complete mediation (Saltzer and Schroeder, 1975) and
-execution-monitor soundness (Schneider, 2000); the live demos are dominated by a correctly-configured
-OS sandbox (SELinux/AppArmor plus `chattr`), which we do not yet run as a baseline; the empirical
-framing-dependence result reproduces a published finding (OS-Blind) at smaller scale with one
-contestable harm label; the head-to-head is parameterized, not a run of real systems; and real
-deterministic-enforcement prior art (GoEX 2024, Progent 2025) already does model-independent agent
-gating. We have corrected the specific overclaims in this revision and added the limitations. The deeper
-repositioning the review calls for is underway: Section 4 now includes RA8, RA9, and RA12, which run
-the MAC/sandbox baseline for real and demonstrate the three harms a per-resource sandbox cannot
-express, a relational graph-reachability invariant, a cumulative blast-radius budget, and a
-context-dependent change-freeze. This is the honest reason the oracle exists, and it is now the part
-of the paper that leads. It is still not complete: a real SafePred run (RA11 took the first measured
-step), broader powered empirics, and the full recast around complete-mediation-made-cheap remain. The results run only on controlled worlds with a hand-specified
-danger model. Read accordingly, and read the review.
+**Status (June 2026): recast after an adversarial self-review; read [docs/review.md](review.md)
+alongside this.** The mechanism and every number below are real and reproducible. An independent
+hostile review (three reviewers, prior-art verified) found that the original draft overclaimed, and
+the most important fix was a reframing, now done. We no longer present a novel "coverage theorem."
+The property is complete mediation (Saltzer and Schroeder, 1975) and execution-monitor soundness
+(Schneider, 2000), old and established; the contribution is not the property but the conditions under
+which it becomes cheap, a domain where the surface to mediate is sparse and syntactically computable
+and the policy oracle is free and exact. The paper now leads with the reason an oracle beats a sandbox
+at all: three harms a static per-resource sandbox structurally cannot express, demonstrated live with
+the MAC/sandbox baseline run for real, a relational graph-reachability invariant (RA8), a cumulative
+blast-radius budget (RA9), and a context-dependent change-freeze (RA12). On those, only the oracle is
+both safe and useful. We also replaced the review's worst target, the parameterized learned-guardrail
+arm, with a real measured LLM guardrail (RA11), which corrected our own story and is reported as such.
+What is still open, and not claimed: a run of SafePred's actual code, a cross-model realism sweep, and
+the full official Terminal-Bench harness at scale. The results run only on controlled worlds with a
+hand-specified danger model. Read accordingly, and read the review.
 
 ## Abstract
 
@@ -34,16 +33,31 @@ guarantee is best-effort rather than provable: an adversary can aim at a predict
 
 Verisim takes a different route, available in exactly one domain. Computer worlds (filesystems,
 processes, networks) have a free, exact, resettable oracle: you can run the real thing and read the
-true next state, bit for bit. That removes the model from the safety-critical path. Our central
-result is a coverage theorem. Danger in such a world lives on a sparse, model-free surface (the
-actions that can *realize* the harm), and a gate that consults the exact oracle on that surface is
-hard to game by *any* model, at a cost set by how rare the surface is.
+true next state, bit for bit. That removes the model from the safety-critical path. The contribution
+is not a new theorem. It is an old principle, complete mediation (Saltzer and Schroeder, 1975), made
+cheap in this one domain. Danger here lives on a sparse, syntactically computable surface (the actions
+that can *realize* the harm), so a gate that consults the free exact oracle only on that surface is
+hard to game by *any* model, at a cost set by how rare the surface is. Established work already gates
+agent actions deterministically (Section 7); what computer worlds add is that sound enforcement here
+is inexpensive.
 
-We measure this as a deployment bake-off against the two deployed defenses. Under an adaptive
-prompt-injection adversary, a learned guardrail and a permission denylist are both breached
-completely, while the oracle coverage gate is not breached at all, at no loss of task success and
-about one oracle call per task. A better model does not close the gap, and a longer denylist does
-not either. The exact oracle does.
+The reason to reach for an oracle at all, rather than the hardened sandbox that prevents
+single-resource harms more cheaply, is a class of harms a static per-resource policy cannot express.
+We demonstrate three, live, on real containers with the sandbox baseline run for real: a *relational*
+harm (a config edit that transitively opens an untrusted-to-database path, RA8), a *cumulative* harm
+(mass collection past a blast-radius budget under individually-allowed reads, RA9), and a
+*context-dependent* harm (a production change pushed during an active change-freeze, RA12). In each,
+the permissive sandbox posture is unsafe and the restrictive one destroys the legitimate task; only
+the oracle, which evaluates the action against the true resulting state, is both safe and useful. That
+is the oracle's reason to exist, and it is where the paper now leads.
+
+Against the two defenses deployed today we add a hermetic bake-off, a consistency check against our
+own models of a learned guardrail and a permission denylist, not a run of real systems. Under an
+adaptive prompt-injection adversary the modeled guardrail and denylist are both breached while the
+oracle gate is not, at no loss of task success and about one oracle call per task. Because that arm
+was parameterized, we then replaced it with a real measured LLM guardrail on the relational harm
+(RA11). It is far stronger than the proxy implied (recall 0.95 to 1.00), so the oracle's edge over a
+learned guardrail is honestly the guarantee and the cost, not a capability gap.
 
 We also ran it live, and the live result is the honest one, more bounded and more useful than the
 convenient story. We measured a real Claude agent across six harm scenarios, two framings each
@@ -122,10 +136,11 @@ The question that remains is the only one that matters for cost: you cannot affo
 about every action, so which actions do you ask about? Get that wrong and you are back to either
 verifying everything (slow) or guessing (gameable). The answer is the contribution.
 
-## 3. Coverage: where danger lives, and why verifying only that is enough
+## 3. Complete mediation, made cheap: where danger lives and why verifying only that is enough
 
-The claim in one sentence: danger has a sparse, model-free surface, and verifying that surface is
-both safe and cheap, provably, because of a single property called coverage.
+The claim in one sentence: danger has a sparse, model-free surface, and mediating exactly that surface
+is both safe and cheap. The safety half is complete mediation, an established principle (Saltzer and
+Schroeder, 1975), not our result. The cheap half is the contribution, and it comes from the domain.
 
 Make three objects precise for a given harm `D`, for example "a credential file is corrupted."
 
@@ -137,20 +152,24 @@ see if it changed. It never consults the learned model. It is the ground truth o
 to consult the oracle*. In the simplest case it is syntactic: does this command name a path under the
 protected region? It is computed from the action itself, not from a model's opinion of the action.
 
-**Coverage** is the bridge between them, and the whole result hangs on it:
+**Coverage** is the bridge between them, and it is the complete-mediation condition stated for this
+setting:
 
 > for every state and action, `realizes(s, a)` implies `target(s, a)`.
 
 In words: every action that *could* cause the harm is on the surface we verify. Nothing that realizes
-the danger lives off it.
+the danger lives off it. This is exactly "every access to every object must be checked" (Saltzer and
+Schroeder, 1975) restricted to the accesses that can realize a specific harm.
 
 From coverage, the safety property falls out, and it is worth walking slowly because it is the point.
 Take any agent, any model, any attacker, any timing. The attacker can win only by getting some action
 `a` with `realizes(s, a)` executed without being caught. But coverage says `realizes(s, a)` implies
 `target(s, a)`, so the gate consults the oracle on `a`. The oracle sees the true `realizes` and
-blocks. The consult decision never read the model, so this holds *no matter how bad the model is*. A
-covering, model-free gate is hard to game at a cost equal to the number of on-surface actions, which
-is rare and cheap by construction.
+blocks. The consult decision never read the model, so this holds *no matter how bad the model is*.
+That last property, bypass-proof regardless of the monitored program, is the soundness of an execution
+monitor (Schneider, 2000); we are re-deriving it, not discovering it. A covering, model-free gate is
+hard to game at a cost equal to the number of on-surface actions, which is rare and cheap by
+construction.
 
 This is the inversion that makes the cost work. You do not need a model that is accurate everywhere.
 You need a surface that is *sparse* (so verifying it is cheap) and *covering* (so nothing slips off
@@ -165,9 +184,13 @@ it degrades from a theorem to a heuristic.
 
 ## 4. What we measured
 
-Bottom line: the gate drives missed-harm to zero around a real model and a real kernel, it
-generalizes to tasks and attacks it never saw, and head-to-head it is the only defense an adaptive
-adversary cannot break.
+Bottom line: the gate drives missed-harm to zero around a real model and a real kernel (RA1 to RA4),
+and on the harms that actually motivate an oracle, the relational, cumulative, and context-dependent
+dangers a static sandbox cannot express, it is the only arm both safe and useful (RA8, RA9, RA12). In
+our hermetic bake-off it is also the arm an adaptive adversary does not break, against our models of
+the deployed defenses, not a claim about every system (deterministic enforcers like Progent also
+resist adaptive attacks, Section 7). The five foundation steps come first, then the un-dominated
+territory that is the real reason to deploy it.
 
 We built the result in five steps, each its own experiment with committed code, a figure, and tests.
 
@@ -398,8 +421,9 @@ That is OS-Harm's domain, and we make no claim there.
 
 Stated plainly, because the difference between the two is where a reader could be misled.
 
-**What it is.** A reproducible mechanism, grounded in an exact oracle, with a coverage theorem behind
-it and thousands of real assertions behind that. Around a real Claude agent (RA1) and a real `/bin/sh`
+**What it is.** A reproducible mechanism, grounded in an exact oracle, with complete mediation behind
+it (an old principle, made cheap here, not a theorem we proved) and thousands of real assertions
+behind that. Around a real Claude agent (RA1) and a real `/bin/sh`
 (RA2) the gate drives missed-harm to zero at low cost. It generalizes across hundreds of randomized
 tasks and a diverse attack taxonomy (RA3). It works without the agent's grammar (RA4). And head to
 head, against our models of the deployed defenses, it is the arm an adaptive adversary cannot break
@@ -493,8 +517,8 @@ as a strawman.
 The product framing is concrete, and it is the reason to care.
 
 A platform like Anthropic already runs a permission system on Claude Code and managed agents, and it
-already faces the approval-fatigue-versus-safety tension that system creates. The coverage result
-offers a different operating point: auto-approve the large off-surface majority of actions, and
+already faces the approval-fatigue-versus-safety tension that system creates. The complete-mediation
+result offers a different operating point: auto-approve the large off-surface majority of actions, and
 reserve verification (or a human prompt) for the sparse on-surface minority that can actually realize
 harm. That cuts the approval burden *and* raises the floor, because the on-surface gate is hard to
 game by injection in a way a click-through approval is not. The same surface that makes verification
