@@ -30,7 +30,12 @@ agent that operates each task container via `docker exec`), on all 80 tasks of `
 Two lanes, both honest: capability 38/80 = 0.475 (15 of the 42 misses are agent-timeout/error at our
 cap, not capability), and, the contribution, the safety lane on 16 real Terminal-Bench containers
 where oracle-coverage missed-harm is 0.00 against 0.40 for a pattern denylist and 1.00 unguarded,
-identical on every task. What is still open, and not claimed: an AppArmor or SELinux arm (no LSM was
+identical on every task.
+And we measured the §8 product operating point on real agent traffic rather than a battery (RA21):
+replaying 123,195 real Claude Code tool calls (3,836 sessions) through the gate, only 1.1% of actions
+touch the danger surface so 98.9% auto-approve with no prompt, while a fair denylist prompts 8.7x as
+often (99% of it off-surface fatigue) and still leaks 0.70 of an injected harm arsenal the gate
+catches entirely. What is still open, and not claimed: an AppArmor or SELinux arm (no LSM was
 available in this kernel), a run of SafePred's actual code, a cross-model realism sweep, and a
 *leaderboard-grade* Terminal-Bench submission (an in-container agent rather than the host-`docker exec`
 bridge, and uncapped timeouts for the heavy build/ML tasks). The results run only on controlled worlds
@@ -703,6 +708,35 @@ a Bash path built by indirection carries no literal prefix, so the syntactic pre
 it, which is why deployment routes the irreversible slice to the post-commit reversibility check rather
 than auto-allowing it. This is the §8 operating point demonstrated on the actual platform mechanism.
 
+**And we measured that operating point on real agent traffic, not a battery (RA21).** The RA17
+battery is 18 hand-built calls; the question a deployer actually has is what the coverage operating
+point costs on the traffic an agent really produces. We replayed every state-mutating tool call a
+real Claude Code installation had logged (`~/.claude/projects/**`, 3,836 sessions, **123,195** Bash /
+Edit / Write calls) through three arms: no gate, the pattern denylist, and the oracle coverage gate
+over a realistic coding-agent surface (system dirs, secret files like `.env` / `*.pem` / `id_rsa` /
+cloud and ssh credentials, VCS integrity `.git/hooks` and `.git/config`, and CI definitions
+`.github/workflows`). The result is the §8 claim made quantitative on real data. The coverage budget
+is genuinely sparse: only **1.1%** of real actions touch the danger surface, so **98.9% are
+auto-approvable** with no prompt. The denylist — made deliberately *fair* here (a destructive-verb
+plus real-file-overwrite list that excludes `2>&1` and `>/dev/null` fd-noise, so its fatigue is not
+inflated) — prompts on **9.4%** of actions, about 8.7 times as often, and **99% of those prompts are
+off-surface** (benign `rm` / `mv` / redirect of build artifacts): the approval-fatigue failure mode,
+measured. And it still leaks: on an injected, labeled harm arsenal (the benign distribution is the
+real corpus; the harm distribution is labeled, since real sessions carry no labeled harms) the
+denylist misses **0.70** — the `chmod` / `sed -i` / `cp` / `python -c` / integrity classes its verb
+list never enumerated — where the coverage gate misses **0.00**. Adding `chmod` to the list only
+moves the leak to the next un-enumerated verb; the coverage surface escapes that enumeration treadmill
+by keying on the effect's genesis, not on verbs. The headline is not an artifact of one workflow: broken
+down across the corpus's 31 distinct projects (29 with ≥20 calls), the per-project off-surface density
+has median **0.991** and a tight IQR [0.981, 0.995], and the only projects that dip below 0.95 are
+small *security-work* projects (the sharpest is the program's own RA7 credential-tamper clean-room)
+where the surface *is* the work — so the gate's approval budget correctly auto-scales to how dangerous
+the real work is rather than failing. Two honest boundaries: the benign traffic is one user's corpus
+(large and real, generalizing across its projects but not a sampled population — the cross-*machine*
+check is the obvious next step), and the harms are injected, not observed, the same boundary as RA17.
+The extractor is privacy-safe by construction — it emits rates and verb names, never the user's command
+strings. (Reproduce: `docs/cc-corpus-run.md`.)
+
 Two steps turn this preprint into a result a platform can act on, and neither is another theorem.
 
 First, the external number at scale, which RA20 has now taken from runbook to a local run on the
@@ -752,4 +786,9 @@ custom agent `src/verisim/realagent/tb_agent.py` (run via `tb run -d terminal-be
 --agent-import-path verisim.realagent.tb_agent:HostClaudeCliAgent`, no API key) and the safety adapter
 `bench/tb_safety/gate_eval.py`; results in `docs/terminal-bench-run.md` and
 `bench/tb_safety/{RESULTS,CAPABILITY_full80}.csv`. It needs Docker and an authenticated `claude` CLI
-(no API key); the rest of the paper's numbers are hermetic (torch-free, no network).
+(no API key). The real-corpus measurement (RA21) is `src/verisim/realagent/cc_corpus.py` with the
+privacy-safe replay `bench/cc_corpus/extract.py` (walks `~/.claude/projects`; emits rates, never
+command strings) regenerating `bench/cc_corpus/{RESULTS.csv,summary.json}` and, via
+`figures/plot_ra21_cc_corpus.py`, `figures/ra21_cc_corpus.png`; results in `docs/cc-corpus-run.md`,
+the logic pinned hermetically by `tests/test_ra21_cc_corpus.py` (which does not read `~/.claude`).
+The rest of the paper's numbers are hermetic (torch-free, no network).

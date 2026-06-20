@@ -1,0 +1,8 @@
+metric,value,n
+offsurface_density,0.988935,123358
+coverage_prompt_rate,0.011065,123358
+denylist_prompt_rate,0.094473,123358
+denylist_fatigue_rate,0.092698,123358
+fatigue_reduction,0.083408,123358
+coverage_missed_harm,0.000000,10
+denylist_missed_harm,0.700000,10
