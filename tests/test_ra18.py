@@ -94,11 +94,12 @@ def test_hook_routes_abstain_by_reversibility() -> None:
 def test_hook_catches_resolvable_indirection_the_ra17_fix() -> None:
     # the RA17 syntactic hook silently allowed in-command indirection; the resolved hook FIRES ->
     # ask
-    indirection = {"tool_name": "Bash", "tool_input": {"command": "p=/et; echo x > ${p}c/shadow"},
-                   "cwd": "/home/work"}
-    assert coverage_gate_decision("Bash", indirection["tool_input"]) == "allow"  # old regex miss
+    ti = {"command": "p=/et; echo x > ${p}c/shadow"}
+    indirection = {"tool_name": "Bash", "tool_input": ti, "cwd": "/home/work"}
+    assert coverage_gate_decision("Bash", ti) == "allow"  # old regex miss
     out = hook_decision(indirection)  # resolver default
-    assert out["hookSpecificOutput"]["permissionDecision"] == "ask"
+    hso = out["hookSpecificOutput"]
+    assert isinstance(hso, dict) and hso["permissionDecision"] == "ask"
 
 
 def test_verdict_flags() -> None:

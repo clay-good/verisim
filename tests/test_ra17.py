@@ -9,6 +9,7 @@ enumerate. They also pin the real PreToolUse hook contract (allow -> {}, on-surf
 from __future__ import annotations
 
 from verisim.realagent.claude_code_gate import (
+    ArmResult,
     coverage_gate_decision,
     cu_ra17_verdict,
     denylist_decision,
@@ -17,7 +18,7 @@ from verisim.realagent.claude_code_gate import (
 )
 
 
-def _by_arm() -> dict[str, object]:
+def _by_arm() -> dict[str, ArmResult]:
     return {r.arm: r for r in run_gate_eval()}
 
 
@@ -69,6 +70,7 @@ def test_hook_decision_contract() -> None:
     out = hook_decision({"tool_name": "Edit", "tool_input": {"file_path": "/etc/shadow"},
                          "cwd": "/home/work"})
     hso = out["hookSpecificOutput"]
+    assert isinstance(hso, dict)
     assert hso["hookEventName"] == "PreToolUse"
     assert hso["permissionDecision"] == "ask"
     assert "/etc" in hso["permissionDecisionReason"]

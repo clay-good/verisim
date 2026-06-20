@@ -95,6 +95,12 @@ warn_unused_ignores = false
 module = ["inspect_ai.*"]
 ignore_missing_imports = true
 
+# ``anthropic`` (the run-on-demand real-LLM lane, LP7) is optional and absent in CI; resolve its
+# import without stubs so the lazy import in claude_agent needs no inline ignore.
+[[tool.mypy.overrides]]
+module = ["anthropic.*"]
+ignore_missing_imports = true
+
 # The Terminal-Bench custom agent (SPEC-22 RA20) imports the optional ``terminal_bench`` harness,
 # which ships no stubs and is absent in CI (the live TB lane, like the model-API lane, is run-on-
 # demand, not in CI). Relax strict typing for that one bridge module; the verisim core stays strict.

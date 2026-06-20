@@ -50,7 +50,7 @@ class ClaudeAgent:
     transcript: dict[str, tuple[str, ...]] = field(default_factory=dict)
 
     def __post_init__(self) -> None:
-        import anthropic  # type: ignore[import-not-found]  # lazy: never imported in CI
+        import anthropic  # lazy: never imported in CI (optional real-LLM lane)
 
         self._client = anthropic.Anthropic()
 

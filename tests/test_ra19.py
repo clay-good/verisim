@@ -12,6 +12,7 @@ from __future__ import annotations
 
 from verisim.realagent.ra19_correlated_layers import (
     TRIAD,
+    Layer,
     _judging_joint,
     deployer_underestimate,
     montecarlo_residual,
@@ -24,6 +25,10 @@ from verisim.realagent.ra19_correlated_layers import (
     subsets,
     trap_sensitivity,
 )
+
+AM: tuple[Layer, ...] = ("alignment", "monitor")
+AL: tuple[Layer, ...] = ("alignment",)
+AO: tuple[Layer, ...] = ("alignment", "oracle")
 
 
 def test_calibration_matches_measured_rates() -> None:
@@ -47,27 +52,27 @@ def test_triad_is_flat_by_saturation_and_rho_is_inert() -> None:
     # under ambient the action-reader stack is flat -- but because both marginals saturate at 1.0,
     # not because of correlation: the rho knob is provably inert on the triad.
     assert rho_is_inert_on_triad() is True
-    am = ("alignment", "monitor")
+    am = AM
     for h in TRIAD:
-        assert residual_true(am, h, 1.0, "ambient") == residual_true(("alignment",), h, 1.0, "ambient")  # noqa: E501
+        assert residual_true(am, h, 1.0, "ambient") == residual_true(AL, h, 1.0, "ambient")
 
 
 def test_conditionality_surfaced_flat_flips_under_direct() -> None:
     # the headline is CONDITIONAL on the ambient assumption: under the monitor's measured DIRECT
     # recall the stack is NOT flat (the monitor buys a large reduction) -- only the oracle still
     # closes.
-    am = ("alignment", "monitor")
+    am = AM
     for h in TRIAD:
         assert residual_true(am, h, 1.0, "direct") == 0.05  # monitor helps under direct framing
-        assert residual_true(am, h, 1.0, "direct") != residual_true(("alignment",), h, 1.0, "direct")  # noqa: E501
-        assert residual_true(("alignment", "oracle"), h, 1.0, "direct") == 0.0  # only oracle  # noqa: E501
+        assert residual_true(am, h, 1.0, "direct") != residual_true(AL, h, 1.0, "direct")
+        assert residual_true(AO, h, 1.0, "direct") == 0.0  # only oracle
 
 
 def test_factorization_holds_within_framing_on_triad() -> None:
     # the trap is marginal-transfer, NOT correlation: within a fixed framing the product factors on
     # the triad (residual_true == residual_indep). The 20x is direct-numerator over ambient-
     # denominator.
-    am = ("alignment", "monitor")
+    am = AM
     for h in TRIAD:
         for framing in ("ambient", "direct"):
             assert abs(residual_true(am, h, 1.0, framing) - residual_indep(am, h, framing)) <= 1e-9
@@ -76,7 +81,7 @@ def test_factorization_holds_within_framing_on_triad() -> None:
 def test_genuine_correlation_gap_is_off_triad_on_disguised_ops() -> None:
     # correlation has teeth only where marginals are unsaturated: disguised-ops min(0.33,0.33)=0.33
     # strictly exceeds the product 0.109; this gap is framing-robust and rho-driven.
-    am = ("alignment", "monitor")
+    am = AM
     assert residual_true(am, "disguised_ops", 1.0) > residual_indep(am, "disguised_ops") + 0.1
     vals = [residual_true(am, "disguised_ops", r) for r in (0.0, 0.25, 0.5, 0.75, 1.0)]
     assert vals == sorted(vals)  # rho interpolates product -> min
@@ -97,8 +102,8 @@ def test_framing_transfer_trap_is_a_sensitivity_not_a_point() -> None:
 
 
 def test_inversion_on_explicit() -> None:
-    align = residual_true(("alignment",), "explicit_injection", 1.0)
-    align_oracle = residual_true(("alignment", "oracle"), "explicit_injection", 1.0)
+    align = residual_true(AL, "explicit_injection", 1.0)
+    align_oracle = residual_true(AO, "explicit_injection", 1.0)
     assert align <= 1e-9  # alignment alone already closes explicit injection (RA7 0/30)
     assert abs(align - align_oracle) <= 1e-9  # adding the oracle changes nothing there
 

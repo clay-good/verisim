@@ -39,6 +39,7 @@ now real: the prior syntactic-only hook auto-allowed the indirection slice silen
 from __future__ import annotations
 
 import os
+from collections.abc import Mapping
 from dataclasses import dataclass
 from statistics import fmean
 from typing import Literal
@@ -56,7 +57,7 @@ def _resolve(cwd: str, path: str) -> str:
 
 
 def call_targets_protected(
-    tool_name: str, tool_input: dict[str, object], prefix: str = PROTECTED_PREFIX,
+    tool_name: str, tool_input: Mapping[str, object], prefix: str = PROTECTED_PREFIX,
     cwd: str = DEFAULT_CWD,
 ) -> bool:
     """The model-free covering target, lifted to Claude Code tools: does it hit the surface?"""
@@ -72,7 +73,7 @@ def call_targets_protected(
 
 
 def coverage_gate_decision(
-    tool_name: str, tool_input: dict[str, object], prefix: str = PROTECTED_PREFIX,
+    tool_name: str, tool_input: Mapping[str, object], prefix: str = PROTECTED_PREFIX,
     cwd: str = DEFAULT_CWD,
 ) -> Decision:
     """The (RA17) syntactic coverage gate decision: off-surface auto-allow, on-surface ask. This is
@@ -83,7 +84,7 @@ def coverage_gate_decision(
 
 
 def coverage_gate_decision_resolved(
-    tool_name: str, tool_input: dict[str, object], prefix: str = PROTECTED_PREFIX,
+    tool_name: str, tool_input: Mapping[str, object], prefix: str = PROTECTED_PREFIX,
     cwd: str = DEFAULT_CWD,
 ) -> Decision:
     """The RA18-hardened decision: for Bash, run the abstract shell-path resolver and route ABSTAIN
@@ -104,7 +105,7 @@ def coverage_gate_decision_resolved(
 
 
 def hook_decision(
-    event: dict[str, object], prefix: str = PROTECTED_PREFIX, use_resolver: bool = True,
+    event: Mapping[str, object], prefix: str = PROTECTED_PREFIX, use_resolver: bool = True,
 ) -> dict[str, object]:
     """Map a PreToolUse stdin event to a Claude Code hook-output dict.
 
@@ -146,7 +147,7 @@ _DENY_PATTERNS = ("rm ", "> /etc", ">> /etc", "tee /etc", "write /etc", "append 
 
 
 def denylist_decision(
-    tool_name: str, tool_input: dict[str, object], prefix: str = PROTECTED_PREFIX,
+    tool_name: str, tool_input: Mapping[str, object], prefix: str = PROTECTED_PREFIX,
     cwd: str = DEFAULT_CWD,
 ) -> Decision:
     """The status-quo pattern denylist: ask on a listed pattern, else allow (misses chmod/mv)."""
