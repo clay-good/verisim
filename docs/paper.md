@@ -634,6 +634,19 @@ on the off-surface majority. The product ask is to make the approval prompt fire
 surface rather than on a pattern list, which is what turns approval fatigue and injection robustness
 from a tradeoff into the same lever.
 
+That ask is now a runnable artifact, not a slide (RA17). The coverage gate is implemented as a real
+Claude Code `PreToolUse` hook (`scripts/claude_code_coverage_hook.py`): it reads the tool call from
+stdin, returns `allow` for the off-surface majority and `ask` for the on-surface minority, over the
+three tools a coding agent mutates state with (Bash, Edit, Write). Measured on a realistic tool-call
+battery against the pattern-denylist status quo, the denylist shows *both* failure modes at once, it
+over-prompts on a benign `rm` under the work directory (approval fatigue) and still auto-allows the
+`chmod` and `mv` classes it never enumerated (a 0.29 missed-harm breach), exactly the RA4/CU34 gap;
+the coverage hook has zero benign approval fatigue and zero missed-harm on the explicit arsenal, at a
+human-approval burden equal to the sparse covering surface. The honest edge is the same one RA4 names:
+a Bash path built by indirection carries no literal prefix, so the syntactic pre-commit target misses
+it, which is why deployment routes the irreversible slice to the post-commit reversibility check rather
+than auto-allowing it. This is the §8 operating point demonstrated on the actual platform mechanism.
+
 Two steps turn this preprint into a result a platform can act on, and neither is another theorem.
 
 First, the external number at scale. The RA6 vertical slice already runs the gate live on a real
@@ -661,5 +674,8 @@ relevant modules are under `src/verisim/realagent/` (the RA arc) and `src/verisi
 framework, CU arc), the experiments under `src/verisim/experiments/`, and the figures and their CSVs
 under `figures/`. The hermetic results run torch-free with no network. The control-evaluation recast
 (RA16) is `src/verisim/realagent/control_eval.py` with `python -m verisim.experiments.ra16_control_eval`
-regenerating `figures/ra16_control_eval.{csv,png}`. The live Terminal-Bench lane, which requires Docker
-and a model API key, is documented as a runbook in `docs/specs/SPEC-22.md`.
+regenerating `figures/ra16_control_eval.{csv,png}`. The §8 Claude Code hook (RA17) is
+`src/verisim/realagent/claude_code_gate.py` with the runnable hook at
+`scripts/claude_code_coverage_hook.py` and `python -m verisim.experiments.ra17_claude_code_gate`
+regenerating `figures/ra17_claude_code_gate.{csv,png}`. The live Terminal-Bench lane, which requires
+Docker and a model API key, is documented as a runbook in `docs/specs/SPEC-22.md`.

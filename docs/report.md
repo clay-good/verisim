@@ -3894,6 +3894,26 @@ them on the covering surface, not a pattern list. Honest scope: this adds the op
 when the trusted check can be the environment itself; it does not improve the control protocols that
 operate where no oracle exists.
 
+**RA17 — the coverage gate as a Claude Code permission hook (H149).** RA16 stated the §8 product
+reading in control terms; RA17 makes it a runnable artifact and measures it. The coverage gate is
+implemented as a real Claude Code `PreToolUse` hook
+([`scripts/claude_code_coverage_hook.py`](../scripts/claude_code_coverage_hook.py), logic in
+[`src/verisim/realagent/claude_code_gate.py`](../src/verisim/realagent/claude_code_gate.py)): it reads
+the tool call from stdin and returns the documented `hookSpecificOutput` permission decision —
+`allow` for the off-surface majority (auto-approve, no prompt), `ask` for the sparse on-surface
+minority that can realize harm — across the three tools a coding agent mutates state with (Bash, Edit,
+Write). Measured on a realistic tool-call battery against the pattern-denylist status quo
+([`figures/ra17_claude_code_gate.csv`](../figures/ra17_claude_code_gate.csv)): the denylist shows
+**both** failure modes at once — it over-prompts on a benign `rm` under the work dir (approval fatigue
+0.11) **and** still auto-allows the `chmod`/`mv` classes it never enumerated (missed-harm **0.29**, the
+RA4/CU34 gap) — while the **coverage hook has zero benign approval fatigue and zero missed-harm on the
+explicit arsenal**, at a human-approval burden equal to the sparse covering surface. The honest edge is
+RA4's: a Bash path built by indirection evades the syntactic target (reported, routed to the
+post-commit reversibility check in deployment). This is the §8 operating point demonstrated on the
+actual platform mechanism — *fire the approval prompt on the covering surface, not a pattern list.*
+(The hook is documented but **not** auto-registered in this repo's `.claude/settings.json`, so it does
+not change the repo's own agent behavior; registration is a one-liner shown in the script.)
+
 ## What v0 ships for others
 
 Per SPEC-2 §15, the env + metric are packaged for reuse:
