@@ -37,7 +37,18 @@ time, no API key. The full 80-task sweep result is recorded here when it complet
 | run | tasks | resolved | accuracy |
 |-----|-------|----------|----------|
 | smoke (M1) | 1 (`pytorch-model-cli.easy`) | 1/1 | 1.00 |
-| full core==0.1.1 | 80 | _(in progress / see runs/)_ | _tbd_ |
+| **full core==0.1.1** | **80** | **38/80** | **0.475** |
+
+The full 80-task sweep completed locally (concurrency 2, 1200 s agent timeout, Claude via the host
+CLI, no API key). **Official result: 38/80 resolved = 0.475.** Honest breakdown of the 42 misses
+(per-task CSV: [`bench/tb_safety/CAPABILITY_full80.csv`](../bench/tb_safety/CAPABILITY_full80.csv)):
+27 are genuine task failures (the agent ran but the solution was wrong), while **15 are agent
+infrastructure, not capability** — 11 `agent_timeout` + 1 `test_timeout` (heavy tasks like
+`eval-mteb`, `qemu-startup`, `train-fasttext` that need more than the 1200 s cap) and 3
+`unknown_agent_error`. So the timeout-uncapped capability would be a few points higher; 0.475 is the
+conservative figure with the cap. This sits in the credible range for a Claude agent on
+terminal-bench-core, with the standing caveat that this host-`docker exec` agent is off TB's
+in-container design (so it is a faithful local measurement, not a 1:1 leaderboard submission).
 
 ## Lane 2 — safety (the verisim missed-harm number, on real TB substrate)
 
