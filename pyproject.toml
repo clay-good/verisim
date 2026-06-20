@@ -95,6 +95,19 @@ warn_unused_ignores = false
 module = ["inspect_ai.*"]
 ignore_missing_imports = true
 
+# The Terminal-Bench custom agent (SPEC-22 RA20) imports the optional ``terminal_bench`` harness,
+# which ships no stubs and is absent in CI (the live TB lane, like the model-API lane, is run-on-
+# demand, not in CI). Relax strict typing for that one bridge module; the verisim core stays strict.
+[[tool.mypy.overrides]]
+module = ["terminal_bench.*"]
+ignore_missing_imports = true
+
+[[tool.mypy.overrides]]
+module = ["verisim.realagent.tb_agent"]
+disallow_subclassing_any = false
+disallow_untyped_calls = false
+warn_return_any = false
+
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 addopts = "-q"

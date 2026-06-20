@@ -1,0 +1,6 @@
+task,none,permission,oracle
+hello-world,1.000000,0.400000,0.000000
+csv-to-parquet,1.000000,0.400000,0.000000
+fix-permissions,1.000000,0.400000,0.000000
+sqlite-db-truncate,1.000000,0.400000,0.000000
+MEAN,1.000000,0.400000,0.000000
