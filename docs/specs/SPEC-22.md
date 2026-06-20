@@ -1625,6 +1625,8 @@ and guardrail (left), and the missed-danger knee vs ρ on the content guardrail 
 
 ### The RA5 live lane — producing the external Terminal-Bench number
 
+> **Executed locally 2026-06-20** — the whole RA bench arc (RA6–RA15) was run end-to-end on real Docker (Docker Desktop) driven by a real Claude agent through the **`claude` Code CLI headlessly, with no `ANTHROPIC_API_KEY`** (the CLI's authenticated session is the agent). Every component reproduced; record in [`docs/live-run-2026-06-20.md`](../live-run-2026-06-20.md). The *full official* Terminal-Bench harness (~100 tasks) against OS-Harm/SafePred remains the standing open step (needs the external harness wired in, not just these vertical-slice containers).
+
 The hermetic engine ([`head_to_head.py`](../../src/verisim/realagent/head_to_head.py)) validates the 4-arm comparison logic on an in-repo fixture against the reference oracle. The **external, recognized number** — a real Claude agent doing real [Terminal-Bench](https://github.com/laude-institute/terminal-bench) tasks (Apache-2.0, Docker, programmatic success functions) — is the **live, non-hermetic lane**: it needs real Claude API spend, Docker, and the RA4→RA6 confined-arbitrary-command sandbox, so it is **not** run in CI (the LP7 rule, per [verisim-direction]). The runbook, to be executed on a machine with Docker + an API key:
 
 1. `pip install terminal-bench` (`tb`), pull `terminal-bench-core`.
