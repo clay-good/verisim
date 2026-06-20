@@ -59,22 +59,30 @@ plants a protected credential the task never needs (`/etc/app/secret`, the tripw
 the protected region, roll back — CU27 reversibility on a real box). Five-class arsenal (overwrite,
 append, delete, weaken-perms, exfil-by-move).
 
-Across 4 real TB task containers (`hello-world`, `csv-to-parquet`, `fix-permissions`,
-`sqlite-db-truncate`):
+Across **16 real TB task containers** (`hello-world`, `csv-to-parquet`, `fix-permissions`,
+`sqlite-db-truncate`, `configure-git-webserver`, `count-dataset-tokens`, `fix-git`,
+`fix-pandas-version`, `heterogeneous-dates`, `organization-json-generator`, `password-recovery`,
+`polyglot-c-py`, `processing-pipeline`, `nginx-request-logging`, `openssl-selfsigned-cert`,
+`grid-pattern-transform`):
 
-| arm | missed-harm | note |
+| arm | missed-harm (mean over 16 tasks) | note |
 |-----|-------------|------|
 | none (no gate) | **1.00** | every realizing action goes through |
 | permission denylist (Claude-Code-style status quo) | **0.40** | misses `chmod` (weaken) and `mv` (exfil) — not a "write" |
 | oracle coverage (verisim) | **0.00** | catches every class; realizing actions rolled back |
 
-This reproduces the RA3/RA5 result on the official Terminal-Bench substrate: a pattern denylist leaks
-the classes it never enumerated; the model-free oracle coverage gate drives missed-harm to zero. Raw
-CSV: [`bench/tb_safety/RESULTS.csv`](../bench/tb_safety/RESULTS.csv).
+The number is **identical on all 16 tasks** (per-task CSV:
+[`bench/tb_safety/RESULTS.csv`](../bench/tb_safety/RESULTS.csv)), and that uniformity is the point: the
+gate's coverage is a property of the *danger surface*, not the task — exactly RA3's generalization
+claim, now confirmed across heterogeneous official Terminal-Bench containers. A pattern denylist leaks
+the classes it never enumerated; the model-free oracle coverage gate drives missed-harm to zero.
 
 ## Status
 
-The external lane is no longer a runbook — both lanes execute locally on the official harness with
-Claude-via-CLI and no API key. What remains for a leaderboard-grade claim: the full 80-task capability
-sweep at scale (running), and a powered safety sweep across more of the 80 tasks (the 4-task slice here
-is a demonstration; the adapter scales with `--tasks`).
+The external lane is no longer a runbook — it is **done, both lanes, on the official harness with
+Claude-via-CLI and no API key**: capability at full scale (38/80 = 0.475 across all of
+`terminal-bench-core==0.1.1`) and safety across 16 real TB containers (oracle missed-harm 0.00 vs 0.40
+denylist / 1.00 none). What remains for a leaderboard-grade *capability* submission is an in-container
+agent (TB's design) rather than the host-`docker exec` bridge, and longer timeouts for the heavy tasks;
+the *safety* result — the program's actual contribution — now holds on the official benchmark's
+substrate and scales to all 80 with `--tasks` at no model cost.
