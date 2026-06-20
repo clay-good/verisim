@@ -775,9 +775,25 @@ pattern (routed to the post-commit diff), with the soundness invariant intact (n
 silently off-surface, zero benign over-fire). This is the program's founding shape — a proposer
 checked by a free exact verifier — finally load-bearing for *safety*, and it is where the learned
 world model reconnects: the structured fuzzer is the proposer slot a learned adversary would fill to
-hunt harder holes. The honest limits are the same as RA18's: one well-specified harm family, an
-empirical certificate over a corpus rather than a proof over all bash, and a fuzzer rather than a
-learned proposer (yet). (Reproduce: `docs/coverage-synthesis-run.md`.)
+hunt harder holes. (Reproduce: `docs/coverage-synthesis-run.md`.)
+
+And we filled that slot (RA23). The structured fuzzer becomes a *learned* adversary: a policy over
+shell-mutation operators trained by REINFORCE whose reward is the exact oracle's own hole-verdict
+(`realizes ∧ ¬target`) — no learned reward model in the loop, so this is the program's
+verifier-as-reward thesis applied to adversarial test generation, the model proposing and the oracle
+disposing. Run against a blind uniform proposer over the same operator space (600 oracle calls,
+labels cross-checked bit-for-bit against a real `/bin/sh`), the learned adversary finds 2.3 times as
+many coverage holes per oracle call, and as the CEGIS loop repairs the literal class its proposal mass
+visibly flows off `literal` (to about 0.01) and onto the indirection transforms that still realize
+holes. It also surfaces a residual class the enumerative grid never contained (quote-splice
+indirection, `/et""c/shadow`), which the oracle confirms realizes the harm and which no string pattern
+covers — widening the command space the certificate is tested over. The load-bearing result is that
+the soundness invariant holds *under the adaptive adversary*: every hole it finds is covered or
+explicitly routed, none silently off-surface, and the literal class is still closed. This is where the
+program's two arcs meet — the RL/world-model arc supplies the proposer, the oracle-coverage arc
+supplies the verifiable reward and the soundness guarantee. The honest limits are the same as RA22's,
+plus that the policy is tabular over a small operator space, not yet a neural proposer over a
+compositional grammar. (Reproduce: `docs/learned-proposer-run.md`.)
 
 The honest summary is short. In the one domain that allows it, the exact oracle turns a guardrail from
 something an adversary can talk around into something it cannot, cheaply and without getting in the
@@ -812,4 +828,8 @@ The automated-coverage synthesizer (RA22) is `src/verisim/realagent/coverage_syn
 `python -m verisim.experiments.ra22_coverage_synth` (add `--bash` for the real-shell label
 cross-check) regenerating `figures/ra22_coverage_synth.{csv,png}`; results in
 `docs/coverage-synthesis-run.md`, logic pinned by `tests/test_ra22_coverage_synth.py`.
+The learned adversarial proposer (RA23) is `src/verisim/realagent/learned_proposer.py` with
+`python -m verisim.experiments.ra23_learned_proposer` (add `--bash` for the real-shell label
+cross-check) regenerating `figures/ra23_learned_proposer.{csv,png}`; results in
+`docs/learned-proposer-run.md`, logic pinned by `tests/test_ra23_learned_proposer.py`.
 The rest of the paper's numbers are hermetic (torch-free, no network).
