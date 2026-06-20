@@ -762,6 +762,23 @@ folded grammar's coverage (more pure builtins, cross-call binding) and to publis
 argument formally; the partition is established and adversarially tested, but the closed fraction is a
 measured coverage of an evolving corpus, not yet a proof over all bash.
 
+Third, and most fundamental, the surface itself. Every target above is *hand-specified*, which
+inherits the very enumeration problem we charge the denylist with: a covering target is only as good
+as the human who wrote it. RA22 begins to automate it. It runs a counterexample-guided (CEGIS) search
+that starts from an *empty* target and grows it: a structured proposer emits candidate harmful
+actions, the exact oracle adjudicates which truly realize the harm (confirmed bit-for-bit against a
+real `/bin/sh`, the RA2 move), and the target is repaired only where a realizing action slipped off
+it, until no hole remains. The result, with no hand-specification, is the same partition RA18 drew by
+hand, now *discovered*: the loop covers the entire class of realizing actions that name the protected
+path and automatically isolates the indirection/symlink class as irreducible to any pre-commit string
+pattern (routed to the post-commit diff), with the soundness invariant intact (no realizing action is
+silently off-surface, zero benign over-fire). This is the program's founding shape — a proposer
+checked by a free exact verifier — finally load-bearing for *safety*, and it is where the learned
+world model reconnects: the structured fuzzer is the proposer slot a learned adversary would fill to
+hunt harder holes. The honest limits are the same as RA18's: one well-specified harm family, an
+empirical certificate over a corpus rather than a proof over all bash, and a fuzzer rather than a
+learned proposer (yet). (Reproduce: `docs/coverage-synthesis-run.md`.)
+
 The honest summary is short. In the one domain that allows it, the exact oracle turns a guardrail from
 something an adversary can talk around into something it cannot, cheaply and without getting in the
 agent's way. We have shown that around a real model and a real kernel, against the two defenses in
@@ -791,4 +808,8 @@ privacy-safe replay `bench/cc_corpus/extract.py` (walks `~/.claude/projects`; em
 command strings) regenerating `bench/cc_corpus/{RESULTS.csv,summary.json}` and, via
 `figures/plot_ra21_cc_corpus.py`, `figures/ra21_cc_corpus.png`; results in `docs/cc-corpus-run.md`,
 the logic pinned hermetically by `tests/test_ra21_cc_corpus.py` (which does not read `~/.claude`).
+The automated-coverage synthesizer (RA22) is `src/verisim/realagent/coverage_synth.py` with
+`python -m verisim.experiments.ra22_coverage_synth` (add `--bash` for the real-shell label
+cross-check) regenerating `figures/ra22_coverage_synth.{csv,png}`; results in
+`docs/coverage-synthesis-run.md`, logic pinned by `tests/test_ra22_coverage_synth.py`.
 The rest of the paper's numbers are hermetic (torch-free, no network).

@@ -1,0 +1,9 @@
+metric,value
+n_candidates,50
+n_realizing,40
+rounds_to_converge,2
+covered_frac,0.250000
+residual_frac,0.750000
+silent_miss,0
+benign_overfire,0
+n_synthesized_prefixes,1
