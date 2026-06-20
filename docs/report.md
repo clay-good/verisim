@@ -3941,6 +3941,33 @@ post-commit diff. Honest boundary: the closed fraction is a measured coverage of
 adversarial corpus, not a proof over all bash; cross-call binding and a formal soundness write-up are
 the remaining work. *The open edge is now split, not papered over.*
 
+**RA19 — the framing-transfer trap and layer saturation: why action-reading defenses don't compose,
+and the oracle is the unique framing-robust closer (H151).** RA19 asks the deployer's question: if you
+stack model alignment (the agent's own refusal) and a trusted-LLM monitor (a SafePred-style guardrail),
+how much residual harm is left, per harm class? It is a **grounded model** calibrated to the repo's
+measured per-layer rates (RA7–RA12), in
+[`src/verisim/realagent/ra19_correlated_layers.py`](../src/verisim/realagent/ra19_correlated_layers.py).
+*This result was recast after a 4-reviewer adversarial pass that tested every claim against the engine
+and caught the first draft overclaiming* (it billed the triad result as "correlated blind spots" — the
+engine showed the correlation knob is **inert** on the triad). The honest findings: **(1)** the oracle
+is the **unique framing-robust zero-residual closer** — any oracle-present subset drives the triad
+residual to 0 under every framing and every correlation `rho`; the best the two action-readers reach is
+0.05 (monitor under its measured *direct* recall) and at worst 1.0 (ambient). **(2)** The
+**framing-transfer trap** (the actionable headline): a deployer who imports the monitor's measured
+*direct*-framing recall (RA11's 0.95–1.00 on the explicit security question) into *ambient* deployment
+— where the agent meets the change as routine work — over-estimates safety by **up to ~20×**, reported
+as a *sensitivity* (degrading to ~10× at a 0.5 ambient miss; the >10× claim survives only above ~0.55),
+not a point estimate. **(3)** Within a fixed framing the residual *factors* on the triad — the trap is
+marginal-transfer, not correlation; **genuine correlation non-factorization** (joint `min` > product)
+lives only off-triad on disguised-ops, validated against CU39's salt-keyed `ImperfectMonitor`. **(4)**
+The triad is flat by **saturation**, not correlation, and *conditional* on the ambient assumption —
+under the monitor's direct recall the stack is no longer flat (the monitor buys the 20×), and only the
+oracle still reaches 0. Honest boundaries (first-class in the verdict + tests + `PROVENANCE`): the
+monitor-ambient cell is an **assigned prior**, not a live measurement; the result is one Claude family;
+the genuinely new content is a CU39 corollary + RA16 citation. *The value is the decomposition of where
+and why layered agent defenses fail to compose, with the framing-transfer trap as the deployer-facing
+lesson.* Reproduce: `python -m verisim.experiments.ra19_correlated_layers`.
+
 ## What v0 ships for others
 
 Per SPEC-2 §15, the env + metric are packaged for reuse:

@@ -445,6 +445,23 @@ the control protocol that escapes the audit-budget tradeoff a fallible trusted m
 product reading of the same fact is in Section 8 (the audit budget is the human-approval budget). This
 is the hermetic engine, like RA5; the figure and CSV are `figures/ra16_control_eval`.
 
+**Defense-in-depth: action-reading layers don't compose on effect-harms (RA19).** A deployer's first
+instinct is to stack two cheap defenses, the model's own alignment (refusal) and a trusted-LLM monitor,
+and assume the residual miss is their product. RA19 is a grounded model over our measured per-layer
+rates (RA7 to RA12) that maps where that fails. The honest result, after an adversarial self-review that
+caught an earlier overclaim: the oracle is the *unique framing-robust* closer (any layer set containing
+it drives the triad residual to zero under every condition; the two action-readers reach at best 0.05
+and at worst 1.0). And there is a concrete trap: a monitor's recall measured by *asking it the security
+question directly* (RA11's 0.95) does not transfer to the *ambient* framing the agent actually operates
+under, where the change looks like routine work, so a deployer who imports the direct number and assumes
+independence over-estimates safety by up to about twenty times. Honestly scoped, the triad's flatness is
+saturation (both action-readers near-blind), not a subtle correlation effect, and it is conditional on
+that ambient assumption, which we make first-class and report as a sensitivity rather than a point. The
+lesson for stacking agent defenses is narrow and useful: layers that both read the action surface share
+a blind spot on harms that are only visible in the resulting state, and only an effect-reader closes
+them. The engine, figure, and provenance are `figures/ra19_correlated_layers` and the module's
+`PROVENANCE` table.
+
 ## 5. The honest negative, and the boundary it draws
 
 The pre-commit target is not a theorem on fully arbitrary shell input, and pretending otherwise would
