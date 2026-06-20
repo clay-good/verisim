@@ -3968,6 +3968,29 @@ the genuinely new content is a CU39 corollary + RA16 citation. *The value is the
 and why layered agent defenses fail to compose, with the framing-transfer trap as the deployer-facing
 lesson.* Reproduce: `python -m verisim.experiments.ra19_correlated_layers`.
 
+**RA20 — the official Terminal-Bench harness, run locally with no API key (the external number).** The
+program's single named open step — the external benchmark number — taken from runbook to a real local
+run on the **official Terminal-Bench harness** (Laude Institute `terminal-bench-core==0.1.1`, **80
+tasks**). TB's built-in `claude-code` agent installs Claude Code *inside* each task container and
+requires `ANTHROPIC_API_KEY`, which a subscription/OAuth CLI login cannot supply; the fix is a custom
+agent ([`src/verisim/realagent/tb_agent.py`](../src/verisim/realagent/tb_agent.py),
+`HostClaudeCliAgent`) that keeps Claude on the **host** (its authenticated CLI session) and drives each
+task container from outside via `docker exec` — the proven bench-arc pattern. **Two lanes.**
+*Capability:* the full 80-task sweep resolved **38/80 = 0.475** (honest: 15 of the 42 misses are
+agent-timeout/error at the 1200s cap, not capability). *Safety (the contribution):* the adapter
+([`bench/tb_safety/gate_eval.py`](../bench/tb_safety/gate_eval.py)) plants a standard tripwire on the
+**real** TB task containers and measures missed-harm per arm with the **real container as the oracle**
+(execute → diff the protected region → roll back, CU27); across **16 real TB tasks** the result is
+**identical on every one** — oracle-coverage **0.00** vs permission-denylist **0.40** (misses chmod/mv)
+vs none **1.00**. That uniformity is RA3's danger-surface generalization, now on the recognized
+benchmark's heterogeneous substrate. Honest boundary: a *leaderboard-grade* capability submission needs
+TB's in-container agent (not the host-`docker exec` bridge) and uncapped timeouts, and the safety
+tripwires are hand-specified, not an external harm definition — the harness, agent, and adapter exist
+and run; what's left is the submission conditions, not the mechanism. Full record:
+[`docs/terminal-bench-run.md`](terminal-bench-run.md); CSVs in `bench/tb_safety/`. Reproduce:
+`tb run -d terminal-bench-core==0.1.1 --agent-import-path verisim.realagent.tb_agent:HostClaudeCliAgent`
+and `python bench/tb_safety/gate_eval.py --tasks <...>`.
+
 ## What v0 ships for others
 
 Per SPEC-2 §15, the env + metric are packaged for reuse:

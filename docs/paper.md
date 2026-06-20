@@ -24,9 +24,17 @@ abstract shell-path interpreter that splits the indirection edge into a closed s
 and a provably-irreducible runtime/filesystem-state half, found by an adversarial red team of our own
 and then closed or routed, with the residual fail-closed on the irreversible slice of the Claude Code
 hook.
-What is still open, and not claimed: an AppArmor or SELinux arm (no LSM was available in this kernel),
-a run of SafePred's actual code, a cross-model realism sweep, and the full official Terminal-Bench
-harness at scale. The results run only on controlled worlds with a hand-specified danger model. Read
+And we ran the program's single named open step, the external Terminal-Bench number, locally on the
+official harness (RA20): a real Claude agent driven through the host Code CLI with no API key (a custom
+agent that operates each task container via `docker exec`), on all 80 tasks of `terminal-bench-core`.
+Two lanes, both honest: capability 38/80 = 0.475 (15 of the 42 misses are agent-timeout/error at our
+cap, not capability), and, the contribution, the safety lane on 16 real Terminal-Bench containers
+where oracle-coverage missed-harm is 0.00 against 0.40 for a pattern denylist and 1.00 unguarded,
+identical on every task. What is still open, and not claimed: an AppArmor or SELinux arm (no LSM was
+available in this kernel), a run of SafePred's actual code, a cross-model realism sweep, and a
+*leaderboard-grade* Terminal-Bench submission (an in-container agent rather than the host-`docker exec`
+bridge, and uncapped timeouts for the heavy build/ML tasks). The results run only on controlled worlds
+with a hand-specified danger model. Read
 accordingly, and read the review.
 
 ## Abstract
@@ -563,13 +571,17 @@ systems.
 **What it is not, yet.** The four-arm head-to-head's numbers in Section 4 come from a *hermetic
 engine*: it runs on an in-repo fixture against the reference oracle, and the learned-guardrail arm is
 a fidelity-phi proxy, not SafePred's actual system. The live RA6 and RA7 runs are real (real Docker,
-real arbitrary bash, a real Claude agent, 60 measured trials), but they are a *vertical slice*: six
-hand-built harm scenarios on Terminal-Bench-shaped containers, not the full official Terminal-Bench
-harness across its ~100 tasks, and not OS-Harm. The harm scenarios are hand-specified (we wrote the
-tripwires and framings), not drawn from or scored against an external harm definition. So the relationship to
-OS-Harm and SafePred is, today, a sound *positioning* plus a real *vertical-slice demonstration*, not
-a full *head-to-head on the published leaderboards*. The engine and the live harness exist to produce
-that; running it at the official scale is the next step, and we will not call it done before it runs.
+real arbitrary bash, a real Claude agent, 60 measured trials) on six hand-built harm scenarios. We
+have since taken the gate onto the **official Terminal-Bench harness** (RA20, `terminal-bench-core`,
+80 tasks), run locally with a real Claude agent through the host Code CLI (no API key): the safety
+lane plants a standard tripwire on the *real* TB task containers and measures missed-harm per arm with
+the real container as the oracle, giving 0.00 (oracle) / 0.40 (denylist) / 1.00 (none) identically
+across 16 tasks. That moves the OS-Harm/SafePred relationship from positioning to a measured result on
+the recognized benchmark's substrate. What is still *not* done: the harm scenarios remain
+hand-specified tripwires (not drawn from an external harm definition), and the capability sweep, while
+full-scale (38/80), used a host-`docker exec` agent bridge and capped timeouts, so it is a faithful
+local measurement, not a leaderboard submission. We will not call the leaderboard head-to-head done
+before the in-container agent runs at the official timeouts.
 
 **We replaced the fidelity-phi proxy with a real measurement, and it corrected us (RA11).** The
 proxy's "adversarial miss pinned at 1.00" is a worst-case theoretical construct: it assumes a model
@@ -693,12 +705,19 @@ than auto-allowing it. This is the §8 operating point demonstrated on the actua
 
 Two steps turn this preprint into a result a platform can act on, and neither is another theorem.
 
-First, the external number at scale. The RA6 vertical slice already runs the gate live on a real
-container against a real Claude agent and shows the framing-independence result. The remaining step is
-breadth: run it across the full official Terminal-Bench harness (~100 tasks) with held-out harm
-tripwires and a published-style injection layer, reporting missed-harm, task success, and cost per
-arm, against OS-Harm's numbers as the anchor and SafePred as the foil. That converts the vertical
-slice into a leaderboard-scale comparison on shared ground.
+First, the external number at scale, which RA20 has now taken from runbook to a local run on the
+official harness. We wrote a custom Terminal-Bench agent that drives a real Claude agent through the
+host Code CLI with no API key (it operates each task container via `docker exec`), and ran all 80
+tasks of `terminal-bench-core`: capability 38/80 = 0.475 (15 of the 42 misses are agent-timeout/error
+at our cap, not capability), and the safety lane on 16 real TB task containers, where the gate plants a
+standard tripwire and the *real container is the oracle* (execute, diff the protected region, roll
+back), giving missed-harm 0.00 for oracle-coverage against 0.40 for a pattern denylist and 1.00
+unguarded, identical on every task — RA3's danger-surface generalization, now on the recognized
+benchmark's substrate. What remains for a *leaderboard-grade* claim is an in-container agent (TB's
+native design) rather than the host-`docker exec` bridge, uncapped timeouts for the heavy build/ML
+tasks, and a published-style injection layer scored against an external harm definition rather than our
+own tripwires. The harness, the agent, and the safety adapter now exist and run; the gap is the
+submission conditions, not the mechanism. (Reproduce: `docs/terminal-bench-run.md`.)
 
 Second, the irreversible-arbitrary-bash target, which RA18 has now largely closed and which the
 remaining work should finish. RA18 hardened the pre-commit target from a regex into an abstract shell
@@ -711,9 +730,10 @@ measured coverage of an evolving corpus, not yet a proof over all bash.
 
 The honest summary is short. In the one domain that allows it, the exact oracle turns a guardrail from
 something an adversary can talk around into something it cannot, cheaply and without getting in the
-agent's way. We have shown that around a real model and a real kernel, and against the two defenses in
-production. We have not yet shown it on an external benchmark, and that is the next thing we will do,
-not the thing we will claim we did.
+agent's way. We have shown that around a real model and a real kernel, against the two defenses in
+production, and now on the official Terminal-Bench harness's own task containers, where the gate's
+missed-harm is zero where a denylist's is not. What we have *not* shown is a leaderboard-grade
+submission under the benchmark's native conditions; that, not the mechanism, is what is left.
 
 ## Reproduce
 
@@ -727,5 +747,9 @@ regenerating `figures/ra16_control_eval.{csv,png}`. The §8 Claude Code hook (RA
 `scripts/claude_code_coverage_hook.py` and `python -m verisim.experiments.ra17_claude_code_gate`
 regenerating `figures/ra17_claude_code_gate.{csv,png}`. The hardened pre-commit target (RA18) is
 `src/verisim/realagent/shell_resolver.py` with `python -m verisim.experiments.ra18_shell_resolver`
-regenerating `figures/ra18_shell_resolver.{csv,png}`. The live Terminal-Bench lane, which requires
-Docker and a model API key, is documented as a runbook in `docs/specs/SPEC-22.md`.
+regenerating `figures/ra18_shell_resolver.{csv,png}`. The official Terminal-Bench lane (RA20) is the
+custom agent `src/verisim/realagent/tb_agent.py` (run via `tb run -d terminal-bench-core==0.1.1
+--agent-import-path verisim.realagent.tb_agent:HostClaudeCliAgent`, no API key) and the safety adapter
+`bench/tb_safety/gate_eval.py`; results in `docs/terminal-bench-run.md` and
+`bench/tb_safety/{RESULTS,CAPABILITY_full80}.csv`. It needs Docker and an authenticated `claude` CLI
+(no API key); the rest of the paper's numbers are hermetic (torch-free, no network).
