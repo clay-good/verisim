@@ -1,0 +1,7 @@
+metric,regex,resolver
+attack_fire,1.000000,1.000000
+benign_false_fire,0.000000,0.000000
+evasion_silent_miss,0.772727,0.000000
+string_resolvable_caught,0.000000,1.000000
+runtime_abstained_routed,0.000000,1.000000
+symlink_residual,0.000000,1.000000

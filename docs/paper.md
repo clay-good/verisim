@@ -19,6 +19,11 @@ say so) and reaches zero on the three un-dominated harms only by killing the tas
 whole result in the AI-control vocabulary the field now uses for untrusted agents (RA16): the oracle is
 a *trusted monitor* whose safety-usefulness frontier, unlike a model monitor's, does not move under an
 adaptive attacker, which is the same property the recent control literature finds model monitors lack.
+And we hardened the pre-commit target the program had flagged as its single open frontier (RA18): an
+abstract shell-path interpreter that splits the indirection edge into a closed string-resolvable half
+and a provably-irreducible runtime/filesystem-state half, found by an adversarial red team of our own
+and then closed or routed, with the residual fail-closed on the irreversible slice of the Claude Code
+hook.
 What is still open, and not claimed: an AppArmor or SELinux arm (no LSM was available in this kernel),
 a run of SafePred's actual code, a cross-model realism sweep, and the full official Terminal-Bench
 harness at scale. The results run only on controlled worlds with a hand-specified danger model. Read
@@ -457,9 +462,31 @@ spelled. So the principled gate routes by reversibility, a result from the broad
 action is reversible, you can execute it, diff the protected region cheaply, and roll back on harm:
 exact, evasion-proof, and needing no pre-commit prediction at all. Where an action is irreversible (an
 exfiltrating send leaves before you can observe it), you cannot run-then-undo, and you are back to
-needing a covering pre-commit target. Hardening that target toward a real shell parser, for
-irreversible actions on arbitrary bash, is the open problem the program is honest about rather than
-papering over.
+needing a covering pre-commit target.
+
+**We hardened that target toward a real shell parser, and the result is a partition, not a patch
+(RA18).** Rather than claim to parse arbitrary bash, we split the open edge into the half a string
+analysis can close and the half it provably cannot, and we close the first. The hardened target is a
+no-execution abstract interpreter (`src/verisim/realagent/shell_resolver.py`, standard library only)
+that returns a three-valued verdict, FIRES / CLEAR / ABSTAIN, with one load-bearing invariant: ABSTAIN
+never collapses to CLEAR, so a command it cannot fully fold is never silently declared safe. It closes
+the string-resolvable indirection a purely syntactic scan misses: in-command variable assembly
+(`p=/et; > ${p}c/shadow`), quote and backslash splicing (`/et""c/shadow`), pure-builtin command
+substitution (`$(printf /%s/shadow etc)`), and the bash parameter-expansion, brace, tilde, and ANSI-C
+quoting forms (`${x:-/etc/shadow}`, `{/etc,/x}/f`, `~/...` with a tracked HOME, `$'\x2f'`) that an
+adversarial red team of our own found and we then folded in. It ABSTAINs, and routes by reversibility,
+on the genuinely runtime- or filesystem-state-dependent residual: a value read from a file, `eval` of
+a runtime string, a glob whose match depends on the disk, or a symlink whose target the command string
+never names. That residual is *proven* irreducible to string analysis (the same command is harm or
+benign depending only on on-disk state the gate never sees), so it belongs to the post-commit diff
+(exact for reversible actions) or, for the irreversible slice, a fail-closed human prompt. On a labeled
+adversarial corpus the syntactic target silently misses every named indirection while the resolver
+catches the string-resolvable class, routes the rest, and silently misses none, with no regression on
+explicit attacks and no benign over-fire. The honest headline is therefore not "arbitrary bash is
+solved" but "the open edge splits into a closed half and a provably-irreducible half"; the irreducible
+half is the post-commit diff's job, not the parser's. The resolver is wired into the Claude Code hook
+(RA17), so its ABSTAIN-on-irreversible verdict is a real fail-closed routing decision rather than a
+silent allow.
 
 **We ran the exfiltration case live, because it is where the post-commit diff is weakest (RA14).** A
 real victim container holds a credential; a real attacker listens off-host; the agent reads the
@@ -656,10 +683,14 @@ tripwires and a published-style injection layer, reporting missed-harm, task suc
 arm, against OS-Harm's numbers as the anchor and SafePred as the foil. That converts the vertical
 slice into a leaderboard-scale comparison on shared ground.
 
-Second, the irreversible-arbitrary-bash target. Close the RA4 boundary by hardening the pre-commit
-target toward a real shell parser for the irreversible slice, where post-commit rollback is not
-available. That is the one place the guarantee is currently a heuristic, and it is worth making it a
-theorem.
+Second, the irreversible-arbitrary-bash target, which RA18 has now largely closed and which the
+remaining work should finish. RA18 hardened the pre-commit target from a regex into an abstract shell
+interpreter that partitions the open edge: it closes the string-resolvable indirection (variable
+assembly, splicing, command substitution, parameter expansion, brace, tilde, ANSI-C) and routes the
+provably-irreducible runtime/filesystem-state residual by reversibility. What remains is to grow the
+folded grammar's coverage (more pure builtins, cross-call binding) and to publish the soundness
+argument formally; the partition is established and adversarially tested, but the closed fraction is a
+measured coverage of an evolving corpus, not yet a proof over all bash.
 
 The honest summary is short. In the one domain that allows it, the exact oracle turns a guardrail from
 something an adversary can talk around into something it cannot, cheaply and without getting in the
@@ -677,5 +708,7 @@ under `figures/`. The hermetic results run torch-free with no network. The contr
 regenerating `figures/ra16_control_eval.{csv,png}`. The §8 Claude Code hook (RA17) is
 `src/verisim/realagent/claude_code_gate.py` with the runnable hook at
 `scripts/claude_code_coverage_hook.py` and `python -m verisim.experiments.ra17_claude_code_gate`
-regenerating `figures/ra17_claude_code_gate.{csv,png}`. The live Terminal-Bench lane, which requires
+regenerating `figures/ra17_claude_code_gate.{csv,png}`. The hardened pre-commit target (RA18) is
+`src/verisim/realagent/shell_resolver.py` with `python -m verisim.experiments.ra18_shell_resolver`
+regenerating `figures/ra18_shell_resolver.{csv,png}`. The live Terminal-Bench lane, which requires
 Docker and a model API key, is documented as a runbook in `docs/specs/SPEC-22.md`.

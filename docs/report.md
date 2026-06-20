@@ -3914,6 +3914,33 @@ actual platform mechanism — *fire the approval prompt on the covering surface,
 (The hook is documented but **not** auto-registered in this repo's `.claude/settings.json`, so it does
 not change the repo's own agent behavior; registration is a one-liner shown in the script.)
 
+**RA18 — the abstract shell-path resolver: the open edge, split and closed (H150).** The paper named
+one open frontier: the pre-commit target is a regex scan (RA4) that silently misses *indirection* — a
+path built from pieces, assembled in a subshell, or reached through a symlink, where the literal prefix
+never appears in the command. RA18 hardens it the only honest way, by **partitioning** the edge. The
+new resolver ([`src/verisim/realagent/shell_resolver.py`](../src/verisim/realagent/shell_resolver.py))
+is a no-execution abstract interpreter (standard library only) returning a 3-valued verdict
+**FIRES / CLEAR / ABSTAIN** with the load-bearing invariant **ABSTAIN never collapses to CLEAR** (a
+command it cannot fully fold is never silently declared safe — the no-silent-breach property carried
+across indirection). It closes the **string-resolvable** slice (in-command variable assembly, quote/
+backslash splicing, pure-builtin `$(...)` folding, plus the parameter-expansion / brace / tilde /
+ANSI-C classes an in-house adversarial red team found and we folded back), **ABSTAINs and routes by
+reversibility (CU27)** the runtime-/FS-state-dependent slice (`eval`, `$RANDOM`, `$(cat f)`, globs),
+and leaves the **symlink** class CLEAR-on-string as the *proven-irreducible* residual the post-commit
+diff owns. Measured ([`figures/ra18_shell_resolver.csv`](../figures/ra18_shell_resolver.csv)): on the
+adversarial battery the regex silently misses every named indirection while the resolver catches the
+string-resolvable class (FIRES), routes the rest (ABSTAIN), and has **zero silent miss** on
+string-visible realizing commands — with **no attack regression** (explicit attacks still 1.00) and
+**no benign over-fire**. The verification was a multi-agent red-team that ran *executable differential
+tests* (resolver verdict vs real bash writing under a sandboxed prefix); it found three genuine
+soundness-violation classes, all now closed. The resolver is wired into the RA17 Claude Code hook
+(`coverage_gate_decision_resolved`, the default), which **fixes a real paper-vs-artifact gap**: the
+prior syntactic hook silently allowed the indirection slice while the text claimed it was routed — now
+ABSTAIN on an irreversible action fails closed to a human, on a reversible one routes to the
+post-commit diff. Honest boundary: the closed fraction is a measured coverage of an evolving
+adversarial corpus, not a proof over all bash; cross-call binding and a formal soundness write-up are
+the remaining work. *The open edge is now split, not papered over.*
+
 ## What v0 ships for others
 
 Per SPEC-2 §15, the env + metric are packaged for reuse:

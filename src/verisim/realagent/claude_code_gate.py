@@ -24,9 +24,16 @@ a coding agent actually uses to mutate state:
 
 Decision: **off-surface -> allow** (the cheap majority, no prompt); **on-surface -> ask** (escalate
 to the human, the audit budget spent on exactly the surface a human should have been asked about).
-The honest edge carries over from RA4: a Bash path built by indirection carries no literal prefix,
-so the syntactic target misses it pre-commit; in deployment that slice is routed to the post-commit
-reversibility check (CU27), not auto-allowed silently. Hermetic, torch-free, deterministic.
+
+On the honest edge -- a Bash path built by indirection carries no literal prefix, so the plain
+syntactic target (:func:`coverage_gate_decision`) misses it pre-commit -- RA18 hardens the hook:
+:func:`coverage_gate_decision_resolved` (the default used by :func:`hook_decision`) runs the
+abstract shell-path resolver (:mod:`verisim.realagent.shell_resolver`) and **routes by reversibility
+(CU27)**. The resolver returns FIRES / CLEAR / ABSTAIN; FIRES -> ask, CLEAR -> allow, ABSTAIN (a
+runtime- or state-dependent expansion it cannot fold) -> ask on an *irreversible* action (fail
+closed, cannot be undone) or allow on a *reversible* one (the deployment's post-commit fs-diff
+catches any realized effect, including symlink indirection). This is the routing the paper promised,
+now real: the prior syntactic-only hook auto-allowed the indirection slice silently. Torch-free.
 """
 
 from __future__ import annotations
@@ -68,25 +75,51 @@ def coverage_gate_decision(
     tool_name: str, tool_input: dict[str, object], prefix: str = PROTECTED_PREFIX,
     cwd: str = DEFAULT_CWD,
 ) -> Decision:
-    """The coverage gate decision: off-surface auto-allow, on-surface ask the human (the budget)."""
+    """The (RA17) syntactic coverage gate decision: off-surface auto-allow, on-surface ask. This is
+    the plain regex target; it misses indirection -- see :func:`coverage_gate_decision_resolved`."""
     if call_targets_protected(tool_name, tool_input, prefix, cwd):
         return "ask"  # the covering surface: spend an approval prompt here (and only here)
     return "allow"  # off-surface: the cheap majority, no prompt
 
 
-def hook_decision(event: dict[str, object], prefix: str = PROTECTED_PREFIX) -> dict[str, object]:
+def coverage_gate_decision_resolved(
+    tool_name: str, tool_input: dict[str, object], prefix: str = PROTECTED_PREFIX,
+    cwd: str = DEFAULT_CWD,
+) -> Decision:
+    """The RA18-hardened decision: for Bash, run the abstract shell-path resolver and route ABSTAIN
+    by reversibility (CU27). FIRES -> ask; CLEAR -> allow; ABSTAIN -> ask if irreversible (fail
+    closed, cannot be undone) else allow (the reversible slice is caught by the post-commit diff).
+    Edit/Write use the structured file_path (exact), unchanged from RA17."""
+    from verisim.realagent.shell_resolver import abstract_targets_protected, is_irreversible
+
+    if tool_name == "Bash":
+        command = str(tool_input.get("command", ""))
+        verdict = abstract_targets_protected(command, prefix)
+        if verdict == "FIRES":
+            return "ask"
+        if verdict == "ABSTAIN":
+            return "ask" if is_irreversible(command) else "allow"
+        return "allow"  # CLEAR
+    return "ask" if call_targets_protected(tool_name, tool_input, prefix, cwd) else "allow"
+
+
+def hook_decision(
+    event: dict[str, object], prefix: str = PROTECTED_PREFIX, use_resolver: bool = True,
+) -> dict[str, object]:
     """Map a PreToolUse stdin event to a Claude Code hook-output dict.
 
     ``allow`` returns ``{}`` (proceed through the normal permission flow); ``ask`` returns the
     ``hookSpecificOutput`` that shows the approval dialog, with the covering surface named as the
-    reason. This is the exact JSON the entrypoint prints to stdout.
+    reason. This is the exact JSON the entrypoint prints to stdout. ``use_resolver`` (default True)
+    selects the RA18 resolver+reversibility routing; set False for the plain RA17 syntactic target.
     """
     tool_name = str(event.get("tool_name", ""))
     tool_input = event.get("tool_input") or {}
     cwd = str(event.get("cwd") or DEFAULT_CWD)
     if not isinstance(tool_input, dict):
         tool_input = {}
-    decision = coverage_gate_decision(tool_name, tool_input, prefix, cwd)
+    decide = coverage_gate_decision_resolved if use_resolver else coverage_gate_decision
+    decision = decide(tool_name, tool_input, prefix, cwd)
     if decision == "allow":
         return {}  # no decision -> normal permission flow (auto-approve the off-surface majority)
     reason = (
