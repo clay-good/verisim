@@ -292,3 +292,28 @@
 - **Inspect / `inspect_evals`** (UK AI Safety Institute) — framework + community evals with a published
   submission standard (scorer unit tests, resource checks). *Take:* the distribution target and quality
   bar `verisim-bench`'s Inspect task is hardened to (already wired in `eval/inspect_task.py`).
+
+## AI control — the frame for the RA arc (SPEC-22 RA16, June 2026)
+
+The home discipline for "deploy a powerful-but-untrusted agent safely" is **AI control**, and RA16
+positions the oracle coverage gate in it explicitly. The contribution there is one operating point the
+domain allows: a *trusted monitor* that is the environment run as an oracle, so it has no model blind
+spot, and whose safety-usefulness frontier is invariant to whether the red team is adaptive.
+
+- **AI Control: Improving Safety Despite Intentional Subversion** — Greenblatt, Shlegeris et al.
+  (Redwood Research, arXiv:2312.06942, 2023). Defines the red-team/blue-team control evaluation and the
+  safety-usefulness frontier at a given audit budget; trusted monitoring, defer-to-trusted, and
+  trusted editing are the canonical blue-team protocols. *Take:* the vocabulary RA16 adopts; the oracle
+  gate is a trusted monitor whose verdict is read, not predicted.
+- **Adaptive Attacks on Trusted Monitors Subvert AI Control Protocols** — arXiv:2510.09462 (2025). The
+  load-bearing recent result: a *model* monitor has a blind spot an adaptive attacker aims at, so no
+  audit budget short of auditing-everything reaches safety 1. *Take:* this is RA5/RA11's learned-
+  guardrail failure named in the control literature, and exactly the failure the exact-oracle monitor
+  (RA16) does not have — the reason its frontier does not move under an adaptive adversary.
+- **Evaluating Control Protocols for Untrusted AI Agents** (arXiv:2511.02997, 2025) and **The sum of
+  its parts: composing AI control protocols** (Redwood, 2025). *Take:* the protocol-composition and
+  evaluation methodology; the oracle gate is one composable trusted check, strongest where exact state
+  is on tap.
+- **Anthropic Alignment Science** — "adversarial robustness and AI control" is a named research area
+  (alignment.anthropic.com; Fellows 2026). *Take:* the audience for the RA16/paper-§8 product reading,
+  where a permission system is a control protocol and approval prompts are its audit budget.

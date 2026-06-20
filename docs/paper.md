@@ -15,10 +15,14 @@ both safe and useful. We also replaced the review's worst target, the parameteri
 arm, with a real measured LLM guardrail (RA11), which corrected our own story and is reported as such,
 and we ran the real hardened-sandbox baseline the review demanded (RA13, the immutable bit `chattr +i`
 on real containers): it drives single-resource harms to zero at no cost (the sandbox wins there, and we
-say so) and reaches zero on the three un-dominated harms only by killing the task. What is still open,
-and not claimed: an AppArmor or SELinux arm (no LSM was available in this kernel), a run of SafePred's
-actual code, a cross-model realism sweep, and the full official Terminal-Bench harness at scale. The results run only on controlled worlds with a
-hand-specified danger model. Read accordingly, and read the review.
+say so) and reaches zero on the three un-dominated harms only by killing the task. We also recast the
+whole result in the AI-control vocabulary the field now uses for untrusted agents (RA16): the oracle is
+a *trusted monitor* whose safety-usefulness frontier, unlike a model monitor's, does not move under an
+adaptive attacker, which is the same property the recent control literature finds model monitors lack.
+What is still open, and not claimed: an AppArmor or SELinux arm (no LSM was available in this kernel),
+a run of SafePred's actual code, a cross-model realism sweep, and the full official Terminal-Bench
+harness at scale. The results run only on controlled worlds with a hand-specified danger model. Read
+accordingly, and read the review.
 
 ## Abstract
 
@@ -411,6 +415,31 @@ demonstrate live and RA13 measures the real sandbox failing on. The agent's reli
 contingent (on legibility, on framing, on not being compromised); the static sandbox's verdict cannot
 condition on the relation, the aggregate, or the context at all; the gate's reliability is neither.
 
+**The control-evaluation frame (RA16): the oracle is the trusted monitor an adaptive attack cannot
+subvert.** The whole result reads cleanly in the vocabulary an agent platform now uses to reason about
+deploying a powerful-but-untrusted model: *AI control* (Greenblatt et al., 2023). There a blue team
+runs a protocol over an untrusted policy and a red team attacks it; the protocol is scored on a safety
+axis (the probability no attack succeeds) against a usefulness axis (task autonomy when the policy is
+honest), as a function of the blue team's *audit budget*, the fraction of actions it can escalate to an
+expensive trusted check (a human, or here the oracle). The control literature's workhorse blue-team
+move is a *trusted monitor*: a cheaper, weaker model that scores each action's suspiciousness, the most
+suspicious fraction getting audited. Its safety against a non-adaptive attacker rises with the audit
+budget, the textbook tradeoff, but a 2025 result shows an *adaptive* attacker subverts it
+("Adaptive Attacks on Trusted Monitors Subvert AI Control Protocols", arXiv 2510.09462): the monitor is
+a model with a blind spot, so the red team finds an attack it scores as benign, and no budget short of
+auditing everything catches it. RA16 runs this comparison on the RA5 substrate, sweeping the budget.
+The model-monitor's non-adaptive safety climbs from 0 to 1 as the budget rises (and usefulness falls
+one-for-one); its adaptive safety is pinned at 0 until the budget reaches audit-everything, where
+usefulness is 0. The oracle coverage gate is a single point in the (safety 1, usefulness 1) corner,
+the *same* point under both attackers, at a sparse fixed audit budget equal to the danger surface's
+density (here 0.17). The reason is coverage restated: the oracle is a trusted monitor whose verdict is
+*read* from the exact resulting state, not *predicted*, so there is no blind spot to aim at, and its
+safety-usefulness frontier does not move when the adversary turns adaptive. That is the cleanest
+statement of the contribution for a deployer: in the one domain that allows it, complete mediation is
+the control protocol that escapes the audit-budget tradeoff a fallible trusted monitor cannot. The
+product reading of the same fact is in Section 8 (the audit budget is the human-approval budget). This
+is the hermetic engine, like RA5; the figure and CSV are `figures/ra16_control_eval`.
+
 ## 5. The honest negative, and the boundary it draws
 
 The pre-commit target is not a theorem on fully arbitrary shell input, and pretending otherwise would
@@ -538,6 +567,22 @@ adaptive attacks; and mandatory-access-control frameworks for LLM agents (arXiv 
 apply the same idea at the OS layer. We do not claim to be the first to gate agent actions, and a
 fair comparison must run these systems, not just our models of them (see the limitations).
 
+**AI control is the frame this work belongs in, and it sharpens the contribution.** The AI-control
+program (Greenblatt et al., arXiv 2312.06942, 2023) evaluates deployment protocols for a
+powerful-but-untrusted model as a red-team/blue-team game scored on a safety-usefulness frontier at a
+given audit budget. Its workhorse blue-team move is a *trusted monitor*: a cheaper, weaker model that
+scores each action and escalates the suspicious ones. The program's own recent result is that this move
+is fragile: an adaptive attacker subverts a trusted monitor ("Adaptive Attacks on Trusted Monitors
+Subvert AI Control Protocols", arXiv 2510.09462), because a model monitor has a blind spot to aim at,
+exactly the failure our RA5/RA11 line describes for a learned guardrail. Verisim's contribution stated
+in this frame (RA16, Section 4) is one move that domain allows: the trusted monitor need not be a model
+at all. The oracle coverage gate is a trusted monitor whose verdict is read from the exact resulting
+state, so it has no blind spot, and its safety-usefulness frontier is invariant to whether the
+adversary is adaptive, sitting in the (safety 1, usefulness 1) corner at a sparse fixed audit budget.
+We do not claim to improve the control protocols that operate where no oracle exists (collusion-
+resistant monitoring, resampling, defer-to-trusted); we add the operating point available when the
+trusted check can be the environment itself.
+
 **SafePred (arXiv 2602.01725) is the closest predictive-guardrail foil.** It also previews an action's
 effect before execution and checks selectively on a danger surface. The difference is the predictor:
 SafePred uses a learned world model, so its guarantee is best-effort rather than provable, which is a
@@ -581,6 +626,14 @@ harm. That cuts the approval burden *and* raises the floor, because the on-surfa
 game by injection in a way a click-through approval is not. The same surface that makes verification
 cheap is the surface a human should have been asked about anyway.
 
+Said in the control vocabulary of Section 7, the permission system *is* a control protocol and the
+approval prompts *are* its audit budget. RA16 is then a statement about that budget directly: a pattern
+denylist and a learned pre-filter both leave the adaptive-attack frontier short of safety 1 at every
+budget, while the on-surface oracle reaches safety 1 at a sparse fixed budget without spending autonomy
+on the off-surface majority. The product ask is to make the approval prompt fire on the covering
+surface rather than on a pattern list, which is what turns approval fatigue and injection robustness
+from a tradeoff into the same lever.
+
 Two steps turn this preprint into a result a platform can act on, and neither is another theorem.
 
 First, the external number at scale. The RA6 vertical slice already runs the gate live on a real
@@ -606,5 +659,7 @@ not the thing we will claim we did.
 Every number above regenerates from committed code and run-records in the verisim repository. The
 relevant modules are under `src/verisim/realagent/` (the RA arc) and `src/verisim/acd/` (the coverage
 framework, CU arc), the experiments under `src/verisim/experiments/`, and the figures and their CSVs
-under `figures/`. The hermetic results run torch-free with no network. The live Terminal-Bench lane,
-which requires Docker and a model API key, is documented as a runbook in `docs/specs/SPEC-22.md`.
+under `figures/`. The hermetic results run torch-free with no network. The control-evaluation recast
+(RA16) is `src/verisim/realagent/control_eval.py` with `python -m verisim.experiments.ra16_control_eval`
+regenerating `figures/ra16_control_eval.{csv,png}`. The live Terminal-Bench lane, which requires Docker
+and a model API key, is documented as a runbook in `docs/specs/SPEC-22.md`.

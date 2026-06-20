@@ -3871,6 +3871,29 @@ external number — a real Claude agent on real Terminal-Bench tasks in Docker, 
 — is the live lane (the runbook is in [SPEC-22](specs/SPEC-22.md) RA5); the honest scope boundary is
 that the oracle gate applies to shell/file/process/network state, not GUI computer-use.
 
+**RA16 — the oracle gate as an AI-control protocol (H148).** RA5 compared arms at one operating point;
+RA16 recasts the same result in the vocabulary the field now uses for deploying powerful-but-untrusted
+agents — **AI control** (Greenblatt et al., [arXiv 2312.06942](https://arxiv.org/pdf/2312.06942)) — and
+sweeps the blue team's **audit budget** (the fraction of actions escalated to an expensive trusted
+check). The control literature's workhorse blue-team move is a *trusted monitor* (a weaker model that
+scores each action's suspiciousness, audit the most suspicious fraction); its 2025 finding is that an
+**adaptive** attacker subverts it ([arXiv 2510.09462](https://arxiv.org/pdf/2510.09462)), because a
+model monitor has a blind spot to aim at — exactly the RA5/RA11 learned-guardrail failure. The hermetic
+sweep ([`figures/ra16_control_eval.csv`](../figures/ra16_control_eval.csv)): the model-monitor's
+non-adaptive safety climbs 0→1 with the budget (usefulness falls one-for-one — the textbook tradeoff)
+but its adaptive safety is pinned at 0 until audit-everything (usefulness 0); the permission denylist is
+flat and adaptively breached; the **oracle coverage gate is the single point in the (safety 1,
+usefulness 1) corner under BOTH attackers**, at a **sparse fixed audit budget = the surface density
+(0.17)**, because its verdict is *read* from the exact state, not *predicted* — there is no blind spot,
+so its safety-usefulness frontier does not move when the adversary turns adaptive. This is the
+CU4/CU10/CU11 coverage theorem stated as a control-frontier result, and the cleanest framing for an
+agent-platform reader: **in the one domain that allows it, complete mediation is the control protocol
+that escapes the audit-budget tradeoff a fallible trusted monitor cannot.** The product reading (paper
+§8): a permission system *is* a control protocol and its approval prompts *are* the audit budget — fire
+them on the covering surface, not a pattern list. Honest scope: this adds the operating point available
+when the trusted check can be the environment itself; it does not improve the control protocols that
+operate where no oracle exists.
+
 ## What v0 ships for others
 
 Per SPEC-2 §15, the env + metric are packaged for reuse:
