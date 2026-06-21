@@ -795,6 +795,37 @@ supplies the verifiable reward and the soundness guarantee. The honest limits ar
 plus that the policy is tabular over a small operator space, not yet a neural proposer over a
 compositional grammar. (Reproduce: `docs/learned-proposer-run.md`.)
 
+And we closed that last limit, which turned out to do more than scale the adversary — it hardened the
+defender (RA24). The proposer becomes a *neural* autoregressive policy (the repo's own from-scratch
+GPT) over a genuinely *compositional* grammar: the protected path is split into atoms and the policy
+assigns each atom one of twelve standard shell encodings (variable assembly, quote-splice, ANSI-C
+hex and octal, `printf %s`, parameter-default, nested substitution, backticks, a `printf` format
+escape, and `cut`/`rev` pipe-filters), which *compose*, so the action space is exponential in the
+path length and a single-transform policy like RA23's can only reach the dozen uniform forms. The
+opponent is no longer a literal-only strawman but the *real* RA18 abstract resolver, and the reward
+is the tiered exact-oracle verdict — 1.0 for a string-resolvable realizing command the resolver
+silently declares CLEAR (a true soundness violation), 0.5 for one it cannot fold and must ABSTAIN on
+(the folder's incompleteness frontier), 0 when it folds and FIRES — with no learned reward model in
+the loop and every composition's realization cross-checked bit-for-bit against a real `/bin/sh` (0
+unfaithful of 200). The result is the program's red-team-folds-back pattern, now automated, learned,
+and load-bearing: run against the resolver as the program shipped it, the neural adversary *discovers
+a genuine RA18 soundness bug the hand-run red team missed* — `printf` decodes backslash escapes in
+its format string, which the fold did not, so `$(printf '\x2f%s' e)` realized `/etc/...` while the
+resolver read CLEAR — finding it about eighteen times more often per oracle call than blind search
+and at lower composition depth than the single-transform control can express. We fold the fix back
+(ABSTAIN on any unfolded format escape, the conservative sound choice), and re-running against the
+hardened resolver the soundness invariant *holds under the learned adversary*: zero string-resolvable
+realizing commands are silently CLEAR across the composition space. What the adversary does then is
+map the incompleteness frontier — the `cut`/`rev`/format-escape forms the resolver now ABSTAINs on —
+4.3 times more efficiently than blind and over a mixed-composition space the single-transform policy
+is architecturally blind to (1,500 distinct compositions against its 18). This is the two arcs
+meeting at the scale the program was built for: a neural sequence model proposing over a compositional
+grammar, the exact oracle disposing as a verifiable reward, and the soundness certificate surviving —
+and improving under — an adaptive learned attacker. The honest limits remain RA22's (one harm family,
+a finite toolkit, a certificate empirical over the sampled space not a proof), plus that the dense
+reward and small space make this the easy-RL regime; the contribution is the mechanism and the
+discover-fix-reverify loop, not RL difficulty. (Reproduce: `docs/neural-proposer-run.md`.)
+
 The honest summary is short. In the one domain that allows it, the exact oracle turns a guardrail from
 something an adversary can talk around into something it cannot, cheaply and without getting in the
 agent's way. We have shown that around a real model and a real kernel, against the two defenses in

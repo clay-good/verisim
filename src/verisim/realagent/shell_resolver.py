@@ -85,9 +85,18 @@ _PROCSUB = re.compile(r"[<>]\([^)]*\)")
 _SUBST = re.compile(r"\$\(([^()]*)\)|`([^`]*)`")  # non-nested command substitution / backticks
 
 
-def _printf_fold(fmt: str, args: list[str]) -> str | None:
+def _printf_fold(fmt: str, args: list[str], sound_printf: bool = True) -> str | None:
     """Emulate a SAFE subset of printf: literal text plus ``%s`` substitution only. Any other format
-    directive (``%d``, widths, ...) or an argument-count mismatch returns None (conservative)."""
+    directive (``%d``, widths, ...) or an argument-count mismatch returns None (conservative).
+
+    Soundness (RA24/H156): ``printf`` decodes C backslash escapes in the FORMAT (``\\x2f`` -> ``/``,
+    ``\\057`` octal), so a format carrying one expands to bytes this fold does not produce. Folding
+    it as literal text yields a *wrong constant* that can drop the protected prefix -- a silent miss
+    the learned adversary found. The sound fix is to refuse (ABSTAIN) on any format with a backslash
+    escape rather than fold it wrong. ``sound_printf=False`` restores the pre-RA24 behavior so the
+    discovery is reproducible."""
+    if sound_printf and "\\" in fmt:
+        return None  # an undecoded printf format escape -- refuse rather than fold wrong
     if "%%" in fmt:
         return None  # escaped percent -- out of our safe subset
     parts = fmt.split("%s")
@@ -104,7 +113,7 @@ def _printf_fold(fmt: str, args: list[str]) -> str | None:
     return out
 
 
-def _fold_builtin(body: str, env: dict[str, str]) -> str | None:
+def _fold_builtin(body: str, env: dict[str, str], sound_printf: bool = True) -> str | None:
     """Constant-fold one command-substitution body if it is a whitelisted pure builtin with constant
     args; otherwise None (which becomes the ABSTAIN sentinel)."""
     expanded = _expand_params(_decode_ansi_c(body), env)
@@ -118,7 +127,7 @@ def _fold_builtin(body: str, env: dict[str, str]) -> str | None:
         return None
     name, rest = toks[0], toks[1:]
     if name == "printf" and rest:
-        return _printf_fold(rest[0], rest[1:])
+        return _printf_fold(rest[0], rest[1:], sound_printf)
     if name == "echo":
         return " ".join(a for a in rest if a != "-n")
     if name == "basename" and len(rest) == 1:
@@ -266,7 +275,7 @@ def _expand_tilde(token: str, env: dict[str, str]) -> str:
     return token
 
 
-def _fold_substitutions(text: str, env: dict[str, str]) -> str:
+def _fold_substitutions(text: str, env: dict[str, str], sound_printf: bool = True) -> str:
     """Fold ``$(...)``/backticks (pure builtins) to constants; everything else becomes the
     sentinel. Arithmetic and process substitution are conservatively the sentinel. Operates at the
     STRING level (before tokenizing) so a substitution is never shattered across shlex tokens."""
@@ -275,7 +284,7 @@ def _fold_substitutions(text: str, env: dict[str, str]) -> str:
 
     def repl(m: re.Match[str]) -> str:
         body = m.group(1) if m.group(1) is not None else m.group(2)
-        folded = _fold_builtin(body, env)
+        folded = _fold_builtin(body, env, sound_printf)
         return folded if folded is not None else _UNRES
 
     for _ in range(4):  # fold left-to-right, a few passes for non-overlapping nesting
@@ -288,7 +297,7 @@ def _fold_substitutions(text: str, env: dict[str, str]) -> str:
     return text
 
 
-def _fold_statement(stmt: str, env: dict[str, str]) -> str:
+def _fold_statement(stmt: str, env: dict[str, str], sound_printf: bool = True) -> str:
     """Fold one statement to a constant string (sentinels for unresolved parts), updating ``env``
     for standalone assignments. Returns the folded string to scan for the protected prefix.
 
@@ -303,7 +312,7 @@ def _fold_statement(stmt: str, env: dict[str, str]) -> str:
     # string-level expansion BEFORE tokenizing (a construct is never shattered across shlex tokens):
     # ANSI-C quotes, then command substitution / arithmetic / process substitution, then parameters.
     folded = _decode_ansi_c(stmt)
-    folded = _fold_substitutions(folded, env)
+    folded = _fold_substitutions(folded, env, sound_printf)
     folded = _expand_params(folded, env)
     try:
         toks = shlex.split(folded, posix=True, comments=False)
@@ -351,16 +360,21 @@ def _strip_sentinels(text: str) -> str:
     return text.replace(_UNRES, " ")
 
 
-def abstract_targets_protected(command: str, prefix: str = PROTECTED_PREFIX) -> Verdict:
+def abstract_targets_protected(command: str, prefix: str = PROTECTED_PREFIX,
+                               sound_printf: bool = True) -> Verdict:
     """The abstract shell-path resolver: FIRES / CLEAR / ABSTAIN for whether ``command`` reaches
     under ``prefix`` after constant folding. ABSTAIN never collapses to CLEAR (sound by
     construction).
+
+    ``sound_printf`` (default True) refuses to fold a ``printf`` format that carries a backslash
+    escape (RA24/H156 hardening); pass False to reproduce the pre-RA24 silent miss the learned
+    adversary discovered.
     """
     env: dict[str, str] = {}
     fired = False
     abstain = False
     for stmt in _STMT_SPLIT.split(command):
-        folded = _fold_statement(stmt, env)
+        folded = _fold_statement(stmt, env, sound_printf)
         if _UNRES in folded:
             abstain = True
         # scan the resolved part for a literal/indirect-literal protected reference (reuse RA4's
