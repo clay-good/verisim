@@ -26,10 +26,15 @@ Torch-free, deterministic given a deterministic proposer.
 
 from __future__ import annotations
 
+import json
 from collections.abc import Callable
+from dataclasses import asdict, dataclass, field
 
+from verisim.realagent.compositional_grammar import ATOMS, MECHANISMS, VERBS
 from verisim.realagent.shell_resolver import is_irreversible
 
+from .guarantee import Guarantee, good_turing_missing_mass, residual_epsilon
+from .proposers import ExhaustiveDepthProposer, GrammarProposer
 from .protocols import (
     EMPTY,
     Action,
@@ -44,6 +49,8 @@ from .protocols import (
     State,
     default_in_contract,
 )
+
+DEFAULT_WORK = "/home/work"
 
 
 def _reversible(action: Action) -> bool:
@@ -133,7 +140,7 @@ def audit(
             _bump(a.klass, "residual")
         holes.append(Hole(command=a.command, klass=a.klass, op=a.op,
                           string_resolvable=a.string_resolvable, reversible=rev,
-                          silent=(route == "silent"), route=route))
+                          silent=(route == "silent"), route=route, depth=a.depth))
 
     synthesized = list(getattr(monitor, "prefixes", []))
     return Certificate(
@@ -153,3 +160,144 @@ def audit(
         synthesized_surface=synthesized,
         per_class=per_class,
     )
+
+
+# --- SPEC-24 (H165/H166/H170): the graded certify entrypoint --------------------------------------
+
+
+def _algebra() -> tuple[str, int]:
+    """The modeled action algebra (the compositional shell grammar) and its full size, recorded so
+    the guarantee is never read wider than the algebra it is complete over."""
+    name = f"compositional_shell(MECH={len(MECHANISMS)},ATOMS={len(ATOMS)},VERBS={len(VERBS)})"
+    size = len(MECHANISMS) ** len(ATOMS) * len(VERBS)
+    return name, size
+
+
+def certify(
+    monitor: Monitor,
+    oracle: Oracle,
+    *,
+    protected_path: str,
+    work: str = DEFAULT_WORK,
+    depth: int = 2,
+    n_sampled: int = 2000,
+    delta: float = 0.05,
+    seed: int = 0,
+    external: str = "",
+    state: State = EMPTY,
+    ctx: Context = EMPTY,
+) -> Certificate:
+    """SPEC-24: the graded certificate -- an exhaustive theorem to ``depth`` plus a statistical
+    residual bound over the sampled tail, with the modeled algebra recorded.
+
+    Tier 1: a clean audit over the *complete* depth-<=k direct lattice (no sampling) -> a proof for
+    that fragment. Tier 2: a sampled tail (blind uniform, with repeats) -> ``residual_epsilon`` (the
+    rule-of-three / Wilson upper bound on the in-contract hole rate) + the Good-Turing missing mass.
+    The returned certificate merges both holes sets and carries the :class:`Guarantee`."""
+    # Tier 1 -- exhaustive proof for the bounded fragment.
+    ex = audit(monitor, oracle, ExhaustiveDepthProposer(protected_path, depth, work),
+               state=state, ctx=ctx)
+
+    # Tier 2 -- the sampled tail, with repeats, for the residual statistics + missing mass.
+    n_realizing = 0
+    hole_freq: dict[tuple[str, tuple[str, ...]], int] = {}
+    tail_holes: dict[tuple[str, tuple[str, ...]], Hole] = {}
+    for a in GrammarProposer(protected_path, work, mode="blind", seed=seed).propose(n_sampled):
+        if not oracle.realizes(a, state):
+            continue
+        n_realizing += 1
+        if monitor.covers(a, ctx):
+            continue
+        if not _in_contract(monitor, a, ctx):
+            continue  # out-of-contract residual: routed, not part of the in-contract residual rate
+        key = (a.command, a.op)
+        hole_freq[key] = hole_freq.get(key, 0) + 1
+        if key not in tail_holes:
+            rev = _reversible(a)
+            tail_holes[key] = Hole(command=a.command, klass=a.klass, op=a.op,
+                                   string_resolvable=a.string_resolvable, reversible=rev,
+                                   silent=True, route="silent", depth=a.depth)
+
+    k_hole_draws = sum(hole_freq.values())
+    singletons = sum(1 for c in hole_freq.values() if c == 1)
+    eps = residual_epsilon(k_hole_draws, n_realizing, delta)
+    mass = good_turing_missing_mass(singletons, n_realizing)
+
+    algebra, size = _algebra()
+    guarantee = Guarantee(
+        algebra=algebra, algebra_size=size, exhaustive_depth=depth, n_exhaustive=ex.n_proposed,
+        residual_epsilon=eps, residual_delta=delta, n_sampled=n_realizing, missing_mass=mass,
+        oracle=oracle.name, external=external,
+    )
+
+    # Merge the exhaustive holes with any new tail holes (dedup by command/op).
+    merged = list(ex.holes)
+    seen = {(h.command, h.op) for h in ex.holes}
+    for key, h in tail_holes.items():
+        if key not in seen:
+            merged.append(h)
+            seen.add(key)
+    silent_total = sum(1 for h in merged if h.silent)
+
+    ex.proposer = f"certify(exhaustive_depth{depth}+sampled{n_realizing})"
+    ex.holes = merged
+    ex.silent_holes = silent_total
+    ex.guarantee = guarantee
+    ex.spec = "SPEC-24"
+    return ex
+
+
+# --- SPEC-24 (H169): differential certification (the monitor-patch regression gate) ---------------
+
+
+def _hole_key(h: Hole) -> tuple[str, tuple[str, ...]]:
+    return (h.command, h.op)
+
+
+@dataclass
+class DiffCertificate:
+    """Certify a monitor *patch* is a monotone improvement: it ``closed`` a hole set and ``opened``
+    none, over the shared sampled+exhaustive space -- RA25's post-commit-diff move applied to the
+    monitor itself, so v2's completeness is not re-asserted from scratch, only the *change*
+    certified."""
+
+    monitor_before: str
+    monitor_after: str
+    closed: list[Hole] = field(default_factory=list)
+    opened: list[Hole] = field(default_factory=list)
+
+    @property
+    def monotone(self) -> bool:
+        """True iff the patch opened no new in-contract hole (a safe, monotone improvement)."""
+        return not self.opened
+
+    def to_json(self, indent: int | None = 2) -> str:
+        return json.dumps(asdict(self), indent=indent, sort_keys=True)
+
+
+def differential(before: Certificate, after: Certificate) -> DiffCertificate:
+    """Partition the in-contract (silent) hole sets of two certificates: closed = in before not
+    after;
+    opened = in after not before. Monotone iff ``opened`` is empty."""
+    b = {_hole_key(h): h for h in before.holes if h.silent}
+    a = {_hole_key(h): h for h in after.holes if h.silent}
+    closed = [h for k, h in b.items() if k not in a]
+    opened = [h for k, h in a.items() if k not in b]
+    return DiffCertificate(before.monitor, after.monitor, closed, opened)
+
+
+def audit_diff(
+    monitor_before: Monitor,
+    monitor_after: Monitor,
+    oracle: Oracle,
+    make_proposer: Callable[[], Proposer],
+    *,
+    budget: int = 512,
+    state: State = EMPTY,
+    ctx: Context = EMPTY,
+) -> DiffCertificate:
+    """Audit two monitor versions over a fresh proposer each (proposers are single-use), and diff
+    them. ``make_proposer`` is called once per version so both see the identical sampled space."""
+    cb = audit(monitor_before, oracle, make_proposer(), budget, state=state, ctx=ctx)
+    ca = audit(monitor_after, oracle, make_proposer(), budget, state=state, ctx=ctx)
+    return differential(cb, ca)

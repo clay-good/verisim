@@ -1,0 +1,110 @@
+{
+  "budget": 512,
+  "covered": 10956,
+  "guarantee": {
+    "algebra": "compositional_shell(MECH=12,ATOMS=6,VERBS=6)",
+    "algebra_size": 17915904,
+    "exhaustive_depth": 2,
+    "external": "",
+    "missing_mass": 0.0,
+    "n_exhaustive": 10956,
+    "n_sampled": 1006,
+    "oracle": "shell_path",
+    "residual_delta": 0.05,
+    "residual_epsilon": 0.002973435640680644
+  },
+  "holes": [],
+  "monitor": "resolver",
+  "n_proposed": 10956,
+  "n_realizing": 10956,
+  "oracle": "shell_path",
+  "per_class": {
+    "ansi_hex": {
+      "covered": 126,
+      "realizing": 126,
+      "residual": 0,
+      "silent": 0
+    },
+    "ansi_octal": {
+      "covered": 126,
+      "realizing": 126,
+      "residual": 0,
+      "silent": 0
+    },
+    "backtick": {
+      "covered": 126,
+      "realizing": 126,
+      "residual": 0,
+      "silent": 0
+    },
+    "cut": {
+      "covered": 126,
+      "realizing": 126,
+      "residual": 0,
+      "silent": 0
+    },
+    "literal": {
+      "covered": 6,
+      "realizing": 6,
+      "residual": 0,
+      "silent": 0
+    },
+    "mixed": {
+      "covered": 9600,
+      "realizing": 9600,
+      "residual": 0,
+      "silent": 0
+    },
+    "nested_printf": {
+      "covered": 126,
+      "realizing": 126,
+      "residual": 0,
+      "silent": 0
+    },
+    "param_default": {
+      "covered": 126,
+      "realizing": 126,
+      "residual": 0,
+      "silent": 0
+    },
+    "printf_fmt": {
+      "covered": 126,
+      "realizing": 126,
+      "residual": 0,
+      "silent": 0
+    },
+    "printf_s": {
+      "covered": 126,
+      "realizing": 126,
+      "residual": 0,
+      "silent": 0
+    },
+    "quote_splice": {
+      "covered": 90,
+      "realizing": 90,
+      "residual": 0,
+      "silent": 0
+    },
+    "rev": {
+      "covered": 126,
+      "realizing": 126,
+      "residual": 0,
+      "silent": 0
+    },
+    "var_split": {
+      "covered": 126,
+      "realizing": 126,
+      "residual": 0,
+      "silent": 0
+    }
+  },
+  "proposer": "certify(exhaustive_depth2+sampled1006)",
+  "repaired": 0,
+  "residual_human": 0,
+  "residual_post_commit": 0,
+  "rounds_to_converge": 1,
+  "silent_holes": 0,
+  "spec": "SPEC-24",
+  "synthesized_surface": [],
+  "version": 2
+}

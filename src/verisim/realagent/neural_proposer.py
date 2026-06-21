@@ -37,6 +37,7 @@ and oracle-grounded. Seeded and deterministic.
 from __future__ import annotations
 
 import random
+from collections.abc import Callable
 from dataclasses import dataclass, field
 
 import torch
@@ -216,11 +217,17 @@ class NeuralAdversary:
     def train(self, budget: int, batch: int = 16, ent_coef: float = 0.02,
               sound_printf: bool = True, work: str = "/home/work",
               fold_filters: bool = False, prefix: str = PROTECTED_PREFIX,
-              atoms: tuple[str, ...] = ATOMS) -> RunResult:
+              atoms: tuple[str, ...] = ATOMS,
+              reward_fn: Callable[[Action], float] | None = None) -> RunResult:
         """Run ``budget`` oracle calls in minibatches; REINFORCE on each batch's tiered reward.
 
         ``prefix``/``atoms`` default to the RA24 ``/etc/shadow`` target (byte-identical); the
-        SPEC-23 auditor passes another target's atoms (same length) to retarget the policy."""
+        SPEC-23 auditor passes another target's atoms (same length) to retarget the policy.
+        ``reward_fn`` (SPEC-24/H167) overrides the resolver reward with an arbitrary per-action
+        scalar -- the auditor passes the oracle-confirmed evasion of the *monitor under audit*, so
+        the
+        policy climbs that monitor's blind-spot gradient instead of the resolver's frontier. The
+        default (None) is the byte-identical RA24 resolver reward."""
         rec = _Recorder("neural")
         calls = 0
         while calls < budget:
@@ -228,10 +235,13 @@ class NeuralAdversary:
             actions, logp_sum, ent_sum = self.sample(b)
             rewards = torch.empty(b)
             for i, a in enumerate(actions):
-                j = judge(a, work=work, prefix=prefix, sound_printf=sound_printf,
-                          fold_filters=fold_filters, atoms=atoms)
-                rewards[i] = j.reward
-                rec.record(a, j)
+                if reward_fn is not None:
+                    rewards[i] = reward_fn(a)
+                else:
+                    j = judge(a, work=work, prefix=prefix, sound_printf=sound_printf,
+                              fold_filters=fold_filters, atoms=atoms)
+                    rewards[i] = j.reward
+                    rec.record(a, j)
             calls += b
             # REINFORCE with a running-mean baseline (variance reduction) + entropy bonus
             self._n += 1

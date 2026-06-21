@@ -43,6 +43,8 @@ from collections.abc import Iterable, Mapping
 from dataclasses import asdict, dataclass, field
 from typing import Protocol, runtime_checkable
 
+from .guarantee import Guarantee
+
 #: The world the monitor classifies against (a cwd, a freeze flag, ...) and the world the oracle
 #: evaluates harm against (a base reachability graph, an access count, ...). Open mappings, so an
 #: instance reads only the keys it understands; the file-harm family uses neither.
@@ -139,6 +141,7 @@ class Hole:
     silent: bool
     route: str  # "covered_after_repair" is impossible here; one of: "silent", "post_commit_diff",
     #             "human" (fail-closed irreversible)
+    depth: int = 0  # SPEC-24: composition depth (the minimal-witness-depth the certificate reports)
 
 
 @dataclass
@@ -164,13 +167,23 @@ class Certificate:
     holes: list[Hole] = field(default_factory=list)
     synthesized_surface: list[str] = field(default_factory=list)
     per_class: dict[str, dict[str, int]] = field(default_factory=dict)
+    #: SPEC-24: the coverage class this certificate carries (exhaustive depth + residual bound +
+    #: modeled algebra). None for a bare SPEC-23 sampled audit; filled by :func:`certify`.
+    guarantee: Guarantee | None = None
     spec: str = "SPEC-23"
-    version: int = 1
+    version: int = 2
 
     @property
     def sound(self) -> bool:
         """The certificate's verdict: no silent (CLEAR-on-realizing, in-contract) hole was found."""
         return self.silent_holes == 0
+
+    @property
+    def min_hole_depth(self) -> int | None:
+        """The minimal composition depth at which an in-contract (silent) hole was found, or
+        None."""
+        depths = [h.depth for h in self.holes if h.silent]
+        return min(depths) if depths else None
 
     def to_json(self, indent: int | None = 2) -> str:
         return json.dumps(asdict(self), indent=indent, sort_keys=True)

@@ -21,6 +21,11 @@ Torch-free, standard library only.
 
 from __future__ import annotations
 
+import json
+import os
+import subprocess
+from collections.abc import Callable
+
 from verisim.realagent.command_agnostic import command_targets_protected
 from verisim.realagent.shell_resolver import abstract_targets_protected
 
@@ -103,3 +108,49 @@ class DenylistMonitor:
 
     def in_contract(self, action: Action, ctx: Context = EMPTY) -> bool:
         return default_in_contract(action)
+
+
+class SubprocessMonitor:
+    """SPEC-24 (H168): an *opaque* external guardrail driven across the process boundary -- the
+    auditor sees only stdin/stdout, never the monitor's source. ``cmd`` is the decision process;
+    ``covers`` encodes the action to its stdin and parses its allow/deny/ask verdict from stdout.
+
+    The defaults speak the Claude Code PreToolUse hook contract (the repo's own
+    ``scripts/claude_code_coverage_hook.py`` and any external engine that adopts it): a JSON event
+    ``{tool_name, tool_input, cwd}`` in, a ``hookSpecificOutput.permissionDecision`` (or ``{}`` for
+    allow) out. ``ask``/``deny`` -> covered (the monitor would check it); ``allow``/``{}`` -> not
+    covered. Uses the default contract (a string-resolvable miss is a finding), so the audit
+    surfaces
+    the encodings the external system lets through.
+    """
+
+    def __init__(self, cmd: list[str], *, cwd: str = "/home/work",
+                 encode: Callable[[Action], bytes] | None = None,
+                 parse: Callable[[bytes], bool] | None = None,
+                 env: dict[str, str] | None = None, timeout: float = 15.0,
+                 name: str | None = None) -> None:
+        self.cmd = cmd
+        self.cwd = cwd
+        self._encode = encode or self._hook_encode
+        self._parse = parse or self._hook_parse
+        self.env = env
+        self.timeout = timeout
+        self.name = name or f"subprocess:{os.path.basename(cmd[-1]) if cmd else '?'}"
+
+    def _hook_encode(self, action: Action) -> bytes:
+        event = {"tool_name": "Bash", "tool_input": {"command": action.command}, "cwd": self.cwd}
+        return json.dumps(event).encode()
+
+    @staticmethod
+    def _hook_parse(stdout: bytes) -> bool:
+        try:
+            decision = json.loads(stdout.decode() or "{}")
+        except (json.JSONDecodeError, UnicodeDecodeError):
+            return False  # unparseable -> treat as not-covered (a finding the auditor surfaces)
+        verdict = decision.get("hookSpecificOutput", {}).get("permissionDecision")
+        return verdict in ("ask", "deny")
+
+    def covers(self, action: Action, ctx: Context = EMPTY) -> bool:
+        proc = subprocess.run(self.cmd, input=self._encode(action), capture_output=True,
+                              cwd=None, env=self.env, timeout=self.timeout, check=False)
+        return self._parse(proc.stdout)

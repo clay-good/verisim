@@ -1,0 +1,7 @@
+run,monitor,depth,n_exhaustive,resid_eps,silent_holes,min_depth,sound
+C_resolver_hardened,resolver,2,10956,0.00297,0,None,True
+C_resolver_unsound,resolver_unsound,2,10956,0.10438,877,1,False
+D_diff_patch,denylist->denylist,-,-,-,0,-,True
+D_directed,planted_blind_spot,-,-,-,230,-,-
+D_blind,planted_blind_spot,-,-,-,14,-,-
+D_external_hook,subprocess:claude_code_coverage_hook.py,-,-,-,18,-,False
