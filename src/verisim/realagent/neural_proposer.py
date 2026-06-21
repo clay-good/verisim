@@ -46,6 +46,7 @@ from verisim.model.transformer import GPT, GPTConfig
 from verisim.realagent.compositional_grammar import (
     ATOMS,
     MECHANISMS,
+    PROTECTED_PREFIX,
     REDIRECTS,
     VERBS,
     Action,
@@ -145,19 +146,26 @@ class _Recorder:
 
 
 def run_blind(budget: int, seed: int = 0, sound_printf: bool = True,
-              work: str = "/home/work", fold_filters: bool = False) -> RunResult:
-    """Uniform over the full per-atom compositional space (the sample-efficiency control)."""
+              work: str = "/home/work", fold_filters: bool = False,
+              prefix: str = PROTECTED_PREFIX, atoms: tuple[str, ...] = ATOMS) -> RunResult:
+    """Uniform over the full per-atom compositional space (the sample-efficiency control).
+
+    ``prefix``/``atoms`` default to the RA24 ``/etc/shadow`` target (byte-identical); the SPEC-23
+    auditor passes another target to retarget the search."""
     rng = random.Random(seed)
     rec = _Recorder("blind")
     for _ in range(budget):
         a = Action(rng.randrange(_N_VERB), rng.randrange(_N_REDIR),
-                   tuple(rng.randrange(_N_MECH) for _ in ATOMS))
-        rec.record(a, judge(a, work=work, sound_printf=sound_printf, fold_filters=fold_filters))
+                   tuple(rng.randrange(_N_MECH) for _ in atoms))
+        rec.record(a, judge(a, work=work, prefix=prefix, sound_printf=sound_printf,
+                            fold_filters=fold_filters, atoms=atoms))
     return rec.result(budget)
 
 
 def run_single_transform(budget: int, seed: int = 0, sound_printf: bool = True,
-                         work: str = "/home/work", fold_filters: bool = False) -> RunResult:
+                         work: str = "/home/work", fold_filters: bool = False,
+                         prefix: str = PROTECTED_PREFIX,
+                         atoms: tuple[str, ...] = ATOMS) -> RunResult:
     """RA23's architecture: ONE mechanism applied to every atom (uniform), plus verb and redirect.
     It cannot represent a mixed composition, so a minimal (depth-1) hole witness is unreachable.
     """
@@ -165,8 +173,9 @@ def run_single_transform(budget: int, seed: int = 0, sound_printf: bool = True,
     rec = _Recorder("single_transform")
     for _ in range(budget):
         m = rng.randrange(_N_MECH)
-        a = Action(rng.randrange(_N_VERB), rng.randrange(_N_REDIR), tuple(m for _ in ATOMS))
-        rec.record(a, judge(a, work=work, sound_printf=sound_printf, fold_filters=fold_filters))
+        a = Action(rng.randrange(_N_VERB), rng.randrange(_N_REDIR), tuple(m for _ in atoms))
+        rec.record(a, judge(a, work=work, prefix=prefix, sound_printf=sound_printf,
+                            fold_filters=fold_filters, atoms=atoms))
     return rec.result(budget)
 
 
@@ -206,8 +215,12 @@ class NeuralAdversary:
 
     def train(self, budget: int, batch: int = 16, ent_coef: float = 0.02,
               sound_printf: bool = True, work: str = "/home/work",
-              fold_filters: bool = False) -> RunResult:
-        """Run ``budget`` oracle calls in minibatches; REINFORCE on each batch's tiered reward."""
+              fold_filters: bool = False, prefix: str = PROTECTED_PREFIX,
+              atoms: tuple[str, ...] = ATOMS) -> RunResult:
+        """Run ``budget`` oracle calls in minibatches; REINFORCE on each batch's tiered reward.
+
+        ``prefix``/``atoms`` default to the RA24 ``/etc/shadow`` target (byte-identical); the
+        SPEC-23 auditor passes another target's atoms (same length) to retarget the policy."""
         rec = _Recorder("neural")
         calls = 0
         while calls < budget:
@@ -215,7 +228,8 @@ class NeuralAdversary:
             actions, logp_sum, ent_sum = self.sample(b)
             rewards = torch.empty(b)
             for i, a in enumerate(actions):
-                j = judge(a, work=work, sound_printf=sound_printf, fold_filters=fold_filters)
+                j = judge(a, work=work, prefix=prefix, sound_printf=sound_printf,
+                          fold_filters=fold_filters, atoms=atoms)
                 rewards[i] = j.reward
                 rec.record(a, j)
             calls += b

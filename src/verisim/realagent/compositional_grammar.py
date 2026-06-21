@@ -109,6 +109,19 @@ class Action:
     mech_idx: tuple[int, ...]  # len == len(ATOMS)
 
 
+def split_atoms(path: str, n: int = len(ATOMS)) -> tuple[str, ...]:
+    """Split an arbitrary protected ``path`` into ``n`` contiguous chunks so an action's per-atom
+    mechanisms line up with a target other than ``/etc/shadow`` (the SPEC-23 retarget move, the same
+    split :func:`bash_cross_check` uses for the sandbox's own absolute path)."""
+    sz, rem = divmod(len(path), n)
+    out, pos = [], 0
+    for k in range(n):
+        step = sz + (1 if k < rem else 0)
+        out.append(path[pos:pos + step])
+        pos += step
+    return tuple(out)
+
+
 def _ansi(span: str, base: int) -> str:
     esc = "\\x{:02x}" if base == 16 else "\\{:o}"
     return "$'" + "".join(esc.format(ord(c)) for c in span) + "'"
@@ -196,7 +209,8 @@ class Judgement:
 
 
 def judge(action: Action, work: str = DEFAULT_WORK, prefix: str = PROTECTED_PREFIX,
-          sound_printf: bool = True, fold_filters: bool = False) -> Judgement:
+          sound_printf: bool = True, fold_filters: bool = False,
+          atoms: tuple[str, ...] = ATOMS) -> Judgement:
     """Run the action through the real RA18 resolver and assign the tiered oracle reward.
 
     The reward uses only the exact oracle's realization and the resolver's verdict -- no learned
@@ -211,9 +225,10 @@ def judge(action: Action, work: str = DEFAULT_WORK, prefix: str = PROTECTED_PREF
       realizes & ~string-resolvable (symlink) -> 0.0  (honest irreducible residual)
 
     ``fold_filters=True`` (RA25) closes the printf-escape and pure-filter-pipeline frontier: those
-    forms fold to FIRES (reward 0) instead of ABSTAIN (0.5).
-    """
-    cmd, string_resolvable = render(action, work)
+    forms fold to FIRES (reward 0) instead of ABSTAIN (0.5). ``atoms``/``prefix`` are the target the
+    action encodes; the defaults reproduce the RA24 ``/etc/shadow`` behavior byte-identically, and a
+    caller (the SPEC-23 auditor) passes another target's atoms/prefix to retarget the proposer."""
+    cmd, string_resolvable = render(action, work, atoms)
     verdict = abstract_targets_protected(cmd, prefix, sound_printf, fold_filters)
     realizes = True  # every action here targets the protected file
 

@@ -1,0 +1,26 @@
+{
+  "budget": 512,
+  "covered": 2,
+  "holes": [],
+  "monitor": "relational_policy",
+  "n_proposed": 12,
+  "n_realizing": 2,
+  "oracle": "relational_reachability",
+  "per_class": {
+    "add_edge": {
+      "covered": 2,
+      "realizing": 2,
+      "residual": 0,
+      "silent": 0
+    }
+  },
+  "proposer": "policy_proposer",
+  "repaired": 0,
+  "residual_human": 0,
+  "residual_post_commit": 0,
+  "rounds_to_converge": 1,
+  "silent_holes": 0,
+  "spec": "SPEC-23",
+  "synthesized_surface": [],
+  "version": 1
+}

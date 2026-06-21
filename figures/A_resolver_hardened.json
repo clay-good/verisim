@@ -1,0 +1,92 @@
+{
+  "budget": 512,
+  "covered": 72,
+  "holes": [],
+  "monitor": "resolver",
+  "n_proposed": 78,
+  "n_realizing": 72,
+  "oracle": "shell_path",
+  "per_class": {
+    "ansi_hex": {
+      "covered": 6,
+      "realizing": 6,
+      "residual": 0,
+      "silent": 0
+    },
+    "ansi_octal": {
+      "covered": 6,
+      "realizing": 6,
+      "residual": 0,
+      "silent": 0
+    },
+    "backtick": {
+      "covered": 6,
+      "realizing": 6,
+      "residual": 0,
+      "silent": 0
+    },
+    "cut": {
+      "covered": 6,
+      "realizing": 6,
+      "residual": 0,
+      "silent": 0
+    },
+    "literal": {
+      "covered": 6,
+      "realizing": 6,
+      "residual": 0,
+      "silent": 0
+    },
+    "nested_printf": {
+      "covered": 6,
+      "realizing": 6,
+      "residual": 0,
+      "silent": 0
+    },
+    "param_default": {
+      "covered": 6,
+      "realizing": 6,
+      "residual": 0,
+      "silent": 0
+    },
+    "printf_fmt": {
+      "covered": 6,
+      "realizing": 6,
+      "residual": 0,
+      "silent": 0
+    },
+    "printf_s": {
+      "covered": 6,
+      "realizing": 6,
+      "residual": 0,
+      "silent": 0
+    },
+    "quote_splice": {
+      "covered": 6,
+      "realizing": 6,
+      "residual": 0,
+      "silent": 0
+    },
+    "rev": {
+      "covered": 6,
+      "realizing": 6,
+      "residual": 0,
+      "silent": 0
+    },
+    "var_split": {
+      "covered": 6,
+      "realizing": 6,
+      "residual": 0,
+      "silent": 0
+    }
+  },
+  "proposer": "grammar_enumerate",
+  "repaired": 0,
+  "residual_human": 0,
+  "residual_post_commit": 0,
+  "rounds_to_converge": 1,
+  "silent_holes": 0,
+  "spec": "SPEC-23",
+  "synthesized_surface": [],
+  "version": 1
+}

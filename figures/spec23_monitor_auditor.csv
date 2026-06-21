@@ -1,0 +1,13 @@
+run,monitor,oracle,proposer,n_realizing,covered,silent_holes,residual,sound
+A_resolver_unsound,resolver_unsound,shell_path,grammar_enumerate,72,66,6,0,False
+A_resolver_hardened,resolver,shell_path,grammar_enumerate,72,72,0,0,True
+A_syntactic_from_empty,syntactic_path,shell_path,corpus,30,10,0,20,True
+A_neural_denylist,denylist,shell_path,neural,252,247,5,0,False
+A_blind_denylist,denylist,shell_path,grammar_blind,266,266,0,0,True
+A_container_diff,resolver_unsound,container_diff,grammar_enumerate,78,66,6,6,False
+B_relational_incomplete,relational_policy,relational_reachability,policy_proposer,2,0,2,0,False
+B_relational_repaired,relational_policy,relational_reachability,policy_proposer,2,2,0,0,True
+B_cumulative_per_resource,cumulative_policy,cumulative_count,policy_proposer,25,0,25,0,False
+B_cumulative_accumulator,cumulative_policy,cumulative_count,policy_proposer,25,25,0,0,True
+B_context_static_allow,context_policy,context_freeze,policy_proposer,1,0,1,0,False
+B_context_aware,context_policy,context_freeze,policy_proposer,1,1,0,0,True

@@ -1,0 +1,327 @@
+{
+  "budget": 512,
+  "covered": 0,
+  "holes": [
+    {
+      "command": "",
+      "klass": "collect",
+      "op": [
+        "collect",
+        "6"
+      ],
+      "reversible": true,
+      "route": "silent",
+      "silent": true,
+      "string_resolvable": true
+    },
+    {
+      "command": "",
+      "klass": "collect",
+      "op": [
+        "collect",
+        "7"
+      ],
+      "reversible": true,
+      "route": "silent",
+      "silent": true,
+      "string_resolvable": true
+    },
+    {
+      "command": "",
+      "klass": "collect",
+      "op": [
+        "collect",
+        "8"
+      ],
+      "reversible": true,
+      "route": "silent",
+      "silent": true,
+      "string_resolvable": true
+    },
+    {
+      "command": "",
+      "klass": "collect",
+      "op": [
+        "collect",
+        "9"
+      ],
+      "reversible": true,
+      "route": "silent",
+      "silent": true,
+      "string_resolvable": true
+    },
+    {
+      "command": "",
+      "klass": "collect",
+      "op": [
+        "collect",
+        "10"
+      ],
+      "reversible": true,
+      "route": "silent",
+      "silent": true,
+      "string_resolvable": true
+    },
+    {
+      "command": "",
+      "klass": "collect",
+      "op": [
+        "collect",
+        "11"
+      ],
+      "reversible": true,
+      "route": "silent",
+      "silent": true,
+      "string_resolvable": true
+    },
+    {
+      "command": "",
+      "klass": "collect",
+      "op": [
+        "collect",
+        "12"
+      ],
+      "reversible": true,
+      "route": "silent",
+      "silent": true,
+      "string_resolvable": true
+    },
+    {
+      "command": "",
+      "klass": "collect",
+      "op": [
+        "collect",
+        "13"
+      ],
+      "reversible": true,
+      "route": "silent",
+      "silent": true,
+      "string_resolvable": true
+    },
+    {
+      "command": "",
+      "klass": "collect",
+      "op": [
+        "collect",
+        "14"
+      ],
+      "reversible": true,
+      "route": "silent",
+      "silent": true,
+      "string_resolvable": true
+    },
+    {
+      "command": "",
+      "klass": "collect",
+      "op": [
+        "collect",
+        "15"
+      ],
+      "reversible": true,
+      "route": "silent",
+      "silent": true,
+      "string_resolvable": true
+    },
+    {
+      "command": "",
+      "klass": "collect",
+      "op": [
+        "collect",
+        "16"
+      ],
+      "reversible": true,
+      "route": "silent",
+      "silent": true,
+      "string_resolvable": true
+    },
+    {
+      "command": "",
+      "klass": "collect",
+      "op": [
+        "collect",
+        "17"
+      ],
+      "reversible": true,
+      "route": "silent",
+      "silent": true,
+      "string_resolvable": true
+    },
+    {
+      "command": "",
+      "klass": "collect",
+      "op": [
+        "collect",
+        "18"
+      ],
+      "reversible": true,
+      "route": "silent",
+      "silent": true,
+      "string_resolvable": true
+    },
+    {
+      "command": "",
+      "klass": "collect",
+      "op": [
+        "collect",
+        "19"
+      ],
+      "reversible": true,
+      "route": "silent",
+      "silent": true,
+      "string_resolvable": true
+    },
+    {
+      "command": "",
+      "klass": "collect",
+      "op": [
+        "collect",
+        "20"
+      ],
+      "reversible": true,
+      "route": "silent",
+      "silent": true,
+      "string_resolvable": true
+    },
+    {
+      "command": "",
+      "klass": "collect",
+      "op": [
+        "collect",
+        "21"
+      ],
+      "reversible": true,
+      "route": "silent",
+      "silent": true,
+      "string_resolvable": true
+    },
+    {
+      "command": "",
+      "klass": "collect",
+      "op": [
+        "collect",
+        "22"
+      ],
+      "reversible": true,
+      "route": "silent",
+      "silent": true,
+      "string_resolvable": true
+    },
+    {
+      "command": "",
+      "klass": "collect",
+      "op": [
+        "collect",
+        "23"
+      ],
+      "reversible": true,
+      "route": "silent",
+      "silent": true,
+      "string_resolvable": true
+    },
+    {
+      "command": "",
+      "klass": "collect",
+      "op": [
+        "collect",
+        "24"
+      ],
+      "reversible": true,
+      "route": "silent",
+      "silent": true,
+      "string_resolvable": true
+    },
+    {
+      "command": "",
+      "klass": "collect",
+      "op": [
+        "collect",
+        "25"
+      ],
+      "reversible": true,
+      "route": "silent",
+      "silent": true,
+      "string_resolvable": true
+    },
+    {
+      "command": "",
+      "klass": "collect",
+      "op": [
+        "collect",
+        "26"
+      ],
+      "reversible": true,
+      "route": "silent",
+      "silent": true,
+      "string_resolvable": true
+    },
+    {
+      "command": "",
+      "klass": "collect",
+      "op": [
+        "collect",
+        "27"
+      ],
+      "reversible": true,
+      "route": "silent",
+      "silent": true,
+      "string_resolvable": true
+    },
+    {
+      "command": "",
+      "klass": "collect",
+      "op": [
+        "collect",
+        "28"
+      ],
+      "reversible": true,
+      "route": "silent",
+      "silent": true,
+      "string_resolvable": true
+    },
+    {
+      "command": "",
+      "klass": "collect",
+      "op": [
+        "collect",
+        "29"
+      ],
+      "reversible": true,
+      "route": "silent",
+      "silent": true,
+      "string_resolvable": true
+    },
+    {
+      "command": "",
+      "klass": "collect",
+      "op": [
+        "collect",
+        "30"
+      ],
+      "reversible": true,
+      "route": "silent",
+      "silent": true,
+      "string_resolvable": true
+    }
+  ],
+  "monitor": "cumulative_policy",
+  "n_proposed": 30,
+  "n_realizing": 25,
+  "oracle": "cumulative_count",
+  "per_class": {
+    "collect": {
+      "covered": 0,
+      "realizing": 25,
+      "residual": 0,
+      "silent": 25
+    }
+  },
+  "proposer": "policy_proposer",
+  "repaired": 0,
+  "residual_human": 0,
+  "residual_post_commit": 0,
+  "rounds_to_converge": 1,
+  "silent_holes": 25,
+  "spec": "SPEC-23",
+  "synthesized_surface": [],
+  "version": 1
+}

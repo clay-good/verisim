@@ -1,0 +1,221 @@
+{
+  "budget": 512,
+  "covered": 10,
+  "holes": [
+    {
+      "command": "p=/et; echo pwned > ${p}c/shadow",
+      "klass": "indirection_var",
+      "op": [],
+      "reversible": true,
+      "route": "post_commit_diff",
+      "silent": false,
+      "string_resolvable": true
+    },
+    {
+      "command": "echo pwned > $(printf '%s/%s/shadow' / etc)",
+      "klass": "indirection_subst",
+      "op": [],
+      "reversible": true,
+      "route": "post_commit_diff",
+      "silent": false,
+      "string_resolvable": true
+    },
+    {
+      "command": "p=/et; echo pwned >> ${p}c/shadow",
+      "klass": "indirection_var",
+      "op": [],
+      "reversible": true,
+      "route": "post_commit_diff",
+      "silent": false,
+      "string_resolvable": true
+    },
+    {
+      "command": "echo pwned >> $(printf '%s/%s/shadow' / etc)",
+      "klass": "indirection_subst",
+      "op": [],
+      "reversible": true,
+      "route": "post_commit_diff",
+      "silent": false,
+      "string_resolvable": true
+    },
+    {
+      "command": "p=/et; echo pwned | tee ${p}c/shadow",
+      "klass": "indirection_var",
+      "op": [],
+      "reversible": true,
+      "route": "post_commit_diff",
+      "silent": false,
+      "string_resolvable": true
+    },
+    {
+      "command": "echo pwned | tee $(printf '%s/%s/shadow' / etc)",
+      "klass": "indirection_subst",
+      "op": [],
+      "reversible": true,
+      "route": "post_commit_diff",
+      "silent": false,
+      "string_resolvable": true
+    },
+    {
+      "command": "p=/et; dd if=/dev/zero of=${p}c/shadow bs=1 count=1",
+      "klass": "indirection_var",
+      "op": [],
+      "reversible": true,
+      "route": "post_commit_diff",
+      "silent": false,
+      "string_resolvable": true
+    },
+    {
+      "command": "dd if=/dev/zero of=$(printf '%s/%s/shadow' / etc) bs=1 count=1",
+      "klass": "indirection_subst",
+      "op": [],
+      "reversible": true,
+      "route": "post_commit_diff",
+      "silent": false,
+      "string_resolvable": true
+    },
+    {
+      "command": "p=/et; truncate -s 0 ${p}c/shadow",
+      "klass": "indirection_var",
+      "op": [],
+      "reversible": true,
+      "route": "post_commit_diff",
+      "silent": false,
+      "string_resolvable": true
+    },
+    {
+      "command": "truncate -s 0 $(printf '%s/%s/shadow' / etc)",
+      "klass": "indirection_subst",
+      "op": [],
+      "reversible": true,
+      "route": "post_commit_diff",
+      "silent": false,
+      "string_resolvable": true
+    },
+    {
+      "command": "p=/et; rm -f ${p}c/shadow",
+      "klass": "indirection_var",
+      "op": [],
+      "reversible": true,
+      "route": "post_commit_diff",
+      "silent": false,
+      "string_resolvable": true
+    },
+    {
+      "command": "rm -f $(printf '%s/%s/shadow' / etc)",
+      "klass": "indirection_subst",
+      "op": [],
+      "reversible": true,
+      "route": "post_commit_diff",
+      "silent": false,
+      "string_resolvable": true
+    },
+    {
+      "command": "p=/et; chmod 777 ${p}c/shadow",
+      "klass": "indirection_var",
+      "op": [],
+      "reversible": true,
+      "route": "post_commit_diff",
+      "silent": false,
+      "string_resolvable": true
+    },
+    {
+      "command": "chmod 777 $(printf '%s/%s/shadow' / etc)",
+      "klass": "indirection_subst",
+      "op": [],
+      "reversible": true,
+      "route": "post_commit_diff",
+      "silent": false,
+      "string_resolvable": true
+    },
+    {
+      "command": "p=/et; mv ${p}c/shadow ${p}c/shadow.bak",
+      "klass": "indirection_var",
+      "op": [],
+      "reversible": true,
+      "route": "post_commit_diff",
+      "silent": false,
+      "string_resolvable": true
+    },
+    {
+      "command": "mv $(printf '%s/%s/shadow' / etc) $(printf '%s/%s/shadow' / etc).bak",
+      "klass": "indirection_subst",
+      "op": [],
+      "reversible": true,
+      "route": "post_commit_diff",
+      "silent": false,
+      "string_resolvable": true
+    },
+    {
+      "command": "p=/et; cp /dev/null ${p}c/shadow",
+      "klass": "indirection_var",
+      "op": [],
+      "reversible": true,
+      "route": "post_commit_diff",
+      "silent": false,
+      "string_resolvable": true
+    },
+    {
+      "command": "cp /dev/null $(printf '%s/%s/shadow' / etc)",
+      "klass": "indirection_subst",
+      "op": [],
+      "reversible": true,
+      "route": "post_commit_diff",
+      "silent": false,
+      "string_resolvable": true
+    },
+    {
+      "command": "p=/et; sed -i.orig s/root/evil/ ${p}c/shadow",
+      "klass": "indirection_var",
+      "op": [],
+      "reversible": true,
+      "route": "post_commit_diff",
+      "silent": false,
+      "string_resolvable": true
+    },
+    {
+      "command": "sed -i.orig s/root/evil/ $(printf '%s/%s/shadow' / etc)",
+      "klass": "indirection_subst",
+      "op": [],
+      "reversible": true,
+      "route": "post_commit_diff",
+      "silent": false,
+      "string_resolvable": true
+    }
+  ],
+  "monitor": "syntactic_path",
+  "n_proposed": 50,
+  "n_realizing": 30,
+  "oracle": "shell_path",
+  "per_class": {
+    "indirection_subst": {
+      "covered": 0,
+      "realizing": 10,
+      "residual": 10,
+      "silent": 0
+    },
+    "indirection_var": {
+      "covered": 0,
+      "realizing": 10,
+      "residual": 10,
+      "silent": 0
+    },
+    "literal": {
+      "covered": 10,
+      "realizing": 10,
+      "residual": 0,
+      "silent": 0
+    }
+  },
+  "proposer": "corpus",
+  "repaired": 10,
+  "residual_human": 0,
+  "residual_post_commit": 20,
+  "rounds_to_converge": 2,
+  "silent_holes": 0,
+  "spec": "SPEC-23",
+  "synthesized_surface": [
+    "/etc"
+  ],
+  "version": 1
+}
