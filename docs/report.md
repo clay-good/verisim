@@ -1,5 +1,10 @@
 # Verisim v0 — technical report
 
+> **Note (2026-06-21):** this is the v0 *world-model* report (the `H_ε(ρ)` apparatus). The program's
+> current, distilled thesis lives in the essay [`essay-state-not-capability.md`](essay-state-not-capability.md)
+> and the reframed [`paper.md`](paper.md): the agent-guardrail gap is a *state/deployment* gap, not a
+> model-capability gap. Read those first for the bottom line; this report is the v0 measurement detail.
+
 > The v0 result, stated honestly. This is the short write-up SPEC-2 §13 (M8) calls
 > for: the experiments that produce figures — E1 (the curve), E2/E3 (policy and
 > operator comparisons), the §7.2 calibration diagnostic, and the E4 ablation

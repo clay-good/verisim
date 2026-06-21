@@ -1,36 +1,34 @@
 # Verisim
 
-> **What this is, plainly.** AI agents now run real commands on real computers, and one wrong move can
-> delete the wrong file or leak a password. The obvious way to keep them safe is to *run the real
-> computer and read what actually happened* instead of letting a model guess — and yes, that part is
-> almost too obvious to count. Verisim's real value is the two things it builds on top of it:
+> **Read this first (2026-06-21).** The honest, distilled thesis is the essay
+> **[docs/essay-state-not-capability.md](docs/essay-state-not-capability.md)** (~5 min); the technical
+> version is **[docs/paper.md](docs/paper.md)**; the hostile self-review that forced the honesty is
+> **[docs/review.md](docs/review.md)**.
 >
-> 1. **It finds the cheap place to look.** You can't stop and check every action an agent takes — too
->    slow, too annoying. On **123,000 real agent commands**, only about **1 in 100** could ever cause
->    real harm, so you wave 99% straight through and only pause on the rare 1% that matters. That turns
->    "checking is too expensive" into "checking is basically free" (RA21).
-> 2. **It's the first tool that *proves* a safety checker actually works.** Everyone in 2026 is shipping
->    agent "safety checkers," but they only *claim* to catch every dangerous action — nobody tests the
->    claim, and a checker is only as good as the cases a human remembered to list. Verisim trains an AI
->    attacker whose whole job is to find a dangerous action that slips past the checker, and because we
->    can run the real computer we always know *for certain* whether it slipped through. It already caught
->    a real bug our own experts had missed (RA24).
+> **The one lucky fact:** in a computer, state is exact and checkable for free (an *oracle*), unlike
+> vision/robotics/language. The tempting claim was "an LLM guardrail reads the *action*, the oracle
+> reads the *effect*, so the oracle catches harms the model can't." We tried hard to prove it and it is
+> **mostly false**: a real Claude judge, *shown the relevant state*, decoded every shell-indirection
+> trick (recall 1.00, two framings), traced relational reachability to depth 8 (4/4), and counted a
+> cumulative budget to 80 on a *cheap* model. It is not a capability gap.
 >
-> The honest one-liner: not "we can see the truth" (of course you can), but **"we found where to look
-> cheaply, and we built the machine that keeps a safety checker honest by relentlessly trying to break
-> it."**
-
-> **New here?** The fastest path to the signal is the distilled preprint: **[docs/paper.md](docs/paper.md)** (about 8 pages). Its 2026 thesis: a deterministic, execution-grounded *complete-mediation* guardrail for computer-use agents is no longer scarce — it is a crowd (YoloFS, ePCA, Progent, GoEX, and more), and every one of them *asserts* its covering surface is complete without *certifying* it. The contribution is the missing half — **a monitor's completeness is a learning problem with a free verifier**: the monitor's own exact oracle makes its soundness-hole predicate (`realizes ∧ ¬target`) a dense, model-free reward, so a neural compositional adversary trained on it (no learned reward model) runs a discover→fix→re-verify loop that *certifies and hardens* the monitor — it found a real soundness bug a human red team missed (RA24), and the soundness invariant then held under the learned attacker (RA22–RA25). The deterministic gate is the **motivating substrate, not the headline**: the three harms a static sandbox cannot express that are the oracle's reason to exist (relational RA8, cumulative RA9, context-dependent RA12), the recast in the **AI-control** frame the field uses for untrusted agents (RA16: the oracle is the one trusted monitor whose safety-usefulness frontier does not move under an adaptive attacker — the property the recent control literature finds *model* monitors lack), the sparse operating point on **123k real Claude Code tool calls** (RA21: 1.1% on-surface), and the run on the **official Terminal-Bench harness** (RA20: 80 tasks, real Claude agent through the host Code CLI with no API key — capability 38/80, and the safety lane's missed-harm **0.00** oracle vs **0.40** denylist vs **1.00** none across 16 real TB containers; see [docs/terminal-bench-run.md](docs/terminal-bench-run.md)). And, plainly, what is proven versus what still awaits a proof-grade certificate, a run against a third-party monitor, and a leaderboard-grade submission. This README is the exhaustive companion.
-
-> A computer-use AI agent is one mis-predicted action away from an
-> irreversible mistake — deleting the wrong file, overwriting a credential, opening a connection to a
-> server it should never touch. **Verisim is the safety layer that makes acting on a cheap, fallible
-> world model safe.** The agent *previews* each action through a learned model ("look before you leap"),
-> and a free, exact **oracle** checks that preview on a small budget so the agent can trust it. Measured
-> end-to-end on a real trained model: **an unverified agent does the irreversible bad thing almost every
-> time; a verified one never does — and verification is cheap, because danger lives on a small,
-> identifiable surface.** That is the deployment. The rest of this paper is the proof that the preview
-> can be trusted, and the price of trusting it.
+> **What is true, and useful:**
+> 1. **It is a state / deployment gap, not a capability gap.** A *stateless per-action* guardrail (the
+>    deployed PreToolUse-hook pattern) cannot enforce any harm that spans actions — cumulative,
+>    relational, contextual — no matter how smart the model: recall **0.00** at every budget, on a
+>    strong and a cheap model. The fix is plumbing (show the guardrail the state) or an exact cheap
+>    check (a distinct-counter, a reachability closure, a post-commit diff), **not** a bigger model.
+> 2. **Certify, don't assert.** Because the oracle is free you can run an adversary that *proves* a
+>    checker honest instead of trusting it; pointed at our own resolver it found a real soundness bug a
+>    human red team missed (RA24). Most guardrail vendors *assert* completeness; almost none *measure* it.
+> 3. **The surface is sparse.** On **123,195** real Claude Code commands only **~1.1%** can touch a
+>    protected resource (RA21), so checking is nearly free.
+>
+> **Honest scope:** this is for **integrity / state-change** harms; **confidentiality / covert-channel
+> exfiltration has no sparse surface and is out** (RA15, an honest negative). The strongest live results
+> are run-on-demand on one model family. Everything below this banner (the CU1–CU33 / RA1–RA26 ledger)
+> is the **full exploratory research history**, much of it measured on learned-model *proxies*; for what
+> is actually defensible versus what was overclaimed, read the essay and `docs/review.md` first.
 
 ![The verisim agent-in-the-loop architecture: a four-stage loop. (1) An LLM agent translates a natural-language intent into a host action plan (open/write/fork/setuid). (2) The cheap learned world model M_θ previews the plan by rolling it forward with no oracle (imagine — look before you leap). (3) The free, exact oracle verifies the preview at a consultation rate ρ, re-anchoring to ground truth (the reference oracle, or a real /bin/sh via SPEC-11), via the propose-verify-correct loop. (4) A safety gate checks a guardrail on the predicted final state: SAFE allows execution on the real computer, UNSAFE aborts. The oracle's truth re-grounds the agent for the next action. The model is cheap but drifts; the oracle is exact but costs a call; the loop spends a small ρ budget to keep the preview faithful, so the agent's gate can be trusted](figures/cu_architecture.png)
 
