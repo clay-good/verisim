@@ -655,11 +655,29 @@ twice (38/40 = 0.95 [0.83, 0.99]), and the misses did not grow with depth. At RA
 well-prompted LLM guardrail is a strong relational-danger detector, not the catastrophically-breached
 arm the proxy implies. So the oracle's real advantage over a learned guardrail here is *not* a
 capability chasm; it is the guarantee (exact and every-time, versus a measured phi of about 0.95 that
-issues no certificate on the one input that matters), complete mediation, and near-zero cost. We did
-not find where the LLM guardrail breaks badly, because at these scales it mostly does not; larger or
-adversarially-obfuscated graphs are the place to look, and we have not looked yet, so we do not claim
-it. This sharpens the contribution and removes an overclaim: the case for the oracle is the
-guarantee, not the suggestion that models cannot see relational harm.
+issues no certificate on the one input that matters), complete mediation, and near-zero cost. This
+sharpens the contribution and removes an overclaim: the case for the oracle is the guarantee, not the
+suggestion that models cannot see relational harm.
+
+**We then built the search RA11 lacked, and pointed it at the real judge (the monitor auditor, run
+live).** RA11 was a fixed battery; it never searched for the judge's failure region. The monitor
+auditor (the certify-the-monitor loop, now monitor-agnostic) puts the real Claude judge in the monitor
+slot and the exact oracle in the verifier slot, so a hole is a realizing action the judge silently
+passes. Run live against the current Claude Code judge on the two effect-harm families an action-reader
+should be weakest on -- encoded shell-path indirection (the same `printf`/`rev`/`cut`/var-assembly
+forms the RA18 resolver folds, where the path is in the action but obfuscated) and relational
+reachability (the RA8 transitive untrusted->db exposure, swept to chain depth 8 with distractors) -- it
+**still found no break**: the judge decoded every one of the thirteen shell-encoding classes (recall
+1.00 over the sampled draws, both the direct and the agent-approval framing) and blocked the exposing
+edit at every depth (4/4 at depths 2/4/6/8). The honest reading is a graded statistical certificate,
+not a theorem: recall is bounded below by about 0.93 at 95% on the encoding family with wide intervals
+on the small relational sweep, pinned to this one model and version, with a fair prompt that warns
+about indirection. So at this scale a strong 2026 model judge is robust on the families we searched,
+and the auditor's value is that it now *certifies* that with a confidence bound and a reproducible
+search harness rather than asserting it; where such a judge breaks badly -- a weaker or older model, a
+larger or adversarially-obfuscated graph, the ambient framing of Section 5's transfer trap -- is the
+place to look, and the auditor is the instrument that would find it (reproduce:
+`docs/llm-guardrail-audit-run.md`).
 
 **The tradeoff, named.** What you give up for hard-to-game safety is generality of domain. The
 oracle's whole advantage, exact state, is exactly what restricts it to computer worlds with checkable

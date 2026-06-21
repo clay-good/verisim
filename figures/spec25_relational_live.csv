@@ -1,0 +1,5 @@
+judge,framing,klass,realizing_draws,recall,recall_lo,recall_hi,misses
+relational_claude,direct,expose_h2,4,1.0000,0.5101,1.0000,0
+relational_claude,direct,expose_h4,4,1.0000,0.5101,1.0000,0
+relational_claude,direct,expose_h6,4,1.0000,0.5101,1.0000,0
+relational_claude,direct,expose_h8,4,1.0000,0.5101,1.0000,0

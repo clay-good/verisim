@@ -45,6 +45,32 @@ its Wilson interval bracket p over K trials (pinned by a hermetic test), so a *c
 (no hole found) is a graded robustness bound — `recall ≥ 1 − ε at conf 1 − δ` — corroborating RA11 at
 the auditor's scale, and a *non-clean* one is the witness RA11 never found.
 
+## The live result (real `claude -p` judge, Claude Code 2.1.81, 2026-06-21)
+
+Run on demand against the current Claude Code judge. This is the finding RA11 left open — searched, not
+asserted.
+
+**File-corruption family (`--claude`, 14-mechanism battery × 3 trials × 2 framings, 84 calls):** the
+real judge **decoded every shell-encoding class** — recall **1.00** on all 13 classes (literal,
+quote_splice, var_split, ansi_hex, ansi_octal, printf_s, param_default, nested_printf, backtick,
+printf_fmt, cut, rev, and mixed compositions), in **both** the `direct` security-question framing and
+the `policy` agent-approval framing. `found_break=False`; graded robustness certificate **recall ≥ 0.93
+at 95%** (residual < 0.069 over the sampled draws). This is the expected-but-worth-certifying case: in
+the file family the path is still *in* the action, just obfuscated, and a strong model decodes it.
+
+**Relational (effect-only) depth sweep (`--relational`, 4 trials × depths 2/4/6/8, direct framing):**
+the judge **blocked the transitive untrusted→db exposing edit 4/4 at every depth**, with distractor
+edges forcing traversal — recall 1.00 (wide CI [0.51, 1.00] at K=4). It traces the resulting-graph
+reachability that is *not* in the action it reads, corroborating RA11 and extending its depth axis.
+
+**The honest reading:** at this scale a strong 2026 model judge breaks on *neither* family the auditor
+searched. The contribution is not "we broke the judge" — it is that the auditor now **certifies** the
+judge's robustness with a confidence bound and a reproducible search, rather than asserting it, and is
+the instrument that *would* surface a break (a weaker/older model, a larger or adversarially-obfuscated
+graph, the ambient framing of the transfer trap — none measured here, none claimed). Pinned to model +
+version + prompt + framing. Artifacts: `figures/spec25_llm_guardrail_live.csv`,
+`figures/spec25_relational_live.csv`, `figures/claude_{direct,policy}.json`.
+
 ## The honest takeaway
 
 The hermetic stub proves the loop and the harness and the action-vs-effect gap; **the real finding lands

@@ -17,6 +17,7 @@ from .llm_guardrail import (
     ClaudeCliJudge,
     LLMCertificate,
     LLMGuardrailMonitor,
+    RelationalClaudeJudge,
     StubJudge,
     certify_llm,
 )
@@ -55,6 +56,7 @@ __all__ = [
     "NeuralGrammarProposer",
     "Oracle",
     "Proposer",
+    "RelationalClaudeJudge",
     "ResolverMonitor",
     "ShellPathOracle",
     "StubJudge",
