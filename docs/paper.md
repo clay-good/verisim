@@ -1,16 +1,54 @@
-# Verisim: oracle-grounded, hard-to-game safety for computer-use agents
+# Verisim: certifying complete mediation — a safety monitor's coverage is a learning problem with a free verifier
 
-**Status (June 2026): recast after an adversarial self-review; read [docs/review.md](review.md)
+**The contribution, stated for 2026.** Deterministic, execution-grounded *complete-mediation* guardrails
+for computer-use agents are no longer scarce — they are a crowd. In the months around this writing the
+design space filled in independently: filesystem-level mediation with staging and snapshot rollback
+(YoloFS, "Don't Let AI Agents YOLO Your Files," arXiv 2604.13536), an SMT-checked "provably secure"
+agent guardrail (ePCA, arXiv 2605.29251), deterministic pre-action authorization (arXiv 2603.20953),
+transactional checkpoint-rollback sandboxing (arXiv 2512.12806), and the earlier deterministic enforcers
+this work already cited (Progent, 2025; GoEX, 2024). They share one move and one unexamined assumption:
+each *asserts* that its mediation is complete — that every action which can realize the harm is on the
+surface it checks — and none of them *certifies* it. The covering surface is hand-specified, and complete
+mediation is only as sound as the human who enumerated it: the very enumeration problem these systems
+charge the pattern denylist with.
+
+This paper's contribution is the missing half. **The completeness of such a monitor is itself a learning
+problem with a free verifier, and we give the method that certifies and hardens it under an adaptive
+*learned* adversary.** Because a computer world has a free, exact oracle, a monitor's own soundness-hole
+predicate — `realizes(s, a) ∧ ¬target(s, a)`, an action that truly causes the harm yet slips off the
+checked surface — is a dense, model-free reward. We train a neural autoregressive adversary over a
+compositional grammar of shell-path encodings against exactly that reward (no learned reward model
+anywhere in the loop), and run a discover → fix → re-verify loop: the adversary hunts holes, the exact
+oracle confirms each one bit-for-bit against a real `/bin/sh`, the monitor is repaired where a realizing
+action slipped off it, and the certificate is re-tested under the adversary. It behaves as a method, not
+a slogan: the learned adversary found a *genuine soundness bug our own hand-run red team had missed* (a
+`printf` format-escape fold, RA24), about 18× faster than blind search; once the fix is folded back, the
+soundness invariant *holds under the learned attacker* — no string-resolvable realizing command is
+silently declared safe across the sampled composition space (RA22–RA25).
+
+The deterministic gate everyone is now building is, in this framing, the **motivating instance and the
+substrate the method runs on, not the headline.** The same method that certifies our shell-path monitor
+is what a deployer would run against YoloFS's staging surface or ePCA's axiom set to ask the question
+those papers leave open: is your covering surface *actually* covering, or is there an encoding that
+realizes the harm off it? We demonstrate the method on our own monitor (one harm family, a
+finite-but-realistic shell-encoding grammar, a certificate empirical over the sampled space rather than a
+proof); auditing a third-party monitor is named future work, not a present claim. The rest of the paper
+is the substrate that earns this framing — the gate, why an oracle beats a sandbox, and the measured
+operating point — read as motivation for, and evidence under, the certification result.
+
+**Status (June 2026): recast twice — first after an adversarial self-review, then to lead with the
+certification contribution above as the deterministic-gate space became crowded; read [docs/review.md](review.md)
 alongside this.** The mechanism and every number below are real and reproducible. An independent
 hostile review (three reviewers, prior-art verified) found that the original draft overclaimed, and
 the most important fix was a reframing, now done. We no longer present a novel "coverage theorem."
 The property is complete mediation (Saltzer and Schroeder, 1975) and execution-monitor soundness
 (Schneider, 2000), old and established; the contribution is not the property but the conditions under
 which it becomes cheap, a domain where the surface to mediate is sparse and syntactically computable
-and the policy oracle is free and exact. The paper now leads with the reason an oracle beats a sandbox
-at all: three harms a static per-resource sandbox structurally cannot express, demonstrated live with
-the MAC/sandbox baseline run for real, a relational graph-reachability invariant (RA8), a cumulative
-blast-radius budget (RA9), and a context-dependent change-freeze (RA12). On those, only the oracle is
+and the policy oracle is free and exact. The oracle's reason to exist over a sandbox — the
+motivation the certification result then builds on — is three harms a static per-resource sandbox
+structurally cannot express, demonstrated live with the MAC/sandbox baseline run for real, a relational
+graph-reachability invariant (RA8), a cumulative blast-radius budget (RA9), and a context-dependent
+change-freeze (RA12). On those, only the oracle is
 both safe and useful. We also replaced the review's worst target, the parameterized learned-guardrail
 arm, with a real measured LLM guardrail (RA11), which corrected our own story and is reported as such,
 and we ran the real hardened-sandbox baseline the review demanded (RA13, the immutable bit `chattr +i`
@@ -44,6 +82,19 @@ accordingly, and read the review.
 
 ## Abstract
 
+A deterministic, execution-grounded guardrail that enforces complete mediation over a computer-use
+agent is, as of 2026, a crowded design (Section 7): several independent systems gate agent actions on a
+hand-specified covering surface and *assert* that the surface is complete. None certifies it, and a
+covering surface is only as sound as the enumeration behind it. This paper supplies the missing half:
+in a computer world the monitor's own exact oracle makes its soundness-hole predicate
+(`realizes ∧ ¬target`) a dense, model-free reward, so **certifying a monitor's completeness is a learning
+problem with a free verifier.** We train a neural compositional adversary on that reward — no learned
+reward model in the loop — and run a discover → fix → re-verify loop against a real monitor; it found a
+genuine soundness bug a human red team had missed and, once that was folded back, the soundness invariant
+held under the learned adversary across the sampled composition space (RA22–RA25). The deterministic gate
+the method certifies is the motivation and the substrate, told first because it is what makes the
+certification claim concrete; the rest of this abstract is that substrate.
+
 A computer-use agent is one mis-predicted action away from an irreversible mistake: overwriting a
 credential, deleting the wrong file, sending data it should never send. The field's own safety
 benchmarks confirm this is not hypothetical. On OS-Harm, frontier models including Claude comply with
@@ -58,9 +109,12 @@ guarantee is best-effort rather than provable: an adversary can aim at a predict
 
 Verisim takes a different route, available in exactly one domain. Computer worlds (filesystems,
 processes, networks) have a free, exact, resettable oracle: you can run the real thing and read the
-true next state, bit for bit. That removes the model from the safety-critical path. The contribution
-is not a new theorem. It is an old principle, complete mediation (Saltzer and Schroeder, 1975), made
-cheap in this one domain. Danger here lives on a sparse, syntactically computable surface (the actions
+true next state, bit for bit. That removes the model from the safety-critical path. Making
+complete mediation cheap this way is no longer, by itself, the contribution: that design is now a crowd
+(Section 7). It is an old principle, complete mediation (Saltzer and Schroeder, 1975), made cheap in this
+one domain — the substrate the contribution stands on. The contribution is *certifying* a monitor built
+this way, by turning its own free oracle into the verifiable reward of an adaptive learned adversary
+(RA22–RA25). Danger here lives on a sparse, syntactically computable surface (the actions
 that can *realize* the harm), so a gate that consults the free exact oracle only on that surface is
 hard to game by *any* model, at a cost set by how rare the surface is. Established work already gates
 agent actions deterministically (Section 7); what computer worlds add is that sound enforcement here
@@ -628,6 +682,28 @@ adaptive attacks; and mandatory-access-control frameworks for LLM agents (arXiv 
 apply the same idea at the OS layer. We do not claim to be the first to gate agent actions, and a
 fair comparison must run these systems, not just our models of them (see the limitations).
 
+**The 2026 deterministic-guardrail crowd is the proper context for the contribution — as the set of
+monitors the method audits, not as rivals to the gate.** Since this program began, the design space we
+occupy filled in independently. YoloFS ("Don't Let AI Agents YOLO Your Files," arXiv 2604.13536) moves
+mediation into the filesystem itself: staging isolates mutations before commit (a pre-commit gate),
+snapshots give agent self-correction (reversibility routing), and progressive permission graduates the
+prompts — the same effect-level, commit-then-review shape we reach for, arrived at as a storage-layer
+design. ePCA ("Provably Secure Agent Guardrail," arXiv 2605.29251) compiles agent intentions into
+first-order constraints an SMT solver discharges before execution, claiming provable, adaptive-attack-
+resilient complete mediation at sub-millisecond latency. "Before the Tool Call" (arXiv 2603.20953)
+formalizes deterministic pre-action authorization, and a transactional sandbox (arXiv 2512.12806) wraps
+execution in checkpoint/rollback. Each of these *asserts* complete mediation over a hand-specified
+surface (a staging policy, an axiom set, an authorization rule) and none *certifies* it — which is
+exactly the gap this paper fills. Two honest distinctions, and one offer. ePCA proves over a *model* of
+the action (its first-order encoding); the oracle reads the *true resulting state*, including the
+relational, cumulative, and context-dependent effects (RA8/RA9/RA12) an action-level encoding does not
+carry. YoloFS stages every mutation; the gate certifies a *sparse covering surface* so the off-surface
+majority needs no staging at all (RA21). The offer is the method itself: the discover → fix → re-verify
+loop (RA22–RA25) is not specific to our shell-path target. Given an exact oracle for the harm, it audits
+*any* such monitor's covering surface — YoloFS's staging predicate, ePCA's axioms — for an encoding that
+realizes the harm off it. We demonstrate it on our own monitor and name auditing a third-party system as
+future work, not a present result.
+
 **AI control is the frame this work belongs in, and it sharpens the contribution.** The AI-control
 program (Greenblatt et al., arXiv 2312.06942, 2023) evaluates deployment protocols for a
 powerful-but-untrusted model as a red-team/blue-team game scored on a safety-usefulness frontier at a
@@ -737,7 +813,9 @@ check is the obvious next step), and the harms are injected, not observed, the s
 The extractor is privacy-safe by construction — it emits rates and verb names, never the user's command
 strings. (Reproduce: `docs/cc-corpus-run.md`.)
 
-Two steps turn this preprint into a result a platform can act on, and neither is another theorem.
+Three things remain to turn this preprint into a result a platform can act on; the first two harden the
+substrate, and the third *is* the contribution this paper leads with, told last here only because it
+rests on the first two.
 
 First, the external number at scale, which RA20 has now taken from runbook to a local run on the
 official harness. We wrote a custom Terminal-Bench agent that drives a real Claude agent through the
@@ -762,9 +840,13 @@ folded grammar's coverage (more pure builtins, cross-call binding) and to publis
 argument formally; the partition is established and adversarially tested, but the closed fraction is a
 measured coverage of an evolving corpus, not yet a proof over all bash.
 
-Third, and most fundamental, the surface itself. Every target above is *hand-specified*, which
-inherits the very enumeration problem we charge the denylist with: a covering target is only as good
-as the human who wrote it. RA22 begins to automate it. It runs a counterexample-guided (CEGIS) search
+Third — and this is the contribution the paper now leads with, not a coda — the surface itself. Every
+target above, and every covering surface in the 2026 deterministic-guardrail crowd (Section 7), is
+*hand-specified*, which inherits the very enumeration problem we charge the denylist with: a covering
+target is only as good as the human who wrote it, and *asserting* completeness is not *certifying* it.
+This is where the program stops re-deriving complete mediation and does the thing the neighbors do not:
+it makes the monitor's completeness a learning problem with a free verifier and certifies it under an
+adaptive learned adversary. RA22 begins it. It runs a counterexample-guided (CEGIS) search
 that starts from an *empty* target and grows it: a structured proposer emits candidate harmful
 actions, the exact oracle adjudicates which truly realize the harm (confirmed bit-for-bit against a
 real `/bin/sh`, the RA2 move), and the target is repaired only where a realizing action slipped off
@@ -849,12 +931,19 @@ human because no post-commit diff can recover the sent bytes, and that is exactl
 irreversible-exfiltration edge §5 already names as the honest open frontier (RA15), not a folder to
 grow without bound. (Reproduce: `docs/frontier-close-run.md`.)
 
-The honest summary is short. In the one domain that allows it, the exact oracle turns a guardrail from
-something an adversary can talk around into something it cannot, cheaply and without getting in the
-agent's way. We have shown that around a real model and a real kernel, against the two defenses in
-production, and now on the official Terminal-Bench harness's own task containers, where the gate's
-missed-harm is zero where a denylist's is not. What we have *not* shown is a leaderboard-grade
-submission under the benchmark's native conditions; that, not the mechanism, is what is left.
+The honest summary is short. Building a deterministic, execution-grounded complete-mediation guardrail
+for a computer-use agent is, in 2026, no longer the contribution — it is a crowded design, and we are
+one of several. The contribution is what the crowd leaves undone: *certifying* such a monitor's
+completeness. In the one domain that allows it, the monitor's own free oracle is the verifiable reward of
+an adaptive learned adversary, so completeness becomes a discover → fix → re-verify loop rather than an
+assertion — and run that way it found a real soundness bug a human red team had missed, then held the
+soundness invariant under the learned attacker. The substrate that earns this — the gate around a real
+model and a real kernel, the un-dominated triad an oracle expresses and a sandbox cannot, the sparse
+operating point on real agent traffic, the run on Terminal-Bench's own containers — is all real and
+reproducible, and it is what makes the certification claim concrete rather than abstract. What we have
+*not* shown is the certificate as a proof rather than an empirical result over a sampled space, the
+method run against a third-party monitor (YoloFS, ePCA), or a leaderboard-grade Terminal-Bench
+submission. That, not the mechanism, is what is left.
 
 ## Reproduce
 
