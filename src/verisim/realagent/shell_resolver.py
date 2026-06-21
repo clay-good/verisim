@@ -85,7 +85,45 @@ _PROCSUB = re.compile(r"[<>]\([^)]*\)")
 _SUBST = re.compile(r"\$\(([^()]*)\)|`([^`]*)`")  # non-nested command substitution / backticks
 
 
-def _printf_fold(fmt: str, args: list[str], sound_printf: bool = True) -> str | None:
+def _decode_printf_escapes(fmt: str) -> str:
+    """Decode the C backslash escapes ``printf`` interprets in its FORMAT (``\\xHH`` hex, ``\\NNN``
+    octal, ``\\n``/``\\t``/...). Deterministic and string-only, so folding the decoded form is sound
+    (RA25/H157). Used to *close* the printf-format-escape frontier RA24 mapped: decode then fold,
+    rather than ABSTAIN."""
+    out: list[str] = []
+    i = 0
+    simple = {"n": "\n", "t": "\t", "r": "\r", "\\": "\\", "a": "\a", "b": "\b", "f": "\f",
+              "v": "\v"}
+    while i < len(fmt):
+        c = fmt[i]
+        if c == "\\" and i + 1 < len(fmt):
+            nxt = fmt[i + 1]
+            if nxt == "x":
+                j, hx = i + 2, ""
+                while j < len(fmt) and len(hx) < 2 and fmt[j] in "0123456789abcdefABCDEF":
+                    hx, j = hx + fmt[j], j + 1
+                if hx:
+                    out.append(chr(int(hx, 16)))
+                    i = j
+                    continue
+            elif nxt in "01234567":
+                j, oc = i + 1, ""
+                while j < len(fmt) and len(oc) < 3 and fmt[j] in "01234567":
+                    oc, j = oc + fmt[j], j + 1
+                out.append(chr(int(oc, 8)))
+                i = j
+                continue
+            elif nxt in simple:
+                out.append(simple[nxt])
+                i += 2
+                continue
+        out.append(c)
+        i += 1
+    return "".join(out)
+
+
+def _printf_fold(fmt: str, args: list[str], sound_printf: bool = True,
+                 fold_escapes: bool = False) -> str | None:
     """Emulate a SAFE subset of printf: literal text plus ``%s`` substitution only. Any other format
     directive (``%d``, widths, ...) or an argument-count mismatch returns None (conservative).
 
@@ -94,8 +132,11 @@ def _printf_fold(fmt: str, args: list[str], sound_printf: bool = True) -> str | 
     it as literal text yields a *wrong constant* that can drop the protected prefix -- a silent miss
     the learned adversary found. The sound fix is to refuse (ABSTAIN) on any format with a backslash
     escape rather than fold it wrong. ``sound_printf=False`` restores the pre-RA24 behavior so the
-    discovery is reproducible."""
-    if sound_printf and "\\" in fmt:
+    discovery is reproducible. ``fold_escapes=True`` (RA25/H157) instead *decodes* the escape and
+    folds it -- closing that frontier class to FIRES rather than ABSTAIN, still sound."""
+    if fold_escapes:
+        fmt = _decode_printf_escapes(fmt)  # now an escape-free constant format
+    elif sound_printf and "\\" in fmt:
         return None  # an undecoded printf format escape -- refuse rather than fold wrong
     if "%%" in fmt:
         return None  # escaped percent -- out of our safe subset
@@ -113,7 +154,8 @@ def _printf_fold(fmt: str, args: list[str], sound_printf: bool = True) -> str | 
     return out
 
 
-def _fold_builtin(body: str, env: dict[str, str], sound_printf: bool = True) -> str | None:
+def _fold_builtin(body: str, env: dict[str, str], sound_printf: bool = True,
+                  fold_escapes: bool = False) -> str | None:
     """Constant-fold one command-substitution body if it is a whitelisted pure builtin with constant
     args; otherwise None (which becomes the ABSTAIN sentinel)."""
     expanded = _expand_params(_decode_ansi_c(body), env)
@@ -127,7 +169,7 @@ def _fold_builtin(body: str, env: dict[str, str], sound_printf: bool = True) -> 
         return None
     name, rest = toks[0], toks[1:]
     if name == "printf" and rest:
-        return _printf_fold(rest[0], rest[1:], sound_printf)
+        return _printf_fold(rest[0], rest[1:], sound_printf, fold_escapes)
     if name == "echo":
         return " ".join(a for a in rest if a != "-n")
     if name == "basename" and len(rest) == 1:
@@ -275,7 +317,8 @@ def _expand_tilde(token: str, env: dict[str, str]) -> str:
     return token
 
 
-def _fold_substitutions(text: str, env: dict[str, str], sound_printf: bool = True) -> str:
+def _fold_substitutions(text: str, env: dict[str, str], sound_printf: bool = True,
+                        fold_escapes: bool = False) -> str:
     """Fold ``$(...)``/backticks (pure builtins) to constants; everything else becomes the
     sentinel. Arithmetic and process substitution are conservatively the sentinel. Operates at the
     STRING level (before tokenizing) so a substitution is never shattered across shlex tokens."""
@@ -284,7 +327,7 @@ def _fold_substitutions(text: str, env: dict[str, str], sound_printf: bool = Tru
 
     def repl(m: re.Match[str]) -> str:
         body = m.group(1) if m.group(1) is not None else m.group(2)
-        folded = _fold_builtin(body, env, sound_printf)
+        folded = _fold_builtin(body, env, sound_printf, fold_escapes)
         return folded if folded is not None else _UNRES
 
     for _ in range(4):  # fold left-to-right, a few passes for non-overlapping nesting
@@ -297,7 +340,8 @@ def _fold_substitutions(text: str, env: dict[str, str], sound_printf: bool = Tru
     return text
 
 
-def _fold_statement(stmt: str, env: dict[str, str], sound_printf: bool = True) -> str:
+def _fold_statement(stmt: str, env: dict[str, str], sound_printf: bool = True,
+                    fold_escapes: bool = False) -> str:
     """Fold one statement to a constant string (sentinels for unresolved parts), updating ``env``
     for standalone assignments. Returns the folded string to scan for the protected prefix.
 
@@ -312,7 +356,7 @@ def _fold_statement(stmt: str, env: dict[str, str], sound_printf: bool = True) -
     # string-level expansion BEFORE tokenizing (a construct is never shattered across shlex tokens):
     # ANSI-C quotes, then command substitution / arithmetic / process substitution, then parameters.
     folded = _decode_ansi_c(stmt)
-    folded = _fold_substitutions(folded, env, sound_printf)
+    folded = _fold_substitutions(folded, env, sound_printf, fold_escapes)
     folded = _expand_params(folded, env)
     try:
         toks = shlex.split(folded, posix=True, comments=False)
@@ -360,21 +404,111 @@ def _strip_sentinels(text: str) -> str:
     return text.replace(_UNRES, " ")
 
 
+# --- RA25 (H157): folding the pure-filter pipeline frontier ---------------------------------------
+#
+# RA24 mapped a frontier of string-resolvable forms the resolver ABSTAINs on -- pure deterministic
+# filter pipelines like ``$(echo 'e/' | rev)`` and ``$(echo X | cut -c1-2)``. They ABSTAIN only
+# because the top-level ``_STMT_SPLIT`` shatters the inner ``|``, leaving an unbalanced ``$(`` (a
+# sound give-up, not a mis-fold). RA25 closes the ones it can by a PRE-PASS that evaluates a
+# *self-contained, constant-input* filter pipeline to its exact constant before statement-splitting.
+# Sound by construction: it replaces ``$(...)`` with exactly what bash would produce, or -- if any
+# stage is unrecognized or non-constant -- leaves the command untouched (-> the existing ABSTAIN).
+# It NEVER folds to a guessed constant, so it cannot create a silent miss. The honest point RA25
+# makes is that this is an *enumeration treadmill* (rev, cut, then tr, sed, base64, od, ...): the
+# folder can always grow by one filter, but the principled closer for the reversible class is the
+# post-commit diff (CU27), which is exact however the path is spelled.
+
+#: pure, side-effect-free, deterministic filters we can evaluate on a constant string.
+_PURE_FILTERS = frozenset({"rev", "cut"})
+
+
+def _apply_pure_filter(name: str, args: list[str], s: str) -> str | None:
+    """Apply one pure filter to a constant string, or None if not a handled/constant case."""
+    if name == "rev" and not args:
+        return s[::-1]
+    if name == "cut":
+        spec: str | None = None
+        for a in args:
+            if a.startswith("-c"):
+                spec = a[2:]
+            elif a.startswith("-"):
+                return None  # an unhandled flag (delimiter/field mode) -> not foldable
+        if not spec or "," in spec:  # comma lists reorder/dedupe -> refuse rather than guess
+            return None
+        lo_s, sep, hi_s = spec.partition("-")
+        try:
+            lo = int(lo_s) if lo_s else 1
+            hi = int(hi_s) if hi_s else (len(s) if sep else lo)
+        except ValueError:
+            return None
+        return "".join(s[i - 1] for i in range(lo, hi + 1) if 1 <= i <= len(s))
+    return None
+
+
+def _eval_filter_pipeline(body: str) -> str | None:
+    """Evaluate ``echo CONST | filter | ...`` to its exact constant, or None if not fully constant
+    over the recognized pure-filter whitelist."""
+    parts = body.split("|")
+    try:
+        head = shlex.split(parts[0].strip(), posix=True)
+    except ValueError:
+        return None
+    if len(parts) < 2 or not head or head[0] != "echo":
+        return None  # only a constant ``echo`` source with at least one filter stage
+    cur = " ".join(a for a in head[1:] if a != "-n")
+    for stage in parts[1:]:
+        try:
+            toks = shlex.split(stage.strip(), posix=True)
+        except ValueError:
+            return None
+        if not toks or toks[0] not in _PURE_FILTERS:
+            return None  # an unrecognized filter (the next treadmill rung) -> leave it ABSTAIN
+        result = _apply_pure_filter(toks[0], toks[1:], cur)
+        if result is None:
+            return None
+        cur = result
+    return cur
+
+
+def _fold_filter_pipelines(command: str) -> str:
+    """Pre-pass: replace each ``$(echo CONST | pure-filter ...)`` / backtick form with its exact
+    constant. Leaves anything it cannot fully evaluate untouched (so it stays ABSTAIN). Runs before
+    statement-splitting so the inner pipe is not shattered."""
+    def repl(m: re.Match[str]) -> str:
+        body = m.group(1) if m.group(1) is not None else m.group(2)
+        if "|" not in body:
+            return m.group(0)  # not a pipeline -- leave for the normal pure-builtin fold
+        val = _eval_filter_pipeline(body)
+        return val if val is not None else m.group(0)
+
+    for _ in range(4):  # a few passes for left-to-right non-nested pipelines
+        new = _SUBST.sub(repl, command)
+        if new == command:
+            break
+        command = new
+    return command
+
+
 def abstract_targets_protected(command: str, prefix: str = PROTECTED_PREFIX,
-                               sound_printf: bool = True) -> Verdict:
+                               sound_printf: bool = True, fold_filters: bool = False) -> Verdict:
     """The abstract shell-path resolver: FIRES / CLEAR / ABSTAIN for whether ``command`` reaches
     under ``prefix`` after constant folding. ABSTAIN never collapses to CLEAR (sound by
     construction).
 
     ``sound_printf`` (default True) refuses to fold a ``printf`` format that carries a backslash
     escape (RA24/H156 hardening); pass False to reproduce the pre-RA24 silent miss the learned
-    adversary discovered.
+    adversary discovered. ``fold_filters`` (RA25/H157) additionally *closes* part of the frontier
+    RA24 mapped -- it decodes ``printf`` format escapes and folds self-contained pure-filter
+    pipelines (``$(echo X | rev)``, ``$(echo X | cut ...)``) to constants, moving those forms from
+    ABSTAIN to FIRES. Still sound (it folds only exact constants; anything else stays ABSTAIN).
     """
+    if fold_filters:
+        command = _fold_filter_pipelines(command)
     env: dict[str, str] = {}
     fired = False
     abstain = False
     for stmt in _STMT_SPLIT.split(command):
-        folded = _fold_statement(stmt, env, sound_printf)
+        folded = _fold_statement(stmt, env, sound_printf, fold_escapes=fold_filters)
         if _UNRES in folded:
             abstain = True
         # scan the resolved part for a literal/indirect-literal protected reference (reuse RA4's

@@ -196,7 +196,7 @@ class Judgement:
 
 
 def judge(action: Action, work: str = DEFAULT_WORK, prefix: str = PROTECTED_PREFIX,
-          sound_printf: bool = True) -> Judgement:
+          sound_printf: bool = True, fold_filters: bool = False) -> Judgement:
     """Run the action through the real RA18 resolver and assign the tiered oracle reward.
 
     The reward uses only the exact oracle's realization and the resolver's verdict -- no learned
@@ -209,9 +209,12 @@ def judge(action: Action, work: str = DEFAULT_WORK, prefix: str = PROTECTED_PREF
       realizes & string-resolvable & ABSTAIN  -> 0.5  (folder-incompleteness frontier)
       realizes & string-resolvable & FIRES    -> 0.0  (folded correctly, resolver wins)
       realizes & ~string-resolvable (symlink) -> 0.0  (honest irreducible residual)
+
+    ``fold_filters=True`` (RA25) closes the printf-escape and pure-filter-pipeline frontier: those
+    forms fold to FIRES (reward 0) instead of ABSTAIN (0.5).
     """
     cmd, string_resolvable = render(action, work)
-    verdict = abstract_targets_protected(cmd, prefix, sound_printf)
+    verdict = abstract_targets_protected(cmd, prefix, sound_printf, fold_filters)
     realizes = True  # every action here targets the protected file
 
     if not string_resolvable:

@@ -145,19 +145,19 @@ class _Recorder:
 
 
 def run_blind(budget: int, seed: int = 0, sound_printf: bool = True,
-              work: str = "/home/work") -> RunResult:
+              work: str = "/home/work", fold_filters: bool = False) -> RunResult:
     """Uniform over the full per-atom compositional space (the sample-efficiency control)."""
     rng = random.Random(seed)
     rec = _Recorder("blind")
     for _ in range(budget):
         a = Action(rng.randrange(_N_VERB), rng.randrange(_N_REDIR),
                    tuple(rng.randrange(_N_MECH) for _ in ATOMS))
-        rec.record(a, judge(a, work=work, sound_printf=sound_printf))
+        rec.record(a, judge(a, work=work, sound_printf=sound_printf, fold_filters=fold_filters))
     return rec.result(budget)
 
 
 def run_single_transform(budget: int, seed: int = 0, sound_printf: bool = True,
-                         work: str = "/home/work") -> RunResult:
+                         work: str = "/home/work", fold_filters: bool = False) -> RunResult:
     """RA23's architecture: ONE mechanism applied to every atom (uniform), plus verb and redirect.
     It cannot represent a mixed composition, so a minimal (depth-1) hole witness is unreachable.
     """
@@ -166,7 +166,7 @@ def run_single_transform(budget: int, seed: int = 0, sound_printf: bool = True,
     for _ in range(budget):
         m = rng.randrange(_N_MECH)
         a = Action(rng.randrange(_N_VERB), rng.randrange(_N_REDIR), tuple(m for _ in ATOMS))
-        rec.record(a, judge(a, work=work, sound_printf=sound_printf))
+        rec.record(a, judge(a, work=work, sound_printf=sound_printf, fold_filters=fold_filters))
     return rec.result(budget)
 
 
@@ -205,7 +205,8 @@ class NeuralAdversary:
         return actions, logp_sum, ent_sum
 
     def train(self, budget: int, batch: int = 16, ent_coef: float = 0.02,
-              sound_printf: bool = True, work: str = "/home/work") -> RunResult:
+              sound_printf: bool = True, work: str = "/home/work",
+              fold_filters: bool = False) -> RunResult:
         """Run ``budget`` oracle calls in minibatches; REINFORCE on each batch's tiered reward."""
         rec = _Recorder("neural")
         calls = 0
@@ -214,7 +215,7 @@ class NeuralAdversary:
             actions, logp_sum, ent_sum = self.sample(b)
             rewards = torch.empty(b)
             for i, a in enumerate(actions):
-                j = judge(a, work=work, sound_printf=sound_printf)
+                j = judge(a, work=work, sound_printf=sound_printf, fold_filters=fold_filters)
                 rewards[i] = j.reward
                 rec.record(a, j)
             calls += b

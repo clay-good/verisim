@@ -826,6 +826,29 @@ a finite toolkit, a certificate empirical over the sampled space not a proof), p
 reward and small space make this the easy-RL regime; the contribution is the mechanism and the
 discover-fix-reverify loop, not RL difficulty. (Reproduce: `docs/neural-proposer-run.md`.)
 
+And we closed the frontier RA24 mapped, which taught the sharpest lesson of the arc (RA25). The
+obvious response to a mapped incompleteness is to fold it, so we did: the resolver gains a sound
+extension that decodes printf format escapes and evaluates self-contained pure-filter pipelines
+(`$(echo X | rev)`, `$(echo X | cut ...)`) to their exact constants, moving those forms from ABSTAIN
+to FIRES. Re-run against the folded resolver the RA24 adversary's reward collapses from 0.47 to 0.00
+per oracle call, because on the twelve-mechanism grammar those forms were the entire frontier, and the
+soundness invariant still holds (no realizing command becomes a silent CLEAR; the fold only ever
+substitutes the exact constant). But the result that matters is the second one: this is an enumeration
+treadmill. A pure deterministic filter pipeline is an unbounded family (`rev`, `cut`, then `tr`, `sed`,
+`base64 -d`, `xxd -r`, `od`, `awk`, ...), so a battery spelling the protected path through each shows
+the folder covers only the three it was taught and ABSTAINs the rest; fold those and the adversary
+finds the next. Folding by enumeration is precisely the denylist failure mode the program charges the
+status quo with. The principled closer is therefore not a bigger folder: every command in the battery
+is a reversible file write, so its ABSTAIN is already safe, routed by reversibility (CU27) to the
+exact post-commit diff, which catches the realized effect however the path is spelled, with no folder
+at all (the partition: four of four of the ABSTAIN tail reversible and post-commit-safe, zero
+irreversible). Folding the common filters is a usability win, fewer prompts, not a safety one; the
+soundness guarantee was always the post-commit diff's. The one place the folder is safety-load-bearing
+is the irreversible slice, an egress send built through an unfolded filter, which fails closed to a
+human because no post-commit diff can recover the sent bytes, and that is exactly the
+irreversible-exfiltration edge §5 already names as the honest open frontier (RA15), not a folder to
+grow without bound. (Reproduce: `docs/frontier-close-run.md`.)
+
 The honest summary is short. In the one domain that allows it, the exact oracle turns a guardrail from
 something an adversary can talk around into something it cannot, cheaply and without getting in the
 agent's way. We have shown that around a real model and a real kernel, against the two defenses in
