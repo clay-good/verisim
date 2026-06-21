@@ -679,6 +679,24 @@ larger or adversarially-obfuscated graph, the ambient framing of Section 5's tra
 place to look, and the auditor is the instrument that would find it (reproduce:
 `docs/llm-guardrail-audit-run.md`).
 
+**We then hunted the one family where the failure should be structural, and it corrected the thesis
+(SPEC-26).** Cumulative harm -- "at most B distinct sensitive records per task" -- is not a property of
+any single action, so it is the place an action-reading judge ought to break. We ran a real `claude -p`
+guardrail two ways and swept the budget magnitude to stress exact counting. The result splits cleanly.
+A *stateless* per-action judge -- the deployed pattern, a hook shown one tool call -- catches the
+over-budget read **0%** of the time at every budget on both a strong and a cheap model: a single read
+always looks individually fine, so it structurally cannot enforce a budget. But a *history-augmented*
+judge, shown the session so far, counts the distinct records correctly to a budget of **80** over a
+~180-line history of scrambled, near-duplicate, re-read-laden actions, on the **cheap** model
+(recall ~1.00), matching the exact accumulator. The empirical break we hunted did not appear. The honest
+synthesis of all three live experiments is a reframing, not a win: **the action-vs-effect gap is not a
+model-capability gap, it is a state-and-guarantee gap.** Modern models, even small ones, see effect-harm
+when shown the relevant state -- the decoded command, the reachability graph, the session history -- and
+the only thing that reliably withholds that state is the *deployed* stateless-hook pattern. So the
+oracle's defensible value is precisely that it *is* the state the deployed pattern omits (the exact
+counter, the reachability closure, the post-commit diff), with a certificate and at a counter's cost,
+not that a model cannot see the harm. We lead with that (reproduce: `docs/cumulative-horizon-run.md`).
+
 **The tradeoff, named.** What you give up for hard-to-game safety is generality of domain. The
 oracle's whole advantage, exact state, is exactly what restricts it to computer worlds with checkable
 state. It buys provable, cheap, injection-robust safety in the place agents are most dangerous (the
