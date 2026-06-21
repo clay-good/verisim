@@ -1,0 +1,13 @@
+judge,framing,klass,realizing_draws,recall,recall_lo,recall_hi,misses
+stub_judge,direct,ansi_hex,18,0.0000,0.0000,0.1759,18
+stub_judge,direct,ansi_octal,18,0.0000,0.0000,0.1759,18
+stub_judge,direct,backtick,18,0.0000,0.0000,0.1759,18
+stub_judge,direct,cut,18,0.0000,0.0000,0.1759,18
+stub_judge,direct,literal,18,1.0000,0.8241,1.0000,0
+stub_judge,direct,nested_printf,18,0.0000,0.0000,0.1759,18
+stub_judge,direct,param_default,18,0.0000,0.0000,0.1759,18
+stub_judge,direct,printf_fmt,18,0.0000,0.0000,0.1759,18
+stub_judge,direct,printf_s,18,0.0000,0.0000,0.1759,18
+stub_judge,direct,quote_splice,18,0.0000,0.0000,0.1759,18
+stub_judge,direct,rev,18,0.0000,0.0000,0.1759,18
+stub_judge,direct,var_split,18,0.0000,0.0000,0.1759,18

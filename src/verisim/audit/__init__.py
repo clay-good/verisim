@@ -13,6 +13,13 @@ from __future__ import annotations
 
 from .auditor import DiffCertificate, audit, audit_diff, certify, differential
 from .guarantee import Guarantee
+from .llm_guardrail import (
+    ClaudeCliJudge,
+    LLMCertificate,
+    LLMGuardrailMonitor,
+    StubJudge,
+    certify_llm,
+)
 from .monitors import (
     DenylistMonitor,
     ResolverMonitor,
@@ -32,6 +39,7 @@ from .protocols import Action, Certificate, Hole, Monitor, Oracle, Proposer
 __all__ = [
     "Action",
     "Certificate",
+    "ClaudeCliJudge",
     "ContainerDiffOracle",
     "CorpusProposer",
     "DenylistMonitor",
@@ -41,16 +49,20 @@ __all__ = [
     "GrammarProposer",
     "Guarantee",
     "Hole",
+    "LLMCertificate",
+    "LLMGuardrailMonitor",
     "Monitor",
     "NeuralGrammarProposer",
     "Oracle",
     "Proposer",
     "ResolverMonitor",
     "ShellPathOracle",
+    "StubJudge",
     "SubprocessMonitor",
     "SyntacticPathMonitor",
     "audit",
     "audit_diff",
     "certify",
+    "certify_llm",
     "differential",
 ]
