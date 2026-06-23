@@ -10,6 +10,17 @@ repo has repeatedly proven it can do and the learned-bug-finding subfield public
 an honest, pre-registered, strong-baseline, CI'd evaluation that reports the null. SPEC-27 turns that
 discipline on the program's own most-quoted positive claim.**
 
+> **✅ RUN — NULL, KILL CRITERION EXECUTED — 2026-06-23.** Result in
+> [`docs/learned-proposer-eval-run.md`](../learned-proposer-eval-run.md) +
+> `runs/spec27/sweep.json` (30 seeds × 3 targets, bootstrap 95% CIs). The pre-registered prediction
+> held: the "18×" reproduces only against `blind` (the weak baseline), and **inverts against the
+> competent Thompson-bandit** RA23/24 omitted — bandit beats neural on raw count (1563 vs 1205) and
+> distinct classes (2.00 vs 1.79), `enumerate` reaches the first bug fastest (10 vs 28 calls), and
+> neural costs ~16× blind's wall-clock, every CI non-overlapping. The 1316 silent misses are
+> compositions of **one** bug class. Verdict **NULL** → the §5 corrections landed (the RA23 2.3× /
+> RA24 18× claims, paper §abstract). The bug discovery and soundness results are untouched; only the
+> *neural-efficiency* claim is retracted. A Revisiting-Neural-Program-Smoothing for guardrail auditing.
+>
 > **▶ PROPOSED — EVALUATION / SELF-AUDIT — 2026-06-23.** No new mechanism. The only new code is one
 > *baseline* (a Thompson-sampling bandit proposer, the BanditFuzz analogue) plus a multi-seed,
 > multi-target harness around the existing `audit()` loop and the existing proposers. If the learned
