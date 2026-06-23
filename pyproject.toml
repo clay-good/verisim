@@ -57,7 +57,11 @@ select = ["E", "F", "I", "B", "UP", "SIM", "RUF"]
 allowed-confusables = ["ρ", "α", "γ", "×", "−"]
 
 [tool.mypy]
-python_version = "3.11"
+# 3.12 (not 3.11): numpy's published stubs use PEP 695 `type` statements, which mypy parses at the
+# configured target grammar — under a 3.11 target that is a syntax error in numpy/__init__.pyi and
+# fails CI. The matrix still runs the test suite on 3.11 and 3.12, so runtime 3.11 support is verified;
+# only mypy's static analysis target is raised to match the ecosystem (and the dev environment).
+python_version = "3.12"
 strict = true
 files = ["src", "tests"]
 # Tests build small ad-hoc states; allow untyped test functions without noise,
