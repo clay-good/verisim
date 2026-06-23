@@ -25,7 +25,7 @@ from dataclasses import dataclass
 
 from verisim.audit.auditor import audit
 from verisim.audit.bandit import BanditProposer
-from verisim.audit.monitors import SubprocessMonitor
+from verisim.audit.monitors import DenylistMonitor, SubprocessMonitor
 from verisim.audit.oracles import ContainerDiffOracle, ShellPathOracle
 from verisim.audit.proposers import GrammarProposer
 from verisim.audit.protocols import Action, Certificate, Hole, Monitor, Oracle, Proposer
@@ -163,3 +163,22 @@ def certify_hook(
     monitor = SubprocessMonitor(cmd, cwd=work, env=env, name=f"hook:{os.path.basename(hook_path)}")
     return certify_monitor(monitor, orc, protected_path=protected_path, prefix=prefix, work=work,
                            proposer=proposer, budget=budget, seed=seed)
+
+
+def certify_denylist(
+    patterns: Iterable[str],
+    *,
+    protected_path: str = DEFAULT_PROTECTED_PATH,
+    proposer: str = "enumerate",
+    budget: int = 512,
+    seed: int = 0,
+    work: str = DEFAULT_WORKDIR,
+) -> CertifyResult:
+    """Audit a pattern denylist directly (no hook script): a guardrail that blocks a command iff it
+    contains one of ``patterns``. The fast second target type -- point it at the deny rules you ship
+    and see which harm-realizing encodings sail past them."""
+    prefix = os.path.dirname(protected_path) or "/etc"
+    pats = tuple(patterns)
+    monitor = DenylistMonitor(pats, name=f"denylist[{len(pats)} patterns]")
+    return certify_monitor(monitor, ShellPathOracle(prefix), protected_path=protected_path,
+                           prefix=prefix, work=work, proposer=proposer, budget=budget, seed=seed)

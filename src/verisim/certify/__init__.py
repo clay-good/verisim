@@ -7,6 +7,6 @@ certificate. See :mod:`verisim.certify.core` and ``python -m verisim.certify aud
 
 from __future__ import annotations
 
-from .core import CertifyResult, certify_hook, certify_monitor
+from .core import CertifyResult, certify_denylist, certify_hook, certify_monitor
 
-__all__ = ["CertifyResult", "certify_hook", "certify_monitor"]
+__all__ = ["CertifyResult", "certify_denylist", "certify_hook", "certify_monitor"]

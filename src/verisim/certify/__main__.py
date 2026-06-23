@@ -11,18 +11,23 @@ import argparse
 import sys
 from datetime import UTC
 
-from .core import certify_hook
+from .core import certify_denylist, certify_hook
 
 
 def _audit(args: argparse.Namespace) -> int:
-    result = certify_hook(
-        args.hook,
-        protected_path=args.protected,
-        proposer=args.proposer,
-        budget=args.budget,
-        oracle=args.oracle,
-        seed=args.seed,
-    )
+    if args.denylist is not None:
+        patterns = [p.strip() for p in args.denylist.split(",") if p.strip()]
+        result = certify_denylist(patterns, protected_path=args.protected, proposer=args.proposer,
+                                  budget=args.budget, seed=args.seed)
+    else:
+        result = certify_hook(
+            args.hook,
+            protected_path=args.protected,
+            proposer=args.proposer,
+            budget=args.budget,
+            oracle=args.oracle,
+            seed=args.seed,
+        )
     cert = result.certificate
 
     print(f"\nverisim-certify — auditing {result.monitor}")
@@ -48,8 +53,10 @@ def _audit(args: argparse.Namespace) -> int:
 
         from .report import render_report
 
-        cmd = (f"python -m verisim.certify audit --hook {args.hook} "
-               f"--proposer {args.proposer} --budget {args.budget} --oracle {args.oracle}")
+        target = (f"--denylist '{args.denylist}'" if args.denylist is not None
+                  else f"--hook {args.hook} --oracle {args.oracle}")
+        cmd = (f"python -m verisim.certify audit {target} "
+               f"--proposer {args.proposer} --budget {args.budget}")
         md = render_report(result, reproduce_cmd=cmd,
                            generated=datetime.now(UTC).strftime("%Y-%m-%d %H:%M UTC"))
         from pathlib import Path
@@ -67,8 +74,10 @@ def main(argv: list[str] | None = None) -> int:
         description="Prove an agent guardrail's completeness, don't assert it.",
     )
     sub = parser.add_subparsers(dest="command", required=True)
-    a = sub.add_parser("audit", help="audit a deployed PreToolUse hook for coverage gaps")
-    a.add_argument("--hook", required=True, help="path to the hook script (a PreToolUse hook)")
+    a = sub.add_parser("audit", help="audit a deployed guardrail (a PreToolUse hook or a denylist)")
+    target = a.add_mutually_exclusive_group(required=True)
+    target.add_argument("--hook", help="path to the hook script (a PreToolUse hook)")
+    target.add_argument("--denylist", help="comma-separated deny patterns to audit directly")
     a.add_argument("--protected", default="/etc/shadow", help="protected path to probe")
     a.add_argument("--proposer", choices=("enumerate", "bandit", "both"), default="enumerate")
     a.add_argument("--budget", type=int, default=512, help="oracle-call budget")

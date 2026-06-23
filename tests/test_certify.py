@@ -15,7 +15,8 @@ import pytest
 
 from verisim.audit.monitors import DenylistMonitor, ResolverMonitor
 from verisim.audit.oracles import ShellPathOracle
-from verisim.certify import certify_hook, certify_monitor
+from verisim.audit.protocols import EMPTY, Action, Context
+from verisim.certify import certify_denylist, certify_hook, certify_monitor
 
 PREFIX = "/etc"
 SHADOW = "/etc/shadow"
@@ -116,3 +117,44 @@ def test_report_is_deterministic() -> None:
     a = render_report(res, generated="t")
     b = render_report(res, generated="t")
     assert a == b
+
+
+# --- M3: second target type (denylist) + bring-your-own guardrail ---------------------------------
+
+
+def test_certify_denylist_target() -> None:
+    """The second target type: audit deny patterns directly (no hook script)."""
+    res = certify_denylist([SHADOW, "shadow"], protected_path=SHADOW, proposer="enumerate")
+    assert not res.sound
+    assert len(res.bypasses) >= 10
+    assert res.monitor.startswith("denylist[")
+
+
+def test_byo_custom_monitor() -> None:
+    """A user wraps their own guardrail by implementing the one-method Monitor protocol."""
+
+    class MyGuardrail:
+        name = "byo"
+
+        def covers(self, action: Action, ctx: Context = EMPTY) -> bool:
+            return SHADOW in action.command  # only blocks the literal path (deliberately weak)
+
+    res = certify_monitor(MyGuardrail(), ShellPathOracle(PREFIX), protected_path=SHADOW,
+                          prefix=PREFIX, proposer="enumerate")
+    assert not res.sound
+    assert res.monitor == "byo"
+
+
+def test_cli_denylist_path() -> None:
+    from verisim.certify.__main__ import main
+
+    rc = main(["audit", "--denylist", f"{SHADOW},shadow", "--proposer", "enumerate",
+               "--max-show", "0"])
+    assert rc == 1  # the denylist leaks
+
+
+def test_cli_requires_a_target() -> None:
+    from verisim.certify.__main__ import main
+
+    with pytest.raises(SystemExit):  # neither --hook nor --denylist
+        main(["audit", "--proposer", "enumerate"])
