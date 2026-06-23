@@ -1,5 +1,16 @@
 # A neural compositional adversary vs the RA18 resolver (RA24, 2026-06-21)
 
+> **⚠ CORRECTION (SPEC-27, 2026-06-23): the "~18× faster than blind search" headline below is a
+> weak-baseline + gameable-metric artifact.** It reproduces exactly (neural 1316 vs blind 74 silent
+> misses) but only against `blind uniform`. The SPEC-27 sweep (30 seeds × 3 targets, bootstrap CIs)
+> adds the competent Thompson-**bandit** baseline RA24 omitted, and the result inverts: the bandit
+> finds **more** raw silent misses (1563 vs 1205) and more distinct bug **classes** (2.00 vs 1.79)
+> than the neural policy, `enumerate` reaches the first bug fastest (10 vs 28 calls), and neural costs
+> ~16× blind's wall-clock. The 1316 vs 74 are *compositions of one bug* (the printf-fold) — distinct
+> bug classes are ≤2 for every arm. The discovery of the printf bug (findings #1–#3) and the soundness
+> result are real and untouched; what is retracted is that the *neural* proposer finds it dramatically
+> faster. Honest measurement: [`docs/learned-proposer-eval-run.md`](learned-proposer-eval-run.md).
+
 > RA23 wired a **learned** proposer into the coverage loop, but two things were soft: the policy was
 > tabular (it picked one transform for the whole path, so it could not *compose*), and its opponent
 > was a literal-only strawman target, not RA18's real abstract resolver. RA24 fixes both. The

@@ -22,7 +22,12 @@ anywhere in the loop), and run a discover → fix → re-verify loop: the advers
 oracle confirms each one bit-for-bit against a real `/bin/sh`, the monitor is repaired where a realizing
 action slipped off it, and the certificate is re-tested under the adversary. It behaves as a method, not
 a slogan: the learned adversary found a *genuine soundness bug our own hand-run red team had missed* (a
-`printf` format-escape fold, RA24), about 18× faster than blind search; once the fix is folded back, the
+`printf` format-escape fold, RA24). **(Correction, SPEC-27: the bug discovery is real and reproducible,
+but the original "~18× faster than blind search" *efficiency* claim does not survive prudent evaluation
+— against a competent Thompson-bandit baseline the neural proposer has no measured advantage on raw
+count, distinct bug classes, or time-to-first-bug, and a deterministic enumerator reaches the bug
+fastest, so the bug — not the neural net — is the contribution. See
+[learned-proposer-eval-run.md](learned-proposer-eval-run.md).)** Once the fix is folded back, the
 soundness invariant *holds under the learned attacker* — no string-resolvable realizing command is
 silently declared safe across the sampled composition space (RA22–RA25).
 

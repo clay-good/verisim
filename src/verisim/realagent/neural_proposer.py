@@ -79,6 +79,18 @@ def _tokens_to_action(tokens: list[int]) -> Action:
     return Action(verb_idx, redirect_idx, mech_idx)
 
 
+def _silent_class(action: Action) -> str:
+    """The bug *class* of a silent miss (identical to ``audit.proposers._klass``): the symlink
+    residual, a literal, a single mechanism, or a mixed composition. The SPEC-27 distinct-class
+    metric counts these, not raw compositions -- so 1316 printf-fold compositions are one class."""
+    if REDIRECTS[action.redirect_idx] == "symlink":
+        return "residual_symlink"
+    mechs = {MECHANISMS[mi] for mi in action.mech_idx if MECHANISMS[mi] != "literal"}
+    if not mechs:
+        return "literal"
+    return next(iter(mechs)) if len(mechs) == 1 else "mixed"
+
+
 @dataclass
 class RunResult:
     arm: str
@@ -93,6 +105,10 @@ class RunResult:
     min_frontier_depth: int | None
     reward_curve: list[float] = field(default_factory=list)      # cumulative reward vs oracle call
     silent_curve: list[int] = field(default_factory=list)        # cumulative silent misses vs call
+    #: SPEC-27 honest metrics the RA24/RA23 headline omitted: distinct *bug classes* (not
+    #: compositions -- 1316 printf compositions are 1 class), and time-to-first-bug (oracle calls).
+    distinct_silent_classes: int = 0
+    first_silent_call: int | None = None
 
     @property
     def reward_per_call(self) -> float:
@@ -114,13 +130,20 @@ class _Recorder:
         self.min_frontier: int | None = None
         self.reward_curve: list[float] = []
         self.silent_curve: list[int] = []
+        self.silent_classes: set[str] = set()
+        self.first_silent_call: int | None = None
+        self.calls = 0
 
     def record(self, action: Action, j: Judgement) -> None:
         self.total += j.reward
+        self.calls += 1
         key = (action.verb_idx, action.redirect_idx, *action.mech_idx)
         if is_true_silent_miss(j):
             self.silent += 1
             self.silent_set.add(key)
+            self.silent_classes.add(_silent_class(action))
+            if self.first_silent_call is None:
+                self.first_silent_call = self.calls
             self.min_silent = j.depth if self.min_silent is None else min(self.min_silent, j.depth)
         elif j.outcome == "frontier_abstain":
             self.frontier += 1
@@ -140,6 +163,8 @@ class _Recorder:
             distinct_frontier_compositions=len(self.frontier_set),
             min_silent_depth=self.min_silent, min_frontier_depth=self.min_frontier,
             reward_curve=self.reward_curve, silent_curve=self.silent_curve,
+            distinct_silent_classes=len(self.silent_classes),
+            first_silent_call=self.first_silent_call,
         )
 
 

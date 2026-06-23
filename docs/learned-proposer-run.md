@@ -1,5 +1,15 @@
 # The learned adversarial proposer: oracle-as-reward hole hunting (RA23, 2026-06-20)
 
+> **⚠ CORRECTION (SPEC-27, 2026-06-23): the "2.3× more holes per oracle call" headline below does not
+> survive prudent evaluation.** It was measured against `blind uniform` only, single seed, no CIs, on
+> the region-gameable raw-hole-count metric. The SPEC-27 sweep (30 seeds × 3 targets, bootstrap CIs,
+> + a competent Thompson-bandit baseline RA23 never ran) finds the learned proposer has **no measured
+> advantage over a competent baseline**: the bandit beats the neural successor on raw count, distinct
+> bug classes, *and* the neural arm is slowest to first-bug while costing ~16× the wall-clock. The
+> raw-count gap is compositions of *one* bug. Read [`docs/learned-proposer-eval-run.md`](learned-proposer-eval-run.md)
+> for the honest measurement. The *mechanism* (oracle-as-reward adversarial test generation) and the
+> *soundness* result are untouched; what is retracted is the efficiency-over-blind claim.
+
 > RA22 synthesized the covering target with a **structured fuzzer** as the proposer — an enumerative
 > grid of verb × path-form. RA23 wires in the piece the program was built for ([docs/lineage.md](lineage.md),
 > [verisim.rl](../src/verisim/rl/)): a **learned proposer trained by the exact oracle's own verdict**.
