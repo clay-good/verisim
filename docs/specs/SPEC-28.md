@@ -8,11 +8,13 @@
 > security engineer runs against the guardrail they already shipped, that catches real coverage gaps
 > and proves them. No prior spec is active work. The program status ledger is §8.
 
-> **▶ THIS SESSION (2026-06-23): VISION ONLY, NO CODE.** This spec + the runbook
-> [`plans/SPEC-28-certifier-mvp.md`](../../plans/SPEC-28-certifier-mvp.md) are the deliverable. Build
-> starts next session at M1 (§7). The repo cleanup (archive/link the research log, simplify the
-> README to lead with the product) happens *naturally* as the build proceeds — nothing is deleted; all
-> completed research is preserved and linked, because it is the evidence the product stands on.
+> **✅ MVP BUILT — M1–M4 done, 2026-06-23.** The certifier ships in
+> [`src/verisim/certify/`](../../src/verisim/certify/) (`python -m verisim.certify audit`), green on
+> ruff + strict mypy with 13 tests; it audits a real `PreToolUse` hook and a denylist, emits bypasses
+> + a coverage certificate + a Markdown report, and found real gaps in both targets it was pointed at
+> (see [`docs/certifier-findings.md`](../certifier-findings.md)). The README now leads with the
+> product; the research log is preserved below the divider. The open goal is distribution — a
+> non-author running it against their own hook (§7 success criterion).
 
 ---
 
@@ -123,18 +125,23 @@ Nothing here is greenfield; the MVP is **assembly** of audited, tested code:
 
 ## 7. Milestones (build starts next session — NO code this session)
 
-- **M0 (this session): the vision.** DONE when SPEC-28 + the runbook exist. ← *we are here.*
-- **M1: end-to-end on a real hook.** A CLI skeleton that audits a Claude Code `PreToolUse` hook via
-  `SubprocessMonitor`, using the repo's own
-  [`scripts/claude_code_coverage_hook.py`](../../scripts/claude_code_coverage_hook.py) as the first
-  target-under-audit, and emits bypasses + a certificate. *Verify: it surfaces ≥1 real off-surface
-  realizing command, oracle-confirmed.*
-- **M2: the certificate report.** Human-readable output, OWASP ASI mapping, CI, reproduce block.
-- **M3: a second target type.** A denylist / MCP-policy target + a "bring your own hook" interface doc.
-- **M4: package + plant the flag.** OSS front-door README + a public writeup: *"we audited N shipping
-  agent hooks; here is what leaked."*
-- **Success criterion:** a security engineer who is **not us** runs the tool against their own hook and
-  it surfaces a real coverage gap they did not know about.
+- **M0: the vision.** ✅ DONE — SPEC-28 + the runbook.
+- **M1: end-to-end on a real hook.** ✅ DONE — `verisim.certify` audits a `PreToolUse` hook via
+  `SubprocessMonitor` and emits bypasses + a certificate. Verified: 66 bypasses on a weak denylist
+  hook (8.3% coverage), 18 on the repo's own hardened resolver hook (75%, the `is_irreversible`
+  blind spot). ([`src/verisim/certify/`](../../src/verisim/certify/), `tests/test_certify.py`.)
+- **M2: the certificate report.** ✅ DONE — Markdown report with coverage %, Wilson CI + residual
+  upper bound, bypasses by class, OWASP ASI02/03/05 mapping, the reversibility caveat, reproduce
+  block. (`report.py`, `--report`.)
+- **M3: a second target type + BYO docs.** ✅ DONE — `--denylist` audits a denylist in-process; the
+  one-method `Monitor` protocol is the BYO interface ([tool README](../../src/verisim/certify/README.md)).
+- **M4: package + plant the flag.** ✅ DONE (this session's scope) — the top-level README leads with
+  the product; the findings writeup is [`docs/certifier-findings.md`](../certifier-findings.md). The
+  *external* writeup ("we audited N **third-party** shipping hooks") is the open follow-up (N=2 here,
+  both our own hooks).
+- **Success criterion (the open goal):** a security engineer who is **not us** runs the tool against
+  their own hook and it surfaces a real coverage gap they did not know about. The MVP is built and
+  green; this is now a distribution/outreach step, not a build step.
 
 ## 8. Program status ledger — everything else is DONE or NOT DOING
 

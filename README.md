@@ -1,13 +1,31 @@
 # Verisim
 
-> **▶ DIRECTION (2026-06-23): the research program is concluded; the active priority is a product.**
-> The honest research result is the essay [`docs/essay-state-not-capability.md`](docs/essay-state-not-capability.md)
-> and the SPEC-27 null. The one durable, battle-tested asset — the *certify-don't-assert* auditor — is
-> now being turned into a tool security engineers run against their own agent guardrails to catch real
-> coverage gaps: **[SPEC-28, the Coverage Certifier](docs/specs/SPEC-28.md)** (the only active spec;
-> runbook [`plans/SPEC-28-certifier-mvp.md`](plans/SPEC-28-certifier-mvp.md)). Everything below this
-> banner is the **completed research log** — preserved and linked, deleted never, because it is the
-> evidence the product stands on. A simplified, product-first README lands as SPEC-28 M4.
+**`verisim-certify` — prove your agent guardrail's completeness, don't assert it.**
+
+Point it at the guardrail you already shipped — a Claude Code `PreToolUse` hook or a denylist — and it
+returns **the concrete commands that realize harm off your checked surface**, each oracle-confirmed
+against a real shell, plus a **coverage certificate** with a confidence interval. It is the measurement
+between the red-teamers that *find* prompt attacks and the guardrails that *assert* completeness.
+
+```bash
+python -m verisim.certify audit --hook ./my_hook.py --report cert.md
+python -m verisim.certify audit --denylist "/etc/shadow,rm -rf /etc"
+```
+
+Tool docs: **[src/verisim/certify/README.md](src/verisim/certify/README.md)** · vision:
+**[SPEC-28](docs/specs/SPEC-28.md)** · what it caught on real hooks:
+**[docs/certifier-findings.md](docs/certifier-findings.md)**.
+
+> **Status (2026-06-23).** The *research program* that produced this tool — the oracle-grounded
+> certify-don't-assert loop — is **concluded**; its honest result is the essay
+> [docs/essay-state-not-capability.md](docs/essay-state-not-capability.md) and the SPEC-27 null. The
+> Coverage Certifier ([SPEC-28](docs/specs/SPEC-28.md)) is the active priority. Everything below the
+> divider is the **completed research log** — preserved and linked, deleted never, because it is the
+> evidence the product stands on.
+
+---
+
+# Research log (concluded)
 
 > **Read this first (2026-06-21).** The honest, distilled thesis is the essay
 > **[docs/essay-state-not-capability.md](docs/essay-state-not-capability.md)** (~5 min); the technical
