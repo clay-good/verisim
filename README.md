@@ -1,5 +1,14 @@
 # Verisim
 
+> **▶ DIRECTION (2026-06-23): the research program is concluded; the active priority is a product.**
+> The honest research result is the essay [`docs/essay-state-not-capability.md`](docs/essay-state-not-capability.md)
+> and the SPEC-27 null. The one durable, battle-tested asset — the *certify-don't-assert* auditor — is
+> now being turned into a tool security engineers run against their own agent guardrails to catch real
+> coverage gaps: **[SPEC-28, the Coverage Certifier](docs/specs/SPEC-28.md)** (the only active spec;
+> runbook [`plans/SPEC-28-certifier-mvp.md`](plans/SPEC-28-certifier-mvp.md)). Everything below this
+> banner is the **completed research log** — preserved and linked, deleted never, because it is the
+> evidence the product stands on. A simplified, product-first README lands as SPEC-28 M4.
+
 > **Read this first (2026-06-21).** The honest, distilled thesis is the essay
 > **[docs/essay-state-not-capability.md](docs/essay-state-not-capability.md)** (~5 min); the technical
 > version is **[docs/paper.md](docs/paper.md)**; the hostile self-review that forced the honesty is

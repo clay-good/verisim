@@ -1,5 +1,11 @@
 # Verisim — Research Specification (SPEC.md)
 
+> **▶ SUPERSEDED AS ACTIVE PRIORITY (2026-06-23).** This research specification is **complete** — the
+> program it describes (SPEC-1…27, CU1–35, RA1–26) is DONE. The active priority is now a product built
+> on the program's one durable asset: **[SPEC-28 — the Coverage Certifier](./SPEC-28.md)** (the only
+> active spec). The "active priority" referenced in §12 below is historical; read it as research log.
+> This document remains the exhaustive science the product stands on, preserved and unchanged.
+
 > **Verisim** *(n., from* verisimilitude *— "the quality of resembling reality")*: a research program and open-source codebase for building **oracle-grounded, neuro-symbolic world models of computer environments**, where a deterministic oracle keeps a learned simulator faithful over long horizons.
 
 > **The distilled preprint** ([../paper.md](../paper.md), ~8 pages) is the load-bearing ~15% of this program for an external reader: the thesis, the coverage theorem, the RA head-to-head against the guardrails the field ships (SafePred / the permission-system status quo), and an honest line between what is proven and what awaits a live external-benchmark run. This SPEC is the exhaustive science behind it.
