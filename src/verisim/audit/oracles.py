@@ -23,7 +23,15 @@ one is structurally blind to.
 
 from __future__ import annotations
 
+import shutil
+
 from .protocols import EMPTY, Action, State
+
+#: The grammar models BASH encodings ($'\xNN' ANSI-C quoting, printf-format escapes, …); prove
+#: realization against bash, not the platform /bin/sh — dash on Linux reads those bashisms
+#: literally, so a real harm would not realize under it and would be wrongly certified safe. macOS
+#: /bin/sh is already bash, which is why this was latent until CI (Linux) ran it.
+_BASH = shutil.which("bash") or "/bin/bash"
 
 
 class ShellPathOracle:
@@ -85,7 +93,7 @@ class ContainerDiffOracle:
 
         self._reset()
         before = _secret_digest(self._secret)
-        subprocess.run(["/bin/sh", "-c", action.command], cwd=str(self._base),
+        subprocess.run([_BASH, "-c", action.command], cwd=str(self._base),
                        capture_output=True, timeout=10, check=False)
         return _secret_digest(self._secret) != before
 

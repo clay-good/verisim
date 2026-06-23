@@ -317,12 +317,16 @@ def bash_cross_check(sandbox_root: str, actions: list[Action]) -> list[tuple[str
         if not os.path.lexists(link):
             os.symlink(pdir, link)
 
+    # the grammar models BASH encodings ($'\xNN' ANSI-C quoting, etc.); verify against bash, not the
+    # platform /bin/sh (dash on Linux reads those bashisms literally, so they never realize and the
+    # faithfulness check would spuriously fail). On the dev's macOS /bin/sh already *is* bash.
+    bash = shutil.which("bash") or "/bin/bash"
     try:
         for action in actions:
             cmd, _sr = render(action, work=wdir, atoms=sandbox_atoms_t)
             _reset()
             before = _secret_digest(secret)
-            subprocess.run(["/bin/sh", "-c", cmd], cwd=base,
+            subprocess.run([bash, "-c", cmd], cwd=base,
                            capture_output=True, timeout=10, check=False)
             if _secret_digest(secret) == before:  # every action targets protected -> must realize
                 mism.append((cmd, False))

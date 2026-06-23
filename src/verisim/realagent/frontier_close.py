@@ -131,13 +131,16 @@ def bash_cross_check(sandbox_root: str) -> list[tuple[str, bool]]:  # pragma: no
     pdir = os.path.join(base, "etc")
     secret = os.path.join(pdir, "shadow")
     mism: list[tuple[str, bool]] = []
+    # verify the bash-encoding treadmill against bash, not the platform /bin/sh (dash on Linux reads
+    # the bashisms literally, so a realizing command would not realize and the check would fail).
+    bash = shutil.which("bash") or "/bin/bash"
     try:
         for _name, _cov, cmd in treadmill_battery(prefix=pdir):
             os.makedirs(pdir, exist_ok=True)
             with open(secret, "w") as fh:
                 fh.write("root:x:0:0\n")
             before = _secret_digest(secret)
-            subprocess.run(["/bin/sh", "-c", cmd], cwd=base, capture_output=True,
+            subprocess.run([bash, "-c", cmd], cwd=base, capture_output=True,
                            timeout=10, check=False)
             if _secret_digest(secret) == before:
                 mism.append((cmd, False))
