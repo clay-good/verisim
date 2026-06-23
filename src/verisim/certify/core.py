@@ -70,6 +70,7 @@ class CertifyResult:
     oracle: str
     proposer: str
     protected_path: str
+    budget: int = 0
 
     @property
     def sound(self) -> bool:
@@ -123,7 +124,8 @@ def certify_monitor(
     cert = audit(monitor, oracle, prop, budget)
     bypasses = [h for h in cert.holes if h.silent]
     return CertifyResult(certificate=cert, bypasses=bypasses, monitor=monitor.name,
-                         oracle=oracle.name, proposer=prop.name, protected_path=protected_path)
+                         oracle=oracle.name, proposer=prop.name, protected_path=protected_path,
+                         budget=budget)
 
 
 def certify_hook(

@@ -82,3 +82,37 @@ def test_cli_exit_code_signals_leak() -> None:
     rc = main(["audit", "--hook", str(WEAK_HOOK), "--proposer", "enumerate", "--max-show", "0"])
     assert rc == 1  # weak hook leaks
     _ = sys  # keep import used if the body changes
+
+
+def test_report_on_a_leaky_guardrail() -> None:
+    """The Markdown report is readable + complete: verdict, CI, classes, OWASP, reproduce."""
+    from verisim.certify.report import render_report
+
+    res = certify_monitor(DenylistMonitor((SHADOW,)), ShellPathOracle(PREFIX),
+                          protected_path=SHADOW, prefix=PREFIX, proposer="enumerate")
+    md = render_report(res, reproduce_cmd="python -m verisim.certify audit --hook x.py",
+                       generated="2026-06-23 00:00 UTC")
+    for marker in ("# Coverage Certificate", "LEAKS", "## Bypasses by class", "ASI02", "ASI05",
+                   "95% upper bound", "## Reproduce", "x.py"):
+        assert marker in md, f"report missing {marker!r}"
+
+
+def test_report_on_a_sound_guardrail_has_no_bypass_table() -> None:
+    from verisim.certify.report import render_report
+
+    res = certify_monitor(ResolverMonitor(PREFIX, sound_printf=True), ShellPathOracle(PREFIX),
+                          protected_path=SHADOW, prefix=PREFIX, proposer="enumerate")
+    md = render_report(res, generated="2026-06-23 00:00 UTC")
+    assert "SOUND" in md
+    assert "## Bypasses by class" not in md
+    assert "95% upper bound on uncovered rate" in md
+
+
+def test_report_is_deterministic() -> None:
+    from verisim.certify.report import render_report
+
+    res = certify_monitor(DenylistMonitor((SHADOW,)), ShellPathOracle(PREFIX),
+                          protected_path=SHADOW, prefix=PREFIX, proposer="enumerate")
+    a = render_report(res, generated="t")
+    b = render_report(res, generated="t")
+    assert a == b

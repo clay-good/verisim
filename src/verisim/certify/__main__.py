@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import argparse
 import sys
+from datetime import UTC
 
 from .core import certify_hook
 
@@ -41,7 +42,21 @@ def _audit(args: argparse.Namespace) -> int:
 
     if args.out:
         path = cert.write(args.out)
-        print(f"\n  certificate written: {path}")
+        print(f"\n  certificate JSON   : {path}")
+    if args.report:
+        from datetime import datetime
+
+        from .report import render_report
+
+        cmd = (f"python -m verisim.certify audit --hook {args.hook} "
+               f"--proposer {args.proposer} --budget {args.budget} --oracle {args.oracle}")
+        md = render_report(result, reproduce_cmd=cmd,
+                           generated=datetime.now(UTC).strftime("%Y-%m-%d %H:%M UTC"))
+        from pathlib import Path
+
+        Path(args.report).parent.mkdir(parents=True, exist_ok=True)
+        Path(args.report).write_text(md)
+        print(f"  certificate report : {args.report}")
     print()
     return 1 if result.bypasses else 0  # nonzero exit on a leak -> usable as a CI gate
 
@@ -62,6 +77,7 @@ def main(argv: list[str] | None = None) -> int:
     a.add_argument("--seed", type=int, default=0)
     a.add_argument("--max-show", type=int, default=15, help="max bypasses to print")
     a.add_argument("--out", default=None, help="write the certificate JSON here")
+    a.add_argument("--report", default=None, help="write a human-readable Markdown report here")
     a.set_defaults(func=_audit)
 
     args = parser.parse_args(argv)
